@@ -3,9 +3,7 @@ local caustic = require 'caustic'
 
 local tabular = require 'tabular'
 print(tabular(caustic))
-load(caustic.premake5_code)
 
---[[
 workspace "caustic"
     configurations { "Debug", "Release" }
 
@@ -32,7 +30,8 @@ workspace "caustic"
         --"-Wno-strict-aliasing",
     }
 
-    links(caustic.links_internal)
+    --links(caustic.links_internal)
+    links(caustic.internal)
     libdirs(caustic.libdirs_internal)
 
     language "C"
@@ -57,7 +56,7 @@ workspace "caustic"
             "./src/*.h", 
             "./src/*.c",
         }
-        removefiles("*main.c")
+        --removefiles("common.c")
 
     --[[
     project "test_objects_pool"

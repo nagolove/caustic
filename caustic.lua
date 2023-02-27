@@ -24,6 +24,29 @@ local dependencies = {
     },
     {
         url = "https://gitlab.com/relkom/small-regex.git",
+        custom_build = function(dep, dirname)
+            print('custom_build', dirname)
+            local prevdir = lfs.currentdir()
+            local ok, errmsg = lfs.chdir('libsmallregex')
+            if not ok then
+                print('custom_build: lfs.chdir()', errmsg)
+                return
+            end
+            print(lfs.currentdir())
+            local cmd_gcc = 'gcc -c libsmallregex.c'
+            local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
+            local fd = io.popen(cmd_gcc)
+            if not fd then
+                print("error in ", cmd_gcc)
+            end
+            print(fd:read("*a"))
+            fd = io.popen(cmd_ar)
+            if not fd then
+                print("error in ", cmd_ar)
+            end
+            print(fd:read("*a"))
+            lfs.chdir(prevdir)
+        end
     },
     {
         url = "https://github.com/JuliaLang/utf8proc",
@@ -139,85 +162,6 @@ project "test_strset"
 ]]
 -- }}}
 
-local premake5_code = 
-[[
-workspace "caustic"
-    configurations { "Debug", "Release" }
-
-    defines{"GRAPHICS_API_OPENGL_43"}
-
-    includedirs(caustic.includedirs)
-    includedirs({ "src" })
-
-    if sanit then
-        linkoptions {
-            "-fsanitize=address",
-            "-fsanitize-recover=address",
-        }
-        buildoptions { 
-            "-fsanitize=address",
-            "-fsanitize-recover=address",
-        }
-    end
-
-    buildoptions {
-        "-ggdb3",
-        "-fPIC",
-        "-Wall",
-        --"-Wno-strict-aliasing",
-    }
-
-    links(caustic.links_internal)
-    libdirs(caustic.libdirs_internal)
-
-    language "C"
-    --cppdialect "C++20"
-    kind "ConsoleApp"
-    targetprefix ""
-    targetdir "."
-    symbols "On"
-
-    project "libcaustic"
-        kind "StaticLib"
-        if sanit then
-            linkoptions {
-                "-fsanitize=address",
-                "-fsanitize-recover=address",
-            }
-        end
-        buildoptions { 
-            "-ggdb3",
-        }
-        files { 
-            "./src/*.h", 
-            "./src/*.c",
-        }
-        removefiles("*main.c")
-
-    
-    filter "configurations:Debug"
-        defines { "DEBUG" }
-        symbols "On"
-        buildoptions { 
-            "-ggdb3"
-        }
-        linkoptions {
-            "-fsanitize=address",
-        }
-        buildoptions { 
-            "-fsanitize=address",
-        }
-
-    filter "configurations:Release"
-        --buildoptions { 
-            --"-O2"
-        --}
-        --symbols "On"
-        --defines { "NDEBUG" }
-        --optimize "On"
-
-]]
-
 local libs_path = "3rd_party"
 
 local includedirs  = { 
@@ -235,11 +179,13 @@ local libdirs_internal = {
     "./3rd_party/Chipmunk2d/src",
     "./3rd_party/raylib/raylib",
     "./3rd_party/lua",
+    "./3rd_party/small-regex/libsmallregex",
 }
 
 local links_internal = { 
     "m",
     "genann:static",
+    "smallregex:static",
     "lua:static",
     "raylib:static",
     "utf8proc:static",
@@ -249,12 +195,14 @@ local links_internal = {
 local links = { 
     "m",
     "genann",
+    "smallregex",
     "lua",
     "raylib",
     "utf8proc",
     "chipmunk",
 }
 
+-- TODO: Расширить имена до полных путей
 local libdirs = { 
     "../caustic",
     "../caustic/3rd_party/genann",
@@ -262,6 +210,7 @@ local libdirs = {
     "../caustic/3rd_party/Chipmunk2D/src",
     "../caustic/3rd_party/raylib/raylib",
     "../caustic/3rd_party/lua",
+    "../caustic/3rd_party/small-regex/libsmallregex",
 }
 
 local function get_dirs(deps)
@@ -472,6 +421,20 @@ local function search_dep_by_dirname(dirname)
     end
 end
 
+local function common_build()
+    if file_exist("CMakeLists.txt") then
+        local fd = io.popen("cmake .")
+        --print(fd:read("*a"))
+        local ret = { fd:close() }
+        --if not ret[1] then
+        print(tabular(ret))
+        local fd2 = io.popen("make -j")
+        --print(fd2:read("*a"))
+    elseif file_exist("Makefile") or file_exist("makefile") then
+        local fd2 = io.popen("make -j")
+    end
+end
+
 function actions.build()
     for _, dirname in pairs(get_dirs(dependencies)) do
         --print('dirname', dirname)
@@ -479,19 +442,19 @@ function actions.build()
         local prevdir = lfs.currentdir()
         lfs.chdir(dirname)
 
-        if file_exist("CMakeLists.txt") then
-            local fd = io.popen("cmake .")
-            --print(fd:read("*a"))
-            local ret = { fd:close() }
-            --if not ret[1] then
-            print(tabular(ret))
-            local fd2 = io.popen("make -j")
-            --print(fd2:read("*a"))
-        elseif file_exist("Makefile") or file_exist("makefile") then
-            local fd2 = io.popen("make -j")
+        local dep = dependencies_map[dirname]
+
+        if dep.custom_build then
+            local ok errmsg = pcall(function()
+                dep.custom_build(dep, dirname)
+            end)
+            if not ok then
+                print('custom_build error:', errmsg)
+            end
+        else
+            common_build()
         end
 
-        local dep = dependencies_map[dirname]
         if dep and dep.after_build then
             dep.after_build(dirname)
         end

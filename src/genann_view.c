@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "chipmunk/cpBB.h"
 #include "routine.h"
 #include "genann.h"
 #include <assert.h>
@@ -14,6 +15,7 @@
 #include "chipmunk/chipmunk_types.h"
 #include "table.h"
 #include "common.h"
+#include "logger.h"
 
 #define MAX_ANN_NAME    48
 
@@ -32,20 +34,22 @@ struct NeuronLinks {
 };
 
 struct genann_view {
-    char    name[MAX_ANN_NAME];
-    float   neuron_radius;
-    Vector2 position;
-    Color   neuron_color;
-    cpSpace *space;
-    // Хэштаблица, хранит имена нейронов по типу "[номер_слоя,номер_нейрона]"
-    HTable  *h_name2physobj, *h_name2weight;
-    genann  *ann;
+    char      name[MAX_ANN_NAME];
+    float     background_rect_gap;
+    Rectangle background_rect;
+    float     neuron_radius;
+    Vector2   position;
+    Color     neuron_color;
+    cpSpace   *space;
+    //        Хэштаблица, хранит имена нейронов по типу "[номер_слоя,номер_нейрона]"
+    HTable    *h_name2physobj, *h_name2weight;
+    genann    *ann;
     struct NeuronInfo *current_neuron;
 };
 
 static void link_free(const void *key, int key_len, void *data, int data_len) {
     struct NeuronLinks *nl = data;
-    printf("link_free: %s, %p\n", (char*)key, data);
+    trace("link_free: %s, %p\n", (char*)key, data);
     if (nl->weights) {
         free(nl->weights);
         nl->weights = NULL;
@@ -57,9 +61,11 @@ struct genann_view *genann_view_new(const char *ann_name) {
     assert(view);
     strncpy(view->name, ann_name, MAX_ANN_NAME);
     view->neuron_radius = 10.;
+    view->background_rect_gap = 25.;
     view->neuron_color = BLUE;
     view->position = (Vector2) { 0., 0., };
     view->space = cpSpaceNew();
+    view->space->userData = view;
     view->h_name2weight = htable_new(&(struct HTableSetup) {
         .cap = 256, .on_remove = link_free,
     });
@@ -128,7 +134,7 @@ void genann_view_free(struct genann_view *v) {
     free(v);
 }
 
-static void *add_neuron_info(
+static cpShape *add_neuron_info(
     struct genann_view *view, Vector2 place, int index, int layer
 ) {
     assert(view);
@@ -156,7 +162,7 @@ static void *add_neuron_info(
 
     htable_add_s(view->h_name2physobj, ni->name, &body, sizeof(void*));
 
-    return body;
+    return shape;
 }
 
 static void neuron_links_init(struct NeuronLinks *nl, int num) {
@@ -170,7 +176,7 @@ static HTableAction iter_neuron_link(
     void *udata
 ) {
     struct NeuronLinks *nl = value;
-    printf("iter_neuron_link: %s, %d\n", (char*)key, nl->num);
+    trace("iter_neuron_link: %s, %d\n", (char*)key, nl->num);
     return HTABLE_ACTION_NEXT;
 }
 
@@ -180,7 +186,7 @@ static HTableAction iter_neuron_info(
 ) {
     //struct NeuronInfo *ni = value;
     cpBody *b = value;
-    printf("iter_neuron_info: %s, %p\n", (char*)key, b);
+    trace("iter_neuron_info: %s, %p\n", (char*)key, b);
     return HTABLE_ACTION_NEXT;
 }
 
@@ -192,9 +198,11 @@ double *genann_weights_input(genann *ann) {
 
 double *genann_weights_hidden(genann *ann, int layer) {
     assert(ann);
-    assert(layer >= 0 && layer < ann->hidden_layers);
+    if (layer >= 0 && layer < ann->hidden_layers)
     /*return ann->weight + ann->inputs + ann->hidden * layer;*/
-    return ann->weight + ann->hidden + ann->hidden * layer;
+        return ann->weight + ann->hidden + ann->hidden * layer;
+    else
+        return NULL;
 }
 
 double *genann_weights_output(genann *ann) {
@@ -228,7 +236,7 @@ void genann_viewer_fill_hash(genann_view *view, genann const *ann) {
     char key[64] = {0};
     int layer = 0;
 
-    printf("input:\n");
+    trace("input:\n");
     /* Figure input layer */
     for (j = 0; j < ann->hidden; ++j) {
         struct NeuronLinks nl = {0};
@@ -239,12 +247,12 @@ void genann_viewer_fill_hash(genann_view *view, genann const *ann) {
             w++;
         }
         ++layer;
-        /*sprintf(key, "[%d,%d]", j);*/
+        /*strace(key, "[%d,%d]", j);*/
         htable_add_s(view->h_name2weight, key, &nl, sizeof(nl));
     }
-    printf("\n");
+    trace("\n");
 
-    printf("hidden:\n");
+    trace("hidden:\n");
 
     /* Figure hidden layers, if any. */
     for (h = 1; h < ann->hidden_layers; ++h) {
@@ -262,10 +270,10 @@ void genann_viewer_fill_hash(genann_view *view, genann const *ann) {
         }
     }
 
-    printf("output:\n");
+    trace("output:\n");
     /* Figure output layer. */
     for (j = 0; j < ann->outputs; ++j) {
-        printf("w %f\n", *w);
+        /*trace("w %f\n", *w);*/
         struct NeuronLinks nl = {0};
         neuron_links_init(&nl, ann->hidden);
         w++;
@@ -275,13 +283,13 @@ void genann_viewer_fill_hash(genann_view *view, genann const *ann) {
             htable_add_s(view->h_name2weight, key, &nl, sizeof(nl));
             w++;
         }
-        printf("\n");
+        trace("\n");
     }
 
     /* Sanity check that we used all weights and wrote all outputs. */
     assert(w - ann->weight == ann->total_weights);
     //assert(o - ann->output == ann->total_neurons);
-    htable_print(view->h_name2weight);
+    /*htable_print(view->h_name2weight);*/
     /*htable_each(view->h_name2weight, iter_neuron_link, NULL);*/
 }
 
@@ -304,50 +312,73 @@ void genann_print_run(genann const *ann) {
     }
     */
 
-    printf("input:\n");
+    trace("input:\n");
     /* Figure input layer */
     for (j = 0; j < ann->hidden; ++j) {
-        printf("\nw [%d] %f\n", j, *w);
+        trace("\nw [%d] %f\n", j, *w);
         w++;
         for (k = 0; k < ann->inputs; ++k) {
-            printf(" %-8.4f", *w);
+            trace(" %-8.4f", *w);
             w++;
         }
     }
-    printf("\n");
+    trace("\n");
 
-    printf("hidden:\n");
+    trace("hidden:\n");
 
     /* Figure hidden layers, if any. */
     for (h = 1; h < ann->hidden_layers; ++h) {
-        printf("w [%d] %f\n", h, *w);
+        trace("w [%d] %f\n", h, *w);
         for (j = 0; j < ann->hidden; ++j) {
             w++;
             for (k = 0; k < ann->hidden; ++k) {
-                printf(" %-8.4f", *w);
+                trace(" %-8.4f", *w);
                 w++;
             }
-            printf("\n");
+            trace("\n");
         }
 
     }
 
-    printf("output:\n");
+    trace("output:\n");
     /* Figure output layer. */
     for (j = 0; j < ann->outputs; ++j) {
-        printf("w %f\n", *w);
+        trace("w %f\n", *w);
         w++;
         //double sum = *w++ * -1.0;
         for (k = 0; k < ann->hidden; ++k) {
-            printf(" %-8.4f", *w);
+            trace(" %-8.4f", *w);
             w++;
         }
-        printf("\n");
+        trace("\n");
     }
 
     /* Sanity check that we used all weights and wrote all outputs. */
     assert(w - ann->weight == ann->total_weights);
     //assert(o - ann->output == ann->total_neurons);
+}
+
+static void iter_each_shape_rect(cpShape *shape, void *data) {
+    if (shape && shape->space && shape->space->userData) 
+        trace(
+            "iter_each_shape_rect: space %s\n",
+            ((genann_view*)shape->space->userData)->name
+        );
+
+    assert(data);
+    assert(shape);
+
+    cpBB *max_bb = data;
+    cpBB bb = bb_local2world(shape->body, shape->bb);
+
+    if (bb.l < max_bb->l)
+        max_bb->l = bb.l;
+    if (bb.r > max_bb->r)
+        max_bb->r = bb.r;
+    if (bb.b < max_bb->b)
+        max_bb->b = bb.b;
+    if (bb.t > max_bb->t)
+        max_bb->t = bb.t;
 }
 
 void make_chipmunk_objects(struct genann_view *view, const genann *net) {
@@ -358,17 +389,13 @@ void make_chipmunk_objects(struct genann_view *view, const genann *net) {
 
     corner = view->position;
     for (int i = 0; i < net->inputs; i++) {
-        //DrawCircleV(corner, view->neuron_radius, view->neuron_color);
-
         add_neuron_info(view, corner, i, layer);
-
         corner.y += view->neuron_radius * shift_coef;
-        /*char text[128] = {0};*/
-        /*sprintf(text, "%.4f", net->inputs*/
-        /*DrawText(text, corner.x, corner.y, view->neuron_radius, RED);*/
     }
 
     layer++;
+
+    cpShape *last_shape = NULL;
 
     Vector2 position = view->position;
     Vector2 right_shift = { view->neuron_radius * 10., 0. };
@@ -376,10 +403,7 @@ void make_chipmunk_objects(struct genann_view *view, const genann *net) {
         position = Vector2Add(position, right_shift);
         corner = position;
         for (int j = 0; j < net->hidden; j++) {
-            //DrawCircleV(corner, view->neuron_radius, view->neuron_color);
-
-            add_neuron_info(view, corner, j, layer);
-
+            last_shape = add_neuron_info(view, corner, j, layer);
             corner.y += view->neuron_radius * shift_coef;
         }
         ++layer;
@@ -387,17 +411,23 @@ void make_chipmunk_objects(struct genann_view *view, const genann *net) {
 
     corner = Vector2Add(position, right_shift);
     for (int i = 0; i < net->outputs; i++) {
-        //DrawCircleV(corner, view->neuron_radius, view->neuron_color);
-
         add_neuron_info(view, corner, i, layer);
-
         corner.y += view->neuron_radius * shift_coef;
     }
 
     htable_each(view->h_name2physobj, iter_neuron_info, NULL);
+
+    assert(last_shape);
+    cpBB max_bb = bb_local2world(last_shape->body, last_shape->bb);
+    cpSpaceEachShape(view->space, iter_each_shape_rect, &max_bb);
+    view->background_rect = rect_extend(
+        from_bb(max_bb), view->background_rect_gap
+    );
+    trace("background_rect %s\n", rect2str(view->background_rect));
 }
 
 void genann_view_prepare(struct genann_view *view, const genann *net) {
+    /*trace("genann_view_prepare: view %p, net %p\n", view, net);*/
     assert(view);
     if (!net)
         return;
@@ -406,20 +436,66 @@ void genann_view_prepare(struct genann_view *view, const genann *net) {
     genann_viewer_fill_hash(view, net);
 }
 
+struct DrawLinkCtx { 
+    cpBody *a, *b;
+    int    i;
+    double *w;
+};
+
+typedef void (*DrawLinkFunc)(genann_view *view, struct DrawLinkCtx *ctx);
+
+void _draw_links(
+    genann_view *view, int layer, int num, double *w, DrawLinkFunc func
+) {
+    assert(view);
+    assert(func);
+
+    for (int i = 0; i < num; ++i) {
+        char key[32] = {0};
+        sprintf(key, "[%d,%d]", i, layer);
+        cpBody **body = htable_get_s(view->h_name2physobj, key, NULL);
+
+        if (!body)
+            continue;
+        if (w)
+            ((struct NeuronInfo*)(*body)->userData)->weight = w[i];
+
+        struct DrawLinkCtx ctx = {
+            .a = *body,
+            .b = view->current_neuron->body,
+            .i = i,
+            .w = w,
+        };
+        func(view, &ctx);
+    }
+}
+
+void draw_link(genann_view *view, struct DrawLinkCtx *ctx) {
+    Vector2 _b = from_Vect(ctx->a->p);
+    Vector2 _a = from_Vect(ctx->b->p);
+    float thick = 2.;
+    DrawLineEx(_a, _b, thick, BLACK);
+}
+
+void draw_link_text(genann_view *view, struct DrawLinkCtx *ctx) {
+    Vector2 _b = from_Vect(ctx->a->p);
+    Vector2 _a = from_Vect(ctx->b->p);
+    Vector2 tmp = Vector2Scale(Vector2Subtract(_b, _a), 0.5);
+    Vector2 middle = Vector2Add(_a, tmp);
+
+    if (ctx->w) {
+        char text[32] = {0};
+        sprintf(text, "%f", ctx->w[ctx->i]);
+        DrawText(text, middle.x, middle.y, view->neuron_radius, RED);
+    }
+}
+
 void draw_links(struct genann_view *view, int layer) {
-    if (!view->ann) {
-        return;
-    }
+    if (!view->ann) return;
+    if (!view->current_neuron)  return;
 
-    struct NeuronInfo *ni = view->current_neuron;
-
-    if (!ni) {
-        return;
-    }
-
-    /*printf("ni->name %s\n", ni->name);*/
-    /*printf("index %d, layer %d\n", ni->index, ni->layer);*/
-
+    /*trace("ni->name %s\n", ni->name);*/
+    /*trace("index %d, layer %d\n", ni->index, ni->layer);*/
     /*struct NeuronLinks *nl = htable_get(view->h_name2weight, */
 
     int num = 0;
@@ -435,31 +511,8 @@ void draw_links(struct genann_view *view, int layer) {
         w = genann_weights_output(view->ann);
     }
 
-    assert(w);
-    for (int i = 0; i < num; ++i) {
-        char key[32] = {0};
-        sprintf(key, "[%d,%d]", i, layer);
-        cpBody **body = htable_get_s(view->h_name2physobj, key, NULL);
-        if (!body)
-            continue;
-
-        ((struct NeuronInfo*)(*body)->userData)->weight = w[i];
-
-        Vector2 b = from_Vect((*body)->p);
-        Vector2 a = from_Vect(ni->body->p);
-        float thick = 2.;
-        DrawLineEx(
-            a, b,
-            thick,
-            BLACK
-        );
-        Vector2 tmp = Vector2Scale(Vector2Subtract(b, a), 0.5);
-        Vector2 middle = Vector2Add(a, tmp);
-        char text[32] = {0};
-        sprintf(text, "%f", w[i]);
-        DrawText(text, middle.x, middle.y, view->neuron_radius, RED);
-    }
-
+    _draw_links(view, layer, num, w, draw_link);
+    _draw_links(view, layer, num, w, draw_link_text);
 }
 
 static void iter_body(cpBody *body, void *data) {
@@ -469,7 +522,7 @@ static void iter_body(cpBody *body, void *data) {
     double w = ((struct NeuronInfo*)body->userData)->weight;
     if (w > 1.)
         w = 1.;
-    printf("w %f\n", w);
+    /*trace("w %f\n", w);*/
     float degree = (1. + w) / (360. * 2.);
     DrawCircleSector(
         from_Vect(body->p), view->neuron_radius, 0., degree, segs_num, DARKBLUE
@@ -484,9 +537,13 @@ static void space_draw(struct genann_view *view) {
 void genann_view_draw(struct genann_view *view) {
     assert(view);
 
+    DrawRectangleRounded(view->background_rect, 0.2, 10, GRAY);
+    DrawText(
+        view->name, 
+        view->background_rect.x, view->background_rect.y,
+        view->neuron_radius, BLACK
+    );
     space_draw(view);
-    /*space_debug_draw(view->space, view->neuron_color);*/
-    //struct NeuronInfo *info = NULL;
 
     if (!view->current_neuron) {
         return;
@@ -507,13 +564,13 @@ void genann_view_draw(struct genann_view *view) {
 
 void genann_print(const genann *net) {
     assert(net);
-    printf("genann_print:\n");
-    printf("inputs: %d\n", net->inputs);
-    printf("hidden_layers: %d\n", net->hidden_layers);
-    printf("hidden: %d\n", net->hidden);
-    printf("outputs: %d\n", net->outputs);
-    printf("total_weights: %d\n", net->total_weights);
-    printf("total_neurons: %d\n", net->total_neurons);
+    trace("genann_print:\n");
+    trace("inputs: %d\n", net->inputs);
+    trace("hidden_layers: %d\n", net->hidden_layers);
+    trace("hidden: %d\n", net->hidden);
+    trace("outputs: %d\n", net->outputs);
+    trace("total_weights: %d\n", net->total_weights);
+    trace("total_neurons: %d\n", net->total_neurons);
 }
 
 void point_query(

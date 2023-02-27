@@ -1,0 +1,176 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
+
+#include "stages.h"
+
+#include <stdlib.h>
+#include <memory.h>
+#include <assert.h>
+#include <lua.h>
+#include <raylib.h>
+#include <string.h>
+
+#include "lauxlib.h"
+#include "script.h"
+#include "console.h"
+#include "raylib.h"
+
+struct StagesStore {
+    Stage *stages[MAX_STAGES_NUM];
+    Stage *cur;
+    int num;
+};
+
+static struct StagesStore stages = {0, };
+
+int l_stages_get(lua_State *lua);
+int l_stage_restart(lua_State *lua);
+int l_stage_set_active(lua_State *lua);
+int l_stage_get_active(lua_State *lua);
+
+void stage_init(void) {
+    memset(&stages, 0, sizeof(stages));
+
+    register_function(
+            l_stage_restart,
+            "stage_restart",
+            "Удалить и снова создать объект сцены"
+    );
+
+    register_function(
+            l_stage_get_active,
+            "stage_get_active",
+            "Возвращает имя активной сцены"
+    );
+    register_function(
+            l_stage_set_active, 
+            "stage_set_active", 
+            "Установить сцену по имени [\"\"]"
+    );
+    register_function(
+            l_stages_get, 
+            "stages_get", 
+            "Получить список зарегистрированных сцен"
+    );
+}
+
+void stage_add(Stage *st, const char *name) {
+    assert(st);
+    assert(name);
+    assert(strlen(name) < MAX_STAGE_NAME);
+    assert(stages.num <= MAX_STAGES_NUM);
+
+    stages.stages[stages.num++] = st;
+    strncpy(st->name, name, MAX_STAGE_NAME);
+}
+
+void stage_shutdown_all(void) {
+    for(int i = 0; i < stages.num; i++) {
+        Stage *st = stages.stages[i];
+        if (st->shutdown) 
+            st->shutdown(st);
+        free(st);
+    }
+}
+
+void stage_update_active(void) {
+    Stage *st = stages.cur;
+    if (st && st->update) st->update(st);
+    if (st && st->draw) st->draw(st);
+}
+
+Stage *stage_find(const char *name) {
+    for(int i = 0; i < stages.num; i++) {
+        Stage *st = stages.stages[i];
+        if (!strcmp(name, st->name)) {
+            return st;
+        }
+    }
+    return NULL;
+}
+
+void stage_set_active(const char *name, void *data) {
+    Stage *st = stage_find(name);
+
+    if (!st) 
+        printf("stage_set_active: '%s' not found\n", name);
+
+    if (stages.cur && stages.cur->leave) {
+        printf(
+            "stage_set_active: leave from '%s' to '%s'\n",
+            stages.cur->name,
+            st->name
+        );
+        stages.cur->leave(stages.cur, data);
+    }
+
+    stages.cur = st;
+
+    if (st && st->enter) {
+        printf("stage_set_active: enter '%s'\n", st->name);
+        st->enter(st, data);
+    }
+}
+
+void stage_subinit(void) {
+    for(int i = 0; i < stages.num; i++) {
+        Stage *st = stages.stages[i];
+        if (st->init) {
+            st->init(st, NULL);
+        }
+    }
+}
+
+int l_stages_get(lua_State *lua) {
+    for(int i = 0; i < stages.num; i++) {
+        console_buf_write_c(DARKGREEN, "\"%s\"", stages.stages[i]->name);
+    }
+    return 0;
+}
+
+int l_stage_restart(lua_State *lua) {
+    luaL_checktype(lua, 1, LUA_TSTRING);
+    const char *stage_name = lua_tostring(lua, 1);
+    Stage *st = stage_find(stage_name);
+    if (st) {
+        if (st->shutdown)
+            st->shutdown(st);
+        if (st->init)
+            st->init(st, NULL);
+    }
+    return 0;
+}
+
+int l_stage_set_active(lua_State *lua) {
+    if (lua_isstring(lua, 1) && lua_isstring(lua, 2)) {
+        const char *stage_name = lua_tostring(lua, 1);
+        const char *stage_arg = lua_tostring(lua, 2);
+        printf("l_stage_set_active: \"%s\" %s\n", stage_name, stage_arg);
+        stage_set_active(stage_name, (char*)stage_arg);
+    }
+    return 0;
+}
+
+int l_stage_get_active(lua_State *lua) {
+    if (stages.cur) {
+        lua_pushstring(lua, stages.cur->name);
+        return 1;
+    } else
+        return 0;
+}
+
+void stages_print() {
+    printf("stages_print\n");
+    for (int i = 0; i < stages.num; i++) {
+        printf("'%s'\n", stages.stages[i]->name);
+    }
+}
+
+const char *stage_get_active_name() {
+    static char ret_buf[MAX_STAGE_NAME] = {0};
+    if (stages.cur) {
+        strcpy(ret_buf, stages.cur->name);
+        return ret_buf;
+    }
+    return NULL;
+}
