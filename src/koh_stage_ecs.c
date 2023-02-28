@@ -1,0 +1,309 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
+
+#include "stage_ecs.h"
+
+#include "raylib.h"
+#include "raymath.h"
+#include "rlgl.h"
+#include "stages.h"
+#include "common.h"
+#include "logger.h"
+#include "routine.h"
+
+#define DESTRAL_ECS_IMPL
+#include "destral_ecs.h"
+
+#include <stddef.h>
+#include <math.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <memory.h>
+
+typedef struct Stage_ECS {
+    Stage parent;
+} Stage_ECS;
+
+struct Component_Position {
+    Vector2 p;
+    float   angle;
+};
+
+static const de_cp_type component_position = {
+    .cp_id = 0,
+    .cp_sizeof = sizeof(struct Component_Position),
+    .name = "position"
+};
+
+static const de_cp_type component_velocity = {
+    .cp_id = 1,
+    .cp_sizeof = sizeof(struct Vector2),
+    .name = "velocity",
+};
+
+static const de_cp_type component_angular_velocity = {
+    .cp_id = 2,
+    .cp_sizeof = sizeof(float),
+    .name = "angular_velocity",
+};
+
+static const de_cp_type component_color = {
+    .cp_id = 3,
+    .cp_sizeof = sizeof(Color),
+    .name = "color",
+};
+
+static const de_cp_type component_lifetime = {
+    .cp_id = 4,
+    .cp_sizeof = sizeof(double),
+    .name = "lifetime",
+};
+
+static de_cp_type components[100] = {0};
+static int components_num = 0;
+
+static de_ecs* r = NULL;
+static int particle_counter = 0;
+
+void stage_ecs_init(Stage_ECS *st, void *data);
+void stage_ecs_update(Stage_ECS *st);
+void stage_ecs_draw(Stage_ECS *st);
+void stage_ecs_shutdown(Stage_ECS *st);
+
+static void component_register(de_cp_type cmp) {
+    int len = sizeof(components) / sizeof(components[0]);
+    if (components_num + 1 == len) {
+        perror("components array if full");
+        exit(EXIT_FAILURE);
+    }
+    components[components_num++] = cmp;
+}
+
+static void entity_print_stuff(de_ecs *r, de_entity e) {
+    trace(
+        "entity %u(id %u, version %u) consist of\n",
+        e, de_entity_identifier(e).id, de_entity_version(e).ver
+    );
+    for (int i = 0; i < components_num; i++) {
+        if (de_try_get(r, e, components[i])) {
+            trace("%s ", components[i].name);
+        }
+    }
+    trace("\n");
+}
+
+void particle_build(de_ecs *r) {
+    de_entity e = de_create(r);
+
+    struct Component_Position* pos = de_emplace(r, e, component_position);
+    pos->p.x = rand() % GetScreenWidth();
+    pos->p.y = rand() % GetScreenHeight();
+    pos->angle = (rand() / (double)RAND_MAX) * 2. * M_PI;
+
+    Vector2* v = de_emplace(r, e, component_velocity);
+    v->x = rand() / (double)RAND_MAX;
+    v->y = rand() / (double)RAND_MAX;
+
+    float* angular_v = de_emplace(r, e, component_angular_velocity);
+    *angular_v = (rand() / (double)RAND_MAX);
+
+    Color *color = de_emplace(r, e, component_color);
+    *color = RED;
+
+    double *lifetime = de_emplace(r, e, component_lifetime);
+    *lifetime = (rand() / (double)RAND_MAX) * 20.;
+
+    trace("particle_build: color %s\n", color2str(*color));
+
+    particle_counter++;
+}
+
+const float particle_radius = 20.;
+
+void particles_update() {
+    float dt = GetFrameTime() * 100.;
+    trace("particles_update: dt %f\n", dt);
+    for (de_view v = de_create_view(r, 3, (de_cp_type[3]) {
+        component_position, component_velocity, component_angular_velocity,
+    }); de_view_valid(&v); de_view_next(&v)) {
+        Vector2 *velocity = de_view_get(&v, component_velocity);
+        float *angular_velocity = de_view_get(&v, component_angular_velocity);
+        struct Component_Position *pos = de_view_get(&v, component_position);
+
+        Vector2 delta = Vector2Scale(*velocity, dt);
+        trace("delta %s\n", Vector2_tostr(delta));
+        pos->p = Vector2Add(pos->p, Vector2Scale(*velocity, dt));
+        pos->angle = *angular_velocity * dt;
+    }
+
+    /*
+    int cap = 100, num = 0;
+    size_t *todestroy = malloc(sizeof(size_t) * cap);
+    for (de_view_single v = de_create_view_single(r, component_lifetime);
+        de_view_single_valid(&v); de_view_single_next(&v)) {
+        double *lifetime = de_view_single_get(&v);
+        *lifetime -= dt;
+        if (*lifetime < 0) {
+            if (num + 1 >= cap) {
+                cap *= 2;
+                void *new_todestroy = realloc(
+                    todestroy, cap * sizeof(todestroy[0])
+                );
+                if (new_todestroy)
+                    todestroy = new_todestroy;
+                else {
+                    perror("Bad realloc");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            todestroy[num++] = de_view_single_entity(&v);
+            de_entity e = de_view_single_entity(&v);
+            printf(
+                "entity id %u, version %u\n",
+                de_entity_identifier(e).id,
+                de_entity_version(e).ver
+            );
+        }
+    }
+    for (int j = 0; j < num; j++) {
+        de_destroy(r, todestroy[j]);
+    }
+    free(todestroy);
+    */
+
+    int cap = 100, num = 0;
+    size_t *todestroy = malloc(sizeof(size_t) * cap);
+    for (de_view v = de_create_view(r, 1, (de_cp_type[1]){ component_lifetime});
+            de_view_valid(&v); de_view_next(&v)) {
+        double *lifetime = de_view_get(&v, component_lifetime);
+        *lifetime -= dt;
+        if (*lifetime < 0) {
+            if (num + 1 >= cap) {
+                cap *= 2;
+                void *new_todestroy = realloc(
+                        todestroy, cap * sizeof(todestroy[0])
+                        );
+                if (new_todestroy)
+                    todestroy = new_todestroy;
+                else {
+                    perror("Bad realloc");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            todestroy[num++] = de_view_entity(&v);
+            de_entity e = de_view_entity(&v);
+            trace(
+                    "entity id %u, version %u\n",
+                    de_entity_identifier(e).id,
+                    de_entity_version(e).ver
+                  );
+        }
+    }
+    for (int j = 0; j < num; j++) {
+        de_destroy(r, todestroy[j]);
+    }
+    free(todestroy);
+
+}
+
+void particles_draw() {
+
+    for (de_view v = de_create_view(r, 2, (de_cp_type[2]) { 
+                component_position, component_color
+        }); de_view_valid(&v); de_view_next(&v)) {
+
+        //de_entity e = de_view_entity(&v);
+        struct Component_Position* p = de_view_get(&v, component_position);
+        Color *c = de_view_get(&v, component_color);
+
+
+        Vector2 displacement;
+        Vector2 vert1, vert2, vert3;
+
+        //rlBegin(RL_TRIANGLES);
+        //rlColor4ub(c->r, c->g, c->b, c->a);
+
+        displacement = (Vector2) {
+            cosf(p->angle) * particle_radius,
+            sinf(p->angle) * particle_radius,
+        };
+        vert1 = Vector2Add(p->p, displacement);
+
+        p->angle += M_PI * 2. / 3.;
+
+        displacement = (Vector2) {
+            cosf(p->angle) * particle_radius,
+            sinf(p->angle) * particle_radius,
+        };
+        vert2 = Vector2Add(p->p, displacement);
+        //rlColor4ub(c->r, c->g, c->b, c->a);
+
+        p->angle += M_PI * 2. / 3.;
+
+        displacement = (Vector2) {
+            cosf(p->angle) * particle_radius,
+            sinf(p->angle) * particle_radius,
+        };
+        vert3 = Vector2Add(p->p, displacement);
+
+        //rlVertex2f(vert2.x, vert2.y);
+        //rlVertex2f(vert1.x, vert1.y);
+        //rlVertex2f(vert3.x, vert3.y);
+        //rlColor4ub(c->r, c->g, c->b, c->a);
+
+        //rlEnd();
+
+        DrawTriangle(vert2, vert1, vert3, *c);
+    }
+    // */
+}
+
+Stage *stage_ecs_new(void) {
+    Stage_ECS *st = calloc(1, sizeof(Stage_ECS));
+    st->parent.init = (Stage_data_callback)stage_ecs_init;
+    st->parent.update = (Stage_callback)stage_ecs_update;
+    st->parent.shutdown = (Stage_callback)stage_ecs_shutdown;
+    st->parent.draw = (Stage_callback)stage_ecs_draw;
+    /*st->parent.enter = (Stage_data_callback)stage_ecs_enter;*/
+    return (Stage*)st;
+}
+
+void stage_ecs_init(Stage_ECS *st, void *data) {
+    r = de_ecs_make();
+    component_register(component_position);
+    component_register(component_velocity);
+    component_register(component_angular_velocity);
+    component_register(component_color);
+    component_register(component_lifetime);
+}
+
+void stage_ecs_draw(Stage_ECS *st) {
+    //ClearBackground(BLACK);
+    particles_draw();
+    char buf[64] = {};
+    sprintf(buf, "particles: %d", particle_counter);
+    DrawText(buf, 0, 0, 45, WHITE);
+}
+
+static void entity_iter(de_ecs *ecs, de_entity e, void * data) {
+    entity_print_stuff(ecs, e);
+}
+
+void stage_ecs_update(Stage_ECS *st) {
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        particle_build(r);
+    }
+    de_each(r, entity_iter, NULL);
+    particles_update();
+}
+
+void stage_ecs_shutdown(Stage_ECS *st) {
+    de_ecs_destroy(r);
+    trace("stage_ecs_shutdown:\n");
+}
+
+void stage_ecs_enter(Stage_ECS *st, void *data) {
+    trace("stage_ecs_enter:\n");
+}

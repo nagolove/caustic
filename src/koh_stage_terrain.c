@@ -1,0 +1,495 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
+
+#include "stage_terrain.h"
+
+
+#include "cammode.h"
+#include "console.h"
+#include "hotkey.h"
+#include "rand.h"
+#include "raylib.h"
+#include "raymath.h"
+
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <memory.h>
+
+#include "common.h"
+#include "tile.h"
+
+#include "das_mt.h"
+#include "das.h"
+
+static const char *rules = "" \
+"R - пересоздать";
+
+// XXX: Починить проблемы с камерой
+static Camera2D cam = {0};
+
+void stage_terrain_init(Stage_Terrain *st, void *data);
+void stage_terrain_update(Stage_Terrain *st);
+void stage_terrain_shutdown(Stage_Terrain *st);
+
+Stage *stage_terrain_new(HotkeyStorage *hk_store) {
+    Stage_Terrain *st = calloc(1, sizeof(Stage_Terrain));
+    st->hk_storage = hk_store;
+    st->parent.init = (Stage_data_callback)stage_terrain_init;
+    st->parent.update = (Stage_callback)stage_terrain_update;
+    //XXX: Падает в wasm?
+    st->parent.shutdown = (Stage_callback)stage_terrain_shutdown;
+    //st->parent.enter = (Stage_data_callback)stage_terrain_enter;
+    return (Stage*)st;
+}
+
+static void hk_camera_zoom_reset(Hotkey *hk) {
+    if (cam_get()) 
+        cam_get()->zoom = 1.;
+}
+
+static void hk_camera_position_reset(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam) {
+        cam->offset.x = 0.;
+        cam->offset.y = 0.;
+        cam->zoom = 1.;
+    }
+}
+
+static void hk_camera_move_left(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.x += GetFrameTime() * st->camera_move_k;
+}
+
+static void hk_camera_move_right(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.x -= GetFrameTime() * st->camera_move_k;
+}
+
+static void hk_camera_move_up(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.y += GetFrameTime() * st->camera_move_k;
+}
+
+static void hk_camera_move_down(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.y -= GetFrameTime() * st->camera_move_k;
+}
+
+static void hk_camera_zoomin(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam && cam->zoom < 4.) {
+        cam->zoom += ((Stage_Terrain*)hk->data)->zoom_step * GetFrameTime();
+    }
+}
+
+static void hk_camera_zoomout(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam) {
+        Stage_Terrain *st = (Stage_Terrain*)hk->data;
+        //int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+        //double w = cam->zoom * mapsize * st->t.rez;
+        //if (w > GetScreenWidth())
+        if (cam && cam->zoom > 0.02) 
+            cam->zoom -= st->zoom_step * GetFrameTime();
+    }
+}
+
+static void hk_incmapsize(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    if (st->mapn <= 15)
+        st->mapn++;
+}
+
+static void hk_decmapsize(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    if (st->mapn > 1)
+        st->mapn--;
+}
+
+static void hk_reset(Hotkey *hk) {
+    printf("reset\n");
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+
+    /*st->t.das = das_interface_init();*/
+
+    if (st->t.das.free && st->t.das.ctx)
+        st->t.das.free(st->t.das.ctx);
+
+    switch (st->t.das_type) {
+        case DAS_TYPE_DEFAULT: {
+            das_interface_shutdown(&st->t.das);
+            st->t.das = das_interface_init();
+            break;
+        }
+        case DAS_TYPE_MT: {
+            dasmt_interface_shutdown(&st->t.das);
+            st->t.das = dasmt_interface_init();
+            break;
+        }
+    }
+
+    xorshift32_state rng = xorshift32_init();
+    if (st->t.das.ctx)
+        st->t.das.free(st->t.das.ctx);
+
+    st->t.das.init(st->t.das.ctx, st->mapn, &rng);
+
+    if (st->t.das_type == DAS_TYPE_MT)
+        st->t.das.set_threadsnum(st->t.das.ctx, st->threads);
+
+    printf("before eval\n");
+    st->t.das.eval(st->t.das.ctx, -1);
+    st->is_run = true;
+
+    tiles_alloc(&st->t);
+    tiles_prerender(&st->t);
+}
+
+void hk_das_mode(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    if (st->t.das_type == DAS_TYPE_DEFAULT)
+        st->t.das_type = DAS_TYPE_MT;
+    else
+        st->t.das_type = DAS_TYPE_DEFAULT;
+}
+
+void hk_dec_threads_num(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    /*if (st->t.das_type == DAS_TYPE_MT && st->t.das.ctx) {*/
+        /*int num = st->t.das.get_threadsnum(st->t.das.ctx);*/
+    if (st->threads >= 2)
+        st->threads--;
+            /*st->t.das.set_threadsnum(st->t.das.ctx, num - 1);*/
+    /*}*/
+}
+
+void hk_inc_threads_num(Hotkey *hk) {
+    Stage_Terrain *st = (Stage_Terrain*)hk->data;
+    /*if (st->t.das_type == DAS_TYPE_MT && st->t.das.ctx) {*/
+        /*int num = st->t.das.get_threadsnum(st->t.das.ctx);*/
+    if (st->threads < 12)
+        st->threads++;
+            /*st->t.das.set_threadsnum(st->t.das.ctx, num + 1);*/
+    /*}*/
+}
+
+void stage_terrain_init(Stage_Terrain *st, void *data) {
+    printf("stage_terrain_init\n");
+
+    hotkey_group_enable(st->hk_storage, HOTKEY_GROUP_FIGHT, false);
+    hotkey_group_enable(st->hk_storage, HOTKEY_GROUP_CONSOLE, false);
+
+    st->threads = 1;
+    st->t.das_type = DAS_TYPE_DEFAULT;
+    st->mapn = 6;
+    st->prev_cam = cam_get();
+
+    memset(&cam, 0, sizeof(cam));
+    cam.zoom = 1.;
+
+    st->zoom_step = 0.2;
+    st->fnt = load_font_unicode("assets/dejavusansmono.ttf", 32);
+    st->camera_move_k = 500.;
+
+    HotkeyStorage *storage = st->hk_storage;
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .mod = 0,
+            .key = KEY_R,
+        },
+        .func = hk_reset,
+        .description = "Пересоздать карту",
+        .name = "reset",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .mod = 0,
+            .key = KEY_W,
+        },
+        .func = hk_decmapsize,
+        .description = "Уменьшить размер карты",
+        .name = "decmapsize",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .mod = 0,
+            .key = KEY_Q,
+        },
+        .func = hk_incmapsize,
+        .description = "Увеличить размер карты",
+        .name = "incmapsize",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    /*
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .key = KEY_L,
+        },
+        .func = hk_utiles_visible,
+        .description = "utility tile visibility",
+        .name = "utiles",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_COMMON,
+    });
+    */
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .key = KEY_Z,
+        },
+        .func = hk_camera_zoomin,
+        .description = "camera zoom in",
+        .name = "cam_zoom_in",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .key = KEY_X,
+        },
+        .func = hk_camera_zoomout,
+        .description = "camera zoom out",
+        .name = "cam_zoom_out",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    ///// Camera management
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_COMMA
+        },
+        .func = hk_camera_position_reset,
+        .description = "camera position reset",
+        .name = "cam_position_reset",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_M
+        },
+        .func = hk_das_mode,
+        .description = "change DAS mode(single/multi)",
+        .name = "das_mode",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_COMMA
+        },
+        .func = hk_camera_zoom_reset,
+        .description = "camera zoom reset",
+        .name = "cam_zoom_reset",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_DOWN,
+        },
+        .func = hk_camera_move_down,
+        .description = "camera move down",
+        .name = "cam_move_down",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_UP,
+        },
+        .func = hk_camera_move_up,
+        .description = "camera move up",
+        .name = "cam_move_up",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_ONE,
+        },
+        .func = hk_dec_threads_num,
+        .description = "Уменьшить количество потоков",
+        .name = "dec_threads_num",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_TWO,
+        },
+        .func = hk_inc_threads_num,
+        .description = "Увеличить количество потоков",
+        .name = "inc_threads_num",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_RIGHT
+        },
+        .func = hk_camera_move_right,
+        .description = "camera move right",
+        .name = "cam_move_right",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_LEFT,
+        },
+        .func = hk_camera_move_left,
+        .description = "camera move left",
+        .name = "cam_move_left",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN,
+    });
+
+
+    tiles_init(&st->t);
+}
+
+void stage_terrain_update(Stage_Terrain *st) {
+    //printf("stage_terrain_update\n");
+    if (st->is_run) {
+        //st->is_run = st->t.das.eval2(st->t.das.ctx);
+    }
+
+    console_immediate_buffer_enable(true);
+
+    console_write(
+        "cam %f, %f, %f", 
+        cam.offset.x, 
+        cam.offset.y, 
+        cam.zoom
+    );
+
+    BeginMode2D(cam);
+    tiles_render(&st->t, tile_get);
+    EndMode2D();
+
+    /*
+    DrawTextPro(
+        st->fnt, 
+        rules, 
+        Vector2Zero(),
+        Vector2Zero(),
+        0.,
+        st->fnt.baseSize,
+        0.,
+        RED
+    );
+    */
+    console_write("%s", rules);
+    if (st->t.das.ctx) {
+        console_write("mapsize %d", st->t.das.get_mapsize(st->t.das.ctx));
+        console_write(
+            "elapsed time %f",
+            st->t.das.get_elapsedtime(st->t.das.ctx) * 100
+        );
+
+        if (st->t.das_type == DAS_TYPE_MT) {
+            /*console_write(*/
+                /*"threads %d\n",*/
+                /*st->t.das.get_threadsnum(st->t.das.ctx)*/
+            /*);*/
+            console_write("threads %d\n", st->threads);
+        }
+    }
+
+    console_write("mapn %d", st->mapn);
+    char *mode_str = NULL;
+    switch(st->t.das_type) {
+        case DAS_TYPE_DEFAULT:
+            mode_str = "single";
+            break;
+        case DAS_TYPE_MT:
+            mode_str = "multi";
+            break;
+    }
+    console_write("mode %s", mode_str);
+}
+
+void stage_terrain_shutdown(Stage_Terrain *st) {
+    printf("stage_terrain_shutdown\n");
+    UnloadFont(st->fnt);
+    tiles_shutdown(&st->t);
+
+    /*cmn.cam = st->prev_cam;*/
+}
+
+void stage_terrain_enter(Stage_Terrain *st, void *data) {
+    printf("stage_terrain_enter\n");
+}
+
+

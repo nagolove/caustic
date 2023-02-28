@@ -165,12 +165,12 @@ project "test_strset"
 local libs_path = "3rd_party"
 
 local includedirs  = { 
-    "./3rd_party/genann",
-    "./3rd_party/Chipmunk2D/include",
-    "./3rd_party/raylib/raylib/include",
-    "./3rd_party/lua/",
-    "./3rd_party/utf8proc",
-    "./3rd_party/small-regex/libsmallregex",
+    "../caustic/3rd_party/genann",
+    "../caustic/3rd_party/Chipmunk2D/include",
+    "../caustic/3rd_party/raylib/raylib/include",
+    "../caustic/3rd_party/lua/",
+    "../caustic/3rd_party/utf8proc",
+    "../caustic/3rd_party/small-regex/libsmallregex",
 }
 
 local libdirs_internal = { 
