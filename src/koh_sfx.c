@@ -1,4 +1,4 @@
-#include "sfx.h"
+#include "koh_sfx.h"
 
 #include <ctype.h>
 #include <assert.h>
@@ -8,12 +8,12 @@
 #include "lua.h"
 #include "raylib.h"
 
-#include "console.h"
-#include "script.h"
-#include "table.h"
-#include "common.h"
-#include "lua_tools.h"
-#include "logger.h"
+#include "koh_common.h"
+#include "koh_console.h"
+#include "koh_logger.h"
+#include "koh_lua_tools.h"
+#include "koh_script.h"
+#include "koh_table.h"
 
 static HTable *sounds_tbl = NULL;
 static const char *SFX_PATH = "assets/sfx";

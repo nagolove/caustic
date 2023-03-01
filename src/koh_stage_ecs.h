@@ -2,5 +2,5 @@
 // vim: fdm=marker
 #pragma once
 
-#include "stages.h"
+#include "koh_stages.h"
 Stage *stage_ecs_new(void);

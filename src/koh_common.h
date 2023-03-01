@@ -19,21 +19,7 @@
 #include "raylib.h"
 #include "raymath.h"
 
-typedef struct Stage_Fight Stage_Fight;
 typedef struct Object Object;
-
-enum HotkeyGroup {
-    HOTKEY_GROUP_FIRST_UNUSED = 0b0000000,
-    HOTKEY_GROUP_FIGHT        = 0b0000001,
-    HOTKEY_GROUP_CONSOLE      = 0b0000010,
-    //HOTKEY_GROUP_MENU_MAIN    = 0b0000100,
-    //HOTKEY_GROUP_MENU_LEVEL   = 0b0001000,
-    ////////////////////////////////////////////////
-    HOTKEY_GROUP_TERRAIN      = 0b0010000,
-    HOTKEY_GROUP_TERRAIN2     = 0b0100000,
-    ////////////////////////////////////////////////
-    HOTKEY_GROUP_LAST_UNUSED  = 0b1000000,
-};
 
 typedef struct {
     bool quit;
@@ -87,10 +73,8 @@ char *str_builder_concat(StrBuilder *sb, int *len);
 // не выделяет памяти под строку, статический буфер в функции
 const char *uint8t_to_bitstr(uint8_t value);
 
-// выделяет память под строку
 char *to_bitstr32(uint32_t value);
 
-int new_fullud_ref(Stage_Fight *st, Object *obj, const char *tname);
 int u8_codeptlen(const char *str);
 void save_scripts(FILE *file);
 void bb_draw(cpBB bb, Color color);

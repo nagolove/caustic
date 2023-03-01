@@ -1,7 +1,7 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_empty.h"
+#include "koh_stage_empty.h"
 
 #include <assert.h>
 #include <stdlib.h>

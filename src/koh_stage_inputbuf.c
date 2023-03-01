@@ -1,9 +1,10 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_inputbuf.h"
-#include "console.h"
-#include "input.h"
+#include "koh_stage_inputbuf.h"
+
+#include "koh_console.h"
+#include "koh_input.h"
 
 #include <assert.h>
 #include <stdlib.h>

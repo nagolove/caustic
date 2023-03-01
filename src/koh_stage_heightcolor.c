@@ -1,4 +1,4 @@
-#include "stage_heightcolor.h"
+#include "koh_stage_heightcolor.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -6,8 +6,8 @@
 
 #include "raylib.h"
 
-#include "common.h"
-#include "height_color.h"
+#include "koh_common.h"
+#include "koh_height_color.h"
 
 const int rectw = 128, recth = 64;
 Rectangle *rects = NULL;

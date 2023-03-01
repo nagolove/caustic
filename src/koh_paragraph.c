@@ -1,16 +1,17 @@
 // vim: fdm=marker
-#include "paragraph.h"
+#include "koh_paragraph.h"
 
-#include "common.h"
-#include "console.h"
+#include "koh_common.h"
+#include "koh_console.h"
+
 #include "raylib.h"
 #include "raymath.h"
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void paragraph_init(Paragraph *prgh) {

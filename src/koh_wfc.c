@@ -1,7 +1,6 @@
-#include "wfc.h"
+#include "koh_wfc.h"
 
-#include "rand.h"
-
+#include "koh_rand.h"
 #include <math.h>
 #include <assert.h>
 #include <raylib.h>

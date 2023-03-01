@@ -1,13 +1,15 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_adsr.h"
-#include "adsr.h"
-#include "common.h"
-#include "hotkey.h"
+#include "koh_stage_adsr.h"
+
+#include "koh_adsr.h"
+#include "koh_common.h"
+#include "koh_hotkey.h"
+#include "koh_stages.h"
+
 #include "raylib.h"
 #include "raymath.h"
-#include "stages.h"
 
 #include <assert.h>
 #include <stdlib.h>

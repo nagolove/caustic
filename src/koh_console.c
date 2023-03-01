@@ -63,6 +63,8 @@ typedef struct LineEntry {
     char *l;
 } LineEntry;
 
+static struct ConsoleSetup setup = {0};
+
 struct {
     // Буфер с прокруткой
     LineEntry *buf;
@@ -110,8 +112,11 @@ struct {
     bool can_move_right, can_move_left, can_backspace;
 } con = {0, };
 
-void console_init(HotkeyStorage *hk_store) {
+void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     assert(hk_store);
+    assert(cs);
+
+    setup = *cs;
 
     timerstore_init(&con.timers, 20);
     con.can_move_left = con.can_move_right = true;
@@ -351,8 +356,9 @@ void console_update(void) {
         /*printf("exit from editor mode\n");*/
         con.editor_mode = false;
 
-        hotkey_group_enable(con.hk_store, HOTKEY_GROUP_FIGHT, true);
         hotkey_group_enable(con.hk_store, HOTKEY_GROUP_CONSOLE, false);
+        if (setup.on_disable)
+            setup.on_disable(con.hk_store, setup.udata);
     }
 
     if (con.editor_mode) {
@@ -379,8 +385,9 @@ bool console_check_editor_mode(void) {
             con.first_char = true;
         con.editor_mode = true;
 
-        hotkey_group_enable(con.hk_store, HOTKEY_GROUP_FIGHT, false);
         hotkey_group_enable(con.hk_store, HOTKEY_GROUP_CONSOLE, true);
+        if (setup.on_enable)
+            setup.on_enable(con.hk_store, setup.udata);
         /*return true;*/
     }
     return con.editor_mode;

@@ -1,19 +1,17 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stages.h"
+#include "koh_stages.h"
 
-#include <stdlib.h>
-#include <memory.h>
-#include <assert.h>
-#include <lua.h>
-#include <raylib.h>
-#include <string.h>
-
+#include "koh_console.h"
+#include "koh_script.h"
 #include "lauxlib.h"
-#include "script.h"
-#include "console.h"
+#include "lua.h"
 #include "raylib.h"
+#include <assert.h>
+#include <memory.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct StagesStore {
     Stage *stages[MAX_STAGES_NUM];

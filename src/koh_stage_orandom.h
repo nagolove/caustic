@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "rand.h"
+#include "koh_rand.h"
+#include "koh_stages.h"
 #include "raylib.h"
-#include "stages.h"
 
 typedef struct Stage_OuterRandom {
     Stage            parent;

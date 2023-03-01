@@ -57,6 +57,7 @@ workspace "caustic"
             "./src/*.c",
         }
         --removefiles("common.c")
+        removefiles { "*koh_stage_terrain.c" }
 
     --[[
     project "test_objects_pool"

@@ -1,15 +1,13 @@
 // vim: fdm=marker
-#include "stage_paragraph.h"
-
-#include <stdlib.h>
+#include "koh_stage_paragraph.h"
 
 #include "chipmunk/chipmunk.h"
-
-#include "routine.h"
-#include "paragraph.h"
+#include "koh_common.h"
+#include "koh_paragraph.h"
+#include "koh_routine.h"
+#include "koh_stages.h"
 #include "raylib.h"
-#include "stages.h"
-#include "common.h"
+#include <stdlib.h>
 
 void stage_paragraph_init(Stage_paragraph *st, void *data) {
     st->fnt = load_font_unicode("assets/dejavusansmono.ttf", 40);

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "stages.h"
+#include "koh_stages.h"
 
 typedef struct Stage_Empty {
     Stage parent;

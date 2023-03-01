@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "path.h"
-#include "stages.h"
+#include "koh_path.h"
+#include "koh_stages.h"
 
 typedef struct Stage_Path {
     Stage parent;

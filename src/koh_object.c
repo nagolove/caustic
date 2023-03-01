@@ -1,50 +1,17 @@
-#include "object.h"
+#include "koh_object.h"
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-struct {
-    uint32_t type;
-    char     *stype;
-} static type2str[] = {
-    { OBJ_UNUSED_FIRST    , "Unused_first" },
-    { OBJ_TANK            , "Tank" },
-    { OBJ_TANK_TURRET     , "Tank_Turret" },
-    { OBJ_HANGAR          , "Hangar" },
-    { OBJ_TELEPORT        , "Teleport" },
-    { OBJ_ROCKET          , "Rocket" },
-    { OBJ_BULLET          , "Bullet" },
-    { OBJ_FLAME           , "Flame" },
-    { OBJ_SEGMENT         , "Segment" },
-    { OBJ_XTURRET         , "XTurret", },
-    { OBJ_XTURRET_TURRET  , "XTurret_Turret", },
-    { OBJ_TREE            , "Tree", },
-    { OBJ_HELICOPPER      , "Helicopter" },
-    { OBJ_FRAGMENT        , "Fragment" },
-    { OBJ_MINE            , "Mine", },
-    { OBJ_UNUSED_LAST     , "Unused_last" },
-    { -1, NULL },
-};
-
-struct {
-    uint32_t comp_id;
-    char     *scomp_id;
-} static component2str[] = {
-    /*{ OBJ_COMPONENT_FIRST_UNUSED, "FIRST_UNUSED" },*/
-    { OBJ_COMPONENT_RENDERED,     "RENDERED" },
-    { OBJ_COMPONENT_TEXTURED,     "TEXTURED" },
-    /*{ OBJ_COMPONENT_LAST_UNUSED,  "LAST_UNUSED" },*/
-    { 0,                          NULL },
-};
-
 static inline TypeStorage *find_type(ObjectStorage *s, uint32_t type) {
     assert(s);
     //assert(OBJ_UNUSED_FIRST < type && type < OBJ_UNUSED_LAST);
-    if (OBJ_UNUSED_FIRST < type && type < OBJ_UNUSED_LAST) {
+    if (0 < type && type < obj_unused_last) {
         for(int i = 0; i < s->typesnum; i++) {
             if (s->types[i].type == type) {
                 return &s->types[i];
@@ -337,11 +304,48 @@ ObjectAction object_foreach_allocated2(
     return OBJ_ACT_CONTINUE;
 }
 
+static struct ID2Str *component2str;
+static struct ID2Str *type2str;
+
+void _id2str_init(struct ID2Str **dest, struct ID2Str *source) {
+    int num = 0;
+    assert(dest);
+    assert(source);
+    while (source[num++].stype);
+    size_t size = num * sizeof(struct ID2Str);
+    component2str = malloc(size);
+    memmove(*dest, source, size);
+}
+
+void _id2str_shutdown(struct ID2Str **t) {
+    assert(t);
+    if (*t) {
+        free(*t);
+        *t = NULL;
+    }
+}
+
+void component_id2str_init(struct ID2Str *_component2str) {
+    _id2str_init(&component2str, _component2str);
+}
+
+void component_id2str_shutdown() {
+    _id2str_shutdown(&component2str);
+}
+
+void object_type2str_init(struct ID2Str *_type2str) {
+    _id2str_init(&type2str, _type2str);
+}
+
+void object_type2str_shutdown() {
+    _id2str_shutdown(&type2str);
+}
+
 const char *component_id2str(uint32_t comp_id) {
     int i = 0;
-    while(component2str[i].scomp_id) {
-        if (comp_id == component2str[i].comp_id) {
-            return component2str[i].scomp_id;
+    while(component2str[i].stype) {
+        if (comp_id == component2str[i].type) {
+            return component2str[i].stype;
         }
         i++;
     }
@@ -403,8 +407,8 @@ static inline ComponentsStorage *find_registry(
     assert(s);
     //assert(OBJ_UNUSED_FIRST < type && type < OBJ_UNUSED_LAST);
     if (
-        comp_id <= OBJ_COMPONENT_FIRST_UNUSED && 
-        comp_id >= OBJ_COMPONENT_LAST_UNUSED
+        comp_id <= 0 && 
+        comp_id >= obj_component_last_unused
     ) return NULL;
 
     for(int i = 0; i < s->systemsnum; i++) {
@@ -494,10 +498,7 @@ void *component_get_system(
 ) {
     assert(store);
 
-    if (
-        OBJ_COMPONENT_FIRST_UNUSED >= comp_id &&
-        comp_id >= OBJ_COMPONENT_LAST_UNUSED
-    ) {
+    if (0 >= comp_id && comp_id >= obj_component_last_unused) {
         return NULL;
     }
 

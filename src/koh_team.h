@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rand.h"
+#include "koh_rand.h"
 
 #define MAX_TEAMS   8
 

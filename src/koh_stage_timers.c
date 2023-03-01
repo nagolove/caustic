@@ -1,17 +1,17 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_timers.h"
-#include "raylib.h"
-#include "timer.h"
+#include "koh_stage_timers.h"
 
-#include <time.h>
-#include <math.h>
+#include "koh_timer.h"
+#include "raylib.h"
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <math.h>
 #include <memory.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 void stage_timers_init(Stage_Timers *st, void *data);
 void stage_timers_update(Stage_Timers *st);

@@ -1,10 +1,11 @@
-#include "render.h"
+#include "koh_render.h"
 
 #include <math.h>
 
-#include "routine.h"
-#include "common.h"
 #include "rlgl.h"               
+
+#include "koh_routine.h"
+#include "koh_common.h"
 
 void render_texture(
         Texture2D texture,

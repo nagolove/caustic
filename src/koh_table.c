@@ -1,12 +1,11 @@
-#include "table.h"
+#include "koh_table.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include "koh_hashers.h"
 #include <assert.h>
 #include <stdint.h>
-
-#include "hashers.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct Bucket {
     int    key_len, value_len;

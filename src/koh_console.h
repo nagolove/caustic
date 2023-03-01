@@ -7,6 +7,10 @@
 
 #include "koh_hotkey.h"
 
+enum {
+    HOTKEY_GROUP_CONSOLE      = 0b0000010,
+};
+
 // Количество строчек в буфере непосредственного вывода
 #define MAX_LINES   200
 // Максимальная длина строки
@@ -14,7 +18,13 @@
 // Количество строчек в буфере прокрутки
 #define BUF_LINES   5000
 
-void console_init(HotkeyStorage *hk_store);
+struct ConsoleSetup {
+    void (*on_enable)(HotkeyStorage *hk_store, void *udata);
+    void (*on_disable)(HotkeyStorage *hk_store, void *udata);
+    void *udata;
+};
+
+void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs);
 void console_shutdown(void);
 
 void console_immediate_buffer_enable(bool state);

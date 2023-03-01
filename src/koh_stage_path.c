@@ -5,15 +5,15 @@
 Объект для хранения и передвижения по пути, состоящим из точек.
 */
 
-#include "stage_path.h"
-#include "path.h"
-#include "raylib.h"
+#include "koh_stage_path.h"
 
+#include "koh_path.h"
+#include "raylib.h"
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <memory.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 void stage_path_init(Stage_Path *st, void *data);
 void stage_path_update(Stage_Path *st);

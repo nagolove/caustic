@@ -1,7 +1,8 @@
-#include "path.h"
+#include "koh_path.h"
 
-#include "dev_draw.h"
-#include "common.h"
+#include "koh_dev_draw.h"
+#include "koh_common.h"
+
 #include "raylib.h"
 #include "raymath.h"
 

@@ -1,12 +1,12 @@
-#include "stage_rand.h"
-#include "rand.h"
-#include "raylib.h"
-#include "stages.h"
+#include "koh_stage_rand.h"
 
-#include <stdio.h>
-#include <time.h>
+#include "koh_rand.h"
+#include "koh_stages.h"
+#include "raylib.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 typedef struct Stage_rand {
     Stage parent;

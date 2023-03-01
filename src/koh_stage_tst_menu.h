@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "hotkey.h"
-#include "stages.h"
-#include "menu.h"
-#include "timer.h"
+#include "koh_hotkey.h"
+#include "koh_stages.h"
+#include "koh_menu.h"
+#include "koh_timer.h"
 
 typedef struct Stage_TestMenu {
     Stage parent;

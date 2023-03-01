@@ -1,19 +1,20 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_tst_menu.h"
-#include "common.h"
-#include "hotkey.h"
-#include "menu.h"
-#include "raylib.h"
-#include "timer.h"
-#include "logger.h"
+#include "koh_stage_tst_menu.h"
 
+#include "koh_common.h"
+#include "koh_console.h"
+#include "koh_hotkey.h"
+#include "koh_logger.h"
+#include "koh_menu.h"
+#include "koh_timer.h"
+#include "raylib.h"
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <memory.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 void stage_tstmenu_init(Stage_TestMenu *st, void *data);
 void stage_tstmenu_update(Stage_TestMenu *st);

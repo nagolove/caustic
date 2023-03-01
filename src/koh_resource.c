@@ -1,5 +1,7 @@
-#include "resource.h"
-#include "common.h"
+#include "koh_resource.h"
+
+#include "koh_common.h"
+
 #include "raylib.h"
 
 #include <assert.h>

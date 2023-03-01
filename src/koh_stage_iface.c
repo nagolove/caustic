@@ -1,20 +1,27 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_iface.h"
+#include "koh_stage_iface.h"
 
-#include "common.h"
-#include "iface.h"
-#include "console.h"
-
+#include "koh_common.h"
+#include "koh_console.h"
+#include "koh_iface.h"
+#include "koh_stages.h"
 #include "raylib.h"
-
 #include <assert.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <memory.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct Stage_iface {
+    Stage parent;
+    VContainer *mnu1, *mnu2;
+    //bool is_mnu_open; //, is_first_iter;
+    Vector2 mousep;
+    Font fnt;
+} Stage_iface;
 
 void stage_iface_init(Stage_iface *st, void *data);
 void stage_iface_update(Stage_iface *st);

@@ -1,4 +1,4 @@
-#include "team.h"
+#include "koh_team.h"
 
 int team_generate(xorshift32_state *rng) {
     return xorshift32_rand(rng) % MAX_TEAMS;

@@ -1,16 +1,17 @@
-#include "script.h"
+#include "koh_script.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "console.h"
-#include "inotifier.h"
 #include "lauxlib.h"
 #include "lua.h"
-#include "lua_tools.h"
-#include "logger.h"
+
+#include "koh_console.h"
+#include "koh_inotifier.h"
+#include "koh_logger.h"
+#include "koh_lua_tools.h"
 
 static ScriptFunc *script_funcs = NULL;
 static lua_State *lua = NULL;
@@ -475,7 +476,7 @@ Vector2 read_pos(lua_State *lua, bool *notfound) {
     return pos;
 }
 
-int new_fullud_ref(Stage_Fight *st, Object *obj, const char *tname) {
+int new_fullud_ref(Stage *st, Object *obj, const char *tname) {
     assert(obj);
     assert(tname);
 
@@ -508,7 +509,7 @@ int new_fullud_ref(Stage_Fight *st, Object *obj, const char *tname) {
     return ref;
 }
 
-int new_fullud_get_ref(Stage_Fight *st, Object *obj, const char *tname) {
+int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
     assert(obj);
     assert(tname);
 

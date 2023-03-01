@@ -1,11 +1,10 @@
 #pragma once
 
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
-
-#include "raylib.h"
 #include "koh_object.h"
+#include "lauxlib.h"
+#include "lua.h"
+#include "lualib.h"
+#include "raylib.h"
 
 typedef struct Stage_Fight Stage_Fight;
 
@@ -28,8 +27,8 @@ void sc_init_script();
 void register_function(lua_CFunction f, const char *fname, const char *desc);
 void sc_register_func_desc(const char *funcname, const char *description);
 const char * sc_stack_dump();
-int new_fullud_ref(Stage_Fight *st, Object *obj, const char *tname);
-int new_fullud_get_ref(Stage_Fight *st, Object *obj, const char *tname);
+int new_fullud_ref(Stage *st, Object *obj, const char *tname);
+int new_fullud_get_ref(Stage *st, Object *obj, const char *tname);
 
 //const char *skip_lead_zeros(const char *s);
 uint32_t read_id(lua_State *lua);

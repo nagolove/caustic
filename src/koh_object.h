@@ -10,22 +10,18 @@
 #define MAX_SYSTEMS     32
 
 extern uint32_t obj_unused_last;
+extern uint32_t obj_component_last_unused;
 
-struct ObjectType2Str {
+struct ID2Str {
     uint32_t type;
     char     *stype;
 };
 
-struct Component2Str {
-    uint32_t comp_id;
-    char     *scomp_id;
-};
-
-void component_id2str_init(struct Component2Str *_component2str);
+void component_id2str_init(struct ID2Str *_component2str);
 void component_id2str_shutdown();
 
 const char *object_type2str(uint32_t type);
-void object_type2str_init(struct ObjectType2Str *_type2str);
+void object_type2str_init(struct ID2Str *_type2str);
 void object_type2str_shutdown();
 
 typedef struct Object Object;

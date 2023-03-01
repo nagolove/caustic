@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include "stages.h"
-#include "timer.h"
+#include "koh_stages.h"
+#include "koh_timer.h"
 
 typedef struct Stage_Timers {
-    Stage parent;
+    Stage      parent;
     TimerStore ts;
 } Stage_Timers;
 

@@ -1,17 +1,17 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_orandom.h"
-#include "common.h"
-#include "rand.h"
-#include "raylib.h"
-#include "routine.h"
+#include "koh_stage_orandom.h"
 
+#include "koh_common.h"
+#include "koh_rand.h"
+#include "koh_routine.h"
+#include "raylib.h"
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <memory.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 const char *rules = "'R' - перезапустить";
 

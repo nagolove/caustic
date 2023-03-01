@@ -1,18 +1,19 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_ecs.h"
+#include "koh_stage_ecs.h"
 
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-#include "stages.h"
-#include "common.h"
-#include "logger.h"
-#include "routine.h"
+
+#include "koh_stages.h"
+#include "koh_common.h"
+#include "koh_logger.h"
+#include "koh_routine.h"
 
 #define DESTRAL_ECS_IMPL
-#include "destral_ecs.h"
+#include "koh_destral_ecs.h"
 
 #include <stddef.h>
 #include <math.h>
