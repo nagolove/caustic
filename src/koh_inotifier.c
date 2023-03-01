@@ -1,8 +1,6 @@
 // vim: fdm=marker
 #include "koh_inotifier.h"
 
-#include "raylib.h"
-
 #if defined(PLATFORM_WEB)
 void inotifier_init() { }
 void inotifier_update() { }
@@ -11,16 +9,17 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) { };
 void inotifier_remove_watch(const char *fname) { }
 #else
 
+#include "koh_logger.h"
+#include "koh_table.h"
+#include "raylib.h"
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/inotify.h>
 #include <unistd.h>
-#include <string.h>
-
-#include "koh_table.h"
 
 struct WatchContext {
     WatchCallback   cb;
@@ -90,18 +89,18 @@ void process_event(const struct inotify_event *event) {
     if (!fname)
         return;
 
-    printf("fname %s\n", fname);
+    //trace("fname %s\n", fname);
     struct WatchContext *ctx;
     ctx = htable_get(tbl, fname, strlen(fname) + 1, NULL);
-    printf("ctx %p\n", ctx);
+    //trace("ctx %p\n", ctx);
     if (ctx && ctx->cb) {
-        printf("handle_events: callback\n");
+        trace("process_event: callback\n");
         ctx->cb(fname, ctx->data);
     }
 }
 
 static void handle_events() {
-    printf("handle_events\n");
+    trace("handle_events:\n");
     char buf[4096]
         __attribute__ ((aligned(__alignof__(struct inotify_event))));
     const struct inotify_event *event;
@@ -128,7 +127,7 @@ static void handle_events() {
 struct pollfd fds[1] = {0};
 
 void inotifier_init() {
-    printf("inotifier_init\n");
+    trace("inotifier_init:\n");
     tbl = htable_new(&(struct HTableSetup) {
         .cap = MAX_WATCHED_FILES
     });
@@ -149,18 +148,18 @@ void inotifier_init() {
 };
 
 void inotifier_update() {
-   //printf("inotifier_update\n");
+   //trace("inotifier_update\n");
     //fds[0].fd = STDIN_FILENO;       [> Console input <]
     //fds[0].events = POLLIN;
 
     int timeout = 0;
     int poll_num = poll(fds, 1, timeout);
 
-    //printf("poll_num %d\n", poll_num);
+    //trace("poll_num %d\n", poll_num);
     
     if (poll_num == -1) {
         if (errno == EINTR) {
-            printf("inotifier_update: error %s", strerror(errno));
+            trace("inotifier_update: error %s", strerror(errno));
             return;
         }
         perror("poll");
@@ -176,7 +175,7 @@ void inotifier_update() {
     */
 
     /*
-    printf("fd %d, events %d, revents %d\n",
+    trace("fd %d, events %d, revents %d\n",
             fds[0].fd,
             fds[0].events,
             fds[0].revents
@@ -184,7 +183,7 @@ void inotifier_update() {
     */
 
     if (poll_num > 0 && fds[0].revents & POLLIN) {
-        /*printf(" fds[0].revents & POLLIN %d\n", fds[0].revents & POLLIN);*/
+        /*trace(" fds[0].revents & POLLIN %d\n", fds[0].revents & POLLIN);*/
         handle_events();
     }
 }
@@ -196,7 +195,7 @@ void fnames_free() {
 }
 
 void inotifier_shutdown() {
-    printf("inotifier_shutdown\n");
+    trace("inotifier_shutdown:\n");
     htable_free(tbl);
     close(fd);
     fnames_free();
@@ -204,18 +203,18 @@ void inotifier_shutdown() {
 
 void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     if (watched_num == MAX_WATCHED_FILES) {
-        printf("inotifier_watch: MAX_WATCHED_FILES reached\n");
+        trace("inotifier_watch: MAX_WATCHED_FILES reached\n");
         return;
     }
 
-    printf("inotifier_watch '%s' with data %p\n", fname, data);
+    trace("inotifier_watch: '%s' with data %p\n", fname, data);
     uint32_t mask = IN_ALL_EVENTS;
     //uint32_t mask = IN_MOVE_SELF;
     wd[watched_num] = inotify_add_watch(fd, fname, mask);
     fnames[watched_num] = strdup(fname);
 
     if (wd[watched_num] == -1) {
-        printf("Cannot watch '%s': %s\n", fname, strerror(errno));
+        trace("inotifier_watch: cannot watch '%s': %s\n", fname, strerror(errno));
     }
 
     struct WatchContext ctx = {

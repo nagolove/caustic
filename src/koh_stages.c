@@ -172,3 +172,10 @@ const char *stage_get_active_name() {
     }
     return NULL;
 }
+
+void *stage_assert(Stage *st, const char *name) {
+    assert(st);
+    Stage *res = stage_find(st->name);
+    assert(res);
+    return res;
+}

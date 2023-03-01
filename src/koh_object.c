@@ -8,6 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+uint32_t obj_unused_last;
+uint32_t obj_component_last_unused;
+
+static struct ID2Str *component2str;
+static struct ID2Str *type2str;
+
 static inline TypeStorage *find_type(ObjectStorage *s, uint32_t type) {
     assert(s);
     //assert(OBJ_UNUSED_FIRST < type && type < OBJ_UNUSED_LAST);
@@ -304,16 +310,14 @@ ObjectAction object_foreach_allocated2(
     return OBJ_ACT_CONTINUE;
 }
 
-static struct ID2Str *component2str;
-static struct ID2Str *type2str;
-
 void _id2str_init(struct ID2Str **dest, struct ID2Str *source) {
     int num = 0;
     assert(dest);
     assert(source);
     while (source[num++].stype);
     size_t size = num * sizeof(struct ID2Str);
-    component2str = malloc(size);
+    *dest = malloc(size);
+    assert(*dest);
     memmove(*dest, source, size);
 }
 

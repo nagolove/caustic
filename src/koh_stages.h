@@ -28,4 +28,5 @@ void stage_update_active(void);
 void stage_set_active(const char *name, void *data);
 const char *stage_get_active_name();
 Stage *stage_find(const char *name);
+void *stage_assert(Stage *st, const char *name);
 void stages_print();

@@ -3,30 +3,29 @@
 
 #include "koh_menu.h"
 
-#include <math.h>
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "raylib.h"
-#include "utf8proc.h"
-
 #include "koh_common.h"
 #include "koh_console.h"
 #include "koh_input.h"
+#include "koh_logger.h"
 #include "koh_timer.h"
+#include "raylib.h"
+#include "utf8proc.h"
+#include <assert.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static const char *left_bracket = "[[", *right_bracket = "]]";
 
 bool timer_blink(Timer *t) {
-    //printf("timer_blink\n");
+    //trace("timer_blink\n");
     Menu *mnu = t->data;
 
     //XXX: Не работает смена фазы для стрелки вверх и стрелки вниз
     /*double time = GetTime();*/
     /*float iter = time - M_PI * floor(time / M_PI);*/
-    /*printf("iter %f\n", time - M_PI * floor(time / M_PI));*/
+    /*trace("iter %f\n", time - M_PI * floor(time / M_PI));*/
     //mnu->arrow_down_color.a = floor((1. + sin(M_PI + iter))) / 2. * 255.;
     
     mnu->arrow_down_color.a = floor((1. + sin(GetTime())) / 2. * 255.);
@@ -172,7 +171,7 @@ void menu_select(Menu *mnu) {
     MenuItem *item = &mnu->items[mnu->active_item];
     assert(item);
     if (item->action) {
-        printf("select action\n");
+        trace("menu_select:\n");
         mnu->items[mnu->active_item].action(mnu, item);
     }
 }
@@ -181,7 +180,7 @@ void menu_update(Menu *mnu) {
     assert(mnu);
 
     if (!mnu->is_builded) {
-        printf("use menu_build() before menu_update()\n");
+        perror("use menu_build() before menu_update()\n");
         abort();
     }
 
@@ -254,17 +253,17 @@ void menu_build(Menu *mnu) {
         0
     ).x;
 
-    printf("full_longest_caption %s\n", full_longest_caption);
-    printf("maxwidth_index %d\n", maxwidth_index);
-    printf("mnu->visible_num %d\n", mnu->visible_num);
-    printf("mnu->scroll_rect.width %f\n", mnu->scroll_rect.width);
+    trace("menu_build: full_longest_caption %s\n", full_longest_caption);
+    trace("menu_build: menu_build: maxwidth_index %d\n", maxwidth_index);
+    trace("menu_build: mnu->visible_num %d\n", mnu->visible_num);
+    trace("menu_build: mnu->scroll_rect.width %f\n", mnu->scroll_rect.width);
 }
 
 void menu_print_items(Menu *mnu) {
     assert(mnu);
     for(int i = 0; i < mnu->items_num; ++i) {
         MenuItem *item = &mnu->items[i];
-        printf("%s, %p, %p\n", item->caption, item->action, item->data);
+        trace("menu_print_items: %s, %p, %p\n", item->caption, item->action, item->data);
     }
 }
 
