@@ -250,6 +250,17 @@ local function get_dirs()
 end
 --]]
 
+local ret_table = {
+    premake5_code = premake5_code,
+    urls = get_urls(dependencies),
+    dependencies = dependencies,
+    dirnames = get_dirs(dependencies),
+    includedirs = includedirs, 
+    links = links,
+    libdirs = libdirs,
+    links = links_internal,
+}
+
 local function main()
 
 local function check_luarocks()
@@ -435,6 +446,10 @@ local function common_build()
     end
 end
 
+function actions.verbose()
+    print(tabular(ret_table))
+end
+
 function actions.build()
     for _, dirname in pairs(get_dirs(dependencies)) do
         --print('dirname', dirname)
@@ -469,6 +484,7 @@ end
     parser:command("build")
     parser:command("remove")
     parser:command("rocks")
+    parser:command("verbose")
 
     if not lfs.chdir(libs_path) then
         lfs.mkdir(libs_path)
@@ -490,14 +506,4 @@ if arg then
     main()
 end
 
-return {
-    premake5_code = premake5_code,
-    urls = get_urls(dependencies),
-    dependencies = dependencies,
-    dirnames = get_dirs(dependencies),
-    includedirs = includedirs, 
-    links = links,
-    libdirs = libdirs,
-    links = links_internal,
-}
-
+return ret_table
