@@ -354,7 +354,6 @@ char *to_bitstr32(uint32_t value) {
     char *last = buf;
 
     union {
-        /*uint64_t u;*/
         uint32_t u;
         struct {
             unsigned char _0: 1;
@@ -368,7 +367,7 @@ char *to_bitstr32(uint32_t value) {
         } b[8];
     } bp = { .u = value, };
 
-    for(int i = 0; i < sizeof(value); ++i) {
+    for(int i = sizeof(value) - 1; i >= 0; i--) {
         last += sprintf(last, "%d", (int)bp.b[i]._7);
         last += sprintf(last, "%d", (int)bp.b[i]._6);
         last += sprintf(last, "%d", (int)bp.b[i]._5);
@@ -748,3 +747,42 @@ const char *get_basename(const char *path) {
         strncpy(buf, ret, sizeof(buf));
     return buf;
 }
+
+void koh_qsort_soa(
+    void *arr, size_t nmemb, size_t size, 
+    QSortCmpFunc cmp, QSortSwapFunc swap,
+    void *udata
+) {
+    /*
+    printf(
+        "koh_qsort_soa: arr %p, nmemb %zu, size %zu\n", 
+        arr, nmemb, size
+    );
+    */
+
+    assert(arr);
+    assert(cmp);
+
+    if (nmemb < 2)
+        return;
+
+    char *swap_tmp[size];
+    char *_arr = arr;
+    char *pivot = _arr + size * (nmemb / 2);
+    size_t i, j;
+    for (i = 0, j = nmemb - 1; ; i++, j--) {
+        // FIXME: Обратный порядок сортировки
+        while (cmp(_arr + size * i, pivot) < 0) i++;
+        while (cmp(_arr + size * j, pivot) > 0) j--;
+        if (i >= j) break;
+
+        memmove(swap_tmp, _arr + i * size, size);
+        memmove(_arr + i * size, _arr + j * size, size);
+        memmove(_arr + j * size, swap_tmp, size);
+        if (swap) swap(i, j, udata);
+    }
+
+    koh_qsort_soa(arr, i, size, cmp, swap, udata);
+    koh_qsort_soa(_arr + size * i, nmemb - i, size, cmp, swap, udata);
+}
+

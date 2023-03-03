@@ -103,3 +103,12 @@ const char * remove_suffix(const char *str);
 
 const char *get_basename(const char *path);
 
+typedef int (*QSortCmpFunc)(void *a, void *b);
+typedef void (*QSortSwapFunc)(size_t index1, size_t index2, void *udata);
+
+void koh_qsort_soa(
+    void *arr, size_t nmemb, size_t size, 
+    QSortCmpFunc cmp, QSortSwapFunc swap, void *udata
+);
+
+
