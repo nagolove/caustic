@@ -5,7 +5,6 @@
 
 #include "koh_common.h"
 #include "koh_console.h"
-#include "koh_input.h"
 #include "koh_logger.h"
 #include "koh_timer.h"
 #include "raylib.h"
@@ -18,7 +17,7 @@
 
 static const char *left_bracket = "[[", *right_bracket = "]]";
 
-bool timer_blink(Timer *t) {
+bool tmr_timer_blink(Timer *t) {
     //trace("timer_blink\n");
     Menu *mnu = t->data;
 
@@ -51,7 +50,7 @@ void menu_init(Menu *mnu, Font fnt, bool font_owned) {
         .every    = 0.05,
         .duration = -1,
         .data     = mnu,
-        .func     = timer_blink,
+        .func     = tmr_timer_blink,
     });
     mnu->items_cap = 10;
     mnu->items = calloc(mnu->items_cap, sizeof(mnu->items[0]));
@@ -176,7 +175,7 @@ void menu_select(Menu *mnu) {
     }
 }
 
-void menu_update(Menu *mnu) {
+void menu_update(Menu *mnu, MenuUpdateHandler func, void *udata) {
     assert(mnu);
 
     if (!mnu->is_builded) {
@@ -188,15 +187,8 @@ void menu_update(Menu *mnu) {
     menu_render(mnu);
 
     if (mnu->input_active && !console_is_editor_mode()) {
-        if (input.is_up()) {
-            menu_up(mnu);
-        }
-        if (input.is_down()) {
-            menu_down(mnu);
-        }
-        if (input.is_select()) {
-            menu_select(mnu);
-        }
+        if (func)
+            func(mnu, udata);
     }
 
 }
