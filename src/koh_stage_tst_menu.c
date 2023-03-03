@@ -6,6 +6,7 @@
 #include "koh_common.h"
 #include "koh_console.h"
 #include "koh_hotkey.h"
+#include "koh_input.h"
 #include "koh_logger.h"
 #include "koh_menu.h"
 #include "koh_timer.h"
@@ -163,6 +164,19 @@ void stage_tstmenu_init(Stage_TestMenu *st, void *data) {
     st->active = &st->mshort;
 }
 
+static void handler(Menu *mnu, void *udata) {
+    assert(mnu);
+    if (input.is_up()) {
+        menu_up(mnu);
+    }
+    if (input.is_down()) {
+        menu_down(mnu);
+    }
+    if (input.is_select()) {
+        menu_select(mnu);
+    }
+}
+
 void stage_tstmenu_update(Stage_TestMenu *st) {
     trace("stage_tstmenu_update:\n");
 
@@ -175,7 +189,7 @@ void stage_tstmenu_update(Stage_TestMenu *st) {
         stage_tstmenu_init(st, NULL);
     }
 
-    menu_update(st->active);
+    menu_update(st->active, handler, NULL);
     Rectangle mnu_rect = st->active->scroll_rect;
     mnu_rect.x = st->active->pos.x;
     mnu_rect.y = st->active->pos.y;

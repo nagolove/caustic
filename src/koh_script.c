@@ -263,34 +263,35 @@ void register_internal() {
 // Попытка переопределить функцию загрузки модулей для последующей "горячей"
 // перезагрузки через inotifier()
 static int require_reload(lua_State *lua) {
-    printf("require_reload: 1 [%s]\n", sc_stack_dump());
+    trace("require_reload:\n");
+    /*trace("require_reload: 1 [%s]\n", sc_stack_dump());*/
     int stack_pos1 = lua_gettop(lua);
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_require);
     lua_pushvalue(lua, -2);
     lua_call(lua, 1, LUA_MULTRET);
     int stack_pos2 = lua_gettop(lua);
     int stack_diff = stack_pos2 - stack_pos1;
-    printf("stack pos diff %d\n", stack_diff);
-    printf("require_reload: 2 [%s]\n", sc_stack_dump());
+    //trace("stack pos diff %d\n", stack_diff);
+    //trace("require_reload: 2 [%s]\n", sc_stack_dump());
     return stack_diff;
 }
 
 static void require_redefine() {
-    printf("require_redefine: [%s]\n", sc_stack_dump());
+    trace("require_redefine: [%s]\n", sc_stack_dump());
     int type = lua_getglobal(lua, "require");
     if (type != LUA_TFUNCTION) {
-        printf("require_redefine: bad require type\n");
+        trace("require_redefine: bad require type\n");
         return;
     }
     ref_require = luaL_ref(lua, LUA_REGISTRYINDEX);
     lua_pushcclosure(lua, require_reload, 0);
     lua_setglobal(lua, "require");
-    printf("ref_require %d\n", ref_require);
-    printf("require_redefine: [%s]\n", sc_stack_dump());
+    trace("ref_require %d\n", ref_require);
+    trace("require_redefine: [%s]\n", sc_stack_dump());
 }
 
 static int print_with_filter(lua_State *lua) {
-    printf("print_with_filter\n");
+    //printf("print_with_filter:\n");
     char out_buf[2048] = {0};
     const int reserve = 10; // Запас буфера для перевода строки в конце печати
     int out_buf_size = 0;
@@ -325,8 +326,8 @@ static void print_redefine() {
     ref_print = luaL_ref(lua, LUA_REGISTRYINDEX);
     lua_pushcclosure(lua, print_with_filter, 0);
     lua_setglobal(lua, "print");
-    printf("ref_print %d\n", ref_print);
-    printf("print_redefine: [%s]\n", sc_stack_dump());
+    //printf("ref_print %d\n", ref_print);
+    //printf("print_redefine: [%s]\n", sc_stack_dump());
 }
 
 void sc_init(void) {

@@ -43,7 +43,6 @@ double *read_number_table(lua_State *lua, int index, int *len);
 int make_ret_table(int num, void**arr, size_t offset);
 
 static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
-    // {{{
     Object_ud r = {0};
     Object_ud *ref = (Object_ud*)luaL_checkudata(l, ud, tname);
     if (ref) {
@@ -51,6 +50,5 @@ static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
         r.st = ref->st;
     }
     return r;
-    // }}}
 }
 

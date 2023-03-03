@@ -4,6 +4,7 @@
 #include "koh_stages.h"
 
 #include "koh_console.h"
+#include "koh_logger.h"
 #include "koh_script.h"
 #include "lauxlib.h"
 #include "lua.h"
@@ -91,10 +92,10 @@ void stage_set_active(const char *name, void *data) {
     Stage *st = stage_find(name);
 
     if (!st) 
-        printf("stage_set_active: '%s' not found\n", name);
+        trace("stage_set_active: '%s' not found\n", name);
 
     if (stages.cur && stages.cur->leave) {
-        printf(
+        trace(
             "stage_set_active: leave from '%s' to '%s'\n",
             stages.cur->name,
             st->name
@@ -105,7 +106,7 @@ void stage_set_active(const char *name, void *data) {
     stages.cur = st;
 
     if (st && st->enter) {
-        printf("stage_set_active: enter '%s'\n", st->name);
+        trace("stage_set_active: enter '%s'\n", st->name);
         st->enter(st, data);
     }
 }
@@ -158,9 +159,9 @@ int l_stage_get_active(lua_State *lua) {
 }
 
 void stages_print() {
-    printf("stages_print\n");
+    printf("stages_print:\n");
     for (int i = 0; i < stages.num; i++) {
-        printf("'%s'\n", stages.stages[i]->name);
+        printf("stages_print: '%s'\n", stages.stages[i]->name);
     }
 }
 

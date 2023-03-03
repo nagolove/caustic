@@ -17,6 +17,9 @@ typedef struct LogPoints {
 extern LogPoints logger;
 
 void logger_init(void);
-void logger_shutdown();
 void logger_register_functions();
-void trace(const char * format, ...);
+void logger_shutdown();
+void trace(const char *format, ...);
+void trace_pop_group();
+void trace_push_group(const char *group_name);
+void traceg(const char *format, ...);

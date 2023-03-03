@@ -1,16 +1,16 @@
 // vim: fdm=marker
 #include "koh_lua_tools.h"
 
-#include <string.h>
-#include <memory.h>
+#include "koh_logger.h"
+#include "lauxlib.h"
+#include "lua.h"
+#include "lualib.h"
 #include <assert.h>
-#include <stdlib.h>
+#include <memory.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
-
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
+#include <string.h>
 
 TypeEntry *typelist;
 
@@ -174,7 +174,7 @@ void register_methods_and_doc(
     const char *mtname,
     const Reg_ext *methods
 ) {
-    printf("register_methods_and_doc: [%s]\n", stack_dump(lua));
+    trace("register_methods_and_doc: [%s]\n", stack_dump(lua));
 
     /*
     // {{{
@@ -208,7 +208,7 @@ void register_methods_and_doc(
         if (!cur->name) {
             break;
         }
-        printf("[%s]\n", stack_dump(lua));
+        //printf("[%s]\n", stack_dump(lua));
 
         lua_createtable(lua, 0, 0);
         lua_pushstring(lua, cur->desc);

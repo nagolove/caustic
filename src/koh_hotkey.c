@@ -3,18 +3,17 @@
 
 #include "koh_hotkey.h"
 
+#include "koh_common.h"
+#include "koh_console.h"
+#include "koh_logger.h"
+#include "koh_lua_tools.h"
+#include "koh_script.h"
+#include "lua.h"
+#include "raylib.h"
 #include <assert.h>
-#include <lua.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "koh_common.h"
-#include "koh_console.h"
-#include "koh_lua_tools.h"
-#include "koh_script.h"
-
-#include "raylib.h"
 
 static HotkeyStorage *last_storage = NULL;
 
@@ -218,45 +217,43 @@ void hotkey_init(HotkeyStorage *storage) {
 void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
     assert(storage);
 
+    trace_push_group("hotkey_register");
+
     if (storage->keysnum + 1 == MAX_HOTKEYS) {
-        perror("Hotkeys limit are reached\n");
-        abort();
+        traceg("hotkeys limit are reached\n");
+        exit(EXIT_FAILURE);
     }
 
     if (!hk.name) {
-        printf("hotkey_register combination without name\n");
+        traceg("unnamed combination\n");
         exit(EXIT_FAILURE);
     }
 
-    if (!hk.data) {
-        printf(
-            "hotkey_register combination '%s' without custom data\n",
-            hk.name
-        );
-    }
+    if (!hk.data)
+        traceg("combination '%s' without custom data\n", hk.name);
 
-    if (hk.groups == 0) {
-        printf("hotkey_register combination '%s' without group\n", hk.name);
+    if (!hk.groups) {
+        traceg("combination '%s' without group\n", hk.name);
     }
 
     if (!hk.func) {
-        printf("hotkey_register combination without func pointer\n");
+        traceg("combination without func pointer\n");
         exit(EXIT_FAILURE);
     }
     if (!hk.description) {
-        printf("hotkey_register combination without description\n");
+        traceg("combination without description\n");
         exit(EXIT_FAILURE);
     }
     if (hk.combo.mode < HM_MODE_RESERVED_FIRST || 
         hk.combo.mode > HM_MODE_RESERVED_LAST) {
-        printf("hotkey_register combination without proper mode\n");
+        traceg("combination without proper mode\n");
         exit(EXIT_FAILURE);
     }
 
     Hotkey existing = {0};
     if (hotkey_exists(storage, hk, &existing)) {
-        printf(
-            "hotkey_register combination duplicated:"
+        traceg(
+            "combination duplicated:"
             "'%s'[%s] overlapped existing '%s'[%s]\n",
             hk.name, hk.description, 
             existing.name, existing.description
@@ -268,6 +265,8 @@ void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
     with_strings.description = strdup(hk.description);
     with_strings.name = strdup(hk.name);
     storage->keys[storage->keysnum++] = with_strings;
+
+    trace_pop_group();
 }
 
 void hotkey_shutdown(HotkeyStorage *storage) {
@@ -297,7 +296,7 @@ void hotkey_process(HotkeyStorage *storage) {
         } else if (mode == HM_MODE_ISKEYPRESSED) {
             handler = IsKeyPressed;
         } else {
-            printf("hotkey_process: unknowd mode\n");
+            trace("hotkey_process: unknowd mode\n");
         }
 
         /*
