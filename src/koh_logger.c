@@ -1,22 +1,24 @@
 // vim: fdm=marker
 #include "koh_logger.h"
 
-#include "lauxlib.h"
-#include "lua.h"
-#include "libsmallregex.h"
-
+#include "koh_console.h"
 #include "koh_script.h"
 #include "koh_strset.h"
-#include "koh_console.h"
-
-#include <stdlib.h>
+#include "lauxlib.h"
+#include "libsmallregex.h"
+#include "lua.h"
 #include <assert.h>
-#include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_TRACE_GROUPS    40
+#define MAX_TRACE_LEN       120
 
 LogPoints logger;
 static StrSet *traces_set = NULL;
+static bool is_trace_enabled = true;
 
 struct FilterEntry {
     struct small_regex *regex;
@@ -111,6 +113,9 @@ void logger_shutdown() {
 }
 
 void trace(const char * format, ...) {
+    if (!is_trace_enabled)
+        return;
+
     char buf[512];
     va_list args;
     va_start(args, format);
@@ -153,6 +158,13 @@ int l_filter_remove(lua_State *lua) {
     return 0;
 }
 
+static int l_trace_enable(lua_State *lua) {
+    luaL_checktype(lua, 1, LUA_TBOOLEAN);
+    bool newstate = lua_toboolean(lua, 1);
+    is_trace_enabled = newstate;
+    return 0;
+}
+
 void logger_register_functions() {
     register_function(
         l_filter,
@@ -171,4 +183,50 @@ void logger_register_functions() {
         "filter_remove",
         "Удаляет фильтр по индексу"
     );
+    register_function(
+        l_trace_enable,
+        "trace_enable",
+        "Включить или выключить печать лога через trace()"
+    );
 }
+
+char groups_stack[MAX_TRACE_LEN][MAX_TRACE_GROUPS];
+int groups_num = 0;
+
+void trace_pop_group() {
+    groups_num--;
+    if (groups_num < 0) {
+        perror("trace_pop_group: unbalanced pop\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void trace_push_group(const char *group_name) {
+    if (groups_num >= MAX_TRACE_GROUPS) {
+        perror("trace_push_group: stack is too much");
+        exit(EXIT_FAILURE);
+    }
+    strncpy(groups_stack[groups_num++], group_name, MAX_TRACE_LEN - 1);
+}
+
+void traceg(const char *format, ...) {
+    if (!is_trace_enabled)
+        return;
+
+    char buf[512];
+    char *buf_ptr = buf;
+    va_list args;
+    if (groups_num > 0) 
+        buf_ptr += sprintf(buf_ptr, "%s: ", groups_stack[groups_num - 1]);
+    va_start(args, format);
+    vsnprintf(buf_ptr, sizeof(buf), format, args);
+    va_end(args);
+
+    strset_add(traces_set, buf);
+
+    if (!filter_match(buf))
+        printf("%s", buf);
+}
+
+#undef MAX_TRACE_LEN
+#undef MAX_TRACE_GROUPS
