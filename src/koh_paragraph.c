@@ -3,10 +3,8 @@
 
 #include "koh_common.h"
 #include "koh_console.h"
-
 #include "raylib.h"
 #include "raymath.h"
-
 #include <assert.h>
 #include <memory.h>
 #include <stdarg.h>
@@ -22,17 +20,21 @@ void paragraph_init(Paragraph *prgh) {
 
 void paragraph_shutdown(Paragraph *prgh) {
     assert(prgh);
-    for(int i = 0; i < prgh->linesnum; i++) {
-        free(prgh->lines[i]);
+    if (prgh->lines) {
+        for(int i = 0; i < prgh->linesnum; i++) {
+            free(prgh->lines[i]);
+        }
+        free(prgh->lines);
+        prgh->lines = NULL;
     }
-    free(prgh->lines);
-    prgh->lines = NULL;
-    for(int i = 0; i < prgh->transformed_linesnum; i++) {
-        if (prgh->transformed_lines[i])
-            free(prgh->transformed_lines[i]);
+    if (prgh->transformed_lines) {
+        for(int i = 0; i < prgh->transformed_linesnum; i++) {
+            if (prgh->transformed_lines[i])
+                free(prgh->transformed_lines[i]);
+        }
+        free(prgh->transformed_lines);
+        prgh->transformed_lines = NULL;
     }
-    free(prgh->transformed_lines);
-    prgh->transformed_lines = NULL;
 }
 
 void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
@@ -155,4 +157,42 @@ Vector2 paragraph_align_center(Paragraph *prgh) {
         .x = (w - prgh->measure.x) / 2.,
         .y = (h - prgh->transformed_linesnum * prgh->fnt.baseSize) / 2.,
     };
+}
+
+Vector2 paragraph_get_size(Paragraph *prgh) {
+    assert(prgh);
+    if (!prgh->builded) {
+        perror("paragraph_draw: not builded");
+        exit(EXIT_FAILURE);
+    }
+    return (Vector2) {
+        prgh->measure.x,
+        prgh->transformed_linesnum * prgh->fnt.baseSize
+    };
+}
+
+void paragraph_set(Paragraph *prgh, const char *txt) {
+    assert(prgh);
+    assert(txt);
+
+    char line[256] = {0};
+    const char *txt_ptr = txt;
+    char *line_ptr = line;
+    int line_len = 0;
+    while (*txt_ptr) {
+        if (*txt_ptr == '\n') {
+            paragraph_add(prgh, line);
+            memset(line, 0, sizeof(line));
+            line_ptr = line;
+            line_len = 0;
+        } else {
+            // TODO: Автоформатирование под заранее определенную максимальную 
+            // ширину текста
+            if (line_len < sizeof(line)) {
+                *line_ptr++ = *txt_ptr;
+                line_len++;
+            }
+        }
+        txt_ptr++;
+    }
 }
