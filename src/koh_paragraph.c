@@ -35,6 +35,7 @@ void paragraph_shutdown(Paragraph *prgh) {
         free(prgh->transformed_lines);
         prgh->transformed_lines = NULL;
     }
+    memset(prgh, 0, sizeof(*prgh));
 }
 
 void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
@@ -121,7 +122,8 @@ void paragraph_build(Paragraph *prgh, Font fnt) {
     prgh->builded = true;
 }
 
-void paragraph_draw(Paragraph *prgh, Vector2 pos) {
+// TODO: Повернутый текст работает некорректно
+void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
     assert(prgh);
 
     if (!prgh->builded) {
@@ -136,8 +138,18 @@ void paragraph_draw(Paragraph *prgh, Vector2 pos) {
         .width = prgh->measure.x,
         .height = prgh->transformed_linesnum * prgh->fnt.baseSize,
     };
-    DrawRectangleRec(background, (Color) { 255 / 2, 255 / 2, 255 / 2, 255});
+
+    Color col =  { 255 / 2, 255 / 2, 255 / 2, 255};
+    DrawRectanglePro(
+        background, 
+        Vector2Zero(),
+        angle,
+        col
+    );
+
     for(int i = 0; i < prgh->transformed_linesnum; ++i) {
+
+        /*
         DrawTextEx(
             prgh->fnt,
             prgh->transformed_lines[i],
@@ -146,8 +158,25 @@ void paragraph_draw(Paragraph *prgh, Vector2 pos) {
             0,
             prgh->color
         );
+        */
+
+        DrawTextPro(
+            prgh->fnt,
+            prgh->transformed_lines[i],
+            coord,
+            Vector2Zero(),
+            angle,
+            prgh->fnt.baseSize,
+            0,
+            prgh->color
+        );
+
         coord.y += prgh->fnt.baseSize;
     }
+}
+
+void paragraph_draw(Paragraph *prgh, Vector2 pos) {
+    paragraph_draw2(prgh, pos, 0.);
 }
 
 Vector2 paragraph_align_center(Paragraph *prgh) {

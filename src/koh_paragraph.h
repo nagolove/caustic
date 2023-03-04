@@ -18,6 +18,7 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...);
 Vector2 paragraph_align_center(Paragraph *prgh);
 void paragraph_build(Paragraph *prgh, Font fnt);
 void paragraph_draw(Paragraph *prgh, Vector2 pos);
+void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle);
 Vector2 paragraph_get_size(Paragraph *prgh);
 void paragraph_init(Paragraph *prgh);
 void paragraph_set(Paragraph *prgh, const char *txt);
