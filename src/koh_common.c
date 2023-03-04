@@ -748,41 +748,72 @@ const char *get_basename(const char *path) {
     return buf;
 }
 
+struct QSortCtx {
+    char *arr, *arr_initial;
+    void *udata;
+    size_t nmemb, size;
+    QSortCmpFunc cmp;
+    QSortSwapFunc swap;
+};
+
+void _koh_qsort_soa(struct QSortCtx *ctx) {
+    if (ctx->nmemb < 2)
+        return;
+
+    char *swap_tmp[ctx->size];
+    char *_arr = ctx->arr;
+    char *pivot = _arr + ctx->size * (ctx->nmemb / 2);
+    size_t i, j;
+    for (i = 0, j = ctx->nmemb - 1; ; i++, j--) {
+        // FIXME: Обратный порядок сортировки
+        while (ctx->cmp(_arr + ctx->size * i, pivot) < 0) i++;
+        while (ctx->cmp(_arr + ctx->size * j, pivot) > 0) j--;
+        if (i >= j) break;
+
+        char *i_ptr = _arr + i * ctx->size;
+        char *j_ptr = _arr + j * ctx->size;
+        memmove(swap_tmp, i_ptr, ctx->size);
+        memmove(i_ptr, j_ptr, ctx->size);
+        memmove(j_ptr, swap_tmp, ctx->size);
+        size_t abs_i = (i_ptr - ctx->arr_initial) / ctx->size;
+        size_t abs_j = (j_ptr - ctx->arr_initial) / ctx->size;
+        if (ctx->swap) ctx->swap(abs_i, abs_j, ctx->udata);
+    }
+
+    struct QSortCtx ctx1;
+    ctx1.arr = ctx->arr;
+    ctx1.arr_initial = ctx->arr_initial;
+    ctx1.cmp = ctx->cmp;
+    ctx1.nmemb = i;
+    ctx1.size = ctx->size;
+    ctx1.swap = ctx->swap;
+    ctx1.udata = ctx->udata;
+    _koh_qsort_soa(&ctx1);
+    struct QSortCtx ctx2;
+    ctx2.arr = ctx->arr + ctx->size * i;
+    ctx2.arr_initial = ctx->arr_initial;
+    ctx2.cmp = ctx->cmp;
+    ctx2.nmemb = ctx->nmemb - i;
+    ctx2.size = ctx->size;
+    ctx2.swap = ctx->swap;
+    ctx2.udata = ctx->udata;
+    _koh_qsort_soa(&ctx2);
+}
+
 void koh_qsort_soa(
     void *arr, size_t nmemb, size_t size, 
     QSortCmpFunc cmp, QSortSwapFunc swap,
     void *udata
 ) {
-    /*
-    printf(
-        "koh_qsort_soa: arr %p, nmemb %zu, size %zu\n", 
-        arr, nmemb, size
-    );
-    */
-
-    assert(arr);
-    assert(cmp);
-
-    if (nmemb < 2)
-        return;
-
-    char *swap_tmp[size];
-    char *_arr = arr;
-    char *pivot = _arr + size * (nmemb / 2);
-    size_t i, j;
-    for (i = 0, j = nmemb - 1; ; i++, j--) {
-        // FIXME: Обратный порядок сортировки
-        while (cmp(_arr + size * i, pivot) < 0) i++;
-        while (cmp(_arr + size * j, pivot) > 0) j--;
-        if (i >= j) break;
-
-        memmove(swap_tmp, _arr + i * size, size);
-        memmove(_arr + i * size, _arr + j * size, size);
-        memmove(_arr + j * size, swap_tmp, size);
-        if (swap) swap(i, j, udata);
-    }
-
-    koh_qsort_soa(arr, i, size, cmp, swap, udata);
-    koh_qsort_soa(_arr + size * i, nmemb - i, size, cmp, swap, udata);
+    struct QSortCtx ctx = {
+        .nmemb = nmemb,
+        .arr = arr,
+        .arr_initial = arr,
+        .cmp = cmp,
+        .udata = udata,
+        .swap = swap,
+        .size = size,
+    };
+    _koh_qsort_soa(&ctx);
 }
 
