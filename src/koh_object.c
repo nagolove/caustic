@@ -1,5 +1,6 @@
 #include "koh_object.h"
 
+#include "koh_logger.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -194,7 +195,7 @@ void object_type_register(
     if (ts) {
         free(ts->objects);
         memset(ts, 0, sizeof(*ts));
-        printf("object type %s was reallocated\n", object_type2str(type));
+        trace("object_type_register: type %s was reallocated\n", object_type2str(type));
     } else {
         ts = &s->types[s->typesnum++];
     }
@@ -206,8 +207,8 @@ void object_type_register(
     ts->free_num = maxnum;
     ts->allocated_num = 0;
 
-    printf(
-        "object_type_register %s wit size %d and max number of %d\n",
+    trace(
+        "object_type_register: %s wit size %d and max number of %d\n",
         object_type2str(type),
         objsize,
         maxnum
