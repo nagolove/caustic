@@ -20,6 +20,7 @@ static const char *init_fname = "assets/init.lua";
 static int ref_functions_desc = -1;
 static int ref_require = 0;
 static int ref_print = 0;
+static int ref_types_table = 0;
 
 int l_script(lua_State *lua);
 static void hook(lua_State *lua, lua_Debug *ar);
@@ -53,7 +54,12 @@ void register_function(lua_CFunction f, const char *fname, const char *desc) {
     sfunc->next = script_funcs;
     script_funcs = sfunc;
 
-    lua_register(lua, fname, f);
+    lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
+    lua_pushstring(lua, fname);
+    lua_pushcclosure(lua, f, 0);
+    lua_settable(lua, -3);
+
+    /*lua_register(lua, fname, f);*/
     sc_register_func_desc(fname, desc);
 }
 
@@ -330,6 +336,11 @@ static void print_redefine() {
     //printf("print_redefine: [%s]\n", sc_stack_dump());
 }
 
+int open_types(lua_State *lua) {
+    lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
+    return 1;
+}
+
 void sc_init(void) {
     lua = luaL_newstate();
     luaL_openlibs(lua);
@@ -337,6 +348,14 @@ void sc_init(void) {
     printf("[%s]\n", stack_dump(lua));
     lua_createtable(lua, 0, 0);
     ref_functions_desc = luaL_ref(lua, LUA_REGISTRYINDEX);
+
+    lua_createtable(lua, 0, 0);
+    ref_types_table = luaL_ref(lua, LUA_REGISTRYINDEX);
+    lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
+
+    luaL_requiref(lua, "types", open_types, true);
+    lua_pop(lua, 1);
+    /*lua_setglobal(lua, "types");*/
 
     register_internal();
 
