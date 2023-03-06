@@ -3,6 +3,7 @@
 
 #include "koh_common.h"
 #include "koh_console.h"
+#include "koh_logger.h"
 #include "raylib.h"
 #include "raymath.h"
 #include <assert.h>
@@ -204,12 +205,15 @@ void paragraph_set(Paragraph *prgh, const char *txt) {
     assert(prgh);
     assert(txt);
 
+    trace("paragraph_set:\n");
+
     char line[256] = {0};
     const char *txt_ptr = txt;
     char *line_ptr = line;
     int line_len = 0;
     while (*txt_ptr) {
         if (*txt_ptr == '\n') {
+            trace("paragraph_set: line '%s'\n", line);
             paragraph_add(prgh, line);
             memset(line, 0, sizeof(line));
             line_ptr = line;
