@@ -122,7 +122,7 @@ Vector2 path_get(Path *p) {
 }
 
 void paths_init(void) {
-    fnt = load_font_unicode("assets/dejavusansmono.ttf", 32);
+    fnt = load_font_unicode("assets/fonts/dejavusansmono.ttf", 32);
 }
 
 void paths_shutdown(void) {
