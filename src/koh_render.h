@@ -17,3 +17,7 @@ void render_texture_t(
     Vector2 origin, float rotation, Color tint,
     cpTransform mat
 );
+
+void koh_render_shutdown();
+void koh_render_init();
+void render_circle(Vector2 center, float radius, Color color);

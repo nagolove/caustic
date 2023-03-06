@@ -2,6 +2,7 @@
 
 #include <math.h>
 
+#include "raylib.h"
 #include "rlgl.h"               
 
 #include "koh_routine.h"
@@ -160,4 +161,63 @@ void render_texture_t(
     }
 }
 
+static const char *shdr_src = 
+"#version 100\n"
+"precision mediump float;\n"
+"varying vec2 fragTexCoord;\n"
+"varying vec4 fragColor;\n"
+"uniform float time;\n"
+"//uniform vec4 color;\n"
+"//uniform vec2 start_pos;\n"
+"uniform sampler2D texture0;\n"
+"\n"
+"float circle(in vec2 _st, in float _radius){\n"
+"    vec2 dist = _st-vec2(0.5);\n"
+"    return 1.-smoothstep(_radius-(_radius*0.01),\n"
+"                         _radius+(_radius*0.01),\n"
+"                         dot(dist,dist)*4.0);\n"
+"}\n"
+"void main()\n"
+"{\n"
+"    //vec2 uv = fragTexCoord;\n"
+"    //vec4 color = texture2D(texture0, uv).rgba;\n"
+"\n"
+"    //gl_FragColor = mix(map_color, stencil_color, 0.5);\n"
+"    \n"
+"    //vec4 col = texture2D(texture0, fragTexCoord).rgba;\n"
+"    vec4 col = fragColor;\n"
+"\n"
+"    //vec4 col = color;\n"
+"    //col.g = smoothstep(0., 1., distance(fragTexCoord, start_pos));\n"
+"    //col.g = smoothstep(0., 1., distance(vec2(0., 0.), fragTexCoord));\n"
+"    //col.g = smoothstep(0., 1., length(fragTexCoord));\n"
+"\n"
+"    col.a = clamp(time, 0., 1.);\n"
+"    //col.a = 0.;\n"
+"\n"
+"    vec3 color = vec3(circle(st,0.9));\n"
+"    gl_FragColor = col;\n"
+"    //gl_FragColor = vec4(1, 1, 1, 0.5);\n"
+"}\n";
+
+static Shader shdr_circle = {0};
+static int loc_pos, loc_radius;
+
+void render_circle(Vector2 center, float radius, Color color) {
+    float pos[2] = { center.x, center.y };
+    SetShaderValue(shdr_circle, loc_pos, pos, SHADER_UNIFORM_VEC2);
+    SetShaderValue(shdr_circle, loc_radius, &radius, SHADER_UNIFORM_FLOAT);
+    BeginShaderMode(shdr_circle);
+    EndShaderMode();
+}
+
+void koh_render_init() {
+    shdr_circle = LoadShaderFromMemory(NULL, shdr_src);
+    loc_pos = GetShaderLocation(shdr_circle, "pos");
+    loc_radius = GetShaderLocation(shdr_circle, "radius");
+}
+
+void koh_render_shutdown() {
+    UnloadShader(shdr_circle);
+}
 
