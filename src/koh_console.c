@@ -112,6 +112,16 @@ struct {
     bool can_move_right, can_move_left, can_backspace;
 } con = {0, };
 
+void font_setup(struct ConsoleSetup *cs) {
+    const char *path = "assets/fonts/dejavusansmono.ttf";
+    if (cs->fnt_path)
+        path = cs->fnt_path;
+    int fnt_size = 35;
+    if (cs->fnt_size > 1)
+        fnt_size = cs->fnt_size;
+    con.fnt = load_font_unicode(path, fnt_size);
+}
+
 void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     assert(hk_store);
     assert(cs);
@@ -128,7 +138,9 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     con.cursor_pos = 0;
     con.border_thick = 9;
     con.hk_store = hk_store;
-    con.fnt = load_font_unicode("assets/dejavusansmono.ttf", 35);
+
+    font_setup(cs);
+
     con.editor_mode = false;
     con.color = BLACK;
     con.cursor_color = GOLD;

@@ -21,7 +21,9 @@ enum {
 struct ConsoleSetup {
     void (*on_enable)(HotkeyStorage *hk_store, void *udata);
     void (*on_disable)(HotkeyStorage *hk_store, void *udata);
-    void *udata;
+    void        *udata;
+    const char  *fnt_path;
+    int         fnt_size;
 };
 
 void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs);
