@@ -6,7 +6,7 @@
 #define PARAGRAPH_INITIAL_LINES 25
 
 typedef struct Paragraph {
-    Color   color;
+    Color   color_text, color_background;
     int     linescap, linesnum, transformed_linesnum;
     char    **lines, **transformed_lines;
     Vector2 measure;
@@ -23,3 +23,6 @@ Vector2 paragraph_get_size(Paragraph *prgh);
 void paragraph_init(Paragraph *prgh);
 void paragraph_set(Paragraph *prgh, const char *txt);
 void paragraph_shutdown(Paragraph *prgh);
+
+extern Color paragraph_default_color_background;
+extern Color paragraph_default_color_text;

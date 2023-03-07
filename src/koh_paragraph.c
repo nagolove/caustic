@@ -13,10 +13,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+Color paragraph_default_color_background = (Color){
+    255 / 2, 255 / 2, 255 / 2, 255
+};
+Color paragraph_default_color_text = BLACK;
+
 void paragraph_init(Paragraph *prgh) {
     assert(prgh);
     memset(prgh, 0, sizeof(Paragraph));
-    prgh->color = BLACK;
+    prgh->color_text = paragraph_default_color_text;
+    prgh->color_background = paragraph_default_color_background;
 }
 
 void paragraph_shutdown(Paragraph *prgh) {
@@ -140,12 +146,11 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
         .height = prgh->transformed_linesnum * prgh->fnt.baseSize,
     };
 
-    Color col =  { 255 / 2, 255 / 2, 255 / 2, 255};
     DrawRectanglePro(
         background, 
         Vector2Zero(),
         angle,
-        col
+        prgh->color_background
     );
 
     for(int i = 0; i < prgh->transformed_linesnum; ++i) {
@@ -169,7 +174,7 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
             angle,
             prgh->fnt.baseSize,
             0,
-            prgh->color
+            prgh->color_text
         );
 
         coord.y += prgh->fnt.baseSize;
