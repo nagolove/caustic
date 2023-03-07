@@ -29,12 +29,14 @@ static inline TypeStorage *find_type(ObjectStorage *s, uint32_t type) {
 }
 
 void object_storage_init(ObjectStorage *s) {
+    trace("object_storage_init:\n");
     assert(s);
     memset(s, 0, sizeof(*s));
     s->last_id = 1;
 }
 
 void object_storage_free(ObjectStorage *s) {
+    trace("object_storage_free:\n");
     assert(s);
     for(int i = 0; i < s->typesnum; i++) {
         if (s->types[i].objects) {
