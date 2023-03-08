@@ -348,7 +348,7 @@ float axis2zerorange(float value) {
     return (1. + value) / 2.;
 }
 
-char *to_bitstr32(uint32_t value) {
+const char *to_bitstr_uint32_t(uint32_t value) {
     //char *buf = calloc(1, sizeof(uint64_t) * 8 + 1);
     static char buf[sizeof(uint32_t) * 8 + 1] = {0};
     char *last = buf;
@@ -382,7 +382,7 @@ char *to_bitstr32(uint32_t value) {
     return buf;
 }
 
-const char *uint8t_to_bitstr(uint8_t value) {
+const char *to_bitstr_uint8_t(uint8_t value) {
     static char buf[sizeof(char) * 8 + 1] = {0};
     char *last = buf;
 
@@ -558,7 +558,7 @@ const char *shapefilter2str(cpShapeFilter filter) {
     return buf;
 }
 
-char *splitstr_quartet(char *in) {
+const char *splitstr_quartet(const char *in) {
     static char buf[128] = {0};
     assert(strlen(in) < sizeof(buf));
     char *ptr = buf;
@@ -582,11 +582,11 @@ char *splitstr_quartet(char *in) {
 
 void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter) {
     assert(pa);
-    char *tmp = NULL;
+    const char *tmp = NULL;
     paragraph_add(pa, " -- group %u", filter.group);
-    tmp = splitstr_quartet(to_bitstr32(filter.mask));
+    tmp = splitstr_quartet(to_bitstr_uint32_t(filter.mask));
     paragraph_add(pa, " -- mask %50s", tmp);
-    tmp = splitstr_quartet(to_bitstr32(filter.categories));
+    tmp = splitstr_quartet(to_bitstr_uint32_t(filter.categories));
     paragraph_add(pa, " -- categories %44s", tmp);
 }
 

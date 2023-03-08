@@ -71,9 +71,9 @@ char *str_builder_concat(StrBuilder *sb, int *len);
 */
 
 // не выделяет памяти под строку, статический буфер в функции
-const char *uint8t_to_bitstr(uint8_t value);
-
-char *to_bitstr32(uint32_t value);
+const char *to_bitstr_uint8_t(uint8_t value);
+// не выделяет памяти под строку, статический буфер в функции
+const char *to_bitstr_uint32_t(uint32_t value);
 
 int u8_codeptlen(const char *str);
 void save_scripts(FILE *file);
