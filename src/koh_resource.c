@@ -1,9 +1,8 @@
 #include "koh_resource.h"
 
 #include "koh_common.h"
-
+#include "koh_logger.h"
 #include "raylib.h"
-
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,14 +87,17 @@ void res_unload_all(Resource *res_list) {
         if (cur->data) {
             switch (cur->type) {
                 case RT_FONT: {
+                    trace("res_unload_all: RT_FONT\n");
                     UnloadFont(*(Font*)cur->data);
                     break;
                 }
                 case RT_TEXTURE: {
+                    trace("res_unload_all: RT_TEXTURE\n");
                     UnloadTexture(*(Texture2D*)cur->data);
                     break;
                 }
                 case RT_SHADER: {
+                    trace("res_unload_all: RT_SHADER\n");
                     UnloadShader(*(Shader*)cur->data);
                 }
             }

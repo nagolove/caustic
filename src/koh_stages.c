@@ -96,9 +96,8 @@ void stage_set_active(const char *name, void *data) {
 
     if (stages.cur && stages.cur->leave) {
         trace(
-            "stage_set_active: leave from '%s' to '%s'\n",
-            stages.cur->name,
-            st->name
+            "stage_set_active: leave from '%s'\n",
+            stages.cur->name
         );
         stages.cur->leave(stages.cur, data);
     }
@@ -106,7 +105,7 @@ void stage_set_active(const char *name, void *data) {
     stages.cur = st;
 
     if (st && st->enter) {
-        trace("stage_set_active: enter '%s'\n", st->name);
+        trace("stage_set_active: enter to '%s'\n", st->name);
         st->enter(st, data);
     }
 }
@@ -141,12 +140,21 @@ int l_stage_restart(lua_State *lua) {
 }
 
 int l_stage_set_active(lua_State *lua) {
-    if (lua_isstring(lua, 1) && lua_isstring(lua, 2)) {
+    bool arg1 = lua_isstring(lua, 1);
+    bool arg2 = lua_isstring(lua, 2);
+    if (arg1 && !arg2) {
         const char *stage_name = lua_tostring(lua, 1);
-        const char *stage_arg = lua_tostring(lua, 2);
-        printf("l_stage_set_active: \"%s\" %s\n", stage_name, stage_arg);
-        stage_set_active(stage_name, (char*)stage_arg);
-    }
+        trace("l_stage_set_active: \"%s\"\n", stage_name);
+        stage_set_active(stage_name, NULL);
+    } else if (arg1 && arg2) {
+        const char *name = lua_tostring(lua, 1);
+        const char *arg = lua_tostring(lua, 2);
+        trace("l_stage_set_active: \"%s\" %s\n", name, arg);
+        // XXX: Может быть ошиюка при передачи arg из-за освобождения 
+        // памяти строки
+        stage_set_active(name, (void*)arg);
+    } else 
+        trace("l_stage_set_active: bad arguments\n");
     return 0;
 }
 

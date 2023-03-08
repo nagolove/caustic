@@ -189,7 +189,7 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
                 get_key2str(hk->combo.mod2),
                 get_key2str(hk->combo.key),
                 /*skip_lead_zeros(uint8t_to_bitstr(hk->groups)),*/
-                uint8t_to_bitstr(hk->groups) + lead_zeros,
+                to_bitstr_uint8_t(hk->groups) + lead_zeros,
                 name,
                 hk->enabled ? "t" : "f",
                 hk->description ? hk->description : "NULL"
