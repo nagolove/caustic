@@ -108,6 +108,10 @@ void common_init(void) {
     add_chars_range(cyrillic_first, cyrillic_last);
     add_chars_range(pseudo_gr_first, pseudo_gr_last);
     add_chars_range(arrows_first, arrows_last);
+
+    const int number_sign = 2116; // FIXME: Значок №
+    add_chars_range(number_sign - 1, number_sign + 1);
+
     printf("cmn.font_chars_num %d\n", cmn.font_chars_num);
 }
 
