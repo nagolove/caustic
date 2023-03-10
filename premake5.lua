@@ -59,26 +59,33 @@ workspace "caustic"
         --removefiles("common.c")
         removefiles { "*koh_stage_terrain.c" }
 
-    --[[
-    project "test_objects_pool"
-        buildoptions { 
-            "-ggdb3",
-        }
-        files {
-            "src/*.h",
-            "src/object.c",
-            "tests/munit.c",
-            "tests/test_object_pool.c",
-        }
 
     project "test_de_ecs"
+        linkoptions {
+            "-fsanitize=address",
+            "-fsanitize-recover=address",
+        }
         buildoptions { 
             "-ggdb3",
+            "-fsanitize=address",
+            "-fsanitize-recover=address",
         }
         files {
             "tests/munit.c",
             "tests/test_de_ecs.c",
         }
+
+    --[[
+    project "test_objects_pool"
+    buildoptions { 
+        "-ggdb3",
+    }
+    files {
+        "src/*.h",
+        "src/object.c",
+        "tests/munit.c",
+        "tests/test_object_pool.c",
+    }
 
     project "test_timers"
         buildoptions { 

@@ -42,7 +42,7 @@ static void recalc(Path *p, int i) {
     // */
 }
 
-static Font fnt;
+static Font *fnt = {0};
 
 void path_init(Path *p) {
     memset(p, 0, sizeof(*p));
@@ -122,11 +122,16 @@ Vector2 path_get(Path *p) {
 }
 
 void paths_init(void) {
-    fnt = load_font_unicode("assets/fonts/dejavusansmono.ttf", 32);
+    fnt = malloc(sizeof(Font));
+    *fnt = load_font_unicode("assets/fonts/dejavusansmono.ttf", 32);
 }
 
 void paths_shutdown(void) {
-    UnloadFont(fnt);
+    if (fnt) {
+        UnloadFont(*fnt);
+        free(fnt);
+        fnt = NULL;
+    }
 }
 
 Vector2 path_get_dir(Path *p) {
@@ -151,11 +156,12 @@ void path_render(Path *p) {
         DrawCircleV(p->points[q], 17., GREEN);
         char buf[20] = {0};
         snprintf(buf, sizeof(buf), "(%d): %u", q, p->id);
-        DrawTextEx(
-            fnt, buf, 
-            Vector2Add(p->points[q], (Vector2) { 20, 0 }),
-            fnt.baseSize, 0, BLACK
-        );
+        if (fnt)
+            DrawTextEx(
+                *fnt, buf, 
+                Vector2Add(p->points[q], (Vector2) { 20, 0 }),
+                fnt->baseSize, 0, BLACK
+            );
         prev = p->points[q];
     }
 

@@ -27,7 +27,8 @@ Resource *res_add(
         memmove(new->source_data, source_data, source_size);
     }
 
-    new->next = res_list;
+    new->next = res_list->next;
+    res_list->next = new;
     new->type = type;
     return new;
 }

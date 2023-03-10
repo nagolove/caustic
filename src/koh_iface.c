@@ -221,6 +221,8 @@ void btn_init(Button *btn) {
 }
 
 void btn_shutdown(Button *btn) {
+    assert(btn);
+    free(btn);
     //printf("btn_done\n");
 }
 

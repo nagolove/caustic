@@ -64,6 +64,7 @@ void menu_shutdown(Menu *mnu) {
     if (mnu->font_owned) {
         UnloadFont(mnu->fnt);
     }
+    timerstore_shutdown(&mnu->timers);
     memset(mnu, 0, sizeof(*mnu));
 }
 
