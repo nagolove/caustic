@@ -203,7 +203,7 @@ void de_orphans_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* ud
     Use this view to iterate entities that have the component type specified.
 */
 typedef struct de_view_single {
-    void* pool; // de_storage opaque pointer
+    struct de_storage* pool; // de_storage opaque pointer
     size_t current_entity_index;
     de_entity entity;
 } de_view_single;
@@ -240,9 +240,9 @@ typedef struct de_view {
     #define DE_MAX_VIEW_COMPONENTS (16)
     /* value is the component id, index is where is located in the all_pools array */
     size_t to_pool_index[DE_MAX_VIEW_COMPONENTS];
-    void* all_pools[DE_MAX_VIEW_COMPONENTS]; // de_storage opaque pointers
+    struct de_storage* all_pools[DE_MAX_VIEW_COMPONENTS]; // de_storage opaque pointers
     size_t pool_count;
-    void* pool; // de_storage opaque pointer
+    struct de_storage* pool; // de_storage opaque pointer
     size_t current_entity_index;
     de_entity current_entity;
 } de_view;
@@ -274,11 +274,17 @@ void de_view_next(de_view* v);
 const de_entity de_null = (de_entity)DE_ENTITY_ID_MASK;
 
 /* Returns the version part of the entity */
-de_entity_ver de_entity_version(de_entity e) { return (de_entity_ver) { .ver = e >> DE_ENTITY_SHIFT }; }
+de_entity_ver de_entity_version(de_entity e) {
+    return (de_entity_ver) { .ver = e >> DE_ENTITY_SHIFT }; 
+}
 /* Returns the id part of the entity */
-de_entity_id de_entity_identifier(de_entity e) { return (de_entity_id) { .id = e & DE_ENTITY_ID_MASK }; }
+de_entity_id de_entity_identifier(de_entity e) {
+    return (de_entity_id) { .id = e & DE_ENTITY_ID_MASK }; 
+}
 /* Makes a de_entity from entity_id and entity_version */
-de_entity de_make_entity(de_entity_id id, de_entity_ver version) { return id.id | (version.ver << DE_ENTITY_SHIFT); }
+de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
+    return id.id | (version.ver << DE_ENTITY_SHIFT); 
+}
 
 
 
@@ -360,12 +366,16 @@ static de_sparse* de_sparse_new() {
 */
 
 static void de_sparse_destroy(de_sparse* s) {
+    assert(s);
     if (!s) return;
-
-    if (s->sparse)
+    if (s->sparse) {
         free(s->sparse);
-    if (s->dense)
+        s->sparse = NULL;
+    }
+    if (s->dense) {
         free(s->dense);
+        s->dense = NULL;
+    }
 }
 
 /*
@@ -395,7 +405,15 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
     if (eid.id >= s->sparse_size) { // check if we need to realloc
         const size_t new_sparse_size = eid.id + 1;
         s->sparse = realloc(s->sparse, new_sparse_size * sizeof(s->sparse[0]));
-        memset(s->sparse + s->sparse_size, de_null, (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]));
+        //memset(s->sparse + s->sparse_size, de_null, (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]));
+      
+        de_entity *start = s->sparse + s->sparse_size;
+        int bytes_num = (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]);
+        while (bytes_num) {
+            *start++ = de_null;
+            bytes_num -= sizeof(de_entity);
+        }
+        
         s->sparse_size = new_sparse_size;
     }
     s->sparse[eid.id] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
@@ -468,12 +486,11 @@ typedef struct de_storage {
 
 
 static de_storage* de_storage_init(de_storage* s, size_t cp_size, size_t cp_id) {
-    if (s) {
-        *s = (de_storage){ 0 };
-        de_sparse_init(&s->sparse);
-        s->cp_sizeof = cp_size;
-        s->cp_id = cp_id;
-    }
+    assert(s);
+    *s = (de_storage){ 0 };
+    de_sparse_init(&s->sparse);
+    s->cp_sizeof = cp_size;
+    s->cp_id = cp_id;
     return s;
 }
 
@@ -482,13 +499,13 @@ static de_storage* de_storage_new(size_t cp_size, size_t cp_id) {
 }
 
 static void de_storage_destroy(de_storage* s) {
-    if (s) {
-        de_sparse_destroy(&s->sparse);
-        free(s->cp_data);
-    }
+    assert(s);
+    de_sparse_destroy(&s->sparse);
+    free(s->cp_data);
 }
 
 static void de_storage_delete(de_storage* s) {
+    assert(s);
     de_storage_destroy(s);
     free(s);
 }
@@ -561,26 +578,30 @@ typedef struct de_ecs {
 } de_ecs;
 
 de_ecs* de_ecs_make() {
-    de_ecs* r = malloc(sizeof(de_ecs));
-    if (r) {
-        r->storages = 0;
-        r->storages_size = 0;
-        r->available_id.id = de_null;
-        r->entities_size = 0;
-        r->entities = 0;
-    }
+    de_ecs* r = calloc(1, sizeof(de_ecs));
+    assert(r);
+    r->storages = 0;
+    r->storages_size = 0;
+    r->available_id.id = de_null;
+    r->entities_size = 0;
+    r->entities = 0;
     return r;
 } 
 
 void de_ecs_destroy(de_ecs* r) {
-    if (r) {
-        if (r->storages) {
-            for (size_t i = 0; i < r->storages_size; i++) {
-                de_storage_delete(r->storages[i]);
-            }
+    assert(r);
+
+    if (!r) return;
+
+    if (r->storages) {
+        for (size_t i = 0; i < r->storages_size; i++) {
+            de_storage_delete(r->storages[i]);
         }
-        free(r->entities);
+        free(r->storages);
+        r->storages = NULL;
     }
+    free(r->entities);
+    memset(r, 0, sizeof(de_ecs));
     free(r);
 }
 
@@ -598,10 +619,11 @@ bool de_valid(de_ecs* r, de_entity e) {
     const de_entity_id id = de_entity_identifier(e);
     bool ret = id.id < r->entities_size && r->entities[id.id] == e;
     if (!ret) {
-        printf("de_valid: crash\n");
-        printf("entity %u, id %u, version %u\n", e, id.id, de_entity_version(e).ver);
-        printf("r->entities_size %zu\n", r->entities_size);
-        printf("r->entities[id.id] %u\n", r->entities[id.id]);
+        printf("de_valid: invalid\n");
+        printf("de_valid: entity %u, id %u, version %u\n", e, id.id, de_entity_version(e).ver);
+        printf("de_valid: r->entities_size %zu\n", r->entities_size);
+        if (r->entities)
+            printf("de_valid: r->entities[id.id] %u\n", r->entities[id.id]);
         dump_entities(r);
     }
     return ret;
@@ -655,11 +677,12 @@ de_entity de_create(de_ecs* r) {
 
 de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     assert(r);
-    de_storage* storage_found = 0;
+    de_storage* storage_found = NULL;
 
     for (size_t i = 0; i < r->storages_size; i++) {
         if (r->storages[i]->cp_id == cp_type.cp_id) {
             storage_found = r->storages[i];
+            break;
         }
     }
 
@@ -668,9 +691,9 @@ de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     } else {
         de_storage* storage_new = de_storage_new(cp_type.cp_sizeof, cp_type.cp_id);
         //r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof * r->storages);
-        r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof(r->storages[0]));
-        r->storages[r->storages_size] = storage_new;
         r->storages_size++;
+        r->storages = realloc(r->storages, r->storages_size * sizeof(r->storages[0]));
+        r->storages[r->storages_size - 1] = storage_new;
         return storage_new;
     }
 }
@@ -715,7 +738,7 @@ bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
 void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
-    assert(de_assure(r, cp_type));
+    //assert(de_assure(r, cp_type));
     return de_storage_emplace(de_assure(r, cp_type), e);
 }
 
@@ -792,7 +815,7 @@ de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type) {
     v.pool = de_assure(r, cp_type);
     assert(v.pool);
 
-    de_storage* pool = (de_storage *)v.pool;
+    de_storage* pool = v.pool;
     if (pool->cp_data_size != 0) {
         // get the last entity of the pool
         v.current_entity_index = pool->cp_data_size - 1; 
@@ -823,7 +846,7 @@ void de_view_single_next(de_view_single* v) {
     assert(v);
     if (v->current_entity_index) {
         v->current_entity_index--;
-        v->entity = ((de_storage*)v->pool)->sparse.dense[v->current_entity_index];
+        v->entity = v->pool->sparse.dense[v->current_entity_index];
     } else {
         v->entity = de_null;
     }
@@ -873,7 +896,7 @@ void de_view_next(de_view* v) {
     do {
         if (v->current_entity_index) {
             v->current_entity_index--;
-            v->current_entity = ((de_storage*)v->pool)->sparse.dense[v->current_entity_index];
+            v->current_entity = v->pool->sparse.dense[v->current_entity_index];
         }
         else {
             v->current_entity = de_null;
@@ -897,16 +920,16 @@ de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
         if (!v.pool) {
             v.pool = v.all_pools[i];
         } else {
-            if (((de_storage*)v.all_pools[i])->cp_data_size < ((de_storage*)v.pool)->cp_data_size) {
+            if ((v.all_pools[i])->cp_data_size < (v.pool)->cp_data_size) {
                 v.pool = v.all_pools[i];
             }
         }
         v.to_pool_index[i] = cp_types[i].cp_id;
     }
 
-    if (v.pool && ((de_storage*)v.pool)->cp_data_size != 0) {
-        v.current_entity_index = ((de_storage*)v.pool)->cp_data_size - 1;
-        v.current_entity = ((de_storage*)v.pool)->sparse.dense[v.current_entity_index];
+    if (v.pool && v.pool->cp_data_size != 0) {
+        v.current_entity_index = (v.pool)->cp_data_size - 1;
+        v.current_entity = (v.pool)->sparse.dense[v.current_entity_index];
         // now check if this entity is contained in all the pools
         if (!de_view_entity_contained(&v, v.current_entity)) {
             // if not, search the next entity contained
@@ -927,7 +950,7 @@ bool de_view_valid(de_view* v) {
 de_entity de_view_entity(de_view* v) {
     assert(v);
     assert(de_view_valid(v));
-    return ((de_storage*)v->pool)->sparse.dense[v->current_entity_index];
+    return v->pool->sparse.dense[v->current_entity_index];
 }
 
 #endif // DESTRAL_ECS_IMPL

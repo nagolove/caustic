@@ -8,7 +8,9 @@
  * details.
  *********************************************************************/
 
+#include "koh_object.h"
 #include "munit.h"
+#include <stdbool.h>
 
 /* This is just to disable an MSVC warning about conditional
  * expressions being constant, which you shouldn't have to do for your
@@ -19,7 +21,7 @@
 #endif
 
 #define DESTRAL_ECS_IMPL
-#include "destral_ecs.h"
+#include "koh_destral_ecs.h"
 
 struct Component_First {
     int data[100];
@@ -30,10 +32,17 @@ struct Component_Second {
 };
 
 struct Component_Third {
-    int data[2];
+    int data[200];
 };
 
-/*
+struct Component_Fouth {
+    char data;
+};
+
+struct Component_Fifth {
+    char data;
+};
+
 static const de_cp_type component_first = {
     .cp_id = 0,
     .cp_sizeof = sizeof(struct Component_First),
@@ -52,40 +61,533 @@ static const de_cp_type component_third = {
     .name = "angular_velocity",
 };
 
-static const de_cp_type component_fourth = {
+static const de_cp_type component_fouth = {
     .cp_id = 3,
-    .cp_sizeof = sizeof(char),
+    .cp_sizeof = sizeof(struct Component_Fouth),
     .name = "color",
 };
-*/
 
-const int iter_num = 10;
+static const de_cp_type component_fifth = {
+    .cp_id = 4,
+    .cp_sizeof = sizeof(struct Component_Fifth),
+    .name = "color2",
+};
+
+const int iter_num = 600;
 
 void each_iter(de_ecs *ecs, de_entity e, void *udata) {
     de_entity *arr = udata;
-    printf("each_iter: %u\n", e);
+    //printf("each_iter: %u\n", e);
     for (int i = 0; i < iter_num; i++) {
         if (arr[i] == e) {
-            printf("found\n");
+            //printf("found\n");
             return;
         }
     }
-    printf("not found\n");
+    munit_assert(true);
 }
 
 static MunitResult
 test_init_free(const MunitParameter params[], void* data) {
     de_ecs *ecs = de_ecs_make();
-    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+    de_entity *arr = calloc(sizeof(de_entity), iter_num);
     for (int i = 0; i < iter_num; i++) {
         arr[i] = de_create(ecs);
     }
     de_each(ecs, each_iter, arr);
-    for (int i = iter_num - 1; i > 0; i++) {
-        // XXX: Падает на удалении
-        de_destroy(ecs, arr[i]);
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
     }
     de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static const char memset_value1 = 117;
+static const char memset_value2 = 107;
+static const char memset_value3 = 98;
+static const char memset_value4 = 109;
+static const char memset_value5 = 105;
+
+static MunitResult
+test_init_free_comp1(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+    for (int i = 0; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+        struct Component_First *comp1 = de_emplace(ecs, e, component_first);
+        memset(comp1, memset_value1, sizeof(struct Component_First));
+    }
+    de_each(ecs, each_iter, arr);
+
+    de_view view = de_create_view(ecs, 1, (de_cp_type[1]) { component_first });
+    while (de_view_valid(&view)) {
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static MunitResult
+test_init_free_comp12(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+    for (int i = 0; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_First *comp1 = de_emplace(ecs, e, component_first);
+        memset(comp1, memset_value1, sizeof(struct Component_First));
+
+        struct Component_Second *comp2 = de_emplace(ecs, e, component_second);
+        memset(comp2, memset_value2, sizeof(struct Component_Second));
+
+    }
+    de_each(ecs, each_iter, arr);
+
+    de_view view = {0};
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_first });
+    while (de_view_valid(&view)) {
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_second });
+    while (de_view_valid(&view)) {
+        struct Component_Second *comp2 = de_view_get(&view, component_second);
+        char *comp2_mem = (char*)comp2;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp2_mem, ==, memset_value2);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static MunitResult
+test_init_free_comp123(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+    for (int i = 0; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_First *comp1 = de_emplace(ecs, e, component_first);
+        memset(comp1, memset_value1, sizeof(struct Component_First));
+
+        struct Component_Second *comp2 = de_emplace(ecs, e, component_second);
+        memset(comp2, memset_value2, sizeof(struct Component_Second));
+
+        struct Component_Third *comp3 = de_emplace(ecs, e, component_third);
+        memset(comp3, memset_value3, sizeof(struct Component_Third));
+
+    }
+    de_each(ecs, each_iter, arr);
+
+    de_view view = {0};
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_first });
+    while (de_view_valid(&view)) {
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_second });
+    while (de_view_valid(&view)) {
+        struct Component_Second *comp2 = de_view_get(&view, component_second);
+        char *comp2_mem = (char*)comp2;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp2_mem, ==, memset_value2);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_third });
+    while (de_view_valid(&view)) {
+        struct Component_Third *comp3 = de_view_get(&view, component_third);
+        char *comp3_mem = (char*)comp3;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp3_mem, ==, memset_value3);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static MunitResult
+test_init_free_comp1234(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+    for (int i = 0; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_First *comp1 = de_emplace(ecs, e, component_first);
+        memset(comp1, memset_value1, sizeof(struct Component_First));
+
+        struct Component_Second *comp2 = de_emplace(ecs, e, component_second);
+        memset(comp2, memset_value2, sizeof(struct Component_Second));
+
+        struct Component_Third *comp3 = de_emplace(ecs, e, component_third);
+        memset(comp3, memset_value3, sizeof(struct Component_Third));
+
+        //struct Component_Fouth *comp4 = de_emplace(ecs, e, component_fouth);
+        //memset(comp4, memset_value4, sizeof(struct Component_Fouth));
+
+    }
+    de_each(ecs, each_iter, arr);
+
+    de_view view = {0};
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_first });
+    while (de_view_valid(&view)) {
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_second });
+    while (de_view_valid(&view)) {
+        struct Component_Second *comp2 = de_view_get(&view, component_second);
+        char *comp2_mem = (char*)comp2;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp2_mem, ==, memset_value2);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_third });
+    while (de_view_valid(&view)) {
+        struct Component_Third *comp3 = de_view_get(&view, component_third);
+        char *comp3_mem = (char*)comp3;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp3_mem, ==, memset_value3);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_fouth });
+    while (de_view_valid(&view)) {
+        struct Component_Fouth *comp4 = de_view_get(&view, component_fouth);
+        char *comp4_mem = (char*)comp4;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp4_mem, ==, memset_value4);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static MunitResult
+test_init_free_comp_5(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+
+    int i = 0;
+    for (i = 0; i < iter_num / 2; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_First *comp5 = de_emplace(ecs, e, component_fifth);
+        memset(comp5, memset_value5, sizeof(struct Component_Fifth));
+
+    }
+
+    for (; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_Third *comp3 = de_emplace(ecs, e, component_third);
+        memset(comp3, memset_value3, sizeof(struct Component_Third));
+
+        struct Component_Fouth *comp4 = de_emplace(ecs, e, component_fouth);
+        memset(comp4, memset_value4, sizeof(struct Component_Fouth));
+
+    }
+
+    de_each(ecs, each_iter, arr);
+
+    de_view view = {0};
+
+    view = de_create_view(
+        ecs, 2, 
+        (de_cp_type[2]) { component_first, component_second }
+    );
+    while (de_view_valid(&view)) {
+
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+
+        struct Component_Second *comp2 = de_view_get(&view, component_second);
+        char *comp2_mem = (char*)comp2;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp2_mem, ==, memset_value2);
+        }
+
+
+        de_entity e = de_view_entity(&view);
+        munit_assert_false(de_has(ecs, e, component_third));
+        munit_assert_false(de_has(ecs, e, component_fouth));
+
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_second });
+    while (de_view_valid(&view)) {
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_third });
+    while (de_view_valid(&view)) {
+        struct Component_Third *comp3 = de_view_get(&view, component_third);
+        char *comp3_mem = (char*)comp3;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp3_mem, ==, memset_value3);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_fouth });
+    while (de_view_valid(&view)) {
+        struct Component_Fouth *comp4 = de_view_get(&view, component_fouth);
+        char *comp4_mem = (char*)comp4;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp4_mem, ==, memset_value4);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static MunitResult
+test_init_free_comp_12_34(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+
+    int i = 0;
+    for (i = 0; i < iter_num / 2; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_First *comp1 = de_emplace(ecs, e, component_first);
+        memset(comp1, memset_value1, sizeof(struct Component_First));
+
+        struct Component_Second *comp2 = de_emplace(ecs, e, component_second);
+        memset(comp2, memset_value2, sizeof(struct Component_Second));
+    }
+
+    for (; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_Third *comp3 = de_emplace(ecs, e, component_third);
+        memset(comp3, memset_value3, sizeof(struct Component_Third));
+
+        struct Component_Fouth *comp4 = de_emplace(ecs, e, component_fouth);
+        memset(comp4, memset_value4, sizeof(struct Component_Fouth));
+
+    }
+
+    de_each(ecs, each_iter, arr);
+
+    de_view view = {0};
+
+    view = de_create_view(
+        ecs, 2, 
+        (de_cp_type[2]) { component_first, component_second }
+    );
+    while (de_view_valid(&view)) {
+
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+
+        struct Component_Second *comp2 = de_view_get(&view, component_second);
+        char *comp2_mem = (char*)comp2;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp2_mem, ==, memset_value2);
+        }
+
+
+        de_entity e = de_view_entity(&view);
+        munit_assert_false(de_has(ecs, e, component_third));
+        munit_assert_false(de_has(ecs, e, component_fouth));
+
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_second });
+    while (de_view_valid(&view)) {
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_third });
+    while (de_view_valid(&view)) {
+        struct Component_Third *comp3 = de_view_get(&view, component_third);
+        char *comp3_mem = (char*)comp3;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp3_mem, ==, memset_value3);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_fouth });
+    while (de_view_valid(&view)) {
+        struct Component_Fouth *comp4 = de_view_get(&view, component_fouth);
+        char *comp4_mem = (char*)comp4;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp4_mem, ==, memset_value4);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
+    return MUNIT_OK;
+}
+
+static MunitResult
+test_many_views_12_34_23(const MunitParameter params[], void* data) {
+    de_ecs *ecs = de_ecs_make();
+    de_entity *arr = malloc(sizeof(de_entity) * iter_num);
+
+    int i = 0;
+    for (i = 0; i < iter_num / 2; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_First *comp1 = de_emplace(ecs, e, component_first);
+        memset(comp1, memset_value1, sizeof(struct Component_First));
+
+        struct Component_Second *comp2 = de_emplace(ecs, e, component_second);
+        memset(comp2, memset_value2, sizeof(struct Component_Second));
+    }
+
+    for (; i < iter_num; i++) {
+        de_entity e = arr[i] = de_create(ecs);
+
+        struct Component_Third *comp3 = de_emplace(ecs, e, component_third);
+        memset(comp3, memset_value3, sizeof(struct Component_Third));
+
+        struct Component_Fouth *comp4 = de_emplace(ecs, e, component_fouth);
+        memset(comp4, memset_value4, sizeof(struct Component_Fouth));
+
+    }
+
+    de_each(ecs, each_iter, arr);
+
+    de_view view = {0};
+
+    view = de_create_view(
+        ecs, 2, 
+        (de_cp_type[2]) { component_first, component_second }
+    );
+    while (de_view_valid(&view)) {
+
+        struct Component_First *comp1 = de_view_get(&view, component_first);
+        char *comp1_mem = (char*)comp1;
+        for (int i = 0; i < sizeof(struct Component_First); i++) {
+            munit_assert_char(*comp1_mem, ==, memset_value1);
+        }
+
+        struct Component_Second *comp2 = de_view_get(&view, component_second);
+        char *comp2_mem = (char*)comp2;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp2_mem, ==, memset_value2);
+        }
+
+
+        de_entity e = de_view_entity(&view);
+        munit_assert_false(de_has(ecs, e, component_third));
+        munit_assert_false(de_has(ecs, e, component_fouth));
+
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_second });
+    while (de_view_valid(&view)) {
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_third });
+    while (de_view_valid(&view)) {
+        struct Component_Third *comp3 = de_view_get(&view, component_third);
+        char *comp3_mem = (char*)comp3;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp3_mem, ==, memset_value3);
+        }
+        de_view_next(&view);
+    }
+
+    view = de_create_view(ecs, 1, (de_cp_type[1]) { component_fouth });
+    while (de_view_valid(&view)) {
+        struct Component_Fouth *comp4 = de_view_get(&view, component_fouth);
+        char *comp4_mem = (char*)comp4;
+        for (int i = 0; i < sizeof(struct Component_Second); i++) {
+            munit_assert_char(*comp4_mem, ==, memset_value4);
+        }
+        de_view_next(&view);
+    }
+
+    for (int i = iter_num - 1; i >= 0; i--) {
+        if (de_valid(ecs, arr[i]))
+            de_destroy(ecs, arr[i]);
+    }
+    de_ecs_destroy(ecs);
+    free(arr);
     return MUNIT_OK;
 }
 
@@ -94,121 +596,6 @@ test_destroy(const MunitParameter params[], void* data) {
     return MUNIT_OK;
 }
 
-/* Tests are functions that return void, and take a single void*
- * parameter.  We'll get to what that parameter is later. */
-static MunitResult
-test_compare(const MunitParameter params[], void* data) {
-  /* We'll use these later */
-  const unsigned char val_uchar = 'b';
-  const short val_short = 1729;
-  double pi = 3.141592654;
-  char* stewardesses = "stewardesses";
-  char* most_fun_word_to_type;
-
-  /* These are just to silence compiler warnings about the parameters
-   * being unused. */
-  (void) params;
-  (void) data;
-
-  /* Let's start with the basics. */
-  munit_assert(0 != 1);
-
-  /* There is also the more verbose, though slightly more descriptive
-     munit_assert_true/false: */
-  munit_assert_false(0);
-
-  /* You can also call munit_error and munit_errorf yourself.  We
-   * won't do it is used to indicate a failure, but here is what it
-   * would look like: */
-  /* munit_error("FAIL"); */
-  /* munit_errorf("Goodbye, cruel %s", "world"); */
-
-  /* There are macros for comparing lots of types. */
-  munit_assert_char('a', ==, 'a');
-
-  /* Sure, you could just assert('a' == 'a'), but if you did that, a
-   * failed assertion would just say something like "assertion failed:
-   * val_uchar == 'b'".  µnit will tell you the actual values, so a
-   * failure here would result in something like "assertion failed:
-   * val_uchar == 'b' ('X' == 'b')." */
-  munit_assert_uchar(val_uchar, ==, 'b');
-
-  /* Obviously we can handle values larger than 'char' and 'uchar'.
-   * There are versions for char, short, int, long, long long,
-   * int8/16/32/64_t, as well as the unsigned versions of them all. */
-  munit_assert_short(42, <, val_short);
-
-  /* There is also support for size_t.
-   *
-   * The longest word in English without repeating any letters is
-   * "uncopyrightables", which has uncopyrightable (and
-   * dermatoglyphics, which is the study of fingerprints) beat by a
-   * character */
-  munit_assert_size(strlen("uncopyrightables"), >, strlen("dermatoglyphics"));
-
-  /* Of course there is also support for doubles and floats. */
-  munit_assert_double(pi, ==, 3.141592654);
-
-  /* If you want to compare two doubles for equality, you might want
-   * to consider using munit_assert_double_equal.  It compares two
-   * doubles for equality within a precison of 1.0 x 10^-(precision).
-   * Note that precision (the third argument to the macro) needs to be
-   * fully evaluated to an integer by the preprocessor so µnit doesn't
-   * have to depend pow, which is often in libm not libc. */
-  munit_assert_double_equal(3.141592654, 3.141592653589793, 9);
-
-  /* And if you want to check strings for equality (or inequality),
-   * there is munit_assert_string_equal/not_equal.
-   *
-   * "stewardesses" is the longest word you can type on a QWERTY
-   * keyboard with only one hand, which makes it loads of fun to type.
-   * If I'm going to have to type a string repeatedly, let's make it a
-   * good one! */
-  munit_assert_string_equal(stewardesses, "stewardesses");
-
-  /* A personal favorite macro which is fantastic if you're working
-   * with binary data, is the one which naïvely checks two blobs of
-   * memory for equality.  If this fails it will tell you the offset
-   * of the first differing byte. */
-  munit_assert_memory_equal(7, stewardesses, "steward");
-
-  /* You can also make sure that two blobs differ *somewhere*: */
-  munit_assert_memory_not_equal(8, stewardesses, "steward");
-
-  /* There are equal/not_equal macros for pointers, too: */
-  most_fun_word_to_type = stewardesses;
-  munit_assert_ptr_equal(most_fun_word_to_type, stewardesses);
-
-  /* And null/not_null */
-  munit_assert_null(NULL);
-  munit_assert_not_null(most_fun_word_to_type);
-
-  /* Lets verify that the data parameter is what we expected.  We'll
-   * see where this comes from in a bit.
-   *
-   * Note that the casting isn't usually required; if you give this
-   * function a real pointer (instead of a number like 0xdeadbeef) it
-   * would work as expected. */
-  munit_assert_ptr_equal(data, (void*)(uintptr_t)0xdeadbeef);
-
-  return MUNIT_OK;
-}
-
-static char* foo_params[] = {
-  (char*) "one", (char*) "two", (char*) "three", NULL
-};
-
-static char* bar_params[] = {
-  (char*) "red", (char*) "green", (char*) "blue", NULL
-};
-
-static MunitParameterEnum test_params[] = {
-  { (char*) "foo", foo_params },
-  { (char*) "bar", bar_params },
-  { (char*) "baz", NULL },
-  { NULL, NULL },
-};
-
 /* Creating a test suite is pretty simple.  First, you'll need an
  * array of tests: */
 static MunitTest de_ecs_suite[] = {
@@ -216,10 +603,14 @@ static MunitTest de_ecs_suite[] = {
    * comments kind of ruin that, though.  Here is how you'll usually
    * see entries written: */
   { (char*) "/init_free", test_init_free, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
-  /* To tell the test runner when the array is over, just add a NULL
-   * entry at the end. */
-  { (char*) "/destroy", test_destroy, NULL, NULL, MUNIT_TEST_OPTION_NONE, test_params },
-  { (char*) "/compare_munit_example", test_compare, NULL, NULL, MUNIT_TEST_OPTION_NONE, test_params },
+  { (char*) "/destroy", test_destroy, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/init_free_comp_1", test_init_free_comp1, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/init_free_comp_12", test_init_free_comp12, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/init_free_comp_123", test_init_free_comp123, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/init_free_comp_1234", test_init_free_comp1234, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/init_free_comp_12_34", test_init_free_comp_12_34, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/init_free_comp_5", test_init_free_comp_5, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+  { (char*) "/many_views_12_34_23", test_many_views_12_34_23, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
   { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
