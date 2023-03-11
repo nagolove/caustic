@@ -163,7 +163,7 @@ void parts_explode(PartsEngine *pe, struct Parts_ExplositionDef *def) {
         *color = RED;
 
         double *lifetime = de_emplace(r, e, component_lifetime);
-        *lifetime = (rand() / (double)RAND_MAX) * 20.;
+        *lifetime = (rand() / (double)RAND_MAX) * 3.;
 
     }
 }

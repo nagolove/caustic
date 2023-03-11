@@ -35,9 +35,14 @@ int cmp(const void *a, const void * b) {
 }
 
 void register_all_functions(void) {
+    assert(ref_types_table);
     ScriptFunc *curr = script_funcs;
     while (curr) {
-        lua_register(lua, curr->fname, curr->func);
+        lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
+        lua_pushstring(lua, curr->fname);
+        lua_pushcclosure(lua, curr->func, 0);
+        lua_settable(lua, -3);
+
         sc_register_func_desc(curr->fname, curr->desc);
         curr = curr->next;
     }
@@ -54,6 +59,7 @@ void register_function(lua_CFunction f, const char *fname, const char *desc) {
     sfunc->next = script_funcs;
     script_funcs = sfunc;
 
+    assert(ref_types_table);
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
     lua_pushstring(lua, fname);
     lua_pushcclosure(lua, f, 0);
@@ -449,6 +455,14 @@ void sc_register_func_desc(const char *funcname, const char *description) {
         lua_pushstring(lua, funcname);
         lua_pushstring(lua, description);
         lua_settable(lua, -3);
+
+        trace(
+            "sc_register_func_desc: [%s]\n",
+            stack_dump(lua)
+        );
+
+        // TODO: Аккуратно очистить стек, не весь
+        //lua_pop(lua, 1);
         lua_settop(lua, 0);
     } else {
         printf("sc_register_func_desc: there is no cmn.ref_functions_desc\n");
