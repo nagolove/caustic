@@ -1,5 +1,7 @@
 // vim: fdm=marker
 #include "koh_inotifier.h"
+#include "koh_console.h"
+#include "koh_script.h"
 
 #if defined(PLATFORM_WEB)
 void inotifier_init() { }
@@ -33,8 +35,9 @@ static int wd[MAX_WATCHED_FILES] = {0};
 static char *fnames[MAX_WATCHED_FILES] = {0};
 static int watched_num = 0;
 static HTable *tbl = NULL;
+static struct pollfd fds[1] = {0};
 
-const char *get_fname(int target_wd) {
+static const char *get_fname(int target_wd) {
     for (int i = 0; i < watched_num; ++i) {
         if (wd[i] == target_wd) {
             return fnames[i];
@@ -43,7 +46,7 @@ const char *get_fname(int target_wd) {
     return NULL;
 }
 
-void process_event(const struct inotify_event *event) {
+static void process_event(const struct inotify_event *event) {
     assert(event);
 
     //{{{
@@ -124,7 +127,18 @@ static void handle_events() {
     }
 }
 
-struct pollfd fds[1] = {0};
+static HTableAction iter_list(
+    const void *key, int key_len, void *value, int value_len, void *udata
+) {
+    console_buf_write(">%s", (char*)key);
+    trace("l_notifier_list: %s\n", (char*)key);
+    return HTABLE_ACTION_NEXT;
+}
+
+static int l_inotifier_list(lua_State *lua) {
+    htable_each(tbl, iter_list, NULL);
+    return 0;
+}
 
 void inotifier_init() {
     trace("inotifier_init:\n");
@@ -145,6 +159,12 @@ void inotifier_init() {
         //.fd = STDIN_FILENO,
         //.events = POLLIN,
     //};
+
+    register_function(
+        l_inotifier_list,
+        "inotifier_list",
+        "Вывести список отслеживаемых для перезагрузки файлов."
+    );
 };
 
 void inotifier_update() {
@@ -188,7 +208,7 @@ void inotifier_update() {
     }
 }
 
-void fnames_free() {
+static void fnames_free() {
     for (int i = watched_num - 1; i >= 0; i--) {
         free(fnames[i]);
     }
