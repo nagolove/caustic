@@ -398,7 +398,7 @@ void sc_shutdown() {
 }
 
 lua_State *sc_get_state() {
-    assert(lua);
+    /*assert(lua);*/
     return lua;
 }
 
@@ -454,6 +454,8 @@ void sc_register_func_desc(const char *funcname, const char *description) {
         return;
     }
 
+    int top = lua_gettop(lua);
+
     //printf("common_register_function_desc [%s]\n", stack_dump(cmn.lua));
     if (lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_functions_desc) == LUA_TTABLE) {
         trace("sc_register_func_desc: 1 [%s]\n", stack_dump(lua));
@@ -467,7 +469,14 @@ void sc_register_func_desc(const char *funcname, const char *description) {
         );
 
         // TODO: Аккуратно очистить стек, не весь
-        //lua_pop(lua, 1);
+        /*lua_pop(lua, 1);*/
+        /*lua_settop(lua, 0);*/
+        int new_top = lua_gettop(lua);
+        int diff_top = new_top - top;
+        if (diff_top > 0) {
+            trace("sc_register_func_desc: pop %d elements\n", diff_top);
+            //lua_pop(lua, diff_top);
+        }
         lua_settop(lua, 0);
     } else {
         printf("sc_register_func_desc: there is no cmn.ref_functions_desc\n");
