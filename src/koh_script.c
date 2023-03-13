@@ -12,6 +12,7 @@
 #include "koh_inotifier.h"
 #include "koh_logger.h"
 #include "koh_lua_tools.h"
+#include "raylib.h"
 
 static ScriptFunc *script_funcs = NULL;
 static lua_State *lua = NULL;
@@ -60,10 +61,13 @@ void register_function(lua_CFunction f, const char *fname, const char *desc) {
     script_funcs = sfunc;
 
     assert(ref_types_table);
+    trace("register_function: '%s' [%s]\n", fname, stack_dump(lua));
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
     lua_pushstring(lua, fname);
     lua_pushcclosure(lua, f, 0);
     lua_settable(lua, -3);
+    lua_pop(lua, 1);
+    trace("register_function: [%s]\n", stack_dump(lua));
 
     /*lua_register(lua, fname, f);*/
     sc_register_func_desc(fname, desc);
@@ -446,18 +450,19 @@ void sc_register_func_desc(const char *funcname, const char *description) {
     assert(description);
 
     if (!lua) {
-        printf("sc_register_func_desc: lua == NULL\n");
+        trace("sc_register_func_desc: lua == NULL\n");
         return;
     }
 
     //printf("common_register_function_desc [%s]\n", stack_dump(cmn.lua));
     if (lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_functions_desc) == LUA_TTABLE) {
+        trace("sc_register_func_desc: 1 [%s]\n", stack_dump(lua));
         lua_pushstring(lua, funcname);
         lua_pushstring(lua, description);
         lua_settable(lua, -3);
 
         trace(
-            "sc_register_func_desc: [%s]\n",
+            "sc_register_func_desc: 2 [%s]\n",
             stack_dump(lua)
         );
 
@@ -484,6 +489,72 @@ uint32_t read_id(lua_State *lua) {
     lua_remove(lua, -1);
     return id;
 }
+
+Rectangle read_rect(lua_State *lua, int index, bool *err) {
+    if (err) *err = false;
+
+    if (!lua_istable(lua, index)) {
+        if (err) *err = true;
+        return (Rectangle){ 0, 0, 0, 0};
+    }
+
+    double nums[4] = {0};
+    int i = 0;
+
+    lua_pushnil(lua);
+    while (lua_next(lua, index)) {
+        /*int key_index = -2;*/
+        const int val_index = -1;
+        if (lua_isnumber(lua, val_index)) {
+            nums[i++] = lua_tonumber(lua, val_index);
+        } else {
+            lua_pop(lua, 2);
+            if (err) *err = true;
+            return (Rectangle){ 0, 0, 0, 0};
+        }
+        lua_pop(lua, 1);
+        if (i >= 4)
+            break;
+    }
+
+    return (Rectangle) { 
+        .x = nums[0], .y = nums[1],
+        .width = nums[2], .height = nums[3],
+    };
+}
+
+double *read_number_table(lua_State *lua, int index, int *len) {
+    assert(len);
+
+    if (!lua_istable(lua, index)) return NULL;
+
+    lua_pushnil(lua);
+    int cap = 100;
+    *len = 0;
+    double *arr = malloc(sizeof(double) * cap);
+    while (lua_next(lua, index)) {
+        /*int key_index = -2;*/
+        int val_index = -1;
+        if (lua_isnumber(lua, val_index)) {
+            printf("len %d\n", *len);
+            arr[(*len)++] = lua_tonumber(lua, val_index);
+
+            if (*len == cap) {
+                cap *= 1.5;
+                void *new_arr = realloc(arr, sizeof(arr[0]) * cap);
+                assert(new_arr);
+                arr = new_arr;
+            }
+        }
+        lua_pop(lua, 1);
+    }
+    if (*len == 0) {
+        free(arr);
+        arr = NULL;
+    }
+    return arr;
+}
+
 
 Vector2 read_pos(lua_State *lua, bool *notfound) {
     Vector2 pos = {0};

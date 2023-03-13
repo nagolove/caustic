@@ -668,36 +668,6 @@ void texture_save(Texture2D tex, const char *fname) {
     UnloadImage(img);
 }
 
-double *read_number_table(lua_State *lua, int index, int *len) {
-    assert(len);
-    assert(lua_istable(lua, index));
-    lua_pushnil(lua);
-    int cap = 100;
-    *len = 0;
-    double *arr = malloc(sizeof(double) * cap);
-    while (lua_next(lua, index)) {
-        /*int key_index = -2;*/
-        int val_index = -1;
-        if (lua_isnumber(lua, val_index)) {
-            printf("len %d\n", *len);
-            arr[(*len)++] = lua_tonumber(lua, val_index);
-
-            if (*len == cap) {
-                cap *= 1.5;
-                void *new_arr = realloc(arr, sizeof(arr[0]) * cap);
-                assert(new_arr);
-                arr = new_arr;
-            }
-        }
-        lua_pop(lua, 1);
-    }
-    if (*len == 0) {
-        free(arr);
-        arr = NULL;
-    }
-    return arr;
-}
-
 // Применение:
 // extract_filename(/some/file/path/some_file.txt, .txt) -> some_file
 const char *extract_filename(const char *fname, const char *ext) {
