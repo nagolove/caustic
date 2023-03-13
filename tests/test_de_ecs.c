@@ -20,7 +20,6 @@
 #pragma warning(disable: 4127)
 #endif
 
-#define DESTRAL_ECS_IMPL
 #include "koh_destral_ecs.h"
 
 struct Component_First {
