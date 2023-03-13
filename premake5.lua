@@ -70,6 +70,18 @@ workspace "caustic"
             "-fsanitize=address",
             "-fsanitize-recover=address",
         }
+        libdirs { "." }
+        libdirs(caustic.libdirs)
+        links({
+            'raylib',
+            'lua',
+            'chipmunk',
+            'genann',
+            'utf8proc',
+            'caustic', 
+            'smallregex',
+            'm'
+        })
         files {
             "tests/munit.c",
             "tests/test_de_ecs.c",
@@ -142,7 +154,6 @@ workspace "caustic"
         }
     --]]
     --
-    --[[
     
     filter "configurations:Debug"
         defines { "DEBUG" }
@@ -158,11 +169,11 @@ workspace "caustic"
         }
 
     filter "configurations:Release"
-        --buildoptions { 
-            --"-O2"
-        --}
+        buildoptions { 
+            "-O3", "-fPIC",
+        }
         --symbols "On"
-        --defines { "NDEBUG" }
+        defines { "NDEBUG" }
         --optimize "On"
 
-]]
+--]]
