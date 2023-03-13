@@ -186,19 +186,20 @@ static void PostBodyFree(cpBody *body, cpSpace *space){
 
 void space_shutdown(cpSpace *space) {
     cpSpaceEachShape(
-            space, 
-            (cpSpaceShapeIteratorFunc)PostShapeFree, 
-            space
+        space, 
+        (cpSpaceShapeIteratorFunc)PostShapeFree, 
+        space
     );
     cpSpaceEachConstraint(
-            space, 
-            (cpSpaceConstraintIteratorFunc)PostConstraintFree, 
-            space
+        space, 
+        (cpSpaceConstraintIteratorFunc)PostConstraintFree, 
+        space
     );
     cpSpaceEachBody(
-            space, (cpSpaceBodyIteratorFunc)PostBodyFree, 
-            space
+        space, (cpSpaceBodyIteratorFunc)PostBodyFree, 
+        space
     );
+    cpSpaceStep(space, 1 / 60.);
 }
 
 void space_debug_draw_circle(
