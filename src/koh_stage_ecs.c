@@ -3,25 +3,21 @@
 
 #include "koh_stage_ecs.h"
 
+#include "koh_common.h"
+#include "koh_destral_ecs.h"
+#include "koh_logger.h"
+#include "koh_routine.h"
+#include "koh_stages.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-
-#include "koh_stages.h"
-#include "koh_common.h"
-#include "koh_logger.h"
-#include "koh_routine.h"
-
-#define DESTRAL_ECS_IMPL
-#include "koh_destral_ecs.h"
-
-#include <stddef.h>
-#include <math.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <math.h>
 #include <memory.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct Stage_ECS {
     Stage parent;
