@@ -253,15 +253,17 @@ static void de_storage_delete(de_storage* s) {
     free(s);
 }
 
+#define DE_USE_STORAGE_CAPACITY 
+
 static void* de_storage_emplace(de_storage* s, de_entity e) {
+#ifdef DE_USE_STORAGE_CAPACITY
     assert(s);
 
     if (s->cp_data_size == 0 && s->cp_data_cap == 0) {
         trace("de_storage_emplace: initial allocating for type %d\n", s->cp_id);
-        s->cp_data_cap = 1000;
-        s->cp_data = malloc(s->cp_data_cap * s->cp_sizeof);
+        s->cp_data_cap = 100;
+        s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
     }
-    // */
 
     // now allocate the data for the new component at the end of the array
     //s->cp_data = realloc(s->cp_data, (s->cp_data_size + 1) * sizeof(char) * s->cp_sizeof);
@@ -272,7 +274,21 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
         trace("de_storage_emplace: additional allocating for type %d\n", s->cp_id);
         s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
     }
+    // */
     
+    // return the component data pointer (last position)
+    void* cp_data_ptr = &((char*)s->cp_data)[(s->cp_data_size - 1) * s->cp_sizeof];
+    
+    // then add the entity to the sparse set
+    de_sparse_emplace(&s->sparse, e);
+
+    return cp_data_ptr;
+#else
+    assert(s);
+    // now allocate the data for the new component at the end of the array
+    s->cp_data = realloc(s->cp_data, (s->cp_data_size + 1) * sizeof(char) * s->cp_sizeof);
+    s->cp_data_size++;
+
     // return the component data pointer (last position)
     void* cp_data_ptr = &((char*)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof];
     
@@ -280,9 +296,34 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
     de_sparse_emplace(&s->sparse, e);
 
     return cp_data_ptr;
+#endif
 }
 
 static void de_storage_remove(de_storage* s, de_entity e) {
+#ifdef DE_USE_STORAGE_CAPACITY
+    assert(s);
+    size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
+
+    /*
+    trace(
+        "de_storage_remove: s->cp_id %d, pos_to_remove %d, s->cp_data_size %d\n",
+        s->cp_id, pos_to_remove, s->cp_data_size
+    );
+    // */
+    
+    // swap (memmove because if cp_data_size 1 it will overlap dst and source.
+    memmove(
+        &((char*)s->cp_data)[pos_to_remove * sizeof(char) * s->cp_sizeof],
+        &((char*)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof],
+        s->cp_sizeof);
+
+    // and pop
+    if (s->cp_data_size <= 0.5 * s->cp_data_cap) {
+        s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof);
+        s->cp_data_cap = s->cp_data_size - 1;
+    }
+    s->cp_data_size--;
+#else
     assert(s);
     size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
 
@@ -295,6 +336,7 @@ static void de_storage_remove(de_storage* s, de_entity e) {
     // and pop
     s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof);
     s->cp_data_size--;
+#endif
 }
 
 static void* de_storage_get_by_index(de_storage* s, size_t index) {
@@ -495,7 +537,7 @@ bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
 void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
-    //assert(de_assure(r, cp_type));
+    assert(de_assure(r, cp_type));
     return de_storage_emplace(de_assure(r, cp_type), e);
 }
 
