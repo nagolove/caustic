@@ -3,6 +3,20 @@
 
 #include "koh_common.h"
 
+#include "chipmunk/chipmunk.h"
+#include "chipmunk/chipmunk_private.h"
+#include "chipmunk/chipmunk_structs.h"
+#include "chipmunk/chipmunk_types.h"
+#include "koh_console.h"
+#include "koh_logger.h"
+#include "koh_lua_tools.h"
+#include "koh_rand.h"
+#include "koh_routine.h"
+#include "lauxlib.h"
+#include "lua.h"
+#include "lualib.h"
+#include "raylib.h"
+#include "raymath.h"
 #include <assert.h>
 #include <ctype.h>
 #include <libgen.h>
@@ -13,23 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
-#include "chipmunk/chipmunk.h"
-#include "chipmunk/chipmunk_private.h"
-#include "chipmunk/chipmunk_structs.h"
-#include "chipmunk/chipmunk_types.h"
-
-#include "raylib.h"
-
-#include "koh_rand.h"
-#include "koh_routine.h"
-#include "koh_lua_tools.h"
-#include "koh_console.h"
-
-#include "raymath.h"
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
 
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 
@@ -156,6 +153,9 @@ Font load_font_unicode(const char *fname, int size) {
 
 // {{{ Chipnumnk shutdown iterators
 static void ShapeFreeWrap(cpSpace *space, cpShape *shape, void *unused){
+    trace("ShapeFreeWrap: shape %p\n", shape);
+    if (shape->userData)
+        trace("ShapeFreeWrap: shape->userData %p\n", shape->userData);
     cpSpaceRemoveShape(space, shape);
     cpShapeFree(shape);
 }
@@ -185,6 +185,8 @@ static void PostBodyFree(cpBody *body, cpSpace *space){
 
 
 void space_shutdown(cpSpace *space) {
+    trace("space_shutdown: space %p\n", space);
+    //cpSpaceStep(space, 1 / 60.);
     cpSpaceEachShape(
         space, 
         (cpSpaceShapeIteratorFunc)PostShapeFree, 
