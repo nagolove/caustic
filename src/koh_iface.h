@@ -32,10 +32,19 @@ typedef struct Control {
     void *data;
 } Control;
 
+struct IInputSources {
+    bool (*is_up)(void *udata);
+    bool (*is_down)(void *udata);
+    bool (*is_select)(void *udata);
+    Vector2 (*mouse_position)(void *udata);
+    bool (*mouse_is_button_pressed)(int button, void *udata);
+};
+
 // Содержит элементы управления в вертикальной раскладке.
 typedef struct VContainer {
     struct VContainer *next;
 
+    struct IInputSources inp;
     char name[CONTAINER_MAX_NAME];
     bool is_builded;
     Control **ctrls;
@@ -72,7 +81,9 @@ typedef struct Slider {
     Control ctrl;
 } Slider;
 
-VContainer *vcontainer_new(int mousebtn_open, const char *name);
+VContainer *vcontainer_new(
+    int mousebtn_open, const char *name, struct IInputSources inp
+);
 void vcontainer_shutdown(VContainer *c);
 
 void vcontainers_init();
@@ -82,7 +93,7 @@ Control* vcontainer_add(VContainer *c, Control *control);
 void vcontainer_build(VContainer *c);
 void vcontainer_get_size(VContainer *c, float *width, float *height);
 
-bool vcontainer_update(VContainer *c);
+bool vcontainer_update(VContainer *c, void *udata);
 
 // Для передвижения между пунктами меню и действия
 void vcontainer_next(VContainer *c);

@@ -1,25 +1,64 @@
 #include "koh_iface.h"
 
-#include "raylib.h"
-#include "raymath.h"
-
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "koh_dev_draw.h"
 #include "koh_input.h"
+#include "koh_logger.h"
+#include "raylib.h"
+#include "raymath.h"
+#include <assert.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static VContainer *container_head = NULL;
 static VContainer *container_active = NULL;
 
 void vcontainer_update_controls(VContainer *c);
 
-VContainer *vcontainer_new(int mousebtn_open, const char *name) {
+static bool empty(void *udata) {
+    return false;
+}
+
+static Vector2 empty_mouse_position(void *udata) {
+    return (Vector2) { 0, 0 };
+}
+
+static bool empty_mouse_is_button_pressed(int button, void *udata) {
+    return false;
+}
+
+static struct IInputSources fill_null_input(struct IInputSources inp) {
+    if (!inp.is_down) {
+        trace("fill_null_input: is_down setup to empty handler\n");
+        inp.is_down = empty;
+    }
+    if (!inp.is_up) {
+        trace("fill_null_input: is_up setup to empty handler\n");
+        inp.is_up = empty;
+    }
+    if (!inp.is_select) {
+        trace("fill_null_input: is_select setup to empty handler\n");
+        inp.is_select = empty;
+    }
+    if (!inp.mouse_is_button_pressed) {
+        trace("fill_null_input: mouse_is_button_pressed setup to empty handler\n");
+        inp.mouse_is_button_pressed = empty_mouse_is_button_pressed;
+    }
+    if (!inp.mouse_position) {
+        trace("fill_null_input: mouse_position setup to empty handler\n");
+        inp.mouse_position = empty_mouse_position;
+    }
+    return inp;
+}
+
+VContainer *vcontainer_new(
+    int mousebtn_open, const char *name, struct IInputSources inp
+) {
     VContainer *cont = calloc(1, sizeof(VContainer));
     assert(cont);
 
+    cont->inp = fill_null_input(inp);
     cont->is_builded = false;
     cont->ctrls = calloc(MAX_CONTROLS, sizeof(Control*));
     cont->color_border = BLACK;
@@ -86,14 +125,14 @@ Control* vcontainer_add(VContainer *c, Control *control) {
     return control;
 }
 
-bool vcontainer_update(VContainer *c) {
+bool vcontainer_update(VContainer *c, void *udata) {
     assert(c);
     assert(c->is_builded);
-    Vector2 mousep = GetMousePosition();
+    Vector2 mousep = c->inp.mouse_position(udata);
 
     if (!c->is_mnu_open) {
         if (c->mousebtn_open != -1 && 
-            IsMouseButtonPressed(c->mousebtn_open)) {
+            c->inp.mouse_is_button_pressed(c->mousebtn_open, udata)) {
             c->mousep = mousep;
             c->pos = mousep;
             c->is_mnu_open = true;
@@ -101,34 +140,31 @@ bool vcontainer_update(VContainer *c) {
     } else {
         vcontainer_update_controls(c);
         //if (ctx.mousebtn_click != -1 && 
-        if (IsMouseButtonPressed(c->mousebtn_click)) {
+        if (c->inp.mouse_is_button_pressed(c->mousebtn_click, udata)) {
             if (!vcontainer_is_in_area(c, mousep)) {
                 c->is_mnu_open = false;
             }
         }
 
-        /*
-        if (c->usegamepad) {
-            if (input.is_up()) {
-                printf("up\n");
-                c->selected--;
-                if (c->selected < 0) 
-                    c->selected = c->ctrlsnum - 1;
-            } else if (input.is_down()) {
-                printf("down\n");
-                c->selected++;
-                if (c->selected > c->ctrlsnum)
-                    c->selected = 0;
-            } else if (input.is_select()) {
+        //if (c->usegamepad) {
+        if (c->inp.is_up(udata)) {
+            printf("up\n");
+            c->selected--;
+            if (c->selected < 0) 
+                c->selected = c->ctrlsnum - 1;
+        } else if (c->inp.is_down(udata)) {
+            printf("down\n");
+            c->selected++;
+            if (c->selected > c->ctrlsnum)
+                c->selected = 0;
+        } else if (c->inp.is_select(udata)) {
 
-                Control *ctrl = c->ctrls[c->selected];
-                if (ctrl->click)
-                    ctrl->click(ctrl);
+            Control *ctrl = c->ctrls[c->selected];
+            if (ctrl->click)
+                ctrl->click(ctrl);
 
-            }
-            //printf("selected %d\n", c->selected);
         }
-        */
+        //printf("selected %d\n", c->selected);
     }
 
     return c->is_mnu_open;
