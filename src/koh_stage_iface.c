@@ -42,8 +42,24 @@ void btn_click(Button *btn) {
     printf("button %s clicked\n", btn->caption);
 }
 
+Vector2 _GetMousePosition(void *udata) {
+    return GetMousePosition();
+}
+
+bool _IsMouseButtonPressed(int button, void *udata) {
+    return IsMouseButtonPressed(button);
+}
+
+static struct IInputSources inp = {
+    .mouse_position = _GetMousePosition,
+    .mouse_is_button_pressed = _IsMouseButtonPressed,
+    .is_down = NULL,
+    .is_up = NULL,
+    .is_select = NULL,
+};
+
 VContainer *menu2_init(Stage_iface *st) {
-    VContainer *mnu = vcontainer_new(MOUSE_BUTTON_LEFT, "menu2");
+    VContainer *mnu = vcontainer_new(MOUSE_BUTTON_LEFT, "menu2", inp);
     //Button *btn = NULL;
 
     //btn = 
@@ -94,7 +110,7 @@ VContainer *menu2_init(Stage_iface *st) {
 }
 
 VContainer *menu1_init(Stage_iface *st) {
-    VContainer *mnu = vcontainer_new(MOUSE_BUTTON_LEFT, "menu1");
+    VContainer *mnu = vcontainer_new(MOUSE_BUTTON_LEFT, "menu1", inp);
     Button *btn = NULL;
 
     btn = (Button*)vcontainer_add(mnu, btn_new((Button_Def) {
@@ -166,7 +182,7 @@ void stage_iface_update(Stage_iface *st) {
 
     console_is_editor_mode();
 
-    if (vcontainer_update(st->mnu2)) {
+    if (vcontainer_update(st->mnu2, NULL)) {
         //printf("vcontainer_update() == false\n");
     }
 
