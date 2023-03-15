@@ -31,8 +31,6 @@ workspace "caustic"
     }
 
     --links(caustic.links_internal)
-    links(caustic.internal)
-    libdirs(caustic.libdirs_internal)
 
     language "C"
     --cppdialect "C++20"
@@ -42,6 +40,8 @@ workspace "caustic"
     symbols "On"
 
     project "libcaustic"
+        links(caustic.internal)
+        libdirs(caustic.libdirs_internal)
         kind "StaticLib"
         if sanit then
             linkoptions {
@@ -60,6 +60,7 @@ workspace "caustic"
         removefiles { "*koh_stage_terrain.c" }
 
 
+    --[[
     project "test_de_ecs"
         linkoptions {
             "-fsanitize=address",
@@ -70,22 +71,22 @@ workspace "caustic"
             "-fsanitize=address",
             "-fsanitize-recover=address",
         }
-        libdirs { "." }
-        libdirs(caustic.libdirs)
+
         links({
-            'raylib',
-            'lua',
-            'chipmunk',
-            'genann',
-            'utf8proc',
-            'caustic', 
-            'smallregex',
-            'm'
+            "caustic",
+            "m"
         })
+        libdirs(".")
+        links(caustic.internal)
+        libdirs(caustic.libdirs_internal)
+
+        
         files {
             "tests/munit.c",
             "tests/test_de_ecs.c",
         }
+
+    --]]
 
     --[[
     project "test_objects_pool"

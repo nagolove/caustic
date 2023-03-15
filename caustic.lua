@@ -258,7 +258,8 @@ local ret_table = {
     includedirs = includedirs, 
     links = links,
     libdirs = libdirs,
-    links = links_internal,
+    libdirs_internal = libdirs_internal,
+    links_internal = links_internal,
 }
 
 local function main()
