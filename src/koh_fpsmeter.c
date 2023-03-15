@@ -26,14 +26,21 @@ static const Color color_grid = BLACK;
 static const Color color_graph1 = ORANGE;
 static const Color color_graph2 = RED;
 static const float font_sz = 17;
+static bool is_drawing = false;
 
 static int l_fpsmeter_stat(lua_State *lua) {
-    koh_fpsmeter_draw((Vector2){ 0, 0 });
+    /*koh_fpsmeter_draw((Vector2){ 0, 0 });*/
+    trace("l_fpsmeter_stat:\n");
+    is_drawing = !is_drawing;
     return 0;
 }
 
-static void _register() {
-    if (!sc_get_state()) return;
+static void fpsmeter_register() {
+    if (!sc_get_state()) {
+        trace("fpsmeter_register: there is no Lua state\n");
+        return;
+    }
+
     register_function(
         l_fpsmeter_stat,
         "fpsmeter_stat",
@@ -47,7 +54,7 @@ void koh_fpsmeter_init() {
     ctx.i = 0;
     ctx.meters = calloc(ctx.cap, sizeof(struct Meter));
 
-    _register();
+    fpsmeter_register();
 }
 
 void koh_fpsmeter_shutdown() {
@@ -153,6 +160,7 @@ static inline void draw_segment(
 }
 
 void koh_fpsmeter_draw() {
+    if (!is_drawing) return;
     Vector2 pos = { 0, GetScreenHeight() / 2. };
 
     int max = find_max();
