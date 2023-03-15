@@ -81,6 +81,8 @@ de_ecs* de_ecs_make();
 /*  Deinitializes and frees a de_ecs context */
 void de_ecs_destroy(de_ecs* r);
 
+void de_ecs_register(de_ecs *r, de_cp_type comp);
+
 /*
     Creates a new entity and returns it
     The identifier can be:

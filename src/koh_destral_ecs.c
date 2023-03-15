@@ -81,14 +81,14 @@ typedef struct de_sparse {
         - value is the index of the dense array
     */
     de_entity* sparse;
-    size_t sparse_size;
+    size_t sparse_size, sparse_cap;
 
     /*  Dense entities array.
         - index is linked with the sparse value.
         - value is the full de_entity
     */
     de_entity* dense;
-    size_t dense_size;
+    size_t dense_size, dense_cap;
 } de_sparse;
 
 
@@ -141,7 +141,53 @@ static size_t de_sparse_index(de_sparse* s, de_entity e) {
     return s->sparse[de_entity_identifier(e).id];
 }
 
+#define DE_USE_SPARSE_CAPACITY
+
 static void de_sparse_emplace(de_sparse* s, de_entity e) {
+#ifdef DE_USE_SPARSE_CAPACITY
+    assert(s);
+    assert(e != de_null);
+    const de_entity_id eid = de_entity_identifier(e);
+    if (eid.id >= s->sparse_size) { // check if we need to realloc
+        if (s->sparse_size == 0 && !s->sparse) {
+            s->sparse_cap = 5000;
+            s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
+        }
+
+        const size_t new_sparse_size = eid.id + 1;
+
+        if (new_sparse_size == s->sparse_cap) {
+            s->sparse_cap *= 2;
+            s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
+        }
+
+        //s->sparse = realloc(s->sparse, new_sparse_size * sizeof(s->sparse[0]));
+
+        //memset(s->sparse + s->sparse_size, de_null, (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]));
+        de_entity *start = s->sparse + s->sparse_size;
+        int bytes_num = (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]);
+        while (bytes_num) {
+            *start++ = de_null;
+            bytes_num -= sizeof(de_entity);
+        }
+        
+        s->sparse_size = new_sparse_size;
+    }
+    s->sparse[eid.id] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
+    //trace("s->dense_size: %d\n", s->dense_size);
+    if (s->dense_size == 0 && !s->dense) {
+        s->dense_cap = 5000;
+        s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
+    }
+
+    if (s->dense_size == s->dense_cap) {
+        s->dense_cap *= 2;
+        s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
+    }
+
+    s->dense[s->dense_size] = e;
+    s->dense_size++;
+#else
     assert(s);
     assert(e != de_null);
     const de_entity_id eid = de_entity_identifier(e);
@@ -163,9 +209,29 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
     s->dense = realloc(s->dense, (s->dense_size + 1) * sizeof(s->dense[0]));
     s->dense[s->dense_size] = e;
     s->dense_size++;
+#endif
 }
 
 static size_t de_sparse_remove(de_sparse* s, de_entity e) {
+#ifdef DE_USE_SPARSE_CAPACITY
+    assert(s);
+    assert(de_sparse_contains(s, e));
+
+    const size_t pos = s->sparse[de_entity_identifier(e).id];
+    const de_entity other = s->dense[s->dense_size - 1];
+
+    s->sparse[de_entity_identifier(other).id] = (de_entity)pos;
+    s->dense[pos] = other;
+    s->sparse[pos] = de_null;
+
+    if (s->dense_size < 0.5 * s->dense_cap) {
+        s->dense_cap /= 2;
+        s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
+    }
+    s->dense_size--;
+
+    return pos;
+#else
     assert(s);
     assert(de_sparse_contains(s, e));
 
@@ -180,6 +246,7 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
     s->dense_size--;
 
     return pos;
+#endif
 }
 
 // STORAGE FUNCTIONS
@@ -260,8 +327,8 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
     assert(s);
 
     if (s->cp_data_size == 0 && s->cp_data_cap == 0) {
-        trace("de_storage_emplace: initial allocating for type %d\n", s->cp_id);
-        s->cp_data_cap = 100;
+        //trace("de_storage_emplace: initial allocating for type %d\n", s->cp_id);
+        s->cp_data_cap = 5000;
         s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
     }
 
@@ -271,7 +338,7 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 
     if (s->cp_data_size >= s->cp_data_cap) {
         s->cp_data_cap *= 2;
-        trace("de_storage_emplace: additional allocating for type %d\n", s->cp_id);
+        //trace("de_storage_emplace: additional allocating for type %d\n", s->cp_id);
         s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
     }
     // */
@@ -318,9 +385,9 @@ static void de_storage_remove(de_storage* s, de_entity e) {
         s->cp_sizeof);
 
     // and pop
-    if (s->cp_data_size <= 0.5 * s->cp_data_cap) {
-        s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof);
-        s->cp_data_cap = s->cp_data_size - 1;
+    if (s->cp_data_size < 0.5 * s->cp_data_cap) {
+        s->cp_data_cap /= 2;
+        s->cp_data = realloc(s->cp_data, s->cp_data_cap * sizeof(char) * s->cp_sizeof);
     }
     s->cp_data_size--;
 #else
@@ -363,6 +430,8 @@ static bool de_storage_contains(de_storage* s, de_entity e) {
     return de_sparse_contains(&s->sparse, e);
 }
 
+#define DE_REGISTRY_MAX 256
+
 /*  de_ecs
 
     Is the global context that holds each storage for each component types
@@ -374,7 +443,23 @@ typedef struct de_ecs {
     size_t entities_size;
     de_entity* entities; /* contains all the created entities */
     de_entity_id available_id; /* first index in the list to recycle */
+
+    de_cp_type registry[DE_REGISTRY_MAX];
+    int registry_num;
 } de_ecs;
+
+void de_ecs_register(de_ecs *r, de_cp_type comp) {
+    for (int i = 0; i < r->registry_num; i++) {
+        if (comp.cp_id == r->registry[i].cp_id) {
+            trace(
+                "de_ecs_register: component '%s' has cp_id duplicated\n",
+                comp.name
+            );
+            exit(EXIT_FAILURE);
+        }
+    }
+    r->registry[r->registry_num++] = comp;
+}
 
 de_ecs* de_ecs_make() {
     de_ecs* r = calloc(1, sizeof(de_ecs));
@@ -384,6 +469,7 @@ de_ecs* de_ecs_make() {
     r->available_id.id = de_null;
     r->entities_size = 0;
     r->entities = 0;
+    r->registry_num = 0;
     return r;
 } 
 
