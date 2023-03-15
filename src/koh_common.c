@@ -63,10 +63,9 @@ uint32_t seedfromstr(const char *s) {
     return seed;
 }
 
-void common_init(void) {
+void koh_common_init(void) {
     memset(&cmn, 0, sizeof(Common));
 
-    /*SetTraceLogLevel(LOG_ERROR);*/
     /*SetTraceLogLevel(LOG_ERROR);*/
     SetTraceLogLevel(LOG_ALL);
 
@@ -88,13 +87,12 @@ void common_init(void) {
     }
     srand(seed);
 
-    /*cmn.cam = calloc(1, sizeof(*cmn.cam));*/
-    /*cmn.cam->zoom = 1.;*/
-
-    //lua_init();
-
     cmn.font_chars_cap = 1024;
     cmn.font_chars = calloc(cmn.font_chars_cap, sizeof(cmn.font_chars[0]));
+    if (!cmn.font_chars) {
+        printf("koh_common_init: could not alloc memory for cmn.font_chars\n");
+        exit(EXIT_FAILURE);
+    }
 
     const int ascii_last = 256, ascii_first = 32;
     // Константы из таблиц Юникода
@@ -112,7 +110,7 @@ void common_init(void) {
     printf("cmn.font_chars_num %d\n", cmn.font_chars_num);
 }
 
-void common_shutdown(void) {
+void koh_common_shutdown(void) {
     /*if (cmn.cam) {*/
         /*free(cmn.cam);*/
     /*}*/

@@ -36,8 +36,8 @@ typedef struct {
 
 extern Common cmn;
 
-void common_init(void);
-void common_shutdown(void);
+void koh_common_init(void);
+void koh_common_shutdown(void);
 
 Color interp_color(Color a, Color b, float t);
 Color height_color(float value);
