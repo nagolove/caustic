@@ -46,19 +46,14 @@ typedef struct VContainer {
 
     struct IInputSources inp;
     char name[CONTAINER_MAX_NAME];
-    bool is_builded;
     Control **ctrls;
-    int ctrlsnum;
-    int selected;
-    Vector2 pos; // Позиция рисования
-    Vector2 mousep;
+    double last_time;
+    int ctrlsnum, selected;
+    Vector2 pos, mousep; // Позиция рисования, позиция курсора
     Rectangle border; // Рамка вокруг меню
     Color color_border;
-    //bool is_mnu_open, is_mnu;
-    bool is_mnu_open;
-
-    int mousebtn_open;
-    int mousebtn_click;
+    bool is_mnu_open, is_builded;
+    int mousebtn_open, mousebtn_click;
     void *data; // user context
 } VContainer;
 

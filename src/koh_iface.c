@@ -65,6 +65,7 @@ VContainer *vcontainer_new(
     cont->mousebtn_click = MOUSE_BUTTON_LEFT;
     cont->mousebtn_open = mousebtn_open;
     strncpy(cont->name, name, sizeof(cont->name));
+    cont->last_time = GetTime();
 
     cont->next = container_head;
     container_head = cont;
@@ -146,25 +147,29 @@ bool vcontainer_update(VContainer *c, void *udata) {
             }
         }
 
-        //if (c->usegamepad) {
-        if (c->inp.is_up(udata)) {
-            printf("up\n");
-            c->selected--;
-            if (c->selected < 0) 
-                c->selected = c->ctrlsnum - 1;
-        } else if (c->inp.is_down(udata)) {
-            printf("down\n");
-            c->selected++;
-            if (c->selected > c->ctrlsnum)
-                c->selected = 0;
-        } else if (c->inp.is_select(udata)) {
+        double now = GetTime();
+        double diff = now - c->last_time ;
+        trace("vcontainer_update: diff %f\n", diff);
+        if (diff >= 1. / 60.) {
+            c->last_time = now;
 
-            Control *ctrl = c->ctrls[c->selected];
-            if (ctrl->click)
-                ctrl->click(ctrl);
+            if (c->inp.is_up(udata)) {
+                c->selected--;
+                if (c->selected < 0) 
+                    c->selected = c->ctrlsnum - 1;
+            } else if (c->inp.is_down(udata)) {
+                c->selected++;
+                if (c->selected > c->ctrlsnum)
+                    c->selected = 0;
+            } else if (c->inp.is_select(udata)) {
+
+                Control *ctrl = c->ctrls[c->selected];
+                if (ctrl->click)
+                    ctrl->click(ctrl);
+
+            }
 
         }
-        //printf("selected %d\n", c->selected);
     }
 
     return c->is_mnu_open;
