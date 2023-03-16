@@ -5,7 +5,7 @@
 
 typedef struct genann_view genann_view;
 
-genann_view *genann_view_new(const char *ann_name);
+genann_view *genann_view_new(const char *ann_name, Font *fnt);
 void genann_view_free(genann_view *v);
 void genann_view_update(genann_view *v, Vector2 mouse_point);
 void genann_view_draw(genann_view *view);

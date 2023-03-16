@@ -205,6 +205,7 @@ void register_methods_and_doc(
 
     while (true) {
         cur++;
+        /*if (!cur->name || strlen(cur->name) == 0) {*/
         if (!cur->name) {
             break;
         }

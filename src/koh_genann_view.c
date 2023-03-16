@@ -1,24 +1,21 @@
 #include "koh_genann_view.h"
 
-#include "raylib.h"
-#include "raymath.h"
-
-#include <string.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#include "chipmunk/cpBB.h"
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
-
-#include "koh_routine.h"
-#include "koh_table.h"
+#include "chipmunk/cpBB.h"
+#include "genann.h"
 #include "koh_common.h"
 #include "koh_logger.h"
-#include "genann.h"
+#include "koh_routine.h"
+#include "koh_table.h"
+#include "raylib.h"
+#include "raymath.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_ANN_NAME    48
 
@@ -38,6 +35,7 @@ struct NeuronLinks {
 
 struct genann_view {
     char      name[MAX_ANN_NAME];
+    Font      *fnt;
     float     background_rect_gap;
     Rectangle background_rect;
     float     neuron_radius;
@@ -59,10 +57,11 @@ static void link_free(const void *key, int key_len, void *data, int data_len) {
     }
 }
 
-struct genann_view *genann_view_new(const char *ann_name) {
+struct genann_view *genann_view_new(const char *ann_name, Font *fnt) {
     struct genann_view *view = calloc(1, sizeof(*view));
     assert(view);
     strncpy(view->name, ann_name, MAX_ANN_NAME);
+    view->fnt = fnt;
     view->neuron_radius = 10.;
     view->background_rect_gap = 25.;
     view->neuron_color = BLUE;
@@ -190,8 +189,8 @@ static HTableAction iter_neuron_info(
     void *udata
 ) {
     //struct NeuronInfo *ni = value;
-    cpBody *b = value;
-    trace("iter_neuron_info: %s, %p\n", (char*)key, b);
+    //cpBody *b = value;
+    /*trace("iter_neuron_info: %s, %p\n", (char*)key, b);*/
     return HTABLE_ACTION_NEXT;
 }
 
@@ -365,10 +364,10 @@ void genann_print_run(genann const *ann) {
 
 static void iter_each_shape_rect(cpShape *shape, void *data) {
     if (shape && shape->space && shape->space->userData) 
-        trace(
-            "iter_each_shape_rect: space %s\n",
-            ((genann_view*)shape->space->userData)->name
-        );
+        //trace(
+            //"iter_each_shape_rect: space %s\n",
+            //((genann_view*)shape->space->userData)->name
+        //);
 
     assert(data);
     assert(shape);
@@ -491,7 +490,9 @@ void draw_link_text(genann_view *view, struct DrawLinkCtx *ctx) {
     if (ctx->w) {
         char text[32] = {0};
         sprintf(text, "%f", ctx->w[ctx->i]);
-        DrawText(text, middle.x, middle.y, view->neuron_radius, RED);
+        DrawTextEx(
+            *view->fnt, text, middle, view->neuron_radius, 0., RED
+        );
     }
 }
 
@@ -543,10 +544,12 @@ void genann_view_draw(struct genann_view *view) {
     assert(view);
 
     DrawRectangleRounded(view->background_rect, 0.2, 10, GRAY);
-    DrawText(
+    DrawTextEx(
+        *view->fnt,
         view->name, 
-        view->background_rect.x, view->background_rect.y,
-        view->neuron_radius, BLACK
+        (Vector2){ view->background_rect.x, view->background_rect.y },
+        view->neuron_radius, 0.,
+        BLACK
     );
     space_draw(view);
 
