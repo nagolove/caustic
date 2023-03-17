@@ -110,7 +110,7 @@ void de_destroy(de_ecs* r, de_entity e);
 /*
     Checks if an entity identifier is a valid one.
     The entity e can be a valid or an invalid one.
-    Teturns true if the identifier is valid, false otherwise
+    Returns true if the identifier is valid, false otherwise
 */
 bool de_valid(de_ecs* r, de_entity e);
 
@@ -254,6 +254,7 @@ de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type* cp_types);
 bool de_view_valid(de_view* v);
 de_entity de_view_entity(de_view* v);
 void* de_view_get(de_view* v, de_cp_type cp_type);
+void* de_view_get_safe(de_view *v, de_cp_type cp_type);
 void* de_view_get_by_index(de_view* v, size_t pool_index);
 void de_view_next(de_view* v);
 

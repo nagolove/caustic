@@ -10,6 +10,7 @@
 */
 
 #include <assert.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
 #include "koh_logger.h"
@@ -503,14 +504,16 @@ bool de_valid(de_ecs* r, de_entity e) {
     assert(r);
     const de_entity_id id = de_entity_identifier(e);
     bool ret = id.id < r->entities_size && r->entities[id.id] == e;
-    if (!ret) {
-        printf("de_valid: invalid\n");
-        printf("de_valid: entity %u, id %u, version %u\n", e, id.id, de_entity_version(e).ver);
-        printf("de_valid: r->entities_size %zu\n", r->entities_size);
-        if (r->entities)
-            printf("de_valid: r->entities[id.id] %u\n", r->entities[id.id]);
-        dump_entities(r);
-    }
+    /*
+     *if (!ret) {
+     *    printf("de_valid: invalid\n");
+     *    printf("de_valid: entity %u, id %u, version %u\n", e, id.id, de_entity_version(e).ver);
+     *    printf("de_valid: r->entities_size %zu\n", r->entities_size);
+     *    if (r->entities)
+     *        printf("de_valid: r->entities[id.id] %u\n", r->entities[id.id]);
+     *    dump_entities(r);
+     *}
+     */
     return ret;
 }
 
@@ -761,6 +764,21 @@ size_t de_view_get_index(de_view* v, de_cp_type cp_type) {
     }
     assert(0); // FIX (dani) cp not found in the view pools
     return 0;
+}
+
+size_t de_view_get_index_safe(de_view* v, de_cp_type cp_type) {
+    assert(v);
+    for (size_t i = 0; i < v->pool_count; i++) {
+        if (v->to_pool_index[i] == cp_type.cp_id) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+void* de_view_get_safe(de_view *v, de_cp_type cp_type) {
+    size_t index = de_view_get_index_safe(v, cp_type);
+    return index ? de_view_get_by_index(v, index) : NULL;
 }
 
 void* de_view_get(de_view* v, de_cp_type cp_type) {
