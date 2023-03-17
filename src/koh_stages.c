@@ -29,13 +29,14 @@ int l_stage_get_active(lua_State *lua);
 
 void stage_init(void) {
     memset(&stages, 0, sizeof(stages));
+    
+    if (!sc_get_state()) return;
 
     register_function(
             l_stage_restart,
             "stage_restart",
             "Удалить и снова создать объект сцены"
     );
-
     register_function(
             l_stage_get_active,
             "stage_get_active",
