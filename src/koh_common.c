@@ -314,6 +314,15 @@ cpSpaceDebugColor space_debug_draw_color_for_shape(
     return def;
 }
 
+cpSpaceDebugColor from_Color(Color c) {
+    return (cpSpaceDebugColor) { 
+        .r = c.r,
+        .g = c.g,
+        .b = c.b,
+        .a = c.a,
+    };
+}
+
 void space_debug_draw(cpSpace *space, Color color) {
     cpSpaceDebugDrawOptions options = {
         .drawCircle = space_debug_draw_circle,
@@ -324,7 +333,7 @@ void space_debug_draw(cpSpace *space, Color color) {
         .flags = CP_SPACE_DEBUG_DRAW_SHAPES | 
             CP_SPACE_DEBUG_DRAW_CONSTRAINTS |
             CP_SPACE_DEBUG_DRAW_COLLISION_POINTS,
-        .shapeOutlineColor = {128., 0., 0., 255.},
+        .shapeOutlineColor = from_Color(color),
         .colorForShape = space_debug_draw_color_for_shape,
         /*.colorForShape = {255., 0., 0., 255.},*/
         .constraintColor = {0., 255., 0., 255.},

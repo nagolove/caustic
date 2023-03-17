@@ -111,4 +111,5 @@ void koh_qsort_soa(
     QSortCmpFunc cmp, QSortSwapFunc swap, void *udata
 );
 
+cpSpaceDebugColor from_Color(Color c);
 
