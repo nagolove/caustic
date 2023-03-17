@@ -41,7 +41,8 @@ void render_texture(
 
             rlBegin(RL_QUADS);
                 rlColor4ub(tint.r, tint.g, tint.b, tint.a);
-                rlNormal3f(0.0f, 0.0f, 1.0f);                          // Normal vector pointing towards viewer
+                // Normal vector pointing towards viewer
+                rlNormal3f(0.0f, 0.0f, 1.0f);                          
 
                 // Bottom-left corner for texture and quad
                 if (flipX) rlTexCoord2f((source.x + source.width)/width, source.y/height);
