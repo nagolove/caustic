@@ -149,55 +149,73 @@ Font load_font_unicode(const char *fname, int size) {
     return LoadFontEx(fname, size, cmn.font_chars, cmn.font_chars_num);
 }
 
+struct SpaceCtx {
+    cpSpace *space;
+    bool free_shapes, free_constraints, free_bodies;
+};
+
 // {{{ Chipnumnk shutdown iterators
 static void ShapeFreeWrap(cpSpace *space, cpShape *shape, void *unused){
     trace("ShapeFreeWrap: shape %p\n", shape);
     if (shape->userData)
         trace("ShapeFreeWrap: shape->userData %p\n", shape->userData);
     cpSpaceRemoveShape(space, shape);
-    cpShapeFree(shape);
+    struct SpaceCtx *ctx = unused;
+    if (ctx->free_shapes)
+        cpShapeFree(shape);
 }
 
-static void PostShapeFree(cpShape *shape, cpSpace *space){
-    cpSpaceAddPostStepCallback(space, (cpPostStepFunc)ShapeFreeWrap, shape, NULL);
+static void PostShapeFree(cpShape *shape, struct SpaceCtx *ctx){
+    cpSpaceAddPostStepCallback(ctx->space, (cpPostStepFunc)ShapeFreeWrap, shape, ctx);
 }
 
 static void ConstraintFreeWrap(cpSpace *space, cpConstraint *constraint, void *unused){
     cpSpaceRemoveConstraint(space, constraint);
-    cpConstraintFree(constraint);
+    struct SpaceCtx *ctx = unused;
+    if (ctx->free_constraints)
+        cpConstraintFree(constraint);
 }
 
-static void PostConstraintFree(cpConstraint *constraint, cpSpace *space){
-    cpSpaceAddPostStepCallback(space, (cpPostStepFunc)ConstraintFreeWrap, constraint, NULL);
+static void PostConstraintFree(cpConstraint *constraint, struct SpaceCtx *ctx){
+    cpSpaceAddPostStepCallback(ctx->space, (cpPostStepFunc)ConstraintFreeWrap, constraint, ctx);
 }
 
 static void BodyFreeWrap(cpSpace *space, cpBody *body, void *unused){
     cpSpaceRemoveBody(space, body);
-    /*cpBodyFree(body);*/
+    struct SpaceCtx *ctx = unused;
+    if (ctx->free_bodies)
+        cpBodyFree(body);
 }
 
-static void PostBodyFree(cpBody *body, cpSpace *space){
-    cpSpaceAddPostStepCallback(space, (cpPostStepFunc)BodyFreeWrap, body, NULL);
+static void PostBodyFree(cpBody *body, struct SpaceCtx *ctx){
+    cpSpaceAddPostStepCallback(ctx->space, (cpPostStepFunc)BodyFreeWrap, body, ctx);
 }
 // }}}
 
-
-void space_shutdown(cpSpace *space) {
+void space_shutdown(
+    cpSpace *space, bool free_shapes, bool free_constraints, bool free_bodies
+) {
     trace("space_shutdown: space %p\n", space);
+    struct SpaceCtx ctx = {
+        .space = space,
+        .free_bodies = free_bodies,
+        .free_shapes = free_shapes,
+        .free_constraints = free_constraints,
+    };
     //cpSpaceStep(space, 1 / 60.);
     cpSpaceEachShape(
         space, 
         (cpSpaceShapeIteratorFunc)PostShapeFree, 
-        space
+        &ctx
     );
     cpSpaceEachConstraint(
         space, 
         (cpSpaceConstraintIteratorFunc)PostConstraintFree, 
-        space
+        &ctx
     );
     cpSpaceEachBody(
         space, (cpSpaceBodyIteratorFunc)PostBodyFree, 
-        space
+        &ctx
     );
     cpSpaceStep(space, 1 / 60.);
 }
