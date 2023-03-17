@@ -429,7 +429,7 @@ void dev_label_group_close() {
             cpSpaceStep(dev.space, 1 / 60.);
         }
         cpSpaceEachShape(dev.space, iter_shape, NULL);
-        space_shutdown(dev.space);
+        space_shutdown(dev.space, true, true, true);
         cpSpaceFree(dev.space);
         dev.space = NULL;
     }
