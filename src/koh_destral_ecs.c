@@ -293,20 +293,23 @@ typedef struct de_storage {
     size_t cp_data_size, cp_data_cap; /* number of elements in the cp_data array */
     size_t cp_sizeof; /* sizeof for each cp_data element */
     de_sparse sparse;
+
+    void (*on_destroy)(void *payload, de_entity e);
 } de_storage;
 
 
-static de_storage* de_storage_init(de_storage* s, size_t cp_size, size_t cp_id) {
+static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     assert(s);
     *s = (de_storage){ 0 };
     de_sparse_init(&s->sparse);
-    s->cp_sizeof = cp_size;
-    s->cp_id = cp_id;
+    s->cp_sizeof = cp_type.cp_sizeof;
+    s->cp_id = cp_type.cp_id;
+    s->on_destroy = cp_type.on_destroy;
     return s;
 }
 
-static de_storage* de_storage_new(size_t cp_size, size_t cp_id) {
-    return de_storage_init(malloc(sizeof(de_storage)), cp_size, cp_id);
+static de_storage* de_storage_new(size_t cp_size, de_cp_type cp_type) {
+    return de_storage_init(malloc(sizeof(de_storage)), cp_type);
 }
 
 static void de_storage_destroy(de_storage* s) {
@@ -368,10 +371,14 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 }
 
 static void de_storage_remove(de_storage* s, de_entity e) {
-#ifdef DE_USE_STORAGE_CAPACITY
     assert(s);
     size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
+    if (s->on_destroy) {
+        void *payload = &((char*)s->cp_data)[pos_to_remove * s->cp_sizeof];
+        s->on_destroy(payload, e);
+    }
 
+#ifdef DE_USE_STORAGE_CAPACITY
     /*
     trace(
         "de_storage_remove: s->cp_id %d, pos_to_remove %d, s->cp_data_size %d\n",
@@ -392,9 +399,6 @@ static void de_storage_remove(de_storage* s, de_entity e) {
     }
     s->cp_data_size--;
 #else
-    assert(s);
-    size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
-
     // swap (memmove because if cp_data_size 1 it will overlap dst and source.
     memmove(
         &((char*)s->cp_data)[pos_to_remove * sizeof(char) * s->cp_sizeof],
@@ -577,7 +581,7 @@ de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     if (storage_found) {
         return storage_found;
     } else {
-        de_storage* storage_new = de_storage_new(cp_type.cp_sizeof, cp_type.cp_id);
+        de_storage* storage_new = de_storage_new(cp_type.cp_sizeof, cp_type);
         //r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof * r->storages);
         r->storages_size++;
         r->storages = realloc(r->storages, r->storages_size * sizeof(r->storages[0]));

@@ -16,17 +16,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/*  de_cp_type:
-    Component Type identifier information.
-*/
-typedef struct de_cp_type {
-    size_t cp_id; // component unique id
-    size_t cp_sizeof; // component sizeof
-    const char* name; // component name
-} de_cp_type;
+/*  de_ecs
 
-#define DE_MAKE_CP_TYPE(TypeId, TypeName) \
-{ .cp_id = TypeId, .cp_sizeof = sizeof(TypeName) , .name = #TypeName }
+    Is the global context that holds each storage for each component types
+    and the entities.
+*/
+typedef struct de_ecs de_ecs;
+
 
 /*  de_entity:
 
@@ -51,6 +47,24 @@ typedef struct de_entity_id { uint32_t id; } de_entity_id;
 #define DE_ENTITY_VERSION_MASK  ((uint32_t)0xFFF)   /* Mask to use to get the version out of an identifier. */
 #define DE_ENTITY_SHIFT         ((size_t)20)        /* Extent of the entity number within an identifier. */   
 
+/*  de_cp_type:
+    Component Type identifier information.
+*/
+typedef struct de_cp_type {
+    size_t cp_id; // component unique id
+    size_t cp_sizeof; // component sizeof
+    void (*on_destroy)(void *payload, de_entity e);
+    const char* name; // component name
+} de_cp_type;
+
+#define DE_MAKE_CP_TYPE(TypeId, TypeName) \
+{ \
+    .cp_id = TypeId, \
+    .cp_sizeof = sizeof(TypeName), \
+    .on_destroy = NULL, \
+    .name = #TypeName  \
+}
+
 /* The de_null is a de_entity that represents a null entity. */
 extern const de_entity de_null;
 
@@ -65,13 +79,6 @@ de_entity_id de_entity_identifier(de_entity e);
 /* Makes a de_entity from entity_id and entity_version */
 de_entity de_make_entity(de_entity_id id, de_entity_ver version);
 
-
-/*  de_ecs
-
-    Is the global context that holds each storage for each component types
-    and the entities.
-*/
-typedef struct de_ecs de_ecs;
 
 /* de_ecs functions */
 
