@@ -175,6 +175,6 @@ workspace "caustic"
         }
         --symbols "On"
         defines { "NDEBUG" }
-        --optimize "On"
+        optimize "On"
 
 --]]
