@@ -116,3 +116,10 @@ void koh_qsort_soa(
 cpSpaceDebugColor from_Color(Color c);
 void camera_process_mouse_drag(int mouse_btn, Camera2D *cam);
 
+struct CameraAxisDrawCtx {
+    Color color_offset, color_target;
+    Font  *fnt;
+    int   fnt_size;
+};
+
+void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx);

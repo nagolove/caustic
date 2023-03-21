@@ -92,6 +92,19 @@ static inline cpBB bb_local2world(cpBody *body, cpBB bb) {
     };
 }
 
+static inline cpBB bb_world2local(cpBody *body, cpBB bb) {
+    assert(body);
+    cpVect p1 = cpBodyWorldToLocal(body, (cpVect) { bb.l, bb.t });
+    cpVect p2 = cpBodyWorldToLocal(body, (cpVect) { bb.r, bb.b });
+
+    return (cpBB) {
+        .l = p1.x,
+        .t = p1.y,
+        .r = p2.x,
+        .b = p2.y,
+    };
+}
+
 static inline Rectangle rect_extend(Rectangle rect, float delta) {
     return (Rectangle) {
         .x = rect.x - delta,

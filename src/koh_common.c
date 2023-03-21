@@ -826,3 +826,36 @@ void camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
         cam->target = Vector2Add(cam->target, delta);
     }
 }
+
+void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx) {
+    assert(cam);
+    if (!cam) return;
+
+    const float thick = 3.;
+    const float len = 5000.;
+    Vector2 directions[4] = {
+        { -len, 0 },
+        { len, 0 },
+        { 0, len },
+        { 0, -len },
+    };
+    Font fnt = ctx.fnt ? *ctx.fnt : GetFontDefault();
+    int fnt_size = ctx.fnt_size == -1 ? fnt.baseSize : ctx.fnt_size;
+    for (int i = 0; i < 4; i++) {
+        DrawLineEx(
+            cam->offset, Vector2Add(cam->offset, directions[i]), thick, 
+            ctx.color_offset
+        );
+        DrawTextEx(
+            fnt, "offset", cam->offset, fnt_size, 0., ctx.color_offset
+        );
+
+        DrawLineEx(
+            cam->target, Vector2Add(cam->target, directions[i]), thick, 
+            ctx.color_target
+        );
+        DrawTextEx(
+            fnt, "target", cam->target, fnt_size, 0., ctx.color_target
+        );
+    }
+}
