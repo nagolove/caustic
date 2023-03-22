@@ -14,7 +14,7 @@ local dependencies = {
         end
     },
     {
-        url = "https://github.com/slembcke/Chipmunk2D.git",
+        url = "https://github.com/nagolove/Chipmunk2D.git",
     },
     {
         url = "https://github.com/lua/lua.git",
