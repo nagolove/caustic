@@ -112,13 +112,17 @@ struct {
     bool can_move_right, can_move_left, can_backspace;
 } con = {0, };
 
+
+// TODO: make default font and font size
 void font_setup(struct ConsoleSetup *cs) {
     const char *path = "assets/fonts/dejavusansmono.ttf";
-    if (cs->fnt_path)
-        path = cs->fnt_path;
     int fnt_size = 35;
-    if (cs->fnt_size > 1)
-        fnt_size = cs->fnt_size;
+    if (cs) {
+        if (cs->fnt_path)
+            path = cs->fnt_path;
+        if (cs->fnt_size != 0)
+            fnt_size = cs->fnt_size;
+    }
     con.fnt = load_font_unicode(path, fnt_size);
 }
 
@@ -253,9 +257,6 @@ static void draw_cursor(Vector2 pos) {
     );
 }
 
-static const char *symbols = "1234567890qwertyuiop[]asdfghjkl;'zxcvbnm,./"
-                      "QWERTYUIOPASDFGHJKLZXCVBNM";
-
 static int l_clear(lua_State *lua) {
     con.i = 0;
     con.buf_len = 0;
@@ -265,6 +266,9 @@ static int l_clear(lua_State *lua) {
     }
     return 0;
 }
+
+static const char *symbols = "1234567890qwertyuiop[]asdfghjkl;'zxcvbnm,./"
+                             "QWERTYUIOPASDFGHJKLZXCVBNM";
 
 static int l_print_random_lines(lua_State *lua) {
     int linesnum = rand() % 40;
@@ -283,20 +287,14 @@ static int l_print_random_lines(lua_State *lua) {
 void draw_buffer(Vector2 pos) {
     // Буфер вывода
     pos.y -= con.fnt.baseSize;
-    /*for(int i = con.buf_len - 1 - con.scroll; i >= 0; i--) {*/
     // XXX
     for(int i = con.i - 1 - con.scroll; i >= 0; i--) {
         DrawTextEx(
-                con.fnt,
-                con.buf[i].l,
-                pos,
-                con.fnt.baseSize,
-                0.,
-                con.buf[i].c
-                );
+            con.fnt, con.buf[i].l, pos,
+            con.fnt.baseSize, 0., con.buf[i].c
+        );
         pos.y -= con.fnt.baseSize;
-        if (pos.y < 0)
-            break;
+        if (pos.y < 0) break;
     }
 }
 
