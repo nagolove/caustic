@@ -198,7 +198,7 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
     }
 }
 
-int l_hotkeys_enumerate(lua_State *lua) {
+int l_keys(lua_State *lua) {
     if (last_storage)
         hotkeys_enumerate(last_storage);
     return 0;
@@ -210,7 +210,7 @@ void hotkey_init(HotkeyStorage *storage) {
 
     lua_State *lua = sc_get_state();
     if (lua)
-        register_function(l_hotkeys_enumerate, "keys", "Клавиши управления");
+        register_function(l_keys, "keys", "Клавиши управления");
 }
 
 void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
