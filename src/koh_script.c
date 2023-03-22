@@ -694,6 +694,9 @@ float read_angle(lua_State *lua, float def_value) {
 
 void sc_dostring(const char *str) {
     lua_State *lua = sc_get_state();
+
+    if (!lua) return;
+
     printf("dostring: %s\n", str);
     printf("dostring: 1 [%s]\n", stack_dump(lua));
     if (luaL_dostring(lua, str) != LUA_OK) {

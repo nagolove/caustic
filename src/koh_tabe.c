@@ -10,7 +10,6 @@
 
 void tabe_init(TabEngine *te, lua_State *lua) {
     assert(te);
-    assert(lua);
     te->lua = lua;
     te->variantsnum = 0;
 }
@@ -30,6 +29,9 @@ const char* tabe_tab(TabEngine *te, const char *line) {
     assert(te);
     static char ret_line[MAX_LINE] = {0};
     memset(ret_line, 0, sizeof(char) * MAX_LINE);
+
+    if (!te->lua)
+        return ret_line;
 
     switch(te->state) {
         case TAB_STATE_NONE:

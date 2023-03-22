@@ -206,12 +206,11 @@ int l_hotkeys_enumerate(lua_State *lua) {
 
 void hotkey_init(HotkeyStorage *storage) {
     assert(storage);
-    lua_State *lua = sc_get_state();
-    assert(lua);
-
     last_storage = storage;
 
-    register_function(l_hotkeys_enumerate, "keys", "Клавиши управления");
+    lua_State *lua = sc_get_state();
+    if (lua)
+        register_function(l_hotkeys_enumerate, "keys", "Клавиши управления");
 }
 
 void hotkey_register(HotkeyStorage *storage, Hotkey hk) {

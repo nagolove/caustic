@@ -1,23 +1,20 @@
 #include "koh_dev_draw.h"
 
-#include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_types.h"
 #include "chipmunk/cpVect.h"
-
-#include "lua.h"
-#include "raylib.h"
-#include "raymath.h"
-
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "koh_routine.h"
 #include "koh_script.h"
 #include "koh_table.h"
+#include "lua.h"
+#include "raylib.h"
+#include "raymath.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define DEFAULT_TRACE_CAP   32
 
@@ -206,7 +203,8 @@ void dev_draw_init() {
     dev.num = 0;
     dev.enabled = false;
 
-    register_funcs();
+    if (sc_get_state())
+        register_funcs();
 }
 
 static void traces_shutdown() {
