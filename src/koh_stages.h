@@ -21,7 +21,7 @@ typedef struct Stage {
 } Stage;
 
 void stage_init(void);
-void stage_add(Stage *st, const char *name);
+Stage *stage_add(Stage *st, const char *name);
 void stage_subinit(void);
 void stage_shutdown_all(void);
 void stage_update_active(void);

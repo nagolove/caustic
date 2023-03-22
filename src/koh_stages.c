@@ -54,7 +54,7 @@ void stage_init(void) {
     );
 }
 
-void stage_add(Stage *st, const char *name) {
+Stage *stage_add(Stage *st, const char *name) {
     assert(st);
     assert(name);
     assert(strlen(name) < MAX_STAGE_NAME);
@@ -62,6 +62,7 @@ void stage_add(Stage *st, const char *name) {
 
     stages.stages[stages.num++] = st;
     strncpy(st->name, name, MAX_STAGE_NAME);
+    return st;
 }
 
 void stage_shutdown_all(void) {
