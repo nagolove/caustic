@@ -24,6 +24,7 @@ struct ConsoleSetup {
     void        *udata;
     const char  *fnt_path;
     int         fnt_size;
+    Color       color_text, color_cursor;
 };
 
 void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs);
@@ -46,8 +47,8 @@ void console_update(void);
 bool console_is_editor_mode(void);
 bool console_check_editor_mode(void);
 
-void console_color_set(Color color);
-Color console_color_get(void);
+void console_color_text_set(Color color);
+Color console_color_text_get(void);
 
 // XXX: Печатает командную строку консоли в буфер
 void console_do_strange();

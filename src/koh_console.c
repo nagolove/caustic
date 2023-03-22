@@ -78,7 +78,7 @@ struct {
     int linesnum;
 
     Font fnt;
-    Color color, cursor_color;
+    Color color_text, color_cursor;
 
     // Ширина прямоугольника вокруг консоли
     int border_thick;
@@ -122,6 +122,7 @@ void font_setup(struct ConsoleSetup *cs) {
     con.fnt = load_font_unicode(path, fnt_size);
 }
 
+// TODO: make arguments optional
 void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     assert(hk_store);
     assert(cs);
@@ -142,8 +143,13 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     font_setup(cs);
 
     con.editor_mode = false;
-    con.color = BLACK;
-    con.cursor_color = GOLD;
+    if (!cs) {
+        con.color_text = BLACK;
+        con.color_cursor = GOLD;
+    } else {
+        con.color_text = cs->color_text;
+        con.color_cursor = cs->color_cursor;
+    }
     con.im_pos = (Vector2){0, 0};
     con.input_line_pos = (Vector2){
         con.border_thick,
@@ -165,16 +171,18 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     con.visible_linesnum = (con.input_line_pos.y / con.fnt.baseSize) - 1;
     printf("con.visible_linesnum %d\n", con.visible_linesnum);
 
-    register_function(
-            l_print_random_lines, 
-            "print_random_lines", 
-            "Напечатать несколько случайных строк в буфер. Для отладки."
-    );
-    register_function(
-            l_clear,
-            "clear",
-            "Очистить буфер консоли."
-    );
+    if (sc_get_state()) {
+        register_function(
+                l_print_random_lines, 
+                "print_random_lines", 
+                "Напечатать несколько случайных строк в буфер. Для отладки."
+        );
+        register_function(
+                l_clear,
+                "clear",
+                "Очистить буфер консоли."
+        );
+    }
 
     hotkeys_register();
 }
@@ -207,12 +215,7 @@ static void render_lines(void) {
     Vector2 pos = con.im_pos;
     for(int i = 0; i < con.linesnum; ++i) {
         DrawTextEx(
-            con.fnt, 
-            con.lines[i], 
-            pos, 
-            con.fnt.baseSize, 
-            0, 
-            con.color
+            con.fnt, con.lines[i], pos, con.fnt.baseSize, 0, con.color_text
         );
         pos.y += con.fnt.baseSize;
     }
@@ -244,9 +247,9 @@ static void draw_cursor(Vector2 pos) {
     memcpy(buf, &con.input_line[index], 1);
     Vector2 symbol_measure = MeasureTextEx(con.fnt, buf, con.fnt.baseSize, 0.);
     DrawRectangle(
-            pos.x + measure.x, pos.y, 
-            symbol_measure.x, con.fnt.baseSize,
-            con.cursor_color
+        pos.x + measure.x, pos.y, 
+        symbol_measure.x, con.fnt.baseSize,
+        con.color_cursor
     );
 }
 
@@ -405,7 +408,7 @@ bool console_check_editor_mode(void) {
     return con.editor_mode;
 }
 
-void console_buf_write2_internal(Color color, char *s) {
+static void console_buf_write2_internal(Color color, char *s) {
     assert(s);
     strncpy(con.buf[con.i].l, s, MAX_LINE);
     con.buf[con.i].c = color;
@@ -1115,11 +1118,11 @@ void console_do_strange() {
     console_buf_write("%s", con.input_line);
 }
 
-void console_color_set(Color color) {
-    con.color = color;
+void console_color_text_set(Color color) {
+    con.color_text = color;
 }
 
-Color console_color_get(void) {
-    return con.color;
+Color console_color_text_get(void) {
+    return con.color_text;
 }
 
