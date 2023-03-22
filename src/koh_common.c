@@ -622,6 +622,22 @@ void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter) {
     paragraph_add(pa, " -- categories %44s", tmp);
 }
 
+cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr) {
+    int num = ceil(radius);
+    cpVect verts[num * sizeof(cpVect)];
+
+    float angle = 0;
+    float d_angle = 2. * M_PI / num;
+    for (int i = 0; i < num; ++i) {
+        verts[i].x = cos(angle) * radius;
+        verts[i].y = sin(angle) * radius;
+        angle += d_angle;
+    }
+
+    cpTransform _tr = tr ? *tr : cpTransformIdentity;
+    return cpPolyShapeNew(body, num, verts, _tr, 1.);
+}
+
 cpShape *circle2polyshape(cpSpace *space, cpShape *inshape) {
     cpBody *body = cpShapeGetBody(inshape);
     float radius = cpCircleShapeGetRadius(inshape);
@@ -629,8 +645,8 @@ cpShape *circle2polyshape(cpSpace *space, cpShape *inshape) {
     //printf("circle2polyshape: offset %s\n", cpVect_tostr(offset));
     //printf("radius %f\n", radius);
 
-    int num = radius;
-    cpVect *verts = calloc(num, sizeof(verts[0]));
+    int num = ceil(radius);
+    cpVect verts[num * sizeof(cpVect)];
 
     float angle = 0;
     float d_angle = 2. * M_PI / num;
@@ -647,8 +663,6 @@ cpShape *circle2polyshape(cpSpace *space, cpShape *inshape) {
         cpTransformIdentity,
         1.
     );
-
-    free(verts);
 
     return outshape;
 }
@@ -858,4 +872,28 @@ void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx) {
             fnt, "target", cam->target, fnt_size, 0., ctx.color_target
         );
     }
+}
+
+const char *transform2str(cpTransform tr) {
+    static char buf[128] = {0};
+    memset(buf, 0, sizeof(buf));
+    sprintf(
+        buf,
+        "colmaj: %f, %f, %f, %f, %f, %f",
+        tr.a, tr.b,  tr.tx, tr.c, tr.d, tr.ty
+    );
+    return buf;
+}
+
+const char *camera2str(Camera2D cam) {
+    static char buf[128] = {0};
+    memset(buf, 0, sizeof(buf));
+    snprintf(
+        buf,
+        sizeof(buf),
+        "offset: %s, target: %s, rotation: %f, zoom: %f", 
+        Vector2_tostr(cam.offset), Vector2_tostr(cam.target), 
+        cam.rotation, cam.zoom
+    );
+    return buf;
 }

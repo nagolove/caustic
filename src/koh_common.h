@@ -90,6 +90,7 @@ const char *shapefilter2str(cpShapeFilter filter);
 
 void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter);
 cpShape *circle2polyshape(cpSpace *space, cpShape *inshape);
+cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr);
 Vector2 camera2screen(Camera2D cam, Vector2 in);
 Color color_by_index(int colornum);
 void texture_save(Texture2D tex, const char *fname);
@@ -123,3 +124,5 @@ struct CameraAxisDrawCtx {
 };
 
 void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx);
+const char *transform2str(cpTransform tr);
+const char *camera2str(Camera2D cam);
