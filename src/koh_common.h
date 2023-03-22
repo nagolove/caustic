@@ -126,3 +126,4 @@ struct CameraAxisDrawCtx {
 void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx);
 const char *transform2str(cpTransform tr);
 const char *camera2str(Camera2D cam);
+Color random_raylib_color();

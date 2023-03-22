@@ -897,3 +897,31 @@ const char *camera2str(Camera2D cam) {
     );
     return buf;
 }
+
+Color random_raylib_color() {
+    Color colors[] = {
+        LIGHTGRAY,
+        GRAY,
+        DARKGRAY,
+        YELLOW,
+        GOLD,
+        ORANGE,
+        PINK,
+        RED,
+        MAROON,
+        GREEN,
+        LIME,
+        DARKGREEN,
+        SKYBLUE,
+        BLUE,
+        DARKBLUE,
+        PURPLE,
+        VIOLET,
+        DARKPURPLE,
+        BEIGE,
+        BROWN,
+        DARKBROWN,
+        MAGENTA,
+    };
+    return colors[rand() % (sizeof(colors) / sizeof(colors[0]))];
+}
