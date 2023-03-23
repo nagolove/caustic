@@ -1,17 +1,52 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+local libs_path = "3rd_party"
+
+local inspect = require 'inspect'
+
+function gennann_after_build(dirname)
+    print('linking genann to static library')
+    local prevdir = lfs.currentdir()
+    lfs.chdir(dirname)
+    local fd = io.popen("ar rcs libgenann.a genann.o")
+    print(fd:read("*a"))
+    lfs.chdir(prevdir)
+end
+
+function small_regex_custom_build(dep, dirname)
+    print('custom_build', dirname)
+    local prevdir = lfs.currentdir()
+    local ok, errmsg = lfs.chdir('libsmallregex')
+    if not ok then
+        print('custom_build: lfs.chdir()', errmsg)
+        return
+    end
+    print(lfs.currentdir())
+    local cmd_gcc = 'gcc -c libsmallregex.c'
+    local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
+    local fd = io.popen(cmd_gcc)
+    if not fd then
+        print("error in ", cmd_gcc)
+    end
+    print(fd:read("*a"))
+    fd = io.popen(cmd_ar)
+    if not fd then
+        print("error in ", cmd_ar)
+    end
+    print(fd:read("*a"))
+    lfs.chdir(prevdir)
+end
+
 local dependencies = {
     {
+        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
+        dir = "sunvox",
+        fname = "sunvox_lib-2.1c.zip",
+    },
+    {
         url = "https://github.com/codeplea/genann.git",
-        after_build = function(dirname)
-            print('linking genann to static library')
-            local prevdir = lfs.currentdir()
-            lfs.chdir(dirname)
-            local fd = io.popen("ar rcs libgenann.a genann.o")
-            print(fd:read("*a"))
-            lfs.chdir(prevdir)
-        end
+        after_build = gennann_after_build,
     },
     {
         url = "https://github.com/nagolove/Chipmunk2D.git",
@@ -24,32 +59,10 @@ local dependencies = {
     },
     {
         url = "https://gitlab.com/relkom/small-regex.git",
-        custom_build = function(dep, dirname)
-            print('custom_build', dirname)
-            local prevdir = lfs.currentdir()
-            local ok, errmsg = lfs.chdir('libsmallregex')
-            if not ok then
-                print('custom_build: lfs.chdir()', errmsg)
-                return
-            end
-            print(lfs.currentdir())
-            local cmd_gcc = 'gcc -c libsmallregex.c'
-            local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
-            local fd = io.popen(cmd_gcc)
-            if not fd then
-                print("error in ", cmd_gcc)
-            end
-            print(fd:read("*a"))
-            fd = io.popen(cmd_ar)
-            if not fd then
-                print("error in ", cmd_ar)
-            end
-            print(fd:read("*a"))
-            lfs.chdir(prevdir)
-        end
+        custom_build = small_regex_custom_build,
     },
     {
-        url = "https://github.com/JuliaLang/utf8proc",
+        url = "https://github.com/JuliaLang/utf8proc.git",
     },
 }
 
@@ -162,8 +175,6 @@ project "test_strset"
 ]]
 -- }}}
 
-local libs_path = "3rd_party"
-
 local includedirs  = { 
     "../caustic/3rd_party/genann",
     "../caustic/3rd_party/Chipmunk2D/include",
@@ -218,8 +229,13 @@ local function get_dirs(deps)
     for _, dep in pairs(deps) do
         assert(type(dep.url) == 'string')
         local url = dep.url
-        local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
-        table.insert(res, dirname)
+        if not string.match(url, "%.zip$") then
+            local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+            print('dirname', dirname)
+            table.insert(res, dirname)
+        else
+            table.insert(res, dep.dir)
+        end
     end
     return res
 end
@@ -229,13 +245,19 @@ local function get_deps_map(deps)
     for _, dep in pairs(deps) do
         assert(type(dep.url) == 'string')
         local url = dep.url
-        local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
-        res[dirname] = dep
+        if not string.match(url, "%.zip$") then
+            local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+            res[dirname] = dep
+        else
+            --print('dep', inspect(dep))
+            res[dep.dir] = dep
+        end
     end
     return res
 end
 
 local dependencies_map = get_deps_map(dependencies)
+--print('dependencies_map', inspect(dependencies_map))
 
 --[[
 local function get_dirs()
@@ -299,6 +321,84 @@ local function git_clone(url)
     print(fd:read("*a"))
 end
 
+local function download_and_unpack_zip(url)
+    local dep_node = nil
+    for k, v in pairs(dependencies) do
+        if v.url == url then
+            dep_node = v
+            break
+        end
+    end
+
+    print('download_zip', inspect(url))
+    --local path = libs_path .. "/" .. dep_node.dir
+    local path = dep_node.dir
+    local lfs = require 'lfs'
+    local ok, err = lfs.mkdir(dep_node.dir)
+    if not ok then
+        print('lfs.mkdir error', err)
+    end
+    local fname = path .. '/' .. dep_node.fname
+    print('fname', fname)
+    local file = io.open(fname, 'w')
+    --assert(file)
+    print('file', file)
+    local curl
+    local ok, errmsg = pcall(function()
+        curl = require 'cURL'
+    end)
+    if not ok then
+        print('errmsg', errmsg)
+    end
+    print('curl loaded')
+    c = curl.easy_init()
+    c:setopt_url(url)
+    c:perform({
+        writefunction = function(str)
+            file:write(str)
+         end
+     })
+    file:close()
+
+    local old_cwd = lfs.currentdir()
+    print('old_cwd', old_cwd)
+
+    lfs.chdir('sunvox')
+
+    local zip = require 'zip'
+    local zfile, err = zip.open(dep_node.fname)
+    if not zfile then
+        print('zfile error', err)
+    end
+    for file in zfile:files() do
+        --print(inspect(file))
+        if file.uncompressed_size == 0 then
+            lfs.mkdir(file.filename)
+        else
+            local filereader = zfile:open(file.filename)
+            local data = filereader:read("*a")
+            print('file.filename', file.filename)
+            local store = io.open(file.filename, "w")
+            if store then
+                store:write(data)
+            end
+        end
+    end
+
+    lfs.chdir(old_cwd)
+    os.remove(fname)
+end
+
+local function url_action(url)
+    if string.match(url, "%.git$") then
+        --print("git url")
+        git_clone(url)
+    elseif string.match(url, "%.zip$") then
+        --print("zip url")
+        download_and_unpack_zip(url)
+    end
+end
+
 local function wait_threads(threads)
     local waiting = true
     while waiting do
@@ -317,7 +417,7 @@ local actions = {}
 
 function actions.init()
     local threads = {}
-    local func = lanes.gen("*", git_clone)
+    local func = lanes.gen("*", url_action)
     for _, dep in pairs(dependencies) do
         assert(type(dep.url) == 'string')
         table.insert(threads, func(dep.url))
@@ -452,13 +552,16 @@ function actions.verbose()
 end
 
 function actions.build()
-    for _, dirname in pairs(get_dirs(dependencies)) do
+    for k, dirname in pairs(get_dirs(dependencies)) do
         --print('dirname', dirname)
         --print(tabular(dependencies_map[dirname]))
         local prevdir = lfs.currentdir()
         lfs.chdir(dirname)
 
         local dep = dependencies_map[dirname]
+        print('k', k);
+        print('dirname', dirname)
+        print('dep', inspect(dep))
 
         if dep.custom_build then
             local ok errmsg = pcall(function()
@@ -482,10 +585,10 @@ end
 
     local parser = argparse()
     local cmd_libs = parser:command("init")
-    parser:command("build")
-    parser:command("remove")
-    parser:command("rocks")
-    parser:command("verbose")
+    parser:command("build"):summary("build dependendies")
+    parser:command("remove"):summary("remove all 3rd_party files")
+    parser:command("rocks"):summary("list of lua rocks should be installed for this script")
+    parser:command("verbose"):summary("print internal data with urls, paths etc.")
 
     if not lfs.chdir(libs_path) then
         lfs.mkdir(libs_path)
