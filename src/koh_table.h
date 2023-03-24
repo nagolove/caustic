@@ -22,10 +22,10 @@ struct HTableSetup {
     int            cap;
 };
 
-void htable_add(
+void *htable_add(
     HTable *ht, const void *key, int key_len, const void *value, int value_len
 );
-void htable_add_s(HTable *ht, const char *key, void *value, int value_len);
+void *htable_add_s(HTable *ht, const char *key, void *value, int value_len);
 void htable_clear(HTable *ht);
 int htable_count(HTable *ht);
 void htable_each(HTable *ht, HTableEachCallback cb, void *udata);

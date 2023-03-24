@@ -119,12 +119,11 @@ void _htable_add_uniq(HTable *ht, Bucket *bucket) {
     ht->taken++;
 }
 
-void htable_add(HTable *ht, const void *key, int key_len, 
+void *htable_add(HTable *ht, const void *key, int key_len, 
     const void *value, int value_len) {
 
     assert(ht);
-    if (!key) return;
-    if (!value) return;
+    if (!key) return NULL;
 
     //print_table(ht);
 
@@ -139,7 +138,7 @@ void htable_add(HTable *ht, const void *key, int key_len,
         ht->arr[index]->value_len = value_len;
         ht->arr[index]->key_len = key_len;
         memmove(get_value(ht->arr[index]), value, value_len);
-        return;
+        return get_value(ht->arr[index]);
     }
 
     if (ht->taken >= ht->cap * 0.7)
@@ -158,12 +157,14 @@ void htable_add(HTable *ht, const void *key, int key_len,
     ht->arr[index]->key_len = key_len;
     ht->arr[index]->hash = hash;
     memmove(get_key(ht->arr[index]), key, key_len);
-    memmove(get_value(ht->arr[index]), value, value_len);
+    if (value)
+        memmove(get_value(ht->arr[index]), value, value_len);
     ht->taken++;
+    return get_value(ht->arr[index]);
 }
 
-void htable_add_s(HTable *ht, const char *key, void *value, int value_len) {
-    htable_add(ht, key, strlen(key) + 1, value, value_len);
+void *htable_add_s(HTable *ht, const char *key, void *value, int value_len) {
+    return htable_add(ht, key, strlen(key) + 1, value, value_len);
 }
 
 void htable_clear(HTable *ht) {
