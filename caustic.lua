@@ -175,6 +175,7 @@ project "test_strset"
 ]]
 -- }}}
 
+-- XXX: Брать значения из таблички зависомостей?
 local includedirs  = { 
     "../caustic/3rd_party/genann",
     "../caustic/3rd_party/Chipmunk2D/include",
@@ -182,6 +183,7 @@ local includedirs  = {
     "../caustic/3rd_party/lua/",
     "../caustic/3rd_party/utf8proc",
     "../caustic/3rd_party/small-regex/libsmallregex",
+    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
 local libdirs_internal = { 
@@ -191,26 +193,30 @@ local libdirs_internal = {
     "./3rd_party/raylib/raylib",
     "./3rd_party/lua",
     "./3rd_party/small-regex/libsmallregex",
+    "./3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
 }
 
 local links_internal = { 
+    --"raylib:static",
+    "raylib",
     "m",
     "genann:static",
     "smallregex:static",
     "lua:static",
-    "raylib:static",
     "utf8proc:static",
     "chipmunk:static",
+    --"sunvox",
 }
 
 local links = { 
+    "raylib",
     "m",
     "genann",
     "smallregex",
     "lua",
-    "raylib",
     "utf8proc",
     "chipmunk",
+    --"sunvox",
 }
 
 -- TODO: Расширить имена до полных путей
@@ -222,6 +228,7 @@ local libdirs = {
     "../caustic/3rd_party/raylib/raylib",
     "../caustic/3rd_party/lua",
     "../caustic/3rd_party/small-regex/libsmallregex",
+    "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
 }
 
 local function get_dirs(deps)
@@ -231,7 +238,7 @@ local function get_dirs(deps)
         local url = dep.url
         if not string.match(url, "%.zip$") then
             local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
-            print('dirname', dirname)
+            --print('dirname', dirname)
             table.insert(res, dirname)
         else
             table.insert(res, dep.dir)
@@ -551,6 +558,15 @@ function actions.verbose()
     print(tabular(ret_table))
 end
 
+function actions.compile_flags()
+    for k, v in pairs(includedirs) do
+        print("-I" .. v)
+    end
+    print("-I../caustic/src")
+    print("-Isrc")
+    print("-I.")
+end
+
 function actions.build()
     for k, dirname in pairs(get_dirs(dependencies)) do
         --print('dirname', dirname)
@@ -559,9 +575,9 @@ function actions.build()
         lfs.chdir(dirname)
 
         local dep = dependencies_map[dirname]
-        print('k', k);
-        print('dirname', dirname)
-        print('dep', inspect(dep))
+        --print('k', k);
+        --print('dirname', dirname)
+        --print('dep', inspect(dep))
 
         if dep.custom_build then
             local ok errmsg = pcall(function()
@@ -589,6 +605,7 @@ end
     parser:command("remove"):summary("remove all 3rd_party files")
     parser:command("rocks"):summary("list of lua rocks should be installed for this script")
     parser:command("verbose"):summary("print internal data with urls, paths etc.")
+    parser:command("compile_flags"):summary("print compile_flags.txt to stdout")
 
     if not lfs.chdir(libs_path) then
         lfs.mkdir(libs_path)
@@ -596,11 +613,10 @@ end
     end
 
     local _args = parser:parse()
-    print(tabular(_args))
+    --print(tabular(_args))
 
     for k, v in pairs(_args) do
         if actions[k] and type(v) == 'boolean' and v == true then
-            print('starting .. ' .. k)
             actions[k]()
         end
     end
