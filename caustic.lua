@@ -6,8 +6,9 @@ local libs_path = "3rd_party"
 local inspect = require 'inspect'
 
 function gennann_after_build(dirname)
-    print('linking genann to static library')
+    print('linking genann to static library', dirname)
     local prevdir = lfs.currentdir()
+    print('prevdir', prevdir);
     lfs.chdir(dirname)
     local fd = io.popen("ar rcs libgenann.a genann.o")
     print(fd:read("*a"))
