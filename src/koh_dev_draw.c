@@ -427,7 +427,12 @@ void dev_label_group_close() {
             cpSpaceStep(dev.space, 1 / 60.);
         }
         cpSpaceEachShape(dev.space, iter_shape, NULL);
-        space_shutdown(dev.space, true, true, true);
+        space_shutdown((struct SpaceShutdownCtx) {
+            .space = dev.space,
+            .free_bodies = true,
+            .free_shapes = true, 
+            .free_constraints = true
+        });
         cpSpaceFree(dev.space);
         dev.space = NULL;
     }

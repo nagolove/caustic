@@ -45,9 +45,13 @@ Color height_color(float value);
 const char *color2str(Color color);
 Font load_font_unicode(const char *fname, int size);
 
-void space_shutdown(
-    cpSpace *space, bool free_shapes, bool free_constraints, bool free_bodies
-);
+struct SpaceShutdownCtx {
+    cpSpace *space;
+    bool free_shapes, free_constraints, free_bodies;
+    bool print_shapes, print_constraints, print_bodies;
+};
+
+void space_shutdown(struct SpaceShutdownCtx ctx);
 void space_debug_draw(cpSpace *space, Color color);
 
 void draw_paragraph(

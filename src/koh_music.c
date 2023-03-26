@@ -35,7 +35,11 @@ static struct Playlist plst = {0};
 static void on_song_remove(
     const void *key, int key_len, void *value, int value_len 
 ) {
-    trace("on_song_remove:\n");
+    struct Song *song = value;
+    trace("on_song_remove: sv_close_slot %d\n", song->slot);
+    sv_lock_slot(song->slot);
+    sv_close_slot(song->slot);
+    sv_unlock_slot(song->slot);
 }
 
 static void svx_init() {
@@ -58,12 +62,10 @@ static void svx_init() {
 }
 
 void svx_shutdown() {
+    htable_free(songs);
+    sv_deinit();
     int errcode = sv_unload_dll();
     trace("svx_shutdown: sv_unload_dll %d\n", errcode);
-    htable_free(songs);
-    sv_stop(0);
-    sv_close_slot(0);
-    sv_deinit();
 }
 
 #ifdef MUSIC_RAY

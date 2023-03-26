@@ -28,6 +28,14 @@ static const Color color_graph2 = RED;
 static const float font_sz = 17;
 static bool is_drawing = false;
 
+bool fpsmeter_stat_get() {
+    return is_drawing;
+}
+
+void fpsmeter_stat_set(bool state) {
+    is_drawing = state;
+}
+
 static int l_fpsmeter_stat(lua_State *lua) {
     /*koh_fpsmeter_draw((Vector2){ 0, 0 });*/
     trace("l_fpsmeter_stat:\n");
