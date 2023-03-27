@@ -2,8 +2,60 @@
 -- vim: fdm=marker
 
 local libs_path = "3rd_party"
+local wasm_libs_path = "wasm_3rd_party"
 
 local inspect = require 'inspect'
+
+-- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
+-- новых обновлений.
+local dependencies = {
+    {
+        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
+        dir = "sunvox",
+        fname = "sunvox_lib-2.1c.zip",
+        copy_for_wasm = false,
+    },
+    {
+        commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
+        url = "https://github.com/codeplea/genann.git",
+        after_build = gennann_after_build,
+        copy_for_wasm = true,
+    },
+    {
+        url = "https://github.com/nagolove/Chipmunk2D.git",
+        copy_for_wasm = true,
+    },
+    {
+        url = "https://github.com/lua/lua.git",
+        copy_for_wasm = true,
+    },
+    {
+        url = "https://github.com/raysan5/raylib.git",
+        copy_for_wasm = true,
+    },
+    {
+        url = "https://gitlab.com/relkom/small-regex.git",
+        custom_build = small_regex_custom_build,
+        copy_for_wasm = true,
+    },
+    {
+        url = "https://github.com/JuliaLang/utf8proc.git",
+        copy_for_wasm = true,
+    },
+    {
+        url = "https://github.com/krychu/wfc.git",
+        before_build = wfc_before_build,
+        after_build = wfc_after_build,
+        copy_for_wasm = true,
+        depends = {'stb'},
+    },
+    {
+        name = 'stb',
+        url = "https://github.com/nothings/stb.git",
+        copy_for_wasm = true,
+        after_init = copy_headers_to_wfc,
+    }
+}
 
 function gennann_after_build(dirname)
     print('linking genann to static library', dirname)
@@ -17,6 +69,7 @@ end
 
 function small_regex_custom_build(dep, dirname)
     print('custom_build', dirname)
+    print('currentdir', lfs.currentdir())
     local prevdir = lfs.currentdir()
     local ok, errmsg = lfs.chdir('libsmallregex')
     if not ok then
@@ -39,33 +92,17 @@ function small_regex_custom_build(dep, dirname)
     lfs.chdir(prevdir)
 end
 
-local dependencies = {
-    {
-        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
-        dir = "sunvox",
-        fname = "sunvox_lib-2.1c.zip",
-    },
-    {
-        url = "https://github.com/codeplea/genann.git",
-        after_build = gennann_after_build,
-    },
-    {
-        url = "https://github.com/nagolove/Chipmunk2D.git",
-    },
-    {
-        url = "https://github.com/lua/lua.git",
-    },
-    {
-        url = "https://github.com/raysan5/raylib.git",
-    },
-    {
-        url = "https://gitlab.com/relkom/small-regex.git",
-        custom_build = small_regex_custom_build,
-    },
-    {
-        url = "https://github.com/JuliaLang/utf8proc.git",
-    },
-}
+
+local function cp(from, to)
+    local _in = io.open(from, 'r')
+    local _out = io.open(to, 'w')
+    local content = _in:read("*a")
+    _out:write(content)
+end
+
+local function copy_headers_to_wfc(dep)
+    print('copy_headers_to_wfc')
+end
 
 local function get_urls(deps)
     local urls = {}
@@ -178,9 +215,10 @@ project "test_strset"
 
 -- XXX: Брать значения из таблички зависомостей?
 local includedirs  = { 
+    "../caustic/3rd_party/stb",
     "../caustic/3rd_party/genann",
     "../caustic/3rd_party/Chipmunk2D/include",
-    "../caustic/3rd_party/raylib/raylib/include",
+    "../caustic/3rd_party/raylib/src",
     "../caustic/3rd_party/lua/",
     "../caustic/3rd_party/utf8proc",
     "../caustic/3rd_party/small-regex/libsmallregex",
@@ -292,8 +330,6 @@ local ret_table = {
     links_internal = links_internal,
 }
 
-local function main()
-
 local function check_luarocks()
     local fd = io.popen("luarocks --version")
     local version 
@@ -323,30 +359,38 @@ if not ok then
     print("Please run ./caustic rocks")
 end
 
-local function git_clone(url)
+local function after_init(dep)
+    if dep.after_init then
+        local ok, errmsg = pcall(function()
+            dep.after_init(dep)
+        end)
+        if not ok then
+            print('after_init() failed with', err)
+        end
+    end
+end
+
+local function git_clone(dep)
+    local url = dep.url
     local git_cmd = "git clone --depth 1"
     local fd = io.popen(git_cmd .. " " .. url)
     print(fd:read("*a"))
 end
 
-local function download_and_unpack_zip(url)
-    local dep_node = nil
-    for k, v in pairs(dependencies) do
-        if v.url == url then
-            dep_node = v
-            break
-        end
-    end
-
-    print('download_zip', inspect(url))
-    --local path = libs_path .. "/" .. dep_node.dir
-    local path = dep_node.dir
+local function download_and_unpack_zip(dep)
     local lfs = require 'lfs'
-    local ok, err = lfs.mkdir(dep_node.dir)
+    print('download_and_unpack_zip', inspect(dep))
+    print('current directory', lfs.currentdir())
+    local url = dep.url
+
+    --print('download_zip', inspect(url))
+    --local path = libs_path .. "/" .. dep.dir
+    local path = dep.dir
+    local ok, err = lfs.mkdir(dep.dir)
     if not ok then
         print('lfs.mkdir error', err)
     end
-    local fname = path .. '/' .. dep_node.fname
+    local fname = path .. '/' .. dep.fname
     print('fname', fname)
     local file = io.open(fname, 'w')
     --assert(file)
@@ -374,7 +418,7 @@ local function download_and_unpack_zip(url)
     lfs.chdir('sunvox')
 
     local zip = require 'zip'
-    local zfile, err = zip.open(dep_node.fname)
+    local zfile, err = zip.open(dep.fname)
     if not zfile then
         print('zfile error', err)
     end
@@ -397,13 +441,26 @@ local function download_and_unpack_zip(url)
     os.remove(fname)
 end
 
-local function url_action(url)
+local function _url_action(dep)
+    local url = dep.url
     if string.match(url, "%.git$") then
         --print("git url")
-        git_clone(url)
+        git_clone(dep)
     elseif string.match(url, "%.zip$") then
         --print("zip url")
-        download_and_unpack_zip(url)
+        download_and_unpack_zip(dep)
+    end
+    after_init(dep)
+end
+
+local function url_action(dep, destdir)
+    -- Копирую в wasm каталог только если установлени специальный флажок
+    if string.match(destdir, "wasm_") then 
+        if dep.copy_for_wasm then
+            _url_action(dep)
+        end
+    else
+        _url_action(dep)
     end
 end
 
@@ -423,12 +480,19 @@ end
 
 local actions = {}
 
-function actions.init()
+local function _init(path)
+    local prev_dir = lfs.currentdir()
+
+    if not lfs.chdir(path) then
+        lfs.mkdir(path)
+        lfs.chdir(path)
+    end
+
     local threads = {}
     local func = lanes.gen("*", url_action)
     for _, dep in pairs(dependencies) do
         assert(type(dep.url) == 'string')
-        table.insert(threads, func(dep.url))
+        table.insert(threads, func(dep, path))
     end
     print(tabular(threads))
     wait_threads(threads)
@@ -436,6 +500,13 @@ function actions.init()
         local result, errcode = thread:join()
         print(result, errcode)
     end
+
+    lfs.chdir(prev_dir)
+end
+
+function actions.init()
+    _init(libs_path)
+    _init(wasm_libs_path)
 end
 
 local function rec_remove_dir(dirname)
@@ -504,16 +575,32 @@ local function rec_remove_dir(dirname)
     local ok, errcode = lfs.rmdir(dirname)
 end
 
-function actions.remove()
-    if not string.match(lfs.currentdir(), libs_path) then
+local function _remove(path)
+    local prev_dir = lfs.currentdir()
+    lfs.chdir(path)
+
+    if not string.match(lfs.currentdir(), path) then
         print("Bad current directory")
         return
     end
 
-    for _, dirname in pairs(get_dirs(dependencies)) do
-        print(dirname)
-        rec_remove_dir(dirname)
+    local ok, errmsg = pcall(function()
+        for _, dirname in pairs(get_dirs(dependencies)) do
+            print(dirname)
+            rec_remove_dir(dirname)
+        end
+    end)
+
+    if not ok then
+        print("fail if rec_remove_dir", errmsg)
     end
+
+    lfs.chdir(prev_dir)
+end
+
+function actions.remove()
+    _remove(libs_path)
+    _remove(wasm_libs_path)
 end
 
 local function file_exist(path)
@@ -568,7 +655,170 @@ function actions.compile_flags()
     print("-I.")
 end
 
+local function chipmunk_build()
+    local prevdir = lfs.currentdir()
+    local f
+    lfs.chdir("wasm_3rd_party/Chipmunk2D/")
+
+    f = io.popen("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
+    print(f:read("*a"))
+    f:close()
+
+    f = io.popen("emmake make -j")
+    print(f:read("*a"))
+    f:close()
+
+    lfs.chdir(prevdir)
+end
+
+local format = string.format
+
+local function link(objfiles, libname, flags)
+    print(tabular(objfiles))
+    flags = flags or ""
+    print(inspect(objfiles))
+    local objfiles_str = table.concat(objfiles, " ")
+    local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
+    local f = io.popen(cmd)
+    print(f:read("*a"))
+end
+
+local function filter_sources(path, cb)
+    for file in lfs.dir(path) do
+        --print(inspect(file))
+        if string.match(file, ".*%.c$") then
+            cb(file)
+        end
+    end
+end
+
+local function src2obj(filename)
+    return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1]
+end
+
+local function build_lua()
+    local prevdir = lfs.currentdir()
+    lfs.chdir("wasm_3rd_party/lua")
+
+    local objfiles = {}
+    filter_sources(".", function(file)
+        local cmd = string.format("emcc -c %s -Os -Wall", file)
+        print(cmd)
+        local pipe = io.popen(cmd)
+        local res = pipe:read("*a")
+        if #res > 0 then
+            print(res)
+        end
+        table.insert(objfiles, src2obj(file))
+    end)
+    link(objfiles, 'liblua.a')
+
+    lfs.chdir(prevdir)
+end
+
+local function build_raylib()
+    local prevdir = lfs.currentdir()
+    lfs.chdir("wasm_3rd_party/raylib")
+
+    local objfiles = {}
+    local path = "src"
+    filter_sources(path, function(file)
+        --print('file', file)
+        local flags = "-Wall -flto -g3 -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2 -Isrc -Iinclude"
+        local fullfile = path .. "/" .. file
+        local cmd = string.format("emcc -c %s %s", fullfile, flags)
+        print(cmd)
+
+        local pipe = io.popen(cmd)
+        local res = pipe:read("*a")
+        if #res > 0 then
+            print(res)
+        end
+
+        table.insert(objfiles, src2obj(file))
+    end)
+    link(objfiles, 'libraylib.a')
+
+    lfs.chdir(prevdir)
+end
+
+local function build_genann()
+    local prevdir = lfs.currentdir()
+    lfs.chdir("wasm_3rd_party/genann")
+
+    local objfiles = {}
+    local sources = { 
+        "genann.c"
+    }
+    for _, file in pairs(sources) do
+        --print('file', file)
+        local flags = "-Wall -g3 -I."
+        local cmd = string.format("emcc -c %s %s", file, flags)
+        print(cmd)
+
+        local pipe = io.popen(cmd)
+        local res = pipe:read("*a")
+        if #res > 0 then
+            print(res)
+        end
+
+        table.insert(objfiles, src2obj(file))
+    end
+    link(objfiles, 'libgenann.a')
+
+    lfs.chdir(prevdir)
+end
+
+local function build_smallregex()
+    local prevdir = lfs.currentdir()
+    lfs.chdir("wasm_3rd_party/small-regex/libsmallregex")
+
+    local objfiles = {}
+    local sources = { 
+        "libsmallregex.c"
+    }
+    for _, file in pairs(sources) do
+        --print('file', file)
+        local flags = "-Wall -g3 -I."
+        local cmd = string.format("emcc -c %s %s", file, flags)
+        print(cmd)
+
+        local pipe = io.popen(cmd)
+        local res = pipe:read("*a")
+        if #res > 0 then
+            print(res)
+        end
+
+        table.insert(objfiles, src2obj(file))
+    end
+    link(objfiles, 'libsmallregex.a')
+
+    lfs.chdir(prevdir)
+end
+
+local function build_utf8proc()
+    local prevdir = lfs.currentdir()
+    lfs.chdir("wasm_3rd_party/utf8proc/")
+
+    local pipe = io.popen("emmake make")
+    print(pipe:read("*a"))
+
+    lfs.chdir(prevdir)
+end
+
+function actions.wbuild()
+    chipmunk_build()
+    build_lua()
+    build_raylib()
+    build_genann()
+    build_smallregex()
+    build_utf8proc()
+end
+
 function actions.build()
+    local prevdir = lfs.currentdir()
+    lfs.chdir(libs_path)
+
     for k, dirname in pairs(get_dirs(dependencies)) do
         --print('dirname', dirname)
         --print(tabular(dependencies_map[dirname]))
@@ -588,30 +838,45 @@ function actions.build()
                 print('custom_build error:', errmsg)
             end
         else
-            common_build()
+            local ok, errmsg = pcall(function()
+                common_build()
+            end)
+            if not ok then
+                print('common_build() failed with', errmsg)
+            end
         end
 
         if dep and dep.after_build then
-            dep.after_build(dirname)
+            local ok, errmsg = pcall(function()
+                dep.after_build(dirname)
+            end)
+            if not ok then
+                print(inspect(dep), 'failed with', errmsg)
+            end
         end
 
         lfs.chdir(prevdir)
         --]]
     end
+
+    lfs.chdir(prevdir)
 end
 
+local function main()
     local parser = argparse()
-    local cmd_libs = parser:command("init")
-    parser:command("build"):summary("build dependendies")
+    --local cmd_libs = 
+    parser:command("init"):summary("download dependencies from network")
+    -- Нужно собрать все исходные файлы для wasm версии.
+    -- Сперва скопировать их в отдельный каталог.
+    -- Собрать все модули согласно спецификации bld.lua для библиотеки caustic
+    -- Собрать целевую программу, слинковать ее с libcaustic.a (wasm)
+    parser:command("build"):summary("build dependendies for native platform")
     parser:command("remove"):summary("remove all 3rd_party files")
     parser:command("rocks"):summary("list of lua rocks should be installed for this script")
     parser:command("verbose"):summary("print internal data with urls, paths etc.")
     parser:command("compile_flags"):summary("print compile_flags.txt to stdout")
-
-    if not lfs.chdir(libs_path) then
-        lfs.mkdir(libs_path)
-        lfs.chdir(libs_path)
-    end
+    parser:command("wbuild"):summary("build dependencies and libcaustic for webassembly platform")
+    parser:command("check_updates"):summary("print new version of libraries")
 
     local _args = parser:parse()
     --print(tabular(_args))
