@@ -1,8 +1,11 @@
 #include "koh_music.h"
-#include <stdint.h>
 
-#define SUNVOX_MAIN /* We are using a dynamic lib. SUNVOX_MAIN adds implementation of sv_load_dll()/sv_unload_dll() */
-#include <dlfcn.h>
+#ifdef PLATFORM_WEB
+    #define SUNVOX_STATIC_LIB
+#else
+    #define SUNVOX_MAIN /* We are using a dynamic lib. SUNVOX_MAIN adds implementation of sv_load_dll()/sv_unload_dll() */
+    #include <dlfcn.h>
+#endif
 
 #include "koh_common.h"
 #include "koh_logger.h"
@@ -12,6 +15,7 @@
 #include "sunvox.h"
 #include <assert.h>
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 //#define MUSIC_RAY
@@ -43,8 +47,10 @@ static void on_song_remove(
 }
 
 static void svx_init() {
+#ifndef PLATFORM_WEB
     int errcode = sv_load_dll();
     trace("music_init: sv_load_dll %d\n", errcode);
+#endif
 
     int ver = sv_init(NULL, koh_music_freq, 2, 0 );
     if( ver >= 0 ) {
@@ -64,8 +70,12 @@ static void svx_init() {
 void svx_shutdown() {
     htable_free(songs);
     sv_deinit();
+
+#ifndef PLATFORM_WEB
     int errcode = sv_unload_dll();
     trace("svx_shutdown: sv_unload_dll %d\n", errcode);
+#endif
+
 }
 
 #ifdef MUSIC_RAY
