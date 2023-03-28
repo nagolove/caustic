@@ -9,6 +9,69 @@ local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
 --print('package.path', package.path)
 
+local function cp(from, to)
+    print(string.format("copy '%s' to '%s'", from, to))
+    local ok, errmsg = pcall(function()
+        local _in = io.open(from, 'r')
+        local _out = io.open(to, 'w')
+        local content = _in:read("*a")
+        _out:write(content)
+    end)
+    if not ok then
+        print("cp() failed with", errmsg)
+    end
+end
+
+local function copy_headers_to_wfc(dep)
+    print('copy_headers_to_wfc:', lfs.currentdir())
+    cp("stb/stb_image.h", "wfc/stb_image.h")
+    cp("stb/stb_image_write.h", "wfc/stb_image_write.h")
+end
+
+local function sunvox_after_init()
+    print('sunvox_after_init:', lfs.currentdir())
+    cp(
+        "sunvox/sunvox_lib/js/lib/sunvox.wasm",
+        "sunvox/sunvox_lib/js/lib/sunvox.o"
+    )
+end
+
+local function gennann_after_build(dirname)
+    print('linking genann to static library', dirname)
+    local prevdir = lfs.currentdir()
+    print('prevdir', prevdir);
+    lfs.chdir(dirname)
+    local fd = io.popen("ar rcs libgenann.a genann.o")
+    print(fd:read("*a"))
+    lfs.chdir(prevdir)
+end
+
+local function small_regex_custom_build(dep, dirname)
+    print('custom_build', dirname)
+    print('currentdir', lfs.currentdir())
+    local prevdir = lfs.currentdir()
+    local ok, errmsg = lfs.chdir('libsmallregex')
+    if not ok then
+        print('custom_build: lfs.chdir()', errmsg)
+        return
+    end
+    print(lfs.currentdir())
+    local cmd_gcc = 'gcc -c libsmallregex.c'
+    local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
+    local fd = io.popen(cmd_gcc)
+    if not fd then
+        print("error in ", cmd_gcc)
+    end
+    print(fd:read("*a"))
+    fd = io.popen(cmd_ar)
+    if not fd then
+        print("error in ", cmd_ar)
+    end
+    print(fd:read("*a"))
+    lfs.chdir(prevdir)
+end
+
+
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
 -- новых обновлений.
 
@@ -20,6 +83,7 @@ local dependencies = {
         dir = "sunvox",
         fname = "sunvox_lib-2.1c.zip",
         copy_for_wasm = false,
+        after_init = sunvox_after_init,
     },
     {
         name = 'genann',
@@ -72,52 +136,6 @@ local dependencies = {
     }
 }
 
-function gennann_after_build(dirname)
-    print('linking genann to static library', dirname)
-    local prevdir = lfs.currentdir()
-    print('prevdir', prevdir);
-    lfs.chdir(dirname)
-    local fd = io.popen("ar rcs libgenann.a genann.o")
-    print(fd:read("*a"))
-    lfs.chdir(prevdir)
-end
-
-function small_regex_custom_build(dep, dirname)
-    print('custom_build', dirname)
-    print('currentdir', lfs.currentdir())
-    local prevdir = lfs.currentdir()
-    local ok, errmsg = lfs.chdir('libsmallregex')
-    if not ok then
-        print('custom_build: lfs.chdir()', errmsg)
-        return
-    end
-    print(lfs.currentdir())
-    local cmd_gcc = 'gcc -c libsmallregex.c'
-    local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
-    local fd = io.popen(cmd_gcc)
-    if not fd then
-        print("error in ", cmd_gcc)
-    end
-    print(fd:read("*a"))
-    fd = io.popen(cmd_ar)
-    if not fd then
-        print("error in ", cmd_ar)
-    end
-    print(fd:read("*a"))
-    lfs.chdir(prevdir)
-end
-
-
-local function cp(from, to)
-    local _in = io.open(from, 'r')
-    local _out = io.open(to, 'w')
-    local content = _in:read("*a")
-    _out:write(content)
-end
-
-local function copy_headers_to_wfc(dep)
-    print('copy_headers_to_wfc')
-end
 
 local function get_urls(deps)
     local urls = {}
@@ -150,84 +168,6 @@ local urls = {
 --]]
 
 
--- {{{
-local tests = [[
-project "test_objects_pool"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "src/*.h",
-        "src/object.c",
-        "tests/munit.c",
-        "tests/test_object_pool.c",
-    }
-
-project "test_de_ecs"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "tests/munit.c",
-        "tests/test_de_ecs.c",
-    }
-
-project "test_timers"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "src/*.h",
-        "src/timer.c",
-        "tests/munit.c",
-        "tests/test_timers.c",
-    }
-
-project "test_array"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "src/*.h",
-        "src/array.c",
-        "tests/munit.c",
-        "tests/test_array.c",
-    }
-
-project "test_console"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "src/*.h",
-        "src/object.c",
-        "tests/munit.c",
-        "tests/test_console.c",
-    }
-
-project "test_table"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "src/table.c",
-        "tests/munit.c",
-        "tests/test_table.c",
-    }
-
-    
-project "test_strset"
-    buildoptions { 
-        "-ggdb3",
-    }
-    files {
-        "src/strset.c",
-        "tests/munit.c",
-        "tests/test_strset.c",
-    }
-]]
--- }}}
---
 local _includedirs  = { 
     "../caustic/src",
     "../caustic/%s/stb",
@@ -237,7 +177,7 @@ local _includedirs  = {
     "../caustic/%s/lua/",
     "../caustic/%s/utf8proc",
     "../caustic/%s/small-regex/libsmallregex",
-    "../caustic/%s/sunvox/sunvox_lib/headers",
+    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
 local function template_dirs(dirs, pattern)
@@ -295,6 +235,19 @@ local libdirs = {
     "../caustic/3rd_party/lua",
     "../caustic/3rd_party/small-regex/libsmallregex",
     "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
+}
+
+local wasm_libdirs = { 
+    "../caustic/wasm_objects/",
+    "../caustic/wasm_3rd_party/genann",
+    "../caustic/wasm_3rd_party/utf8proc",
+    "../caustic/wasm_3rd_party/Chipmunk2D/src",
+    --"../caustic/wasm_3rd_party/raylib/raylib",
+    "../caustic/wasm_3rd_party/raylib",
+    "../caustic/wasm_3rd_party/lua",
+    "../caustic/wasm_3rd_party/small-regex/libsmallregex",
+    --"../caustic/wasm_3rd_party/sunvox/sunvox_lib/
+    "../caustic/3rd_party/sunvox/sunvox_lib/js/lib"
 }
 
 local function get_dirs(deps)
@@ -402,6 +355,7 @@ end
 local function after_init(dep)
     if dep.after_init then
         local ok, errmsg = pcall(function()
+            print('after_init:', dep.name)
             dep.after_init(dep)
         end)
         if not ok then
@@ -481,7 +435,7 @@ local function download_and_unpack_zip(dep)
         else
             local filereader = zfile:open(file.filename)
             local data = filereader:read("*a")
-            print('file.filename', file.filename)
+            --print('file.filename', file.filename)
             local store = io.open(file.filename, "w")
             if store then
                 store:write(data)
@@ -829,7 +783,7 @@ function actions.compile_flags()
     print("-I.")
 end
 
-local function chipmunk_build()
+local function build_chipmunk()
     local prevdir = lfs.currentdir()
     local f
     lfs.chdir("wasm_3rd_party/Chipmunk2D/")
@@ -980,54 +934,136 @@ local function build_utf8proc()
     lfs.chdir(prevdir)
 end
 
+local function build_project(output_dir)
+    local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
+    print('includedirs before')
+    print(tabular(includedirs))
+
+    local includedirs = {}
+    for k, v in pairs(tmp_includedirs) do
+        table.insert(includedirs, "-I" .. v)
+    end
+
+    print('includedirs after')
+    print(tabular(includedirs))
+
+    local include_str = table.concat(includedirs, " ")
+    print('include_str', include_str)
+
+    --print("os.exit()")
+    --os.exit()
+    local define_str = "-DPLATFORM_WEB=1"
+
+    lfs.mkdir(output_dir)
+    local path = "src"
+    filter_sources(path, function(file)
+        print(file)
+        local output_path = output_dir .. 
+                            "/" ..string.gsub(file, "(.*%.)c$", "%1o")
+
+        --print(output_path)
+        --os.exit()
+
+        local cmd = format(
+            "emcc -o %s -c %s/%s -Wall %s %s",
+            output_path, path, file, include_str, define_str
+        )
+        print(cmd)
+        local pipe = io.popen(cmd)
+        print(pipe:read("*a"))
+    end)
+end
+
+local function link_koh_lib(objs_dir)
+    print('link_koh_lib:', lfs.currentdir())
+    local files = {}
+    for file in lfs.dir(objs_dir) do
+        if string.match(file, ".*%.o") then
+            table.insert(files, objs_dir .. "/" .. file)
+        end
+    end
+    print('files', inspect(files))
+    local files_str = table.concat(files, " ")
+    local cmd = "emar rcs " .. objs_dir .. "/libcaustic.a " .. files_str
+    print(cmd)
+    local pipe = io.popen(cmd)
+    print(pipe:read("*a"))
+end
+
+local function build_koh()
+    local dir = "wasm_objects"
+    build_project(dir)
+    link_koh_lib(dir)
+end
+
+local function link_project()
+    currentdir = lfs.currentdir()
+    print('link_project:', lfs.currentdir())
+    local project_dir = string.match(currentdir, ".*/(.*)$")
+    lfs.mkdir(project_dir)
+
+    local prev_dir = lfs.currentdir()
+
+    local flags = {
+        "-s MAXIMUM_MEMORY=4294967296",
+        "-s ALLOW_MEMORY_GROWTH=1",
+        "-s EMULATE_FUNCTION_POINTER_CASTS",
+        "-s LLD_REPORT_UNDEFINED",
+        "--shell-file ../caustic/3rd_party/raylib/src/minshell.html",
+        --"-o index.html src/main.c",
+        "-Wall -flto -g3 -DPLATFORM_WEB",
+    }
+
+    table.insert(flags, format("-o %s/%s.html", project_dir, project_dir))
+
+    local _includedirs = {}
+    for k, v in pairs(includedirs) do
+        table.insert(_includedirs, "-I" .. v)
+    end
+    local includes_str = table.concat(_includedirs, " ")
+
+    --print('_includedirs', inspect(_includedirs))
+    --print()
+
+    local _libs = {}
+    for k, v in pairs(links) do
+        table.insert(_libs, "-l" .. v)
+    end
+    local libs_str = table.concat(_libs, " ")
+
+    print(inspect(_libs))
+    print()
+
+    local libspath = {}
+    for k, v in pairs(wasm_libdirs) do
+        table.insert(libspath, "-L" .. v)
+    end
+    local libspath_str = table.concat(libspath, " ")
+
+    local flags_str = table.concat(flags, " ")
+    local cmd = format(
+        "emcc %s %s %s %s", libspath_str, libs_str, includes_str, flags_str
+    )
+    print(cmd)
+    local pipe = io.popen(cmd)
+    print(pipe:read("*a"))
+
+    lfs.chdir(prev_dir)
+end
+
 function actions.wbuild()
     local exist, errmsg = lfs.attributes("caustic.lua")
     if exist then
-        chipmunk_build()
-        build_lua()
-        build_raylib()
-        build_genann()
-        build_smallregex()
-        build_utf8proc()
+        --build_chipmunk()
+        --build_lua()
+        --build_raylib()
+        --build_genann()
+        --build_smallregex()
+        --build_utf8proc()
+        build_koh()
     else
-        local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
-        print('includedirs before')
-        print(tabular(includedirs))
-
-        local includedirs = {}
-        for k, v in pairs(tmp_includedirs) do
-            table.insert(includedirs, "-I" .. v)
-        end
-        
-        print('includedirs after')
-        print(tabular(includedirs))
-
-        local include_str = table.concat(includedirs, " ")
-        print('include_str', include_str)
-
-        --print("os.exit()")
-        --os.exit()
-        local define_str = "-DPLATFORM_WEB"
-        local output_dir = "wasm_objects"
-
-        lfs.mkdir(output_dir)
-        local path = "src"
-        filter_sources(path, function(file)
-            print(file)
-            local output_path = output_dir .. 
-                                "/" ..string.gsub(file, "(.*%.)c$", "%1o")
-
-            --print(output_path)
-            --os.exit()
-
-            local cmd = format(
-                "emcc -o %s -c %s/%s -Wall %s %s",
-                output_path, path, file, include_str, define_str
-            )
-            print(cmd)
-            local pipe = io.popen(cmd)
-            print(pipe:read("*a"))
-        end)
+        --build_project("wasm_objects")
+        link_project()
     end
 end
 
