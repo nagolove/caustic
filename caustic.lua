@@ -5,44 +5,58 @@ local libs_path = "3rd_party"
 local wasm_libs_path = "wasm_3rd_party"
 
 local inspect = require 'inspect'
+package.path = "./?.lua;" .. package.path
+print('package.path', package.path)
 
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
 -- новых обновлений.
+
+-- Имена и зависимости(поля name и depends) обрабатываются в команде init
 local dependencies = {
     {
+        name = 'sunvox',
         url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
         dir = "sunvox",
         fname = "sunvox_lib-2.1c.zip",
         copy_for_wasm = false,
     },
     {
+        name = 'genann',
         commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         url = "https://github.com/codeplea/genann.git",
         after_build = gennann_after_build,
         copy_for_wasm = true,
     },
     {
+        name = 'chipmunk',
         url = "https://github.com/nagolove/Chipmunk2D.git",
         copy_for_wasm = true,
     },
     {
+        name = 'lua',
         url = "https://github.com/lua/lua.git",
         copy_for_wasm = true,
     },
     {
+        name = 'raylib',
         url = "https://github.com/raysan5/raylib.git",
         copy_for_wasm = true,
     },
     {
+        name = 'smallregex',
         url = "https://gitlab.com/relkom/small-regex.git",
         custom_build = small_regex_custom_build,
         copy_for_wasm = true,
+        --depends = {'lua'},
     },
     {
+        name = 'utf8proc',
         url = "https://github.com/JuliaLang/utf8proc.git",
         copy_for_wasm = true,
+        --depends = {'smallregex', "wfc"},
     },
     {
+        name = 'wfc',
         url = "https://github.com/krychu/wfc.git",
         before_build = wfc_before_build,
         after_build = wfc_after_build,
@@ -302,7 +316,20 @@ local function get_deps_map(deps)
     return res
 end
 
+local function get_deps_name_map(deps)
+    local map = {}
+    for k, dep in pairs(deps) do
+        if map[dep.name] then
+            print("get_deps_name_map: name dublicated", dep.name)
+            os.exit(1)
+        end
+        map[dep.name] = dep
+    end
+    return map
+end
+
 local dependencies_map = get_deps_map(dependencies)
+local dependencies_name_map = get_deps_name_map(dependencies)
 --print('dependencies_map', inspect(dependencies_map))
 
 --[[
@@ -371,10 +398,22 @@ local function after_init(dep)
 end
 
 local function git_clone(dep)
+    print('git_clone')
+    print(tabular(dep))
     local url = dep.url
-    local git_cmd = "git clone --depth 1"
-    local fd = io.popen(git_cmd .. " " .. url)
-    print(fd:read("*a"))
+    if not dep.commit then
+        local git_cmd = "git clone --depth 1"
+        local fd = io.popen(git_cmd .. " " .. url)
+        print(fd:read("*a"))
+    else
+        local git_cmd = "git clone"
+        local fd
+        fd = io.popen(git_cmd .. " " .. url)
+        print(fd:read("*a"))
+
+        fd = io.popen("git checkout " .. url)
+        print(fd:read("*a"))
+    end
 end
 
 local function download_and_unpack_zip(dep)
@@ -441,7 +480,7 @@ local function download_and_unpack_zip(dep)
     os.remove(fname)
 end
 
-local function _url_action(dep)
+local function _dependecy_init(dep)
     local url = dep.url
     if string.match(url, "%.git$") then
         --print("git url")
@@ -453,14 +492,14 @@ local function _url_action(dep)
     after_init(dep)
 end
 
-local function url_action(dep, destdir)
+local function dependency_init(dep, destdir)
     -- Копирую в wasm каталог только если установлени специальный флажок
     if string.match(destdir, "wasm_") then 
         if dep.copy_for_wasm then
-            _url_action(dep)
+            _dependecy_init(dep)
         end
     else
-        _url_action(dep)
+        _dependecy_init(dep)
     end
 end
 
@@ -478,6 +517,102 @@ local function wait_threads(threads)
     end
 end
 
+local function visit(sorted, node)
+    --print('visit', node)
+    if node.permament then
+        return
+    end
+    if node.temporary then
+        print('Cycle found')
+        local ok, errmsg = pcall(function()
+            local inspect = require 'inspect'
+            print('node', inspect(node.value))
+        end)
+        os.exit(1)
+    end
+    node.temporary = true
+    for _, child in pairs(node.childs) do
+        visit(sorted, child)
+    end
+    node.temporary = nil
+    node.permament = true
+    table.insert(sorted, 1, node)
+end
+
+local Toposorter = {
+}
+
+local Toposorter_mt = {
+    __index = Toposorter,
+}
+
+function Toposorter.new()
+    local self = {
+        T = {},
+    }
+    return setmetatable(self, Toposorter_mt)
+end
+
+function Toposorter:add(value1, value2)
+    print(':add', value1, value2)
+    local from = value1
+    local to = value2
+    if not self.T[from] then
+        self.T[from] = {
+            value = from,
+            parents = {},
+            childs = {}
+        }
+    end
+    if not self.T[to] then
+        self.T[to] = {
+            value = to,
+            parents = {},
+            childs = {},
+        }
+    end
+    local node_from = self.T[from]
+    local node_to = self.T[to]
+
+    table.insert(node_from.childs, node_to)
+    table.insert(node_to.parents, node_from)
+end
+
+function Toposorter:clear()
+    self.T = {}
+end
+
+function Toposorter:sort()
+    local sorted = {}
+    for _, node in pairs(self.T) do
+        if not node.permament then
+            visit(sorted, node)
+        end
+    end
+    return sorted
+end
+
+-- Обратный ipairs() итератор
+local function ripairs(t)
+    local i = #t + 1
+    return function()
+        while i - 1 > 0 do
+            i = i - 1
+            return i, t[i]
+        end
+    end
+end
+
+local function filter(collection, cb)
+    local tmp = {}
+    for _, v in ipairs(collection) do
+        if cb(v) then
+            table.insert(tmp, v)
+        end
+    end
+    return tmp
+end
+
 local actions = {}
 
 local function _init(path)
@@ -489,11 +624,31 @@ local function _init(path)
     end
 
     local threads = {}
-    local func = lanes.gen("*", url_action)
-    for _, dep in pairs(dependencies) do
+    local func = lanes.gen("*", dependency_init)
+
+    local sorter = Toposorter.new()
+
+    for _, dep in ipairs(dependencies) do
         assert(type(dep.url) == 'string')
-        table.insert(threads, func(dep, path))
+        assert(dep.name)
+        if dep.depends then
+            for _, dep_name in pairs(dep.depends) do
+                sorter:add(dep.name, dep_name)
+            end
+        else
+            --sorter:add(dep.name, "null")
+            table.insert(threads, func(dep, path))
+        end
     end
+
+    local sorted = sorter:sort()
+
+    -- XXX: На всякий случай удаляются имена null
+    -- Но они могут и отсутствовать всегда :))
+    sorted = filter(sorted, function(node)
+        return node.value ~= "null"
+    end)
+
     print(tabular(threads))
     wait_threads(threads)
     for _, thread in pairs(threads) do
@@ -501,12 +656,18 @@ local function _init(path)
         print(result, errcode)
     end
 
+    for _, node in ripairs(sorted) do
+        local dep = dependencies_name_map[node.value]
+        --print('dep', inspect(dep))
+        dependency_init(dep, path)
+    end
+
     lfs.chdir(prev_dir)
 end
 
 function actions.init()
     _init(libs_path)
-    _init(wasm_libs_path)
+    --_init(wasm_libs_path)
 end
 
 local function rec_remove_dir(dirname)
