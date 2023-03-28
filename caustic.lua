@@ -5,8 +5,9 @@ local libs_path = "3rd_party"
 local wasm_libs_path = "wasm_3rd_party"
 
 local inspect = require 'inspect'
-package.path = "./?.lua;" .. package.path
-print('package.path', package.path)
+local tabular = require "tabular"
+--package.path = "./?.lua;" .. package.path
+--print('package.path', package.path)
 
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
 -- новых обновлений.
@@ -226,18 +227,30 @@ project "test_strset"
     }
 ]]
 -- }}}
+--
+local _includedirs  = { 
+    "../caustic/src",
+    "../caustic/%s/stb",
+    "../caustic/%s/genann",
+    "../caustic/%s/Chipmunk2D/include",
+    "../caustic/%s/raylib/src",
+    "../caustic/%s/lua/",
+    "../caustic/%s/utf8proc",
+    "../caustic/%s/small-regex/libsmallregex",
+    "../caustic/%s/sunvox/sunvox_lib/headers",
+}
+
+local function template_dirs(dirs, pattern)
+    local tmp = {}
+    for k, v in pairs(dirs) do
+        table.insert(tmp, string.format(v, pattern))
+    end
+    return tmp
+end
 
 -- XXX: Брать значения из таблички зависомостей?
-local includedirs  = { 
-    "../caustic/3rd_party/stb",
-    "../caustic/3rd_party/genann",
-    "../caustic/3rd_party/Chipmunk2D/include",
-    "../caustic/3rd_party/raylib/src",
-    "../caustic/3rd_party/lua/",
-    "../caustic/3rd_party/utf8proc",
-    "../caustic/3rd_party/small-regex/libsmallregex",
-    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
-}
+--
+local includedirs = template_dirs(_includedirs, libs_path)
 
 local libdirs_internal = { 
     "./3rd_party/genann",
@@ -968,12 +981,54 @@ local function build_utf8proc()
 end
 
 function actions.wbuild()
-    chipmunk_build()
-    build_lua()
-    build_raylib()
-    build_genann()
-    build_smallregex()
-    build_utf8proc()
+    local exist, errmsg = lfs.attributes("caustic.lua")
+    if exist then
+        chipmunk_build()
+        build_lua()
+        build_raylib()
+        build_genann()
+        build_smallregex()
+        build_utf8proc()
+    else
+        local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
+        print('includedirs before')
+        print(tabular(includedirs))
+
+        local includedirs = {}
+        for k, v in pairs(tmp_includedirs) do
+            table.insert(includedirs, "-I" .. v)
+        end
+        
+        print('includedirs after')
+        print(tabular(includedirs))
+
+        local include_str = table.concat(includedirs, " ")
+        print('include_str', include_str)
+
+        --print("os.exit()")
+        --os.exit()
+        local define_str = "-DPLATFORM_WEB"
+        local output_dir = "wasm_objects"
+
+        lfs.mkdir(output_dir)
+        local path = "src"
+        filter_sources(path, function(file)
+            print(file)
+            local output_path = output_dir .. 
+                                "/" ..string.gsub(file, "(.*%.)c$", "%1o")
+
+            --print(output_path)
+            --os.exit()
+
+            local cmd = format(
+                "emcc -o %s -c %s/%s -Wall %s %s",
+                output_path, path, file, include_str, define_str
+            )
+            print(cmd)
+            local pipe = io.popen(cmd)
+            print(pipe:read("*a"))
+        end)
+    end
 end
 
 function actions.build()
