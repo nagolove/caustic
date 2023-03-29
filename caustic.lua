@@ -4,13 +4,39 @@
 local libs_path = "3rd_party"
 local wasm_libs_path = "wasm_3rd_party"
 
+--[[
+local lanes, lfs, argparse, tabular, sleep
+
+local ok, errmsg = pcall(function()
+    lanes = require "lanes".configure()
+    lfs = require "lfs"
+    argparse = require "argparse"
+    tabular = require "tabular"
+    sleep = require "socket".sleep
+end)
+--]]
+
+local lanes = require "lanes".configure()
+local lfs = require "lfs"
+local argparse = require "argparse"
+local tabular = require "tabular"
+local sleep = require "socket".sleep
+
+--[[
+if not ok then
+    print(errmsg)
+    print("Please run ./caustic rocks")
+end
+--]]
+
 local inspect = require 'inspect'
 local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
 --print('package.path', package.path)
 
 local function cp(from, to)
-    print(string.format("copy '%s' to '%s'", from, to))
+    print(string.format("cp '%s' to '%s'", from, to))
+    print('cp: currentdir', lfs.currentdir())
     local ok, errmsg = pcall(function()
         local _in = io.open(from, 'r')
         local _out = io.open(to, 'w')
@@ -154,16 +180,6 @@ local urls = {
         links = "__auto__",
         libdirs = "__auto__",
     },
-    {
-        "https://github.com/codeplea/genann.git",
-        after_build = function(dirname)
-            local prevdir = lfs.currentdir()
-            lfs.chdir(dirname)
-            local fd = io.popen("ar rcs libgenann.a genann.o")
-            print(fd:read("*a"))
-            lfs.chdir(prevdir)
-        end
-    }
 }
 --]]
 
@@ -250,18 +266,21 @@ local wasm_libdirs = {
     "../caustic/3rd_party/sunvox/sunvox_lib/js/lib"
 }
 
+local function get_dir(dep)
+    assert(type(dep.url) == 'string')
+    local url = dep.url
+    if not string.match(url, "%.zip$") then
+        local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+        return dirname
+    else
+        return dep.dir
+    end
+end
+
 local function get_dirs(deps)
     local res = {}
     for _, dep in pairs(deps) do
-        assert(type(dep.url) == 'string')
-        local url = dep.url
-        if not string.match(url, "%.zip$") then
-            local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
-            --print('dirname', dirname)
-            table.insert(res, dirname)
-        else
-            table.insert(res, dep.dir)
-        end
+        table.insert(res, get_dir(dep))
     end
     return res
 end
@@ -337,21 +356,6 @@ if not check_luarocks() then
     os.exit(1)
 end
 
-local lanes, lfs, argparse, tabular, sleep
-
-local ok, errmsg = pcall(function()
-    lanes = require "lanes".configure()
-    lfs = require "lfs"
-    argparse = require "argparse"
-    tabular = require "tabular"
-    sleep = require "socket".sleep
-end)
-
-if not ok then
-    print(errmsg)
-    print("Please run ./caustic rocks")
-end
-
 local function after_init(dep)
     if dep.after_init then
         local ok, errmsg = pcall(function()
@@ -359,7 +363,7 @@ local function after_init(dep)
             dep.after_init(dep)
         end)
         if not ok then
-            print('after_init() failed with', err)
+            print('after_init() failed with', errmsg)
         end
     end
 end
@@ -384,7 +388,7 @@ local function git_clone(dep)
 end
 
 local function download_and_unpack_zip(dep)
-    local lfs = require 'lfs'
+    --local lfs = require 'lfs'
     print('download_and_unpack_zip', inspect(dep))
     print('current directory', lfs.currentdir())
     local url = dep.url
@@ -582,7 +586,8 @@ end
 
 local actions = {}
 
-local function _init(path)
+local function _init(path, deps)
+    print("_init", path, inspect(deps))
     local prev_dir = lfs.currentdir()
 
     if not lfs.chdir(path) then
@@ -595,7 +600,7 @@ local function _init(path)
 
     local sorter = Toposorter.new()
 
-    for _, dep in ipairs(dependencies) do
+    for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
         assert(dep.name)
         if dep.depends then
@@ -604,7 +609,12 @@ local function _init(path)
             end
         else
             --sorter:add(dep.name, "null")
-            table.insert(threads, func(dep, path))
+            --local ok, errmsg = pcall(function()
+                table.insert(threads, func(dep, path))
+            --end)
+            --if not ok then
+                --print('insert in threads', errmsg)
+            --end
         end
     end
 
@@ -616,7 +626,7 @@ local function _init(path)
         return node.value ~= "null"
     end)
 
-    print(tabular(threads))
+    --print(tabular(threads))
     wait_threads(threads)
     for _, thread in pairs(threads) do
         local result, errcode = thread:join()
@@ -632,13 +642,23 @@ local function _init(path)
     lfs.chdir(prev_dir)
 end
 
-function actions.init()
-    _init(libs_path)
-    --_init(wasm_libs_path)
+function actions.init(_args)
+    local deps = {}
+    if _args.name and dependencies_name_map[_args.name] then
+        table.insert(deps, dependencies_name_map[_args.name])
+    else
+        for _, dep in ipairs(dependencies) do
+            table.insert(deps, dep)
+        end
+    end
+    print('deps', inspect(deps))
+    _init(libs_path, deps)
+    _init(wasm_libs_path, deps)
 end
 
 local function rec_remove_dir(dirname)
     --print('rec_remove_dir', dirname)
+    --local lfs = require 'lfs'
     local ok, errcode = lfs.rmdir(dirname)
     --print('rmdir', ok, errcode)
     if ok then
@@ -703,7 +723,7 @@ local function rec_remove_dir(dirname)
     local ok, errcode = lfs.rmdir(dirname)
 end
 
-local function _remove(path)
+local function _remove(path, dirnames)
     local prev_dir = lfs.currentdir()
     lfs.chdir(path)
 
@@ -713,8 +733,8 @@ local function _remove(path)
     end
 
     local ok, errmsg = pcall(function()
-        for _, dirname in pairs(get_dirs(dependencies)) do
-            print(dirname)
+        for _, dirname in pairs(dirnames) do
+            print("_remove", dirname)
             rec_remove_dir(dirname)
         end
     end)
@@ -726,9 +746,17 @@ local function _remove(path)
     lfs.chdir(prev_dir)
 end
 
-function actions.remove()
-    _remove(libs_path)
-    _remove(wasm_libs_path)
+function actions.remove(_args)
+    local dirnames = {}
+    if _args.name and dependencies_name_map[_args.name] then
+        table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
+    else
+        for _, dirname in pairs(get_dirs(dependencies)) do
+            table.insert(dirnames, dirname)
+        end
+    end
+    _remove(libs_path, dirnames)
+    _remove(wasm_libs_path, dirnames)
 end
 
 local function file_exist(path)
@@ -802,6 +830,7 @@ end
 local format = string.format
 
 local function link(objfiles, libname, flags)
+    print('link: ')
     print(tabular(objfiles))
     flags = flags or ""
     print(inspect(objfiles))
@@ -811,11 +840,20 @@ local function link(objfiles, libname, flags)
     print(f:read("*a"))
 end
 
-local function filter_sources(path, cb)
+local function filter_sources(path, cb, exclude)
     for file in lfs.dir(path) do
-        --print(inspect(file))
         if string.match(file, ".*%.c$") then
+            --print('filter_sources:', file)
+            if exclude then
+                for _, pattern in pairs(exclude) do
+                    if string.match(file, pattern) then
+                        --print('filter_sources: excluded', file)
+                        goto continie
+                    end
+                end
+            end
             cb(file)
+            :: continie ::
         end
     end
 end
@@ -829,6 +867,9 @@ local function build_lua()
     lfs.chdir("wasm_3rd_party/lua")
 
     local objfiles = {}
+    local exclude = {
+        "lua.c"
+    }
     filter_sources(".", function(file)
         local cmd = string.format("emcc -c %s -Os -Wall", file)
         print(cmd)
@@ -838,7 +879,7 @@ local function build_lua()
             print(res)
         end
         table.insert(objfiles, src2obj(file))
-    end)
+    end, exclude)
     link(objfiles, 'liblua.a')
 
     lfs.chdir(prevdir)
@@ -998,9 +1039,14 @@ end
 
 local function link_project()
     currentdir = lfs.currentdir()
-    print('link_project:', lfs.currentdir())
-    local project_dir = string.match(currentdir, ".*/(.*)$")
-    lfs.mkdir(project_dir)
+    print('link_project: cur dir', lfs.currentdir())
+    --local project_dir = string.match(currentdir, ".*/(.*)$")
+    local project_dir = 'wasm_build'
+    print('link_project: project_dir', project_dir)
+    local ok, errmsg = lfs.mkdir(project_dir)
+    if not ok then 
+        print('link_project:', errmsg)
+    end
 
     local prev_dir = lfs.currentdir()
 
@@ -1009,12 +1055,13 @@ local function link_project()
         "-s ALLOW_MEMORY_GROWTH=1",
         "-s EMULATE_FUNCTION_POINTER_CASTS",
         "-s LLD_REPORT_UNDEFINED",
-        "--shell-file ../caustic/3rd_party/raylib/src/minshell.html",
+        --"--shell-file ../caustic/3rd_party/raylib/src/minshell.html",
         --"-o index.html src/main.c",
+        "--preload-file assets",
         "-Wall -flto -g3 -DPLATFORM_WEB",
     }
 
-    table.insert(flags, format("-o %s/%s.html", project_dir, project_dir))
+    table.insert(flags, format("-o %s/%s.html", project_dir, 'main'))
 
     local _includedirs = {}
     for k, v in pairs(includedirs) do
@@ -1054,88 +1101,116 @@ end
 function actions.wbuild()
     local exist, errmsg = lfs.attributes("caustic.lua")
     if exist then
-        --build_chipmunk()
-        --build_lua()
-        --build_raylib()
-        --build_genann()
-        --build_smallregex()
-        --build_utf8proc()
+        build_chipmunk()
+        build_lua()
+        build_raylib()
+        build_genann()
+        build_smallregex()
+        build_utf8proc()
         build_koh()
     else
-        --build_project("wasm_objects")
+        build_project("wasm_objects")
         link_project()
     end
 end
 
-function actions.build()
+local function _build(dirname)
     local prevdir = lfs.currentdir()
-    lfs.chdir(libs_path)
+    lfs.chdir(dirname)
 
-    for k, dirname in pairs(get_dirs(dependencies)) do
-        --print('dirname', dirname)
-        --print(tabular(dependencies_map[dirname]))
-        local prevdir = lfs.currentdir()
-        lfs.chdir(dirname)
+    local dep = dependencies_map[dirname]
 
-        local dep = dependencies_map[dirname]
-        --print('k', k);
-        --print('dirname', dirname)
-        --print('dep', inspect(dep))
-
-        if dep.custom_build then
-            local ok errmsg = pcall(function()
-                dep.custom_build(dep, dirname)
-            end)
-            if not ok then
-                print('custom_build error:', errmsg)
-            end
-        else
-            local ok, errmsg = pcall(function()
-                common_build()
-            end)
-            if not ok then
-                print('common_build() failed with', errmsg)
-            end
+    if dep.custom_build then
+        local ok errmsg = pcall(function()
+            dep.custom_build(dep, dirname)
+        end)
+        if not ok then
+            print('custom_build error:', errmsg)
         end
-
-        if dep and dep.after_build then
-            local ok, errmsg = pcall(function()
-                dep.after_build(dirname)
-            end)
-            if not ok then
-                print(inspect(dep), 'failed with', errmsg)
-            end
+    else
+        local ok, errmsg = pcall(function()
+            common_build()
+        end)
+        if not ok then
+            print('common_build() failed with', errmsg)
         end
+    end
 
-        lfs.chdir(prevdir)
-        --]]
+    if dep and dep.after_build then
+        local ok, errmsg = pcall(function()
+            dep.after_build(dirname)
+        end)
+        if not ok then
+            print(inspect(dep), 'failed with', errmsg)
+        end
     end
 
     lfs.chdir(prevdir)
 end
 
+function actions.build(_args)
+    local prevdir = lfs.currentdir()
+    lfs.chdir(libs_path)
+
+    if _args.name and dependencies_name_map[_args.name] then
+        _build(get_dir(dependencies_name_map[_args.name]))
+    else
+        for _, dirname in pairs(get_dirs(dependencies)) do
+            _build(dirname)
+        end
+    end
+
+    lfs.chdir(prevdir)
+end
+
+function actions.deps(_args)
+    if _args.full then
+        print(tabular(dependencies))
+    else
+        local shorts = {}
+        for _, dep in pairs(dependencies) do
+            table.insert(shorts, dep.name)
+        end
+        print(tabular(shorts))
+    end
+end
+
 local function main()
     local parser = argparse()
-    --local cmd_libs = 
-    parser:command("init"):summary("download dependencies from network")
     -- Нужно собрать все исходные файлы для wasm версии.
     -- Сперва скопировать их в отдельный каталог.
     -- Собрать все модули согласно спецификации bld.lua для библиотеки caustic
     -- Собрать целевую программу, слинковать ее с libcaustic.a (wasm)
-    parser:command("build"):summary("build dependendies for native platform")
+    parser:command("init")
+        :summary("download dependencies from network")
+        :option("-n --name")
+    parser:command("deps")
+        :summary("list of dependendies")
+        :flag("-f --full", "full nodes info")
+    parser:command("build")
+        :summary("build dependendies for native platform")
+        :option("-n --name")
     parser:command("remove"):summary("remove all 3rd_party files")
-    parser:command("rocks"):summary("list of lua rocks should be installed for this script")
-    parser:command("verbose"):summary("print internal data with urls, paths etc.")
-    parser:command("compile_flags"):summary("print compile_flags.txt to stdout")
-    parser:command("wbuild"):summary("build dependencies and libcaustic for webassembly platform")
-    parser:command("check_updates"):summary("print new version of libraries")
+        :option("-n --name")
+    parser:command("rocks")
+        :summary("list of lua rocks should be installed for this script")
+    parser:command("verbose")
+        :summary("print internal data with urls, paths etc.")
+    parser:command("compile_flags")
+        :summary("print compile_flags.txt to stdout")
+    parser:command("wbuild")
+        :summary("build dependencies and libcaustic for webassembly platform")
+    parser:command("check_updates")
+        :summary("print new version of libraries")
 
     local _args = parser:parse()
-    --print(tabular(_args))
+    print(tabular(_args))
+
+    --os.exit()
 
     for k, v in pairs(_args) do
         if actions[k] and type(v) == 'boolean' and v == true then
-            actions[k]()
+            actions[k](_args)
         end
     end
 end
