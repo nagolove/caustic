@@ -845,6 +845,17 @@ local function src2obj(filename)
     return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1]
 end
 
+local function append_dicts(list1, list2)
+    local res = {}
+    for k, v in pairs(list1) do
+        res[k] = v
+    end
+    for k, v in pairs(list2) do
+        res[k] = v
+    end
+    return res
+end
+
 local function build_lua()
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_3rd_party/lua")
@@ -872,6 +883,7 @@ local function build_raylib()
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_3rd_party/raylib")
 
+    --[[
     local objfiles = {}
     local path = "src"
     filter_sources(path, function(file)
@@ -890,6 +902,19 @@ local function build_raylib()
         table.insert(objfiles, src2obj(file))
     end)
     link(objfiles, 'libraylib.a')
+    --]]
+
+    lfs.chdir("src")
+    local EMSDK = os.getenv('EMSDK')
+    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+    print(cmd)
+    local pipe = io.popen(cmd)
+    print(pipe:read("*a"))
+
+    cp("libraylib.a", "../libraylib.a")
+
+    --print('os.exit')
+    --os.exit()
 
     lfs.chdir(prevdir)
 end
@@ -958,10 +983,17 @@ local function build_utf8proc()
     lfs.chdir(prevdir)
 end
 
-local function build_project(output_dir)
+local function build_project(output_dir, main_fname)
+    print('build_project:', output_dir, main_fname)
     local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
     print('includedirs before')
     print(tabular(includedirs))
+
+    local short_main_fname
+    if main_fname then
+        short_main_fname = string.match(main_fname, ".*/(.*)$") or main_fname
+    end
+    print('short_main_fname', short_main_fname)
 
     local includedirs = {}
     for k, v in pairs(tmp_includedirs) do
@@ -980,6 +1012,7 @@ local function build_project(output_dir)
 
     lfs.mkdir(output_dir)
     local path = "src"
+    local objfiles = {}
     filter_sources(path, function(file)
         print(file)
         local output_path = output_dir .. 
@@ -995,7 +1028,15 @@ local function build_project(output_dir)
         print(cmd)
         local pipe = io.popen(cmd)
         print(pipe:read("*a"))
-    end)
+        table.insert(objfiles, src2obj(file))
+    end, { short_main_fname })
+
+    local prevdir = lfs.currentdir()
+    lfs.chdir("wasm_objects")
+    print('currentdir', lfs.currentdir())
+    print(tabular(objfiles))
+    link(objfiles, 'libproject.a')
+    lfs.chdir(prevdir)
 end
 
 local function link_koh_lib(objs_dir)
@@ -1020,15 +1061,17 @@ local function build_koh()
     link_koh_lib(dir)
 end
 
-local function link_project()
+local function link_project(main_fname)
     currentdir = lfs.currentdir()
     print('link_project:', lfs.currentdir())
-    local project_dir = string.match(currentdir, ".*/(.*)$")
+    --local project_dir = string.match(currentdir, ".*/(.*)$")
+    local project_dir = "wasm_build"
     lfs.mkdir(project_dir)
 
     local prev_dir = lfs.currentdir()
 
     local flags = {
+        "-s USE_GLFW=3",
         "-s MAXIMUM_MEMORY=4294967296",
         "-s ALLOW_MEMORY_GROWTH=1",
         "-s EMULATE_FUNCTION_POINTER_CASTS",
@@ -1037,6 +1080,7 @@ local function link_project()
         --"-o index.html src/main.c",
         "--preload-file assets",
         "-Wall -flto -g3 -DPLATFORM_WEB",
+        main_fname or '',
     }
 
     table.insert(flags, format("-o %s/%s.html", project_dir, 'main'))
@@ -1054,15 +1098,27 @@ local function link_project()
     for k, v in pairs(links) do
         table.insert(_libs, "-l" .. v)
     end
+    table.insert(_libs, "-lcaustic")
+    table.insert(_libs, "-lproject")
+    print("_libs", inspect(_libs))
     local libs_str = table.concat(_libs, " ")
 
     print(inspect(_libs))
     print()
 
     local libspath = {}
+
+    table.insert(libspath, "wasm_objects")
     for k, v in pairs(wasm_libdirs) do
-        table.insert(libspath, "-L" .. v)
+        table.insert(libspath, v)
     end
+
+    for k, v in pairs(libspath) do
+        libspath[k] = "-L" .. v
+    end
+
+    print(tabular(libspath))
+    print('currentdir', lfs.currentdir())
     local libspath_str = table.concat(libspath, " ")
 
     local flags_str = table.concat(flags, " ")
@@ -1087,8 +1143,9 @@ function actions.wbuild()
         build_utf8proc()
         build_koh()
     else
-        build_project("wasm_objects")
-        link_project()
+        local cfg = loadfile("bld.lua")()
+        build_project("wasm_objects", cfg.main)
+        link_project(cfg.main)
     end
 end
 
@@ -1198,4 +1255,7 @@ if arg then
     main()
 end
 
+-- TODO: 
+-- Возвращать caustic_* - для сборки движка
+-- Возвращать project_* - для сборки проекта на движке
 return ret_table
