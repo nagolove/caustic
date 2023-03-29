@@ -4,39 +4,13 @@
 local libs_path = "3rd_party"
 local wasm_libs_path = "wasm_3rd_party"
 
---[[
-local lanes, lfs, argparse, tabular, sleep
-
-local ok, errmsg = pcall(function()
-    lanes = require "lanes".configure()
-    lfs = require "lfs"
-    argparse = require "argparse"
-    tabular = require "tabular"
-    sleep = require "socket".sleep
-end)
---]]
-
-local lanes = require "lanes".configure()
-local lfs = require "lfs"
-local argparse = require "argparse"
-local tabular = require "tabular"
-local sleep = require "socket".sleep
-
---[[
-if not ok then
-    print(errmsg)
-    print("Please run ./caustic rocks")
-end
---]]
-
 local inspect = require 'inspect'
 local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
 --print('package.path', package.path)
 
 local function cp(from, to)
-    print(string.format("cp '%s' to '%s'", from, to))
-    print('cp: currentdir', lfs.currentdir())
+    print(string.format("copy '%s' to '%s'", from, to))
     local ok, errmsg = pcall(function()
         local _in = io.open(from, 'r')
         local _out = io.open(to, 'w')
@@ -152,13 +126,13 @@ local dependencies = {
         before_build = wfc_before_build,
         after_build = wfc_after_build,
         copy_for_wasm = true,
+        after_init = copy_headers_to_wfc,
         depends = {'stb'},
     },
     {
         name = 'stb',
         url = "https://github.com/nothings/stb.git",
         copy_for_wasm = true,
-        after_init = copy_headers_to_wfc,
     }
 }
 
@@ -180,7 +154,6 @@ local urls = {
         links = "__auto__",
         libdirs = "__auto__",
     },
-}
 --]]
 
 
@@ -356,6 +329,21 @@ if not check_luarocks() then
     os.exit(1)
 end
 
+local lanes, lfs, argparse, tabular, sleep
+
+local ok, errmsg = pcall(function()
+    lanes = require "lanes".configure()
+    lfs = require "lfs"
+    argparse = require "argparse"
+    tabular = require "tabular"
+    sleep = require "socket".sleep
+end)
+
+if not ok then
+    print(errmsg)
+    print("Please run ./caustic rocks")
+end
+
 local function after_init(dep)
     if dep.after_init then
         local ok, errmsg = pcall(function()
@@ -388,7 +376,7 @@ local function git_clone(dep)
 end
 
 local function download_and_unpack_zip(dep)
-    --local lfs = require 'lfs'
+    local lfs = require 'lfs'
     print('download_and_unpack_zip', inspect(dep))
     print('current directory', lfs.currentdir())
     local url = dep.url
@@ -609,12 +597,7 @@ local function _init(path, deps)
             end
         else
             --sorter:add(dep.name, "null")
-            --local ok, errmsg = pcall(function()
-                table.insert(threads, func(dep, path))
-            --end)
-            --if not ok then
-                --print('insert in threads', errmsg)
-            --end
+            table.insert(threads, func(dep, path))
         end
     end
 
@@ -626,7 +609,7 @@ local function _init(path, deps)
         return node.value ~= "null"
     end)
 
-    --print(tabular(threads))
+    print(tabular(threads))
     wait_threads(threads)
     for _, thread in pairs(threads) do
         local result, errcode = thread:join()
@@ -658,7 +641,6 @@ end
 
 local function rec_remove_dir(dirname)
     --print('rec_remove_dir', dirname)
-    --local lfs = require 'lfs'
     local ok, errcode = lfs.rmdir(dirname)
     --print('rmdir', ok, errcode)
     if ok then
@@ -858,6 +840,7 @@ local function filter_sources(path, cb, exclude)
     end
 end
 
+
 local function src2obj(filename)
     return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1]
 end
@@ -1039,14 +1022,9 @@ end
 
 local function link_project()
     currentdir = lfs.currentdir()
-    print('link_project: cur dir', lfs.currentdir())
-    --local project_dir = string.match(currentdir, ".*/(.*)$")
-    local project_dir = 'wasm_build'
-    print('link_project: project_dir', project_dir)
-    local ok, errmsg = lfs.mkdir(project_dir)
-    if not ok then 
-        print('link_project:', errmsg)
-    end
+    print('link_project:', lfs.currentdir())
+    local project_dir = string.match(currentdir, ".*/(.*)$")
+    lfs.mkdir(project_dir)
 
     local prev_dir = lfs.currentdir()
 
@@ -1162,6 +1140,7 @@ function actions.build(_args)
 
     lfs.chdir(prevdir)
 end
+
 
 function actions.deps(_args)
     if _args.full then
