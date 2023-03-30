@@ -1,8 +1,8 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
-local libs_path = "3rd_party"
-local wasm_libs_path = "wasm_3rd_party"
+local third_party = "3rd_party"
+local wasm_third_party = "wasm_3rd_party"
 
 local inspect = require 'inspect'
 --local tabular = require "tabular"
@@ -88,7 +88,6 @@ local function small_regex_custom_build(_: Dependency, dirname: string)
     print(fd:read("*a"))
     lfs.chdir(prevdir)
 end
-
 
 local dependencies: {Dependency} = {
     {
@@ -193,7 +192,7 @@ end
 
 -- XXX: Брать значения из таблички зависомостей?
 --
-local includedirs = template_dirs(_includedirs, libs_path)
+local includedirs = template_dirs(_includedirs, third_party)
 
 local libdirs_internal = { 
     "./3rd_party/genann",
@@ -680,6 +679,8 @@ local record Args
     full: string
 end
 
+-- TODO: сделать проверку на наличие несохраненных изменений в репозитории
+-- зависимости
 function actions.init(_args: Args)
     local deps = {}
     if _args.name and dependencies_name_map[_args.name] then
@@ -690,8 +691,8 @@ function actions.init(_args: Args)
         end
     end
     print('deps', inspect(deps))
-    _init(libs_path, deps)
-    _init(wasm_libs_path, deps)
+    _init(third_party, deps)
+    _init(wasm_third_party, deps)
 end
 
 local function rec_remove_dir(dirname: string)
@@ -792,8 +793,8 @@ function actions.remove(_args: Args)
             table.insert(dirnames, dirname)
         end
     end
-    _remove(libs_path, dirnames)
-    _remove(wasm_libs_path, dirnames)
+    _remove(third_party, dirnames)
+    _remove(wasm_third_party, dirnames)
 end
 
 local function file_exist(path: string): boolean
@@ -1026,7 +1027,7 @@ local type ObjectFiles = {string}
 -- по ссылке
 local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     print('build_project:', output_dir)
-    local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
+    local tmp_includedirs = template_dirs(_includedirs, wasm_third_party)
     print('includedirs before')
     print(tabular(includedirs))
 
@@ -1239,7 +1240,7 @@ end
 
 function actions.build(_args: Args)
     local prevdir = lfs.currentdir()
-    lfs.chdir(libs_path)
+    lfs.chdir(third_party)
 
     if _args.name and dependencies_name_map[_args.name] then
         _build(get_dir(dependencies_name_map[_args.name]))
