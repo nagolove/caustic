@@ -983,17 +983,19 @@ local function build_utf8proc()
     lfs.chdir(prevdir)
 end
 
-local function build_project(output_dir, main_fname)
+local function build_project(output_dir, exclude)
     print('build_project:', output_dir, main_fname)
     local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
     print('includedirs before')
     print(tabular(includedirs))
 
-    local short_main_fname
-    if main_fname then
-        short_main_fname = string.match(main_fname, ".*/(.*)$") or main_fname
+    if exclude then
+        for k, v in pairs(exclude) do
+            exclude[k] = string.match(v, ".*/(.*)$") or v
+        end
     end
-    print('short_main_fname', short_main_fname)
+    print('exclude')
+    print(tabular(exclude))
 
     local includedirs = {}
     for k, v in pairs(tmp_includedirs) do
@@ -1029,8 +1031,11 @@ local function build_project(output_dir, main_fname)
         local pipe = io.popen(cmd)
         print(pipe:read("*a"))
         table.insert(objfiles, src2obj(file))
-    end, { short_main_fname })
+    end, exclude)
 
+end
+
+local function link_libproject()
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_objects")
     print('currentdir', lfs.currentdir())
@@ -1057,7 +1062,9 @@ end
 
 local function build_koh()
     local dir = "wasm_objects"
-    build_project(dir)
+    build_project(dir, {
+        "koh_input.c"
+    })
     link_koh_lib(dir)
 end
 
@@ -1144,7 +1151,8 @@ function actions.wbuild()
         build_koh()
     else
         local cfg = loadfile("bld.lua")()
-        build_project("wasm_objects", cfg.main)
+        build_project("wasm_objects", { cfg.main })
+        link_libproject()
         link_project(cfg.main)
     end
 end
