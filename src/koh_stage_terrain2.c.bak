@@ -1,0 +1,1037 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
+
+// {{{ includes
+#include "koh_stage_terrain2.h"
+
+#include <assert.h>
+#include <math.h>
+#include <memory.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "cammode.h"
+#include "lauxlib.h"
+#include "layer.h"
+#include "lua.h"
+#include "raylib.h"
+#include "reasings.h"
+#include "chipmunk/chipmunk.h"
+#include "chipmunk/chipmunk_structs.h"
+#include "chipmunk/chipmunk_types.h"
+#include "chipmunk/cpBB.h"
+#include "chipmunk/chipmunk_private.h"
+#include "chipmunk/cpVect.h"
+
+#include "dev_draw.h"
+#include "common.h"
+#include "console.h"
+#include "das.h"
+#include "das_mt.h"
+#include "flames.h"
+#include "hangar.h"
+#include "hangar_menu.h"
+#include "helicopter.h"
+#include "hotkey.h"
+#include "iface.h"
+#include "input.h"
+#include "laser.h"
+#include "lua_tools.h"
+#include "minimap.h"
+#include "object.h"
+#include "rand.h"
+#include "script.h"
+#include "segment.h"
+#include "stage_fight_menu_paste.h"
+#include "stages.h"
+#include "tank.h"
+#include "teleport.h"
+#include "tile.h"
+#include "timer.h"
+#include "tree.h"
+#include "weapon.h"
+#include "xturret.h"
+/*#include "das_hk.h"*/
+
+// }}}
+
+typedef bool (*EachTankFunc)(Stage_Fight2 *st, Tank *tank, void *data);
+typedef void (*QueryDrawObjectFunc)(
+        Stage_Fight2 *st, 
+        cpShape *shape, 
+        Object *obj
+);
+typedef void (*ObjectDrawStatFunc)(
+        Stage_Fight2 *st,
+        Object *obj,
+        Vector2 pos
+);
+
+// {{{ declarations
+static int l_camera_get(lua_State *lua);
+static int l_camera_set(lua_State *lua);
+static void camera_process(Stage_Fight2 *st);
+static void defaults_init(Stage_Fight2 *st);
+static void calculate_square(Stage_Fight2 *st);
+// }}}
+
+static void stage_fight2_init(Stage_Fight2 *st, void *data);
+static void stage_fight2_update(Stage_Fight2 *st);
+static void stage_fight2_shutdown(Stage_Fight2 *st);
+
+// {{{ hk_... functions
+
+static void hk_set_stage_main(Hotkey *hk) {
+    Stage_Fight2 *st = (Stage_Fight2*)hk->data;
+    // Включен-ли режим удаления?
+    if (!st->is_action_remove)
+        stage_set_active("main_menu", NULL);
+}
+
+static void hk_utiles_visible(Hotkey *hk) {
+    is_utiles_visible = !is_utiles_visible;
+}
+
+static void hk_graph_visible(Hotkey *hk) {
+    is_graph_visible = !is_graph_visible;
+}
+
+static void hk_space_debug_draw(Hotkey *hk) {
+    is_space_debug_draw = !is_space_debug_draw;
+}
+
+static void hk_regions_draw(Hotkey *hk) {
+    is_regions_draw = !is_regions_draw;
+}
+
+static void hk_draw_under_point(Hotkey *hk) {
+    is_draw_under_point = !is_draw_under_point;
+}
+
+static void hk_draw_minimap(Hotkey *hk) {
+    is_draw_minimap = !is_draw_minimap;
+}
+
+static void hk_draw_tile_border(Hotkey *hk) {
+    is_draw_tile_border = !is_draw_tile_border;
+}
+
+static void hk_camera_zoomin(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam && cam->zoom < 4.) {
+        cam->zoom += ((Stage_Fight2*)hk->data)->zoom_step * GetFrameTime();
+    }
+}
+
+static void hk_camera_zoomout(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam) {
+        Stage_Fight2 *st = (Stage_Fight2*)hk->data;
+        int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+        double w = cam->zoom * mapsize * st->t.rez;
+        if (w > GetScreenWidth())
+            cam->zoom -= st->zoom_step * GetFrameTime();
+    }
+}
+
+static void hk_camera_zoom_reset(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam) 
+        cam->zoom = 1.;
+}
+
+static void hk_immediate_console(Hotkey *hk) {
+    console_immediate_buffer_enable(!console_immediate_buffer_get());
+}
+
+static void hk_hotkeys_enumerate(Hotkey *hk) {
+    hotkeys_enumerate(((Stage_Fight2*)hk->data)->hk_storage);
+}
+
+static void hk_camera_position_reset(Hotkey *hk) {
+    Camera2D *cam = cam_get();
+    if (cam) {
+        cam->offset.x = 0.;
+        cam->offset.y = 0.;
+        cam->zoom = 1.;
+    }
+}
+
+static void hk_camera_move_left(Hotkey *hk) {
+    Stage_Fight2 *st = (Stage_Fight2*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.x += GetFrameTime() * st->defs.camera_move_k;
+}
+
+static void hk_camera_move_right(Hotkey *hk) {
+    Stage_Fight2 *st = (Stage_Fight2*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.x -= GetFrameTime() * st->defs.camera_move_k;
+}
+
+static void hk_camera_move_up(Hotkey *hk) {
+    Stage_Fight2 *st = (Stage_Fight2*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.y += GetFrameTime() * st->defs.camera_move_k;
+}
+
+static void hk_camera_move_down(Hotkey *hk) {
+    Stage_Fight2 *st = (Stage_Fight2*)hk->data;
+    assert(st);
+    Camera2D *cam = cam_get();
+    if (cam)
+        cam->offset.y -= GetFrameTime() * st->defs.camera_move_k;
+}
+
+// }}}
+
+static void hotkeys_init(Stage_Fight2 *st) {
+    st->hk_storage = st->parent.data;
+    HotkeyStorage *storage = st->hk_storage;
+
+    // {{{
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_GRAVE,
+        },
+        .func = hk_immediate_console,
+        .description = "Enable/disable immediate console output",
+        .name = "console_immediate",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_H,
+        },
+        .func = hk_hotkeys_enumerate,
+        .description = "list of all active hotkey bindings",
+        .name = "hotkey_enumerate",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_ESCAPE,
+        },
+        .func = hk_set_stage_main,
+        .description = "go to main menu",
+        .name = "escape2main",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .key = KEY_L,
+        },
+        .func = hk_utiles_visible,
+        .description = "utility tile visibility",
+        .name = "utiles",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_G,
+        },
+        .func = hk_graph_visible,
+        .description = "graph visibility",
+        .name = "graph",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_S,
+        },
+        .func = hk_space_debug_draw,
+        .description = "physics debug draw",
+        .name = "space_debug_draw",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_R,
+        },
+        .func = hk_regions_draw,
+        .description = "draw regions",
+        .name = "regions",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_U,
+        },
+        .func = hk_draw_under_point,
+        .description = "draw stat under point",
+        .name = "under_point_stat",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_M,
+        },
+        .func = hk_draw_minimap,
+        .description = "draw minimap",
+        .name = "minimap",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_B,
+        },
+        .func = hk_draw_tile_border,
+        .description = "draw tile border",
+        .name = "tileborder",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .key = KEY_Z,
+        },
+        .func = hk_camera_zoomin,
+        .description = "camera zoom in",
+        .name = "cam_zoom_in",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .key = KEY_X,
+        },
+        .func = hk_camera_zoomout,
+        .description = "camera zoom out",
+        .name = "cam_zoom_out",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    ///// Camera management
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_COMMA
+        },
+        .func = hk_camera_position_reset,
+        .description = "camera position reset",
+        .name = "cam_position_reset",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYPRESSED,
+            .key = KEY_COMMA
+        },
+        .func = hk_camera_zoom_reset,
+        .description = "camera zoom reset",
+        .name = "cam_zoom_reset",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_DOWN,
+        },
+        .func = hk_camera_move_down,
+        .description = "camera move down",
+        .name = "cam_move_down",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_UP,
+        },
+        .func = hk_camera_move_up,
+        .description = "camera move up",
+        .name = "cam_move_up",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_RIGHT
+        },
+        .func = hk_camera_move_right,
+        .description = "camera move right",
+        .name = "cam_move_right",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    hotkey_register(storage, (Hotkey){
+        .combo = (HotkeyCombo){
+            .mode = HM_MODE_ISKEYDOWN,
+            .mod = KEY_LEFT_SHIFT,
+            .key = KEY_LEFT,
+        },
+        .func = hk_camera_move_left,
+        .description = "camera move left",
+        .name = "cam_move_left",
+        .data = st,
+        .enabled = true,
+        .groups = HOTKEY_GROUP_TERRAIN2,
+    });
+
+    // }}}
+}
+
+/*
+int l_init(lua_State *s) {
+    Stage_Fight2 *st = (Stage_Fight2*)stage_find("fight");
+    assert(st);
+
+    stage_fight2_shutdown(st);
+    stage_fight2_init(st);
+
+    return 0;
+}
+*/
+
+static int l_load(lua_State *s) {
+    Stage_Fight2 *st = (Stage_Fight2*)stage_find("fight");
+    assert(st);
+
+    const char *fname = lua_tostring(sc_get_state(), -1);
+    printf("l_load %s\n", fname);
+
+    stage_fight2_shutdown(st);
+    stage_fight2_init(st, NULL);
+
+    return 0;
+}
+
+static int terrain_check_type(lua_State *lua) {
+    printf("terrain_check_type: [%s]\n", stack_dump(lua));
+    if (lua_isstring(lua, 3)) {
+        const char *type_str = lua_tostring(lua, 3);
+        struct {
+            char *str; DAS_type type;
+        } map[7] = {
+            { "default",     DAS_TYPE_DEFAULT },
+            { "def",         DAS_TYPE_DEFAULT },
+            { "mt",          DAS_TYPE_MT },
+            { "multithread", DAS_TYPE_MT },
+            { "thread",      DAS_TYPE_MT },
+            { NULL,          -1 },
+        };
+        int i = 0;
+        while (map[i].str) {
+            if (!strcmp(type_str, map[i].str))
+                return map[i].type;
+            i++;
+        }
+    }
+    return DAS_TYPE_DEFAULT;
+}
+
+static int l_terrain(lua_State *lua) {
+    double time1 = GetTime();
+    Stage_Fight2 *st = (Stage_Fight2*)stage_find("fight");
+    assert(st);
+
+    printf("l_terrain 1 [%s]\n", stack_dump(lua));
+    lua_getglobal(lua, "init");
+    lua_call(lua, 0, 0);
+    printf("l_terrain 2 [%s]\n", stack_dump(lua));
+
+    int mapn = luaL_checknumber(lua, 1);
+    xorshift32_state rnd = {0};
+    if (lua_isnone(lua, 2)) {
+        rnd = xorshift32_init();
+        // TODO: Записывать зерно генератора в глобальную переменную
+        // lua состояния
+    } else {
+        rnd.a = luaL_checknumber(lua, 2);
+    }
+    printf("rnd seed %u\n", rnd.a);
+
+    if (mapn <= 0 || mapn >= 13) {
+        return 0;
+    }
+
+    st->t.das_type = terrain_check_type(lua);
+
+    switch (st->t.das_type) {
+        case DAS_TYPE_DEFAULT: {
+            das_interface_shutdown(&st->t.das);
+            st->t.das = das_interface_init();
+            break;
+        }
+        case DAS_TYPE_MT: {
+            dasmt_interface_shutdown(&st->t.das);
+            st->t.das = dasmt_interface_init();
+            break;
+        }
+    }
+
+    st->t.das.init(st->t.das.ctx, mapn, &rnd);
+    st->t.das.eval(st->t.das.ctx, -1.);
+
+    calculate_square(st);
+
+    tiles_alloc(&st->t);
+    tiles_prerender(&st->t);
+
+    /*graph_init(st);*/
+    /*graph_add_static_segments(st);*/
+
+
+    double time2 = GetTime();
+    printf("l_terrain: elapsed %f\n", time2 - time1);
+    return 0;
+}
+
+static int l_SetTargetFPS(lua_State *l) {
+    if (lua_isnumber(l, -1)) {
+        double fps = lua_tonumber(l, -1);
+        if (fps > 0) {
+            SetTargetFPS(fps);
+        }
+    }
+    return 0;
+}
+
+static int l_set_update(lua_State *lua) {
+    if (lua_isboolean(lua, -1)) {
+        Stage_Fight2 *st_fight = (Stage_Fight2*)stage_find("fight");
+        if (st_fight) {
+            st_fight->is_l_update = lua_toboolean(lua, -1);
+        }
+    }
+    return 0;
+}
+
+/*
+// XXX: Как убрать поиск текущей сцены?
+static int l_random(lua_State *l) {
+    if (stages.cur) {
+        Stage_Fight2 *st = (Stage_Fight2*)stages.cur;
+        if (st->state & STAGE_STATE_INITED) {
+            double value = (double)xorshift32_rand(&st->rng_objects) / 
+                (double)UINT32_MAX;
+            lua_pushnumber(l, value);
+            return 1;
+        }
+    }
+    console_buf_write2(RED, "No current scene for l_random() call");
+    return 0;
+}
+*/
+
+static void stage_lua_register(void) {
+    // {{{ register_function(..)
+ 
+    /*
+    register_function(
+            l_init,
+            "init",
+            "Перезапустить уровень впустую."
+    );
+    */
+
+    register_function(
+            l_load,
+            "load",
+            "Загрузить уровень [имя файла]"
+    );
+
+    register_function(
+            l_terrain,
+            "terrain",
+            "Создать ландшафт [mapn, [seed]]"
+    );
+
+    register_function(
+            l_tank_new,
+            "tank_new",
+            "Создать танк [{}]"
+    );
+
+    register_function(
+            l_camera_set,
+            "camera_set",
+            "Установить положение камеры и ее масштаб (xp, yp, zoom)"
+    );
+
+    register_function(
+            l_hangar_new,
+            "hangar_new",
+            "Создать танк [{}]"
+    );
+
+    register_function(
+            l_tree_new,
+            "tree_new",
+            "Создать дерево [{}]"
+    );
+
+    register_function(
+            l_teleport_new,
+            "teleport_new",
+            "Создать телепорт [{}]"
+    );
+
+    register_function(
+            l_helicopter_new,
+            "helicopter_new",
+            "Создать вертолет {}"
+    );
+
+    register_function(
+            l_xturret_new,
+            "xturret_new",
+            "Создать лазерную турель [{}]"
+    );
+
+    /*
+    register_function(
+            l_random,
+            "random",
+            "Возвращает случайно число 0..1"
+    );
+    */
+
+    register_function(
+            l_SetTargetFPS,
+            "SetTargetFPS",
+            "Устанавливает ограничитель кадров в секунду"
+    );
+
+    register_function(
+            l_set_update,
+            "set_update",
+            "Включить или выключить вызов обновления из скрипта"
+    );
+
+    register_function(
+            l_camera_get,
+            "camera_get",
+            "Если камера существует, то возвращает camx, camy, camzoom"
+    );
+
+    // }}} 
+}
+
+int l_camera_get(lua_State *lua) {
+    Camera2D *cam = cam_get();
+    if (cam) {
+        lua_pushnumber(lua, cam->offset.x);
+        lua_pushnumber(lua, cam->offset.y);
+        lua_pushnumber(lua, cam->zoom);
+        return 3;
+    } else
+        return 0;
+}
+
+int l_camera_set(lua_State *lua) {
+    float x = -luaL_checknumber(lua, 1);
+    float y = -luaL_checknumber(lua, 2);
+
+    Camera2D *cam = cam_get();
+    if (cam) {
+        printf("l_camera_set: %f, %f\n", x, y);
+
+        cam->offset.x = x;
+        cam->offset.y = y;
+
+        if (lua_isnumber(lua, 3)) {
+            float z = luaL_checknumber(lua, 3);
+            printf("l_camera_set: z = %f\n", z);
+            cam->zoom = z;
+        }
+    }
+
+    return 0;
+}
+
+static void stage_fight2_init(Stage_Fight2 *st, void *data) {
+    Stage parent = st->parent;
+    memset(st, 0, sizeof(*st));
+    st->parent = parent;
+
+    double init_time_start = GetTime();
+    defaults_init(st);
+
+    st->t.das_type = DAS_TYPE_DEFAULT;
+    st->camera_mode = CM_FIXED;
+    st->rng_objects = xorshift32_init();
+
+    timerstore_init(&st->timers, 0);
+
+    st->minimap_pos = (Vector2) { 200., 100. };
+    st->zoom_step = 0.2;
+    st->space_debug_color = RED;
+
+    tiles_init(&st->t);
+
+    hotkeys_init(st);
+    if (console_is_editor_mode()) {
+        hotkey_group_enable(st->hk_storage, HOTKEY_GROUP_TERRAIN2, false);
+    }
+
+    /*
+    ObjectStorage *os = &st->obj_store;
+    object_storage_init(os);
+    object_type_register(os, OBJ_HANGAR, sizeof(Hangar), 256);
+    object_type_register(os, OBJ_TELEPORT, sizeof(Teleport), 128);
+    object_type_register(os, OBJ_BULLET, sizeof(Bullet), 1024 * 4);
+    object_type_register(os, OBJ_ROCKET, sizeof(Rocket), 1024 * 2);
+    object_type_register(os, OBJ_TANK, sizeof(Tank), 1024);
+    object_type_register(os, OBJ_TANK_TURRET, sizeof(Tank_Turret), 1024);
+    object_type_register(os, OBJ_XTURRET, sizeof(XTurret), 256);
+    object_type_register(os, OBJ_XTURRET_TURRET, sizeof(XTurret_Turret), 256);
+    object_type_register(os, OBJ_TREE, sizeof(Tree), 1024 * 8);
+    object_type_register(os, OBJ_HELICOPPER, sizeof(Helicopter), 32);
+    */
+
+    /*st->mnu_paste = menu_init_paste(st);*/
+
+    double init_time_end = GetTime();
+    printf(
+        "stage_fight_init finished for %f\n",
+        init_time_end - init_time_start
+    );
+
+    dev_draw_init();
+
+    stage_lua_register();
+    st->state |= STAGE_STATE_INITED;
+}
+
+/*
+static void stage_fight_enter(Stage_Fight2 *st, void *data) {
+    char *str = NULL;
+    if (data) 
+        str = data;
+    printf("stage_fight_enter %s\n", str);
+}
+*/
+
+Stage *stage_fight2_new(HotkeyStorage *hk_store) {
+    assert(hk_store);
+    Stage_Fight2 *st = calloc(1, sizeof(Stage_Fight2));
+    st->parent.data = hk_store;
+    st->parent.init = (Stage_data_callback)stage_fight2_init;
+    st->parent.update = (Stage_callback)stage_fight2_update;
+    st->parent.shutdown = (Stage_callback)stage_fight2_shutdown;
+    //st->parent.enter = (Stage_data_callback)stage_fight2_enter;
+    return (Stage*)st;
+}
+
+static void camera_mode_check(Stage_Fight2 *st) {
+    if (input.camera_mode_change()) {
+        if (st->camera_mode + 1 >= CM_LAST_UNUSED)
+            st->camera_mode = CM_FIRST_UNUSED + 1;
+        else
+            st->camera_mode += 1;
+    }
+}
+
+void camera_process(Stage_Fight2 *st) {
+    assert(st);
+    camera_mode_check(st);
+
+    if (st->camera_mode == CM_FREE)
+        console_write("camera mode: free");
+    else if (st->camera_mode == CM_FIXED)
+        console_write("camera mode: fixed");
+
+    switch (st->camera_mode) {
+        case CM_FREE: {
+            Vector2* cam_off = &cam_get()->offset;
+
+            float stick_x = input.stick_map_x();
+            float stick_y = input.stick_map_y();
+            float ftime = GetFrameTime();
+
+            Vector2 prev_cam_off = *cam_off;
+
+            if (stick_x != 0.)
+                cam_off->x -= stick_x * ftime * st->defs.camera_move_k;
+            if (stick_y != 0.)
+                cam_off->y -= stick_y * ftime * st->defs.camera_move_k;
+
+            int sizepx = st->t.tilesize * st->t.tilesnum;
+
+            if (cam_off->x > st->t.tilesize ||
+                cam_off->x < -sizepx + st->t.tilesize) {
+                cam_off->x = prev_cam_off.x;
+                //printf("reset x\n");
+            }
+
+            if (cam_off->y > st->t.tilesize ||
+                cam_off->y < -sizepx + st->t.tilesize) {
+                cam_off->y = prev_cam_off.y;
+                //printf("reset y\n");
+            }
+
+            break;
+          }
+        case CM_FIXED: {
+            /*if (!st->current_tank) {*/
+                /*return;*/
+            /*}*/
+
+            //cpVect bodypos = st->current_tank->b.p;
+            //cpVect pos = st->current_tank->b.p;
+            //cmn.cam->offset = (Vector2) {
+                //-pos.x + (GetScreenWidth() / 2.),
+                //-pos.y + (GetScreenHeight() / 2.),
+            //};
+
+            break;
+        }
+        default: break;
+    }
+
+}
+
+static void conditional_draw_with_camera1(Stage_Fight2 *st) {
+    if (is_utiles_visible)
+        tiles_render(&st->t, tile_uget);
+
+    else
+        tiles_render(&st->t, tile_get);
+}
+
+static void stage_fight2_update(Stage_Fight2 *st) {
+    st->query_counter = 0;
+
+    Camera2D *cam = cam_get();
+
+    console_write(
+            "cam.offset (%f, %f), zoom %f", 
+            cam->offset.x, cam->offset.y,
+            cam->zoom
+    );
+    console_is_editor_mode();
+
+    if (cam) {
+        camera_process(st);
+        BeginMode2D(*cam);
+    }
+
+    conditional_draw_with_camera1(st);
+
+    timerstore_update(&st->timers);
+    dev_draw_draw();
+
+    if (cam) {
+        EndMode2D();
+    }
+
+    //dev_draw_draw();
+
+    //menu_paste_update_actions(st);
+    //cpSpaceStep(st->space, GetFrameTime());
+    console_write("query_counter %d", st->query_counter);
+}
+
+void stage_fight2_shutdown(Stage_Fight2 *st) {
+    timerstore_shutdown(&st->timers);
+
+    layer_free(&st->layer_helicopters);
+
+    hotkey_group_unregister(st->hk_storage, HOTKEY_GROUP_TERRAIN2);
+
+    object_storage_free(&st->obj_store);
+
+    if (st->t.das.free && st->t.das.ctx)
+        st->t.das.free(st->t.das.ctx);
+
+    switch (st->t.das_type) {
+        case DAS_TYPE_DEFAULT: {
+            das_interface_shutdown(&st->t.das);
+            break;
+        }
+        case DAS_TYPE_MT: {
+            dasmt_interface_shutdown(&st->t.das);
+            break;
+        }
+    }
+
+    tiles_shutdown(&st->t);
+
+    Camera2D *cam = cam_get();
+    if (cam) {
+        memset(cam, 0, sizeof(*cam));
+        cam->zoom = 1.;
+    }
+
+    st->state = 0;
+
+    Stage parent = st->parent;
+    memset(st, 0, sizeof(*st));
+    st->parent = parent;
+
+    dev_draw_shutdown();
+}
+
+void calculate_square(Stage_Fight2 *st) {
+    assert(st);
+    int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+    int square = mapsize * mapsize;
+    int square_pass = 0;
+    for(int j = 0; j < mapsize; j++) {
+        for(int i = 0; i < mapsize; i++) {
+            square_pass += (int)tiles_is_passability(&st->t, i, j);
+        }
+    }
+    printf("square %d\n", square);
+    printf("square_pass %d\n", square_pass);
+    st->square = square;
+    st->square_pass = square_pass;
+}
+
+void defaults_init(Stage_Fight2 *st) {
+    Defaults *defs = &st->defs;
+
+    defs->teleport_radare_offset = (Vector2) {
+        .x = 0,
+        .y = 0,
+    };
+
+    defs->camera_move_k = 500.;
+    defs->flame_anim_time = 0.1;
+    defs->barrel_lenght = 83.;
+    defs->velocity_limit = 160.;
+    defs->avelocity_limit = 2;
+    defs->anchor_b = (Vector2){ 0, -45 };
+
+    defs->turret_source = (Rectangle){
+        .x = 101, .y = 0,
+        .width = 54, .height = 160,
+    };
+    defs->tank_source = (Rectangle){
+        .x = 87, .y = 73,
+        .width = 82, .height = 110,
+    };
+
+    defs->hangar_source = (Rectangle){
+        .x = 0, .y = 0.,
+        .width = 220, .height = 220,
+    };
+    defs->teleport_source = (Rectangle){
+        .x = 0, .y = 31.,
+        .width = 255, .height = 182,
+    };
+    defs->xturret_b_source = (Rectangle){
+        .x = 0, .y = 0,
+        .width = 256, .height = 256,
+    };
+    defs->xturret_t_source = (Rectangle){
+        .x = 74, .y = 16,
+        .width = 101, .height = 146,
+    };
+    defs->xturret_rot_point = (Vector2){
+        // XXX:
+        .x = 256 / 2., .y = 256. / 2,
+    };
+
+    defs->tree_source = (Rectangle){
+        .x = 0, .y = 0,
+        .width = 82, .height = 84,
+    };
+    defs->tree_stump_radius = 15;
+
+    defs->helicopter_source = (Rectangle) {
+        .x = 48, .y = 56,
+        .width = 32, .height = 113,
+    };
+
+    defs->helicopter_blades = (Rectangle) {
+        .x = 0, .y = 0,
+        .width = 128, .height = 128,
+    };
+
+    defs->sq_per_tank = 200;
+    defs->sq_per_hangar = 400;
+    defs->sq_per_teleport = 700;
+    defs->sq_per_tree = 300;
+
+    defs->turret_rot_point = (Vector2){
+        0., 0.
+    };
+
+    defs->tank_radius = 130.;
+    defs->hangar_radius = 110.;
+    // XXX Задать приемлимые значения, не на обум
+    defs->xturret_radius = 256 / 2. * pow(1, 0.5);
+    // XXX Задать приемлимые значения, не на обум
+    defs->teleport_radius = 150;
+
+    printf("defs->tank_radius = %d\n", st->defs.tank_radius);
+
+    defs->impulse_amount = 50;
+    defs->rot_impulse_amount = 10.;
+}

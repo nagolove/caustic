@@ -1,0 +1,15 @@
+#pragma once
+
+#include <rand.h>
+
+typedef void (*das_init_t)(void *ctx, int mapn, xorshift32_state *rnd);
+typedef void (*das_free_t)(void *ctx);
+typedef double (*das_get_t)(void *ctx, int i, int j);
+typedef void (*das_eval_t)(void *ctx);
+
+typedef struct {
+    das_init_t init;
+    das_free_t free;
+    das_get_t get;
+    das_eval_t eval;
+} DAS_Interface;

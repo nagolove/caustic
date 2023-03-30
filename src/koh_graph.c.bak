@@ -1,0 +1,323 @@
+#include "graph.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <memory.h>
+
+#include "segment.h"
+
+// Заполнить массивы со списками отдельных регионов
+void find_regions(Stage_Fight *st);
+bool check_cell(Stage_Fight *st, Region **reg, int i, int j, int *count);
+void region_split2segments(Stage_Fight *st, Region *region, int num);
+int count_segments(Stage_Fight *st);
+
+// Устанавливает значение флажка для данной ячейки
+void set_checked_flag(Stage_Fight *st, int i, int j, bool value) {
+    int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+    if (i < 0 || i >= mapsize) {
+        printf("set_checked(): i out of range 0..%d\n", mapsize);
+        abort();
+    }
+    if (j < 0 || j >= mapsize) {
+        printf("set_checked(): j out of range 0..%d\n", mapsize);
+        abort();
+    }
+    st->passability_graph.checked[j * mapsize + i] = value;
+}
+
+// Возвразает истину если флажок проверки для данной ячейки не выставлен
+bool get_checked_flag(Stage_Fight *st, int i, int j) {
+    int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+    if (i < 0 || i >= mapsize) {
+        printf("get_checked(): i out of range 0..%d\n", mapsize);
+        abort();
+    }
+    if (j < 0 || j >= mapsize) {
+        printf("get_checked(): j out of range 0..%d\n", mapsize);
+        abort();
+    }
+    return st->passability_graph.checked[j * mapsize + i];
+}
+
+
+void graph_init(Stage_Fight *st) {
+    // {{{
+    Graph *gr = &st->passability_graph;
+    /*DAS_Context *ctx = &st->das;*/
+
+    assert(gr);
+    /*assert(ctx);*/
+
+    gr->maxsegs = 10000000;
+
+    int size = gr->maxsegs * sizeof(GraphSegment*);
+    printf("segs allocated = %d Mb\n", size / 1024 / 1024);
+
+    gr->segs = malloc(size);
+
+    /*int checked_size = sizeof(bool) * st->das.mapSize * st->das.mapSize;*/
+    int checked_size = 
+        sizeof(bool) * 
+        st->t.das.get_mapsize(&st->t.das) * 
+        st->t.das.get_mapsize(&st->t.das);
+
+    gr->checked = malloc(checked_size);
+    memset(gr->checked, 0, checked_size);
+
+    gr->segsnum = 0;
+    gr->maxregions = 100000;
+    gr->regions = calloc(gr->maxsegs, sizeof(Region));
+    gr->region_num = calloc(gr->maxsegs, sizeof(int));
+    gr->segs_num = calloc(gr->maxsegs, sizeof(int));
+    gr->region_color = calloc(gr->maxsegs, sizeof(Color));
+
+    for (int i = 0; i < gr->maxregions; i++) {
+        gr->region_color[i] = (Color) { 
+            .a = 255, 
+            .r = 255,
+            .g = 0,
+            .b = 0,
+        };
+    }
+
+    //TODO
+    find_regions(st);
+
+    for(int i = 0; i < st->passability_graph.regionsnum; ++i) {
+        Region *region = st->passability_graph.regions[i];
+        if (region) {
+            int num = gr->region_num[i];
+            region_split2segments(st, region, num);
+        }
+    }
+
+    printf("-----------------------\n");
+
+    st->passability_graph.segments_count = count_segments(st);
+    printf(
+        "there are %d segments in scene\n",
+        st->passability_graph.segments_count
+    );
+
+}
+
+int count_segments(Stage_Fight *st) {
+    int counter = 0;
+    Graph *gr = &st->passability_graph;
+    for(int i = 0; i < gr->segsnum; ++i) {
+        /*GraphSegment *seg = gr->segs[i];*/
+        counter += gr->segs_num[i];
+    }
+    return counter;
+}
+
+void graph_add_static_segments(Stage_Fight *st) {
+    assert(st);
+    int counter = 0;
+    Graph *gr = &st->passability_graph;
+    for(int i = 0; i < gr->segsnum; ++i) {
+        GraphSegment *seg = gr->segs[i];
+        for(int j = 0; j < gr->segs_num[i]; j++) {
+            /*printf("counter %d\n", counter);*/
+            segment_add(st, seg[j].start_px, seg[j].end_px);
+            counter++;
+        }
+    }
+}
+
+void graph_free(Graph* gr) {
+    assert(gr);
+
+    for(int i = 0; i < gr->segsnum; i++) {
+        if (gr->segs[i])
+            free(gr->segs[i]);
+    }
+    gr->segsnum = 0;
+
+    if (gr->segs) {
+        free(gr->segs);
+        gr->segs = NULL;
+    }
+
+    if (gr->regions) {
+        free(gr->regions);
+        gr->regions = NULL;
+    }
+
+    if (gr->region_color) {
+        free(gr->region_color);
+        gr->region_color = NULL;
+    }
+
+    if (gr->checked) {
+        free(gr->checked);
+        gr->checked = NULL;
+    }
+
+    if (gr->region_num) {
+        free(gr->region_num);
+        gr->region_num = NULL;
+    }
+
+    if (gr->segs_num) {
+        free(gr->segs_num);
+        gr->segs_num = NULL;
+    }
+}
+
+// Заполнить массивы со списками отдельных регионов
+void find_regions(Stage_Fight *st) {
+    Graph *gr = &st->passability_graph;
+
+    int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+    for(int j = 0; j < mapsize; j++) {
+        for(int i = 0; i < mapsize; ++i) {
+            Region **root = &gr->regions[gr->regionsnum];
+
+            if (gr->regionsnum >= gr->maxregions) {
+                perror("Регионы закончились\n");
+                abort();
+            }
+
+            int num = 0;
+            if (check_cell(st, root, i, j, &num)) {
+                /*printf("regionsnum = %d\n", gr->regionsnum);*/
+                /*printf("num = %d\n", num);*/
+
+                gr->region_color[gr->regionsnum] = (Color) { 
+                    .a = 255, 
+                    .r = rand() % 255,
+                    .g = rand() % 255,
+                    .b = rand() % 255,
+                };
+
+                gr->region_num[gr->regionsnum] = num;
+                gr->regionsnum++;
+            }
+
+        }
+    }
+}
+
+void graph_draw(Graph *gr) {
+    for(int i = 0; i < gr->segsnum; ++i) {
+        Color color = gr->region_color[i];
+        /*Color color = RED;*/
+        GraphSegment *seg = gr->segs[i];
+        for(int j = 0; j < gr->segs_num[i]; j++) {
+            int thick = 5;
+            DrawLineEx(seg[j].start_px, seg[j].end_px, thick, color);
+        }
+    }
+}
+
+void region_split2segments(Stage_Fight *st, Region *region, int num) {
+    Graph *gr = &st->passability_graph;
+    if (gr->segsnum + 1 >= gr->maxsegs) {
+        perror("Закончиласть память под сегменты\n");
+        abort();
+    }
+
+    int size = num * 4;
+    /*printf("size = %d\n", size);*/
+    /*printf("gr->segsnum = %d\n", gr->segsnum);*/
+    GraphSegment *segs = gr->segs[gr->segsnum] = calloc(
+            size, 
+            sizeof(GraphSegment)
+    );
+    /*int rez = st->rez;*/
+    int rez = st->t.rez;
+    int segsnum = 0;
+
+    while (region) {
+        int i = region->i;
+        int j = region->j;
+
+        if (is_passability_safe(&st->t, i - 1, j)) {
+            segs[segsnum].start_px.x = i * rez;
+            segs[segsnum].start_px.y = j * rez;
+            segs[segsnum].end_px.x = i * rez;
+            segs[segsnum].end_px.y = j * rez + rez;
+            segsnum++;
+        }
+
+        if (is_passability_safe(&st->t, i + 1, j)) {
+            segs[segsnum].start_px.x = i * rez + rez;
+            segs[segsnum].start_px.y = j * rez;
+            segs[segsnum].end_px.x = i * rez + rez;
+            segs[segsnum].end_px.y = j * rez + rez;
+            segsnum++;
+        }
+
+        if (is_passability_safe(&st->t, i, j - 1)) {
+            segs[segsnum].start_px.x = i * rez;
+            segs[segsnum].start_px.y = j * rez;
+            segs[segsnum].end_px.x = i * rez + rez;
+            segs[segsnum].end_px.y = j * rez;
+            segsnum++;
+        }
+
+        if (is_passability_safe(&st->t, i, j + 1)) {
+            segs[segsnum].start_px.x = i * rez;
+            segs[segsnum].start_px.y = j * rez + rez;
+            segs[segsnum].end_px.x = i * rez + rez;
+            segs[segsnum].end_px.y = j * rez + rez;
+            segsnum++;
+        }
+
+        region = region->next;
+    }
+
+    gr->segs_num[gr->segsnum] = segsnum;
+    gr->segsnum++;
+}
+
+//TODO Убрать рекурсию
+bool check_cell(Stage_Fight *st, Region **reg, int i, int j, int *count) {
+    assert(reg);
+
+    /*printf("count %d\n", *count);*/
+    if (*count > 200000) {
+        printf("Максимальная глубина рекурсии достигнута\n");
+        return false;
+    }
+
+    int mapsize = st->t.das.get_mapsize(st->t.das.ctx);
+    if (i < 0 || i >= mapsize) {
+        //printf("i = %d out of bound [0, %d]\n", i, mapsize);
+        return false;
+    }
+
+    if (j < 0 || j >= mapsize) {
+        //printf("j = %d out of bound [0, %d]\n", j, mapsize);
+        return false;
+    }
+
+    // Уже в списках?
+    if (!get_checked_flag(st, i, j)) {
+        // Если клетка непроходимая?
+        if (!is_passability(&st->t, i, j)) {
+            set_checked_flag(st, i, j, true);
+
+            (*count)++;
+
+            Region *new = calloc(1, sizeof(Region));
+            new->i = i;
+            new->j = j;
+            new->next = *reg;
+            *reg = new;
+
+            check_cell(st, reg, i + 1, j, count);
+            check_cell(st, reg, i - 1, j, count);
+            check_cell(st, reg, i, j + 1, count);
+            check_cell(st, reg, i, j - 1, count);
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
