@@ -679,6 +679,26 @@ local record Args
     full: string
 end
 
+local dir_stack: {string} = {}
+
+local function push_current_dir()
+    table.insert(dir_stack, lfs.currentdir())
+end
+
+local function pop_dir()
+    lfs.chdir(table.remove(dir_stack, #dir_stack))
+end
+
+local function check_for_unstaged(deps: {Dependency})
+    push_current_dir()
+    lfs.chdir(third_party)
+    for _, dep in ipairs(deps) do
+        -- XXX: extract dirnames
+        --lfs.chdir(dep.dirname)
+    end
+    pop_dir()
+end
+
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
 function actions.init(_args: Args)
@@ -691,6 +711,7 @@ function actions.init(_args: Args)
         end
     end
     print('deps', inspect(deps))
+    --check_for_unstaged(deps)
     _init(third_party, deps)
     _init(wasm_third_party, deps)
 end
