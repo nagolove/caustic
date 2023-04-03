@@ -4,6 +4,7 @@
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 
+local signal = require "posix".signal.signal
 local inspect = require 'inspect'
 --local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
@@ -183,6 +184,18 @@ local _includedirs  = {
     "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
+local _includedirs_internal  = { 
+    "src",
+    "%s/stb",
+    "%s/genann",
+    "%s/Chipmunk2D/include",
+    "%s/raylib/src",
+    "%s/lua/",
+    "%s/utf8proc",
+    "%s/small-regex/libsmallregex",
+    "3rd_party/sunvox/sunvox_lib/headers",
+}
+
 local function template_dirs(dirs: {string}, pattern: string): {string}
     local tmp = {}
     for _, v in ipairs(dirs) do
@@ -194,6 +207,7 @@ end
 -- XXX: Брать значения из таблички зависомостей?
 --
 local includedirs = template_dirs(_includedirs, third_party)
+local includedirs_internal = template_dirs(_includedirs_internal, third_party)
 
 local libdirs_internal = { 
     "./3rd_party/genann",
@@ -1293,14 +1307,70 @@ function actions.deps(_args: Args)
     end
 end
 
+local serpent = require 'serpent'
+
+local record Cache
+    cache: {string:number}
+    new: function(storage: string): Cache
+    should_recompile: function(Cache, fname: string): boolean
+    save: function(Cache, storage: string)
+end
+
+local Cache_mt: metatable<Cache> = {
+    __index = Cache,
+}
+
+function Cache.new(storage: string): Cache
+    local self: Cache = {}
+    local ok, errmsg: boolean, string = pcall(function()
+        self.cache = serpent.load(storage)() as {string: number}
+    end)
+    if not ok then
+        self.cache = {}
+        print(string.format('Cache.new("%s") failed with', storage), errmsg)
+    end
+    return setmetatable(self, Cache_mt)
+end
+
+function Cache:should_recompile(fname: string): boolean
+    local modtime_cur: number = lfs.attributes(fname, 'modification')
+    if not modtime_cur then
+        print(format(
+            'Cache:should_recompile("%s") failed to query attributes', fname
+        ))
+    end
+    local modtime_cache  = self.cache[fname] or 0
+    print(self.cache[fname])
+    print('modtime_cur', modtime_cur)
+    print('modtime_cache', modtime_cache)
+    local should = modtime_cur > modtime_cache
+    if should then
+        self.cache[fname] = modtime_cur
+    end
+    return should
+end
+
+function Cache:save(storage: string)
+    print(format('Cache:save(\"%s\")', storage))
+    local file = io.open(storage, "w")
+    local data = serpent.dump(self.cache)
+    print(tabular(data))
+    file:write(data)
+end
+
 function actions.make(_args: Args)
     print('make:')
+
+    local cache_name = "cache.lua"
+
     print(push_current_dir())
     lfs.chdir("src")
+
+    local cache = Cache.new(cache_name)
     local exclude = {}
-    local path = "src"
+    --local path = "src"
     local output_dir = "."
-    local objfiles: string = ""
+    local objfiles: {string} = {}
 
     local _defines: string = table.concat({
         "-DGRAPHICS_API_OPENGL_43",
@@ -1309,58 +1379,86 @@ function actions.make(_args: Args)
     local _includes: string = table.concat({
     }, " ")
 
-    for _, v in ipairs(includedirs) do
-        _includes = _includes .. " -I" .. v
+    for _, v in ipairs(includedirs_internal) do
+        _includes = _includes .. " -I../" .. v
     end
+    print(tabular(includedirs))
 
     local _flags: string = table.concat({
         "-ggdb3",
         "-fsanitize=address",
     }, " ")
-    local _input: string = table.concat({
-    }, " ")
+    --local _input: string = table.concat({
+    --}, " ")
     local _libspath: string = table.concat({
     }, " ")
     local _libs: string = table.concat({
     }, " ")
 
-    filter_sources(path, function(file: string)
+    filter_sources(".", function(file: string)
         print(file)
-        local _output = output_dir .. 
-                            "/" ..string.gsub(file, "(.*%.)c$", "%1o")
+        local _output = output_dir .. "/" .. 
+                        string.gsub(file, "(.*%.)c$", "%1o")
+        local _input = output_dir .. "/" .. file
 
-
-        print(_output)
-        print('attributes', inspect(lfs.attributes(_output)))
-
+        print('_output', _output)
+        --print('attributes', inspect(lfs.attributes(file)))
         --print(_input, _output, _libs)
 
-        local cmd = format(
-                "cc -lm -MD -MP %s %s %s %s -o %s -c %s %s", 
-                _defines, _includes, _libspath, 
-                _flags, _output, _input, _libs
-        )
+        --print('should_recompile', cache:should_recompile(file))
 
-        print(cmd)
-        local pipe = io.popen(cmd)
-        print(pipe:read("*a"))
-        --table.insert(objfiles, src2obj(file))
-        objfiles = objfiles .. " " .. _output
+
+        print('_defines', _defines)
+        print('_includes', _includes)
+        print('_libspath', _libspath)
+        print('_flags', _flags)
+        --print('_output', _output)
+        print('_input', _input)
+        print('_libs', _libs)
+
+        if cache:should_recompile(file) then
+            local cmd = format(
+                "cc -lm -MD -MP %s %s %s %s -o %s -c %s %s", 
+                _defines, _includes, _libspath, _flags,
+                _output, _input, _libs
+            )
+
+            print(cmd)
+            local pipe = io.popen(cmd)
+            print(pipe:read("*a"))
+            --table.insert(objfiles, src2obj(file))
+        end
+
+        table.insert(objfiles, _output)
+        --objfiles = objfiles .. " " .. _output
     end, exclude)
 
-    --[[
-    local _output = "splitter"
-    local cmd = F("gcc {_output} {_objfiles}")
+    cache:save(cache_name)
+
+    print(tabular(objfiles))
+    local objfiles_str = table.concat(objfiles, " ")
+    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
     print(cmd)
     local pipe = io.popen(cmd)
     print(pipe:read("*a"))
-    --]]
+
+    cp("libcaustic.a", "../libcaustic.a")
 
     pop_dir()
 end
 --]]
 
+local function handler_int(sig: integer)
+    -- TODO: Сохранить кэш, сколько есть
+    print('handler_int', sig)
+    print(debug.traceback())
+    os.exit()
+end
+
 local function main()
+    local SIGINT = 2
+    signal(SIGINT, handler_int)
+
     local parser = argparse()
     -- Нужно собрать все исходные файлы для wasm версии.
     -- Сперва скопировать их в отдельный каталог.
