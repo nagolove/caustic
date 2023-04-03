@@ -1,13 +1,13 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
-local libs_path = "3rd_party"
-local wasm_libs_path = "wasm_3rd_party"
+local third_party = "3rd_party"
+local wasm_third_party = "wasm_3rd_party"
 
 local inspect = require('inspect')
 
 
-
+print('package.path', package.path)
 
 
 
@@ -26,6 +26,7 @@ local inspect = require('inspect')
 
 
 local lfs = require('lfs')
+
 
 local function cp(from, to)
    print(string.format("copy '%s' to '%s'", from, to))
@@ -88,7 +89,6 @@ local function small_regex_custom_build(_, dirname)
    print(fd:read("*a"))
    lfs.chdir(prevdir)
 end
-
 
 local dependencies = {
    {
@@ -193,7 +193,7 @@ end
 
 
 
-local includedirs = template_dirs(_includedirs, libs_path)
+local includedirs = template_dirs(_includedirs, third_party)
 
 local libdirs_internal = {
    "./3rd_party/genann",
@@ -317,7 +317,7 @@ local dependencies_name_map = get_deps_name_map(dependencies)
 
 
 
-local ret_table = {
+ret_table = {
    urls = get_urls(dependencies),
    dependencies = dependencies,
    dirnames = get_dirs(dependencies),
@@ -621,6 +621,8 @@ end
 
 
 
+
+
 local actions = {}
 
 local function _init(path, deps)
@@ -680,6 +682,32 @@ end
 
 
 
+local dir_stack = {}
+
+local function push_current_dir()
+   local dir = lfs.currentdir()
+   table.insert(dir_stack, dir)
+   return dir
+end
+
+local function pop_dir()
+   lfs.chdir(table.remove(dir_stack, #dir_stack))
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function actions.init(_args)
    local deps = {}
    if _args.name and dependencies_name_map[_args.name] then
@@ -690,8 +718,9 @@ function actions.init(_args)
       end
    end
    print('deps', inspect(deps))
-   _init(libs_path, deps)
-   _init(wasm_libs_path, deps)
+
+   _init(third_party, deps)
+   _init(wasm_third_party, deps)
 end
 
 local function rec_remove_dir(dirname)
@@ -792,8 +821,8 @@ function actions.remove(_args)
          table.insert(dirnames, dirname)
       end
    end
-   _remove(libs_path, dirnames)
-   _remove(wasm_libs_path, dirnames)
+   _remove(third_party, dirnames)
+   _remove(wasm_third_party, dirnames)
 end
 
 local function file_exist(path)
@@ -1026,7 +1055,7 @@ end
 
 local function build_project(output_dir, exclude)
    print('build_project:', output_dir)
-   local tmp_includedirs = template_dirs(_includedirs, wasm_libs_path)
+   local tmp_includedirs = template_dirs(_includedirs, wasm_third_party)
    print('includedirs before')
    print(tabular(includedirs))
 
@@ -1239,7 +1268,7 @@ end
 
 function actions.build(_args)
    local prevdir = lfs.currentdir()
-   lfs.chdir(libs_path)
+   lfs.chdir(third_party)
 
    if _args.name and dependencies_name_map[_args.name] then
       _build(get_dir(dependencies_name_map[_args.name]))
@@ -1252,7 +1281,6 @@ function actions.build(_args)
    lfs.chdir(prevdir)
 end
 
-
 function actions.deps(_args)
    if _args.full then
       print(tabular(dependencies))
@@ -1264,6 +1292,72 @@ function actions.deps(_args)
       print(tabular(shorts))
    end
 end
+
+function actions.make(_args)
+   print('make:')
+   print(push_current_dir())
+   local exclude = {}
+   local path = "src"
+   local output_dir = "."
+   local objfiles = ""
+
+   local _defines = table.concat({
+      "-DGRAPHICS_API_OPENGL_43",
+      "-DDEBUG",
+   }, " ")
+   local _includes = table.concat({},
+   " ")
+
+   for _, v in ipairs(includedirs) do
+      _includes = _includes .. " -I" .. v
+   end
+
+   local _flags = table.concat({
+      "-ggdb3",
+      "-fsanitize=address",
+   }, " ")
+   local _input = table.concat({},
+   " ")
+   local _libspath = table.concat({},
+   " ")
+   local _libs = table.concat({},
+   " ")
+
+   filter_sources(path, function(file)
+      print(file)
+      local _output = output_dir ..
+      "/" .. string.gsub(file, "(.*%.)c$", "%1o")
+
+
+      print(_output)
+      print('attributes', inspect(lfs.attributes(_output)))
+
+
+
+      local cmd = format(
+      "cc -lm -MD -MP %s %s %s %s -o %s -c %s %s",
+      _defines, _includes, _libspath,
+      _flags, _output, _input, _libs)
+
+
+      print(cmd)
+      local pipe = io.popen(cmd)
+      print(pipe:read("*a"))
+
+      objfiles = objfiles .. " " .. _output
+   end, exclude)
+
+
+
+
+
+
+
+
+
+   pop_dir()
+end
+
 
 local function main()
    local parser = argparse()
@@ -1292,6 +1386,7 @@ local function main()
    summary("build dependencies and libcaustic for webassembly platform")
    parser:command("check_updates"):
    summary("print new version of libraries")
+   parser:command("make")
 
    local _args = parser:parse()
    print(tabular(_args))

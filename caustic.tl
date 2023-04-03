@@ -7,7 +7,7 @@ local wasm_third_party = "wasm_3rd_party"
 local inspect = require 'inspect'
 --local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
---print('package.path', package.path)
+print('package.path', package.path)
 
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
 -- новых обновлений.
@@ -26,6 +26,7 @@ local record Dependency
 end
 
 local lfs = require 'lfs'
+--local md5 = require "md5"
 
 local function cp(from: string, to: string)
     print(string.format("copy '%s' to '%s'", from, to))
@@ -316,7 +317,7 @@ local function get_dirs()
 end
 --]]
 
-local ret_table = {
+global ret_table = {
     urls = get_urls(dependencies),
     dependencies = dependencies,
     dirnames = get_dirs(dependencies),
@@ -607,6 +608,7 @@ local record Actions
     rocks: function(Args)
     build: function(Args)
     wbuild: function(Args)
+    make: function(Args)
 end
 
 local enum ActionsEnum
@@ -618,6 +620,7 @@ local enum ActionsEnum
     "rocks"
     "build"
     "wbuild"
+    "make"
 end
 
 local actions: Actions = {}
@@ -681,23 +684,27 @@ end
 
 local dir_stack: {string} = {}
 
-local function push_current_dir()
-    table.insert(dir_stack, lfs.currentdir())
+local function push_current_dir(): string
+    local dir = lfs.currentdir()
+    table.insert(dir_stack, dir)
+    return dir
 end
 
 local function pop_dir()
     lfs.chdir(table.remove(dir_stack, #dir_stack))
 end
 
+--[[
 local function check_for_unstaged(deps: {Dependency})
     push_current_dir()
     lfs.chdir(third_party)
-    for _, dep in ipairs(deps) do
+    for _, _ in ipairs(deps) do
         -- XXX: extract dirnames
         --lfs.chdir(dep.dirname)
     end
     pop_dir()
 end
+--]]
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
@@ -1274,7 +1281,6 @@ function actions.build(_args: Args)
     lfs.chdir(prevdir)
 end
 
-
 function actions.deps(_args: Args)
     if _args.full then
         print(tabular(dependencies))
@@ -1286,6 +1292,73 @@ function actions.deps(_args: Args)
         print(tabular(shorts))
     end
 end
+
+function actions.make(_args: Args)
+    print('make:')
+    print(push_current_dir())
+    lfs.chdir("src")
+    local exclude = {}
+    local path = "src"
+    local output_dir = "."
+    local objfiles: string = ""
+
+    local _defines: string = table.concat({
+        "-DGRAPHICS_API_OPENGL_43",
+        "-DDEBUG",
+    }, " ")
+    local _includes: string = table.concat({
+    }, " ")
+
+    for _, v in ipairs(includedirs) do
+        _includes = _includes .. " -I" .. v
+    end
+
+    local _flags: string = table.concat({
+        "-ggdb3",
+        "-fsanitize=address",
+    }, " ")
+    local _input: string = table.concat({
+    }, " ")
+    local _libspath: string = table.concat({
+    }, " ")
+    local _libs: string = table.concat({
+    }, " ")
+
+    filter_sources(path, function(file: string)
+        print(file)
+        local _output = output_dir .. 
+                            "/" ..string.gsub(file, "(.*%.)c$", "%1o")
+
+
+        print(_output)
+        print('attributes', inspect(lfs.attributes(_output)))
+
+        --print(_input, _output, _libs)
+
+        local cmd = format(
+                "cc -lm -MD -MP %s %s %s %s -o %s -c %s %s", 
+                _defines, _includes, _libspath, 
+                _flags, _output, _input, _libs
+        )
+
+        print(cmd)
+        local pipe = io.popen(cmd)
+        print(pipe:read("*a"))
+        --table.insert(objfiles, src2obj(file))
+        objfiles = objfiles .. " " .. _output
+    end, exclude)
+
+    --[[
+    local _output = "splitter"
+    local cmd = F("gcc {_output} {_objfiles}")
+    print(cmd)
+    local pipe = io.popen(cmd)
+    print(pipe:read("*a"))
+    --]]
+
+    pop_dir()
+end
+--]]
 
 local function main()
     local parser = argparse()
@@ -1314,6 +1387,7 @@ local function main()
         :summary("build dependencies and libcaustic for webassembly platform")
     parser:command("check_updates")
         :summary("print new version of libraries")
+    parser:command("make")
 
     local _args = parser:parse()
     print(tabular(_args))
