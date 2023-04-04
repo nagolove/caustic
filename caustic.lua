@@ -713,6 +713,7 @@ end
 
 
 
+
 local dir_stack = {}
 
 local function push_current_dir()
@@ -1450,18 +1451,12 @@ local function parallel_run(queue)
 
 
    repeat
-
       local new_threads = {}
       for _ = 1, tasks_num do
          local l = lanes.gen("*", build_fun)
-
-
-
          local cmd = table.remove(queue, 1)
          if cmd then
             table.insert(new_threads, l(cmd))
-         else
-
          end
       end
       tasks_num = 0
@@ -1606,8 +1601,11 @@ function actions.make(_args)
       table.insert(objfiles, _output)
    end, exclude)
 
-
-   parallel_run(queue)
+   if not _args.j then
+      serial_run(queue)
+   else
+      parallel_run(queue)
+   end
 
    cache:save()
    cache = nil
@@ -1678,9 +1676,13 @@ local function main()
    summary("build dependencies and libcaustic for webassembly platform")
    parser:command("check_updates"):
    summary("print new version of libraries")
-   parser:command("make"):
+
+   local make = parser:command("make")
+   make:
    summary("build libcaustic or current project"):
    argument("make_action"):args("?")
+   make:
+   flag('-j', 'run compilation parallel')
 
    local _args = parser:parse()
    print(tabular(_args))

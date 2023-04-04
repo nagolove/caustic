@@ -708,6 +708,7 @@ local enum MakeAction
 end
 
 local record Args
+    j: string
     name: string
     make_action: MakeAction
     full: string
@@ -1450,18 +1451,12 @@ local function parallel_run(queue: {string})
     local type THREAD_FUNC = function(string)
 
     repeat
-        --for _, cmd in ipairs(queue) do
         local new_threads: {lanes.Thread} = {}
         for _ = 1, tasks_num do
             local l = lanes.gen("*", build_fun) as THREAD_FUNC
-            --l(table.remove(queue, 1))
-            --table.insert(new_threads, l as lanes.Thread)
-           
             local cmd = table.remove(queue, 1)
             if cmd then
                 table.insert(new_threads, l(cmd))
-            else
-                -- XXX: all tasks done?
             end
         end
         tasks_num = 0
@@ -1606,8 +1601,11 @@ function actions.make(_args: Args)
         table.insert(objfiles, _output)
     end, exclude)
 
-    --serial_run(queue)
-    parallel_run(queue)
+    if not _args.j then
+        serial_run(queue)
+    else
+        parallel_run(queue)
+    end
 
     cache:save()
     cache = nil
@@ -1678,9 +1676,13 @@ local function main()
         :summary("build dependencies and libcaustic for webassembly platform")
     parser:command("check_updates")
         :summary("print new version of libraries")
-    parser:command("make")
+
+    local make = parser:command("make")
+    make
         :summary("build libcaustic or current project")
         :argument("make_action"):args("?")
+    make
+        :flag('-j', 'run compilation parallel')
 
     local _args = parser:parse()
     print(tabular(_args))
