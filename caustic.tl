@@ -1,6 +1,16 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+local serpent = require 'serpent'
+
+local record Cache
+    abs_storage: string
+    cache: {string:number}
+    new: function(storage: string): Cache
+    should_recompile: function(Cache, fname: string): boolean
+    save: function(Cache)
+end
+
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 
@@ -9,6 +19,7 @@ local inspect = require 'inspect'
 --local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
 print('package.path', package.path)
+local cache: Cache
 
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
 -- новых обновлений.
@@ -691,8 +702,14 @@ local function _init(path: string, deps: {Dependency})
     lfs.chdir(prev_dir)
 end
 
+local enum MakeAction
+    "clean"
+    "force"
+end
+
 local record Args
     name: string
+    make_action: MakeAction
     full: string
 end
 
@@ -1307,15 +1324,6 @@ function actions.deps(_args: Args)
     end
 end
 
-local serpent = require 'serpent'
-
-local record Cache
-    cache: {string:number}
-    new: function(storage: string): Cache
-    should_recompile: function(Cache, fname: string): boolean
-    save: function(Cache, storage: string)
-end
-
 local Cache_mt: metatable<Cache> = {
     __index = Cache,
 }
@@ -1323,8 +1331,11 @@ local Cache_mt: metatable<Cache> = {
 function Cache.new(storage: string): Cache
     local self: Cache = {}
     local ok, errmsg: boolean, string = pcall(function()
-        self.cache = serpent.load(storage)() as {string: number}
+        self.cache = loadfile(storage)() as {string: number}
     end)
+    --print(tabular(self.cache))
+    self.abs_storage = lfs.currentdir() .. "/" .. storage
+    --print('self.abs_storage', self.abs_storage)
     if not ok then
         self.cache = {}
         print(string.format('Cache.new("%s") failed with', storage), errmsg)
@@ -1338,11 +1349,17 @@ function Cache:should_recompile(fname: string): boolean
         print(format(
             'Cache:should_recompile("%s") failed to query attributes', fname
         ))
+        os.exit()
     end
     local modtime_cache  = self.cache[fname] or 0
-    print(self.cache[fname])
+
+    --[[
+    print(tabular(self.cache))
+    print(format("self.cache['%s'] = ", fname, self.cache[fname]))
     print('modtime_cur', modtime_cur)
     print('modtime_cache', modtime_cache)
+    --]]
+
     local should = modtime_cur > modtime_cache
     if should then
         self.cache[fname] = modtime_cur
@@ -1350,28 +1367,40 @@ function Cache:should_recompile(fname: string): boolean
     return should
 end
 
-function Cache:save(storage: string)
-    print(format('Cache:save(\"%s\")', storage))
-    local file = io.open(storage, "w")
+function Cache:save()
+    --print(format('Cache:save(\"%s\")', storage))
+    local file = io.open(self.abs_storage, "w")
     local data = serpent.dump(self.cache)
-    print(tabular(data))
+    --print(tabular(data))
     file:write(data)
 end
 
 function actions.make(_args: Args)
     print('make:')
+    --print(tabular(_args))
+
+    if _args.make_action == 'clean' then
+        -- TODO: удалить кэш сборки
+        -- удалить объектные файлы
+        -- удалить артефакты сборки
+    elseif _args.make_action == "force" then
+        -- TODO: удалить кэш сборки
+    end
 
     local cache_name = "cache.lua"
 
-    print(push_current_dir())
+    --print(push_current_dir())
+    push_current_dir()
+
+    -- TODO: Возможность задания каталога через bld.lua
     lfs.chdir("src")
 
-    local cache = Cache.new(cache_name)
+    cache = Cache.new(cache_name)
     local exclude = {}
-    --local path = "src"
     local output_dir = "."
     local objfiles: {string} = {}
 
+    -- TODO: Дефайны через bld.lua
     local _defines: string = table.concat({
         "-DGRAPHICS_API_OPENGL_43",
         "-DDEBUG",
@@ -1382,8 +1411,9 @@ function actions.make(_args: Args)
     for _, v in ipairs(includedirs_internal) do
         _includes = _includes .. " -I../" .. v
     end
-    print(tabular(includedirs))
+    --print(tabular(includedirs))
 
+    -- TODO: Отладочная и релизная сборка через команду
     local _flags: string = table.concat({
         "-ggdb3",
         "-fsanitize=address",
@@ -1401,24 +1431,19 @@ function actions.make(_args: Args)
                         string.gsub(file, "(.*%.)c$", "%1o")
         local _input = output_dir .. "/" .. file
 
+        --[[
         print('_output', _output)
-        --print('attributes', inspect(lfs.attributes(file)))
-        --print(_input, _output, _libs)
-
-        --print('should_recompile', cache:should_recompile(file))
-
-
         print('_defines', _defines)
         print('_includes', _includes)
         print('_libspath', _libspath)
         print('_flags', _flags)
-        --print('_output', _output)
         print('_input', _input)
         print('_libs', _libs)
+        --]]
 
         if cache:should_recompile(file) then
             local cmd = format(
-                "cc -lm -MD -MP %s %s %s %s -o %s -c %s %s", 
+                "cc -lm %s %s %s %s -o %s -c %s %s", 
                 _defines, _includes, _libspath, _flags,
                 _output, _input, _libs
             )
@@ -1426,16 +1451,15 @@ function actions.make(_args: Args)
             print(cmd)
             local pipe = io.popen(cmd)
             print(pipe:read("*a"))
-            --table.insert(objfiles, src2obj(file))
         end
 
         table.insert(objfiles, _output)
-        --objfiles = objfiles .. " " .. _output
     end, exclude)
 
-    cache:save(cache_name)
+    cache:save()
+    cache = nil
 
-    print(tabular(objfiles))
+    --print(tabular(objfiles))
     local objfiles_str = table.concat(objfiles, " ")
     local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
     print(cmd)
@@ -1448,9 +1472,12 @@ function actions.make(_args: Args)
 end
 --]]
 
-local function handler_int(sig: integer)
-    -- TODO: Сохранить кэш, сколько есть
-    print('handler_int', sig)
+local function handler_int(_: integer)
+    if cache then
+        cache:save()
+    end
+
+    --print('handler_int', sig)
     print(debug.traceback())
     os.exit()
 end
@@ -1486,6 +1513,8 @@ local function main()
     parser:command("check_updates")
         :summary("print new version of libraries")
     parser:command("make")
+        :summary("build libcaustic or current project")
+        :argument("make_action"):args("?")
 
     local _args = parser:parse()
     print(tabular(_args))
