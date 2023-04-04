@@ -1,13 +1,25 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+
+
+local serpent = require('serpent')
+
+local Cache = {}
+
+
+
+
+
 
 
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 
+local signal = require("posix").signal.signal
 local inspect = require('inspect')
 
 
 print('package.path', package.path)
+local cache
 
 
 
@@ -183,6 +195,18 @@ local _includedirs = {
    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
+local _includedirs_internal = {
+   "src",
+   "%s/stb",
+   "%s/genann",
+   "%s/Chipmunk2D/include",
+   "%s/raylib/src",
+   "%s/lua/",
+   "%s/utf8proc",
+   "%s/small-regex/libsmallregex",
+   "3rd_party/sunvox/sunvox_lib/headers",
+}
+
 local function template_dirs(dirs, pattern)
    local tmp = {}
    for _, v in ipairs(dirs) do
@@ -194,6 +218,7 @@ end
 
 
 local includedirs = template_dirs(_includedirs, third_party)
+local includedirs_internal = template_dirs(_includedirs_internal, third_party)
 
 local libdirs_internal = {
    "./3rd_party/genann",
@@ -676,6 +701,12 @@ local function _init(path, deps)
 
    lfs.chdir(prev_dir)
 end
+
+
+
+
+
+
 
 
 
@@ -1293,13 +1324,82 @@ function actions.deps(_args)
    end
 end
 
+local Cache_mt = {
+   __index = Cache,
+}
+
+function Cache.new(storage)
+   local self = {}
+   local ok, errmsg = pcall(function()
+      self.cache = loadfile(storage)()
+   end)
+
+   self.abs_storage = lfs.currentdir() .. "/" .. storage
+
+   if not ok then
+      self.cache = {}
+      print(string.format('Cache.new("%s") failed with', storage), errmsg)
+   end
+   return setmetatable(self, Cache_mt)
+end
+
+function Cache:should_recompile(fname)
+   local modtime_cur = lfs.attributes(fname, 'modification')
+   if not modtime_cur then
+      print(format(
+      'Cache:should_recompile("%s") failed to query attributes', fname))
+
+      os.exit()
+   end
+   local modtime_cache = self.cache[fname] or 0
+
+
+
+
+
+
+
+
+   local should = modtime_cur > modtime_cache
+   if should then
+      self.cache[fname] = modtime_cur
+   end
+   return should
+end
+
+function Cache:save()
+
+   local file = io.open(self.abs_storage, "w")
+   local data = serpent.dump(self.cache)
+
+   file:write(data)
+end
+
 function actions.make(_args)
    print('make:')
-   print(push_current_dir())
+
+
+   if _args.make_action == 'clean' then
+
+
+
+   elseif _args.make_action == "force" then
+
+   end
+
+   local cache_name = "cache.lua"
+
+
+   push_current_dir()
+
+
+   lfs.chdir("src")
+
+   cache = Cache.new(cache_name)
    local exclude = {}
-   local path = "src"
    local output_dir = "."
-   local objfiles = ""
+   local objfiles = {}
+
 
    local _defines = table.concat({
       "-DGRAPHICS_API_OPENGL_43",
@@ -1308,58 +1408,84 @@ function actions.make(_args)
    local _includes = table.concat({},
    " ")
 
-   for _, v in ipairs(includedirs) do
-      _includes = _includes .. " -I" .. v
+   for _, v in ipairs(includedirs_internal) do
+      _includes = _includes .. " -I../" .. v
    end
+
+
 
    local _flags = table.concat({
       "-ggdb3",
       "-fsanitize=address",
    }, " ")
-   local _input = table.concat({},
-   " ")
+
+
    local _libspath = table.concat({},
    " ")
    local _libs = table.concat({},
    " ")
 
-   filter_sources(path, function(file)
+   filter_sources(".", function(file)
       print(file)
-      local _output = output_dir ..
-      "/" .. string.gsub(file, "(.*%.)c$", "%1o")
-
-
-      print(_output)
-      print('attributes', inspect(lfs.attributes(_output)))
+      local _output = output_dir .. "/" ..
+      string.gsub(file, "(.*%.)c$", "%1o")
+      local _input = output_dir .. "/" .. file
 
 
 
-      local cmd = format(
-      "cc -lm -MD -MP %s %s %s %s -o %s -c %s %s",
-      _defines, _includes, _libspath,
-      _flags, _output, _input, _libs)
 
 
-      print(cmd)
-      local pipe = io.popen(cmd)
-      print(pipe:read("*a"))
 
-      objfiles = objfiles .. " " .. _output
+
+
+
+
+
+      if cache:should_recompile(file) then
+         local cmd = format(
+         "cc -lm %s %s %s %s -o %s -c %s %s",
+         _defines, _includes, _libspath, _flags,
+         _output, _input, _libs)
+
+
+         print(cmd)
+         local pipe = io.popen(cmd)
+         print(pipe:read("*a"))
+      end
+
+      table.insert(objfiles, _output)
    end, exclude)
 
+   cache:save()
+   cache = nil
 
 
+   local objfiles_str = table.concat(objfiles, " ")
+   local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
+   print(cmd)
+   local pipe = io.popen(cmd)
+   print(pipe:read("*a"))
 
-
-
-
-
+   cp("libcaustic.a", "../libcaustic.a")
 
    pop_dir()
 end
 
 
+local function handler_int(_)
+   if cache then
+      cache:save()
+   end
+
+
+   print(debug.traceback())
+   os.exit()
+end
+
 local function main()
+   local SIGINT = 2
+   signal(SIGINT, handler_int)
+
    local parser = argparse()
 
 
@@ -1386,7 +1512,9 @@ local function main()
    summary("build dependencies and libcaustic for webassembly platform")
    parser:command("check_updates"):
    summary("print new version of libraries")
-   parser:command("make")
+   parser:command("make"):
+   summary("build libcaustic or current project"):
+   argument("make_action"):args("?")
 
    local _args = parser:parse()
    print(tabular(_args))
