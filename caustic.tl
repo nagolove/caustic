@@ -243,13 +243,13 @@ local links_internal = {
 }
 
 local links = { 
-    "raylib",
     "m",
-    "genann",
-    "smallregex",
-    "lua",
-    "utf8proc",
-    "chipmunk",
+    "raylib:static",
+    "genann:static",
+    "smallregex:static",
+    "lua:static",
+    "utf8proc:static",
+    "chipmunk:static",
     --"sunvox",
 }
 
@@ -932,6 +932,7 @@ local function link(objfiles: {string}, libname: string, flags: string)
 end
 
 local function filter_sources(path: string, cb: function(string), exclude: {string})
+    --if path == "" then path = "." end
     for file in lfs.dir(path) do
         if string.match(file, ".*%.c$") then
             --print('filter_sources:', file)
@@ -1242,6 +1243,7 @@ local function link_project(main_fname: string)
 end
 
 local record Cfg
+    artifact: string
     main: string
 end
 
@@ -1375,22 +1377,74 @@ function Cache:save()
     file:write(data)
 end
 
+local function make_L(list: {string}, path_prefix: string): {string}
+    local ret = {}
+    path_prefix = path_prefix or ""
+    for _, v in ipairs(list) do
+        table.insert(ret, "-L" .. path_prefix .. v)
+    end
+    return ret
+end
+
+local function make_l(list: {string}): {string}
+    local ret = {}
+    local static_pattern = "%:static$"
+    for _, v in ipairs(list) do
+        if string.match(v, static_pattern) then
+            --table.insert(ret, "-Wl,-Bstatic")
+            table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
+        else
+            table.insert(ret, "-l" .. v)
+        end
+    end
+    return ret
+end
+
+local function shallow_copy<X>(a: X): X
+    if type(a) == 'table' then
+        local ret = {}
+        for k, v in pairs(a as {any:any}) do
+            ret[k] = v
+        end
+        return ret as X
+    else
+        return a
+    end
+end
+
 function actions.make(_args: Args)
     print('make:')
     --print(tabular(_args))
 
+    local cfg: Cfg
+    local ok, errmsg: boolean, string = pcall(function()
+        cfg = loadfile("bld.lua")() as Cfg
+    end)
+
+    if not ok then
+        print("could not load config", errmsg)
+        os.exit()
+    end
+    print(tabular(cfg))
+
+    local cache_name = "cache.lua"
+
     if _args.make_action == 'clean' then
-        -- TODO: удалить кэш сборки
-        -- удалить объектные файлы
+        push_current_dir()
+        lfs.chdir('src')
+        local err = os.remove(cache_name)
+        if not err then
+            print('cache removed')
+        end
+        pop_dir()
+        -- TODO: удалить объектные файлы
         -- удалить артефакты сборки
     elseif _args.make_action == "force" then
         -- TODO: удалить кэш сборки
     end
 
-    local cache_name = "cache.lua"
-
-    --print(push_current_dir())
-    push_current_dir()
+    print(push_current_dir())
+    --push_current_dir()
 
     -- TODO: Возможность задания каталога через bld.lua
     lfs.chdir("src")
@@ -1403,12 +1457,15 @@ function actions.make(_args: Args)
     -- TODO: Дефайны через bld.lua
     local _defines: string = table.concat({
         "-DGRAPHICS_API_OPENGL_43",
+        "-DPLATFORM=PLATFORM_DESKTOP",
+        "-DPLATFORM_DESKTOP",
         "-DDEBUG",
     }, " ")
+
     local _includes: string = table.concat({
     }, " ")
-
-    for _, v in ipairs(includedirs_internal) do
+    local dirs = cfg.artifact and includedirs or includedirs_internal
+    for _, v in ipairs(dirs) do
         _includes = _includes .. " -I../" .. v
     end
     --print(tabular(includedirs))
@@ -1417,30 +1474,30 @@ function actions.make(_args: Args)
     local _flags: string = table.concat({
         "-ggdb3",
         "-fsanitize=address",
+        "-fPIC",
     }, " ")
     --local _input: string = table.concat({
     --}, " ")
-    local _libspath: string = table.concat({
-    }, " ")
-    local _libs: string = table.concat({
-    }, " ")
+    local libspath_prefix = cfg.artifact and "../" or ""
+    local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
+    table.insert(_libdirs, "-L/usr/lib")
+    local _libspath: string = table.concat(_libdirs, " ")
+    print(tabular(_libspath))
+
+    local _links = links
+    if cfg.artifact then
+        table.insert(_links, 1, "caustic:static")
+    end
+    local _libs: string = table.concat(make_l(_links), " ")
+    print(tabular(_libs))
 
     filter_sources(".", function(file: string)
-        print(file)
+        print('file', file)
         local _output = output_dir .. "/" .. 
                         string.gsub(file, "(.*%.)c$", "%1o")
         local _input = output_dir .. "/" .. file
 
-        --[[
-        print('_output', _output)
-        print('_defines', _defines)
-        print('_includes', _includes)
-        print('_libspath', _libspath)
-        print('_flags', _flags)
-        print('_input', _input)
-        print('_libs', _libs)
-        --]]
-
+        -- TODO: Проверять отсутствие объектного файла
         if cache:should_recompile(file) then
             local cmd = format(
                 "cc -lm %s %s %s %s -o %s -c %s %s", 
@@ -1459,14 +1516,27 @@ function actions.make(_args: Args)
     cache:save()
     cache = nil
 
-    --print(tabular(objfiles))
     local objfiles_str = table.concat(objfiles, " ")
-    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
-    print(cmd)
-    local pipe = io.popen(cmd)
-    print(pipe:read("*a"))
 
-    cp("libcaustic.a", "../libcaustic.a")
+    if not cfg.artifact then
+        local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
+        print(cmd)
+        local pipe = io.popen(cmd)
+        print(pipe:read("*a"))
+        cp("libcaustic.a", "../libcaustic.a")
+    else
+        local cmd = format(
+            --"-static-libgcc",
+            "g++ -o \"%s\" %s %s -fsanitize=address %s", 
+            cfg.artifact,
+            objfiles_str,
+            _libspath,
+            _libs
+        )
+        print(cmd)
+        local pipe = io.popen(cmd)
+        print(pipe:read("*a"))
+    end
 
     pop_dir()
 end
