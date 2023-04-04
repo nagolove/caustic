@@ -243,13 +243,13 @@ local links_internal = {
 }
 
 local links = {
-   "raylib",
    "m",
-   "genann",
-   "smallregex",
-   "lua",
-   "utf8proc",
-   "chipmunk",
+   "raylib:static",
+   "genann:static",
+   "smallregex:static",
+   "lua:static",
+   "utf8proc:static",
+   "chipmunk:static",
 
 }
 
@@ -932,6 +932,7 @@ local function link(objfiles, libname, flags)
 end
 
 local function filter_sources(path, cb, exclude)
+
    for file in lfs.dir(path) do
       if string.match(file, ".*%.c$") then
 
@@ -1245,6 +1246,7 @@ end
 
 
 
+
 function actions.wbuild(_)
    local exist = lfs.attributes("caustic.lua")
    if exist then
@@ -1375,22 +1377,165 @@ function Cache:save()
    file:write(data)
 end
 
+local function make_L(list, path_prefix)
+   local ret = {}
+   path_prefix = path_prefix or ""
+   for _, v in ipairs(list) do
+      table.insert(ret, "-L" .. path_prefix .. v)
+   end
+   return ret
+end
+
+local function make_l(list)
+   local ret = {}
+   local static_pattern = "%:static$"
+   for _, v in ipairs(list) do
+      if string.match(v, static_pattern) then
+
+         table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
+      else
+         table.insert(ret, "-l" .. v)
+      end
+   end
+   return ret
+end
+
+local function shallow_copy(a)
+   if type(a) == 'table' then
+      local ret = {}
+      for k, v in pairs(a) do
+         ret[k] = v
+      end
+      return ret
+   else
+      return a
+   end
+end
+
+local function get_cores_num()
+   local file = io.open("/proc/cpuinfo", "r")
+   local num = 1
+   for line in file:lines() do
+      local _num = string.match(line, "cpu cores.*%:.*(%d+)")
+      if _num then
+         num = tonumber(_num)
+         break
+      end
+   end
+   return num
+end
+
+local function parallel_run(queue)
+   print('parallel_run:', #queue)
+   local cores_num = get_cores_num() * 2
+   print('cores_num', cores_num)
+
+   local function build_fun(cmd)
+      local pipe = io.popen(cmd)
+      local output = pipe:read("*a")
+      if #output > 0 then
+         print(output)
+      end
+   end
+
+   local threads = {}
+   local stop = false
+   local tasks_num
+   if #queue < cores_num then
+      tasks_num = #queue
+   else
+      tasks_num = cores_num
+   end
+
+
+
+   repeat
+
+      local new_threads = {}
+      for _ = 1, tasks_num do
+         local l = lanes.gen("*", build_fun)
+
+
+
+         local cmd = table.remove(queue, 1)
+         if cmd then
+            table.insert(new_threads, l(cmd))
+         else
+
+         end
+      end
+      tasks_num = 0
+
+      for _, thread in ipairs(new_threads) do
+         table.insert(threads, thread)
+      end
+
+      sleep(0.02)
+
+      local has_jobs = false
+      local live_threads = {}
+      for _, t in ipairs(threads) do
+
+         if t.status == 'done' then
+            if tasks_num + 1 <= cores_num then
+               tasks_num = tasks_num + 1
+            end
+         else
+            table.insert(live_threads, t)
+            has_jobs = true
+         end
+      end
+      threads = live_threads
+
+
+
+      stop = not has_jobs
+   until stop
+end
+
+local function serial_run(queue)
+   for _, cmd in ipairs(queue) do
+      local pipe = io.popen(cmd)
+      local output = pipe:read("*a")
+      if #output > 0 then
+         print(output)
+      end
+   end
+end
+
 function actions.make(_args)
    print('make:')
 
 
-   if _args.make_action == 'clean' then
+   local cfg
+   local ok, errmsg = pcall(function()
+      cfg = loadfile("bld.lua")()
+   end)
 
+   if not ok then
+      print("could not load config", errmsg)
+      os.exit()
+   end
+   print(tabular(cfg))
+
+   local cache_name = "cache.lua"
+
+   if _args.make_action == 'clean' then
+      push_current_dir()
+      lfs.chdir('src')
+      local err = os.remove(cache_name)
+      if not err then
+         print('cache removed')
+      end
+      pop_dir()
 
 
    elseif _args.make_action == "force" then
 
    end
 
-   local cache_name = "cache.lua"
+   print(push_current_dir())
 
-
-   push_current_dir()
 
 
    lfs.chdir("src")
@@ -1403,12 +1548,15 @@ function actions.make(_args)
 
    local _defines = table.concat({
       "-DGRAPHICS_API_OPENGL_43",
+      "-DPLATFORM=PLATFORM_DESKTOP",
+      "-DPLATFORM_DESKTOP",
       "-DDEBUG",
    }, " ")
+
    local _includes = table.concat({},
    " ")
-
-   for _, v in ipairs(includedirs_internal) do
+   local dirs = cfg.artifact and includedirs or includedirs_internal
+   for _, v in ipairs(dirs) do
       _includes = _includes .. " -I../" .. v
    end
 
@@ -1417,28 +1565,29 @@ function actions.make(_args)
    local _flags = table.concat({
       "-ggdb3",
       "-fsanitize=address",
+      "-fPIC",
    }, " ")
 
 
-   local _libspath = table.concat({},
-   " ")
-   local _libs = table.concat({},
-   " ")
+   local libspath_prefix = cfg.artifact and "../" or ""
+   local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
+   table.insert(_libdirs, "-L/usr/lib")
+   local _libspath = table.concat(_libdirs, " ")
+   print(tabular(_libspath))
 
+   local _links = links
+   if cfg.artifact then
+      table.insert(_links, 1, "caustic:static")
+   end
+   local _libs = table.concat(make_l(_links), " ")
+   print(tabular(_libs))
+
+   local queue = {}
    filter_sources(".", function(file)
-      print(file)
+      print('file', file)
       local _output = output_dir .. "/" ..
       string.gsub(file, "(.*%.)c$", "%1o")
       local _input = output_dir .. "/" .. file
-
-
-
-
-
-
-
-
-
 
 
       if cache:should_recompile(file) then
@@ -1448,25 +1597,42 @@ function actions.make(_args)
          _output, _input, _libs)
 
 
-         print(cmd)
-         local pipe = io.popen(cmd)
-         print(pipe:read("*a"))
+
+
+
+         table.insert(queue, cmd)
       end
 
       table.insert(objfiles, _output)
    end, exclude)
 
+
+   parallel_run(queue)
+
    cache:save()
    cache = nil
 
-
    local objfiles_str = table.concat(objfiles, " ")
-   local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
-   print(cmd)
-   local pipe = io.popen(cmd)
-   print(pipe:read("*a"))
 
-   cp("libcaustic.a", "../libcaustic.a")
+   if not cfg.artifact then
+      local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
+      print(cmd)
+      local pipe = io.popen(cmd)
+      print(pipe:read("*a"))
+      cp("libcaustic.a", "../libcaustic.a")
+   else
+      local cmd = format(
+
+      "g++ -o \"%s\" %s %s -fsanitize=address %s",
+      cfg.artifact,
+      objfiles_str,
+      _libspath,
+      _libs)
+
+      print(cmd)
+      local pipe = io.popen(cmd)
+      print(pipe:read("*a"))
+   end
 
    pop_dir()
 end

@@ -1412,6 +1412,97 @@ local function shallow_copy<X>(a: X): X
     end
 end
 
+local function get_cores_num(): integer
+    local file = io.open("/proc/cpuinfo", "r")
+    local num = 1
+    for line in file:lines() do
+        local _num = string.match(line, "cpu cores.*%:.*(%d+)")
+        if _num then
+            num = tonumber(_num)
+            break
+        end
+    end
+    return num
+end
+
+local function parallel_run(queue: {string})
+    print('parallel_run:', #queue)
+    local cores_num = get_cores_num() * 2
+    print('cores_num', cores_num)
+
+    local function build_fun(cmd: string): any
+        local pipe = io.popen(cmd)
+        local output = pipe:read("*a")
+        if #output > 0 then
+            print(output)
+        end
+    end
+
+    local threads: {lanes.Thread} = {}
+    local stop = false
+    local tasks_num: integer
+    if #queue < cores_num then
+        tasks_num = #queue
+    else
+        tasks_num = cores_num
+    end
+
+    local type THREAD_FUNC = function(string)
+
+    repeat
+        --for _, cmd in ipairs(queue) do
+        local new_threads: {lanes.Thread} = {}
+        for _ = 1, tasks_num do
+            local l = lanes.gen("*", build_fun) as THREAD_FUNC
+            --l(table.remove(queue, 1))
+            --table.insert(new_threads, l as lanes.Thread)
+           
+            local cmd = table.remove(queue, 1)
+            if cmd then
+                table.insert(new_threads, l(cmd))
+            else
+                -- XXX: all tasks done?
+            end
+        end
+        tasks_num = 0
+
+        for _, thread in ipairs(new_threads) do
+            table.insert(threads, thread)
+        end
+
+        sleep(0.02 as integer)
+
+        local has_jobs = false
+        local live_threads = {}
+        for _, t in ipairs(threads) do
+            --print(t, t.status)
+            if t.status == 'done' then
+                if tasks_num + 1 <= cores_num then
+                    tasks_num = tasks_num + 1
+                end
+            else
+                table.insert(live_threads, t)
+                has_jobs = true
+            end
+        end
+        threads = live_threads
+        --print('------------------------------------------------')
+
+        --end
+        stop = not has_jobs
+    until stop
+end
+
+local function serial_run(queue: {string})
+    for _, cmd in ipairs(queue) do
+        local pipe = io.popen(cmd)
+        local output = pipe:read("*a")
+        if #output > 0 then
+            print(output)
+        end
+    end
+end
+
 function actions.make(_args: Args)
     print('make:')
     --print(tabular(_args))
@@ -1491,6 +1582,7 @@ function actions.make(_args: Args)
     local _libs: string = table.concat(make_l(_links), " ")
     print(tabular(_libs))
 
+    local queue = {}
     filter_sources(".", function(file: string)
         print('file', file)
         local _output = output_dir .. "/" .. 
@@ -1505,13 +1597,17 @@ function actions.make(_args: Args)
                 _output, _input, _libs
             )
 
-            print(cmd)
-            local pipe = io.popen(cmd)
-            print(pipe:read("*a"))
+            --print(cmd)
+            --local pipe = io.popen(cmd)
+            --print(pipe:read("*a"))
+            table.insert(queue, cmd)
         end
 
         table.insert(objfiles, _output)
     end, exclude)
+
+    --serial_run(queue)
+    parallel_run(queue)
 
     cache:save()
     cache = nil
