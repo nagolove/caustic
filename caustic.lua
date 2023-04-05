@@ -14,6 +14,7 @@ local Cache = {}
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 
+
 local signal = require("posix").signal.signal
 local inspect = require('inspect')
 
@@ -753,6 +754,7 @@ function actions.init(_args)
 
    _init(third_party, deps)
    _init(wasm_third_party, deps)
+
 end
 
 local function rec_remove_dir(dirname)
@@ -855,6 +857,7 @@ function actions.remove(_args)
    end
    _remove(third_party, dirnames)
    _remove(wasm_third_party, dirnames)
+
 end
 
 local function file_exist(path)
@@ -981,20 +984,6 @@ end
 local function build_raylib()
    local prevdir = lfs.currentdir()
    lfs.chdir("wasm_3rd_party/raylib")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

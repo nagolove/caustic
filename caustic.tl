@@ -13,6 +13,7 @@ end
 
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
+--local win_third_party = "win_3rd_party"
 
 local signal = require "posix".signal.signal
 local inspect = require 'inspect'
@@ -421,6 +422,7 @@ local function git_clone(dep: Dependency)
     end
 end
 
+-- Разбить на download() и unpack()
 local function download_and_unpack_zip(dep: Dependency)
     --local lfs = require 'lfs'
     print('download_and_unpack_zip', inspect(dep))
@@ -753,6 +755,7 @@ function actions.init(_args: Args)
     --check_for_unstaged(deps)
     _init(third_party, deps)
     _init(wasm_third_party, deps)
+    --_init(win_third_party, deps)
 end
 
 local function rec_remove_dir(dirname: string)
@@ -855,6 +858,7 @@ function actions.remove(_args: Args)
     end
     _remove(third_party, dirnames)
     _remove(wasm_third_party, dirnames)
+    --_remove(win_third_party, dirnames)
 end
 
 local function file_exist(path: string): boolean
@@ -983,24 +987,10 @@ local function build_raylib()
     lfs.chdir("wasm_3rd_party/raylib")
 
     --[[
-    local objfiles = {}
-    local path = "src"
-    filter_sources(path, function(file)
-        --print('file', file)
-        local flags = "-Wall -flto -g3 -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2 -Isrc -Iinclude"
-        local fullfile = path .. "/" .. file
-        local cmd = string.format("emcc -c %s %s", fullfile, flags)
-        print(cmd)
-
-        local pipe = io.popen(cmd)
-        local res = pipe:read("*a")
-        if #res > 0 then
-            print(res)
-        end
-
-        table.insert(objfiles, src2obj(file))
-    end)
-    link(objfiles, 'libraylib.a')
+    make CC=x86_64-w64-mingw32-gcc \
+        PLATFORM=PLATFORM_DESKTOP \
+        PLATFORM_OS=WINDOWS \
+        RAYLIB_LIBTYPE=SHARED
     --]]
 
     lfs.chdir("src")
