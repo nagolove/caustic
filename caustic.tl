@@ -1,16 +1,39 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+--[[
+project dir -> bld.lua
+            -> src      -> main.c
+                        -> other_file.c
+                        -> header.c
+                        -> cache.lua [created by caustic]
+            -> assets
+            -> wasm_objects
+            -> 3rd_party
+            -> wasm_3rd_party
+            -> win_3rd_party
+
+            -> linux_objects
+            -> win_objects
+            -> wasm_objects
+
+--]]
+
 local serpent = require 'serpent'
 
 local record Cache
+    record Data
+        modtime: number
+        cmd: string
+    end
     abs_storage: string
-    cache: {string:number}
+    cache: {string: Data}
     new: function(storage: string): Cache
-    should_recompile: function(Cache, fname: string): boolean
+    should_recompile: function(Cache, fname: string, cmd: string): boolean
     save: function(Cache)
 end
 
+local cache_name = "cache.lua"
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 --local win_third_party = "win_3rd_party"
@@ -19,7 +42,7 @@ local signal = require "posix".signal.signal
 local inspect = require 'inspect'
 --local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
-print('package.path', package.path)
+--print('package.path', package.path)
 local cache: Cache
 
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
@@ -705,14 +728,14 @@ local function _init(path: string, deps: {Dependency})
 end
 
 local enum MakeAction
-    "clean"
-    "force"
+    "release"
 end
 
 local record Args
+    c: string
     j: string
     name: string
-    make_action: MakeAction
+    make_type: MakeAction
     full: string
 end
 
@@ -1323,20 +1346,20 @@ local Cache_mt: metatable<Cache> = {
 
 function Cache.new(storage: string): Cache
     local self: Cache = {}
-    local ok, errmsg: boolean, string = pcall(function()
-        self.cache = loadfile(storage)() as {string: number}
+    local ok, _: boolean, string = pcall(function()
+        self.cache = loadfile(storage)() as {string: Cache.Data}
     end)
     --print(tabular(self.cache))
     self.abs_storage = lfs.currentdir() .. "/" .. storage
     --print('self.abs_storage', self.abs_storage)
     if not ok then
         self.cache = {}
-        print(string.format('Cache.new("%s") failed with', storage), errmsg)
+        --print(string.format('Cache.new("%s") failed with', storage), errmsg)
     end
     return setmetatable(self, Cache_mt)
 end
 
-function Cache:should_recompile(fname: string): boolean
+function Cache:should_recompile(fname: string, cmd: string): boolean
     local modtime_cur: number = lfs.attributes(fname, 'modification')
     if not modtime_cur then
         print(format(
@@ -1344,18 +1367,14 @@ function Cache:should_recompile(fname: string): boolean
         ))
         os.exit()
     end
-    local modtime_cache  = self.cache[fname] or 0
-
-    --[[
-    print(tabular(self.cache))
-    print(format("self.cache['%s'] = ", fname, self.cache[fname]))
-    print('modtime_cur', modtime_cur)
-    print('modtime_cache', modtime_cache)
-    --]]
-
+    local data = self.cache[fname]
+    local modtime_cache = data and data.modtime or 0
     local should = modtime_cur > modtime_cache
     if should then
-        self.cache[fname] = modtime_cur
+        self.cache[fname] = {
+            modtime = modtime_cur,
+            cmd = cmd,
+        }
     end
     return should
 end
@@ -1488,12 +1507,55 @@ local function serial_run(queue: {string})
     end
 end
 
+local function cache_remove()
+    push_current_dir()
+    lfs.chdir('src')
+    local err = os.remove(cache_name)
+    if not err then
+        print('cache removed')
+    end
+    pop_dir()
+end
+
+local function koh_link(objfiles_str: string, _args: Args)
+    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
+    print(cmd)
+    local pipe = io.popen(cmd)
+    print(pipe:read("*a"))
+end
+
+local record LinkContext
+    objfiles: string
+    libspath: string
+    libs: string
+end
+
+local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
+    local flags: string = "-fsanitize=address"
+    if _args.make_type == 'release' then
+        flags = ""
+    end
+    local cmd = format(
+        "gcc -o \"%s\" %s %s %s %s", 
+        cfg.artifact,
+        ctx.objfiles,
+        ctx.libspath,
+        flags,
+        ctx.libs
+    )
+    print(cmd)
+    local pipe = io.popen(cmd)
+    print(pipe:read("*a"))
+end
+
 function actions.make(_args: Args)
-    print('make:')
+    --print('make:')
     --print(tabular(_args))
 
     local cfg: Cfg
     local ok, errmsg: boolean, string = pcall(function()
+        -- TODO: если файл не найден, то подняться на уровень выше и снова
+        -- попробовать загрузить конфиг
         cfg = loadfile("bld.lua")() as Cfg
     end)
 
@@ -1501,22 +1563,10 @@ function actions.make(_args: Args)
         print("could not load config", errmsg)
         os.exit()
     end
-    print(tabular(cfg))
+    --print(tabular(cfg))
 
-    local cache_name = "cache.lua"
-
-    if _args.make_action == 'clean' then
-        push_current_dir()
-        lfs.chdir('src')
-        local err = os.remove(cache_name)
-        if not err then
-            print('cache removed')
-        end
-        pop_dir()
-        -- TODO: удалить объектные файлы
-        -- удалить артефакты сборки
-    elseif _args.make_action == "force" then
-        -- TODO: удалить кэш сборки
+    if _args.c then
+        cache_remove()
     end
 
     print(push_current_dir())
@@ -1552,6 +1602,7 @@ function actions.make(_args: Args)
         "-fsanitize=address",
         "-fPIC",
     }, " ")
+
     --local _input: string = table.concat({
     --}, " ")
     local libspath_prefix = cfg.artifact and "../" or ""
@@ -1575,16 +1626,12 @@ function actions.make(_args: Args)
         local _input = output_dir .. "/" .. file
 
         -- TODO: Проверять отсутствие объектного файла
-        if cache:should_recompile(file) then
-            local cmd = format(
-                "cc -lm %s %s %s %s -o %s -c %s %s", 
-                _defines, _includes, _libspath, _flags,
-                _output, _input, _libs
-            )
-
-            --print(cmd)
-            --local pipe = io.popen(cmd)
-            --print(pipe:read("*a"))
+        local cmd = format(
+            "cc -lm %s %s %s %s -o %s -c %s %s", 
+            _defines, _includes, _libspath, _flags,
+            _output, _input, _libs
+        )
+        if cache:should_recompile(file, cmd) then
             table.insert(queue, cmd)
         end
 
@@ -1603,23 +1650,14 @@ function actions.make(_args: Args)
     local objfiles_str = table.concat(objfiles, " ")
 
     if not cfg.artifact then
-        local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
-        print(cmd)
-        local pipe = io.popen(cmd)
-        print(pipe:read("*a"))
+        koh_link(objfiles_str, _args)
         cp("libcaustic.a", "../libcaustic.a")
     else
-        local cmd = format(
-            --"-static-libgcc",
-            "g++ -o \"%s\" %s %s -fsanitize=address %s", 
-            cfg.artifact,
-            objfiles_str,
-            _libspath,
-            _libs
-        )
-        print(cmd)
-        local pipe = io.popen(cmd)
-        print(pipe:read("*a"))
+        project_link({
+            objfiles = objfiles_str,
+            libspath = _libspath,
+            libs = _libs,
+        }, cfg, _args)
     end
 
     pop_dir()
@@ -1670,12 +1708,12 @@ local function main()
     local make = parser:command("make")
     make
         :summary("build libcaustic or current project")
-        :argument("make_action"):args("?")
-    make
-        :flag('-j', 'run compilation parallel')
+        :argument("make_type"):args("?")
+    make:flag('-j', 'run compilation parallel')
+    make:flag('-c', 'remove cache file')
 
     local _args = parser:parse()
-    print(tabular(_args))
+    --print(tabular(_args))
 
     --os.exit()
 

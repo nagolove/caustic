@@ -1,9 +1,27 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 local serpent = require('serpent')
 
-local Cache = {}
+local Cache = {Data = {}, }
 
 
 
@@ -11,6 +29,11 @@ local Cache = {}
 
 
 
+
+
+
+
+local cache_name = "cache.lua"
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 
@@ -19,7 +42,7 @@ local signal = require("posix").signal.signal
 local inspect = require('inspect')
 
 
-print('package.path', package.path)
+
 local cache
 
 
@@ -421,6 +444,7 @@ local function git_clone(dep)
       print(fd:read("*a"))
    end
 end
+
 
 local function download_and_unpack_zip(dep)
 
@@ -1322,7 +1346,7 @@ local Cache_mt = {
 
 function Cache.new(storage)
    local self = {}
-   local ok, errmsg = pcall(function()
+   local ok, _ = pcall(function()
       self.cache = loadfile(storage)()
    end)
 
@@ -1330,12 +1354,12 @@ function Cache.new(storage)
 
    if not ok then
       self.cache = {}
-      print(string.format('Cache.new("%s") failed with', storage), errmsg)
+
    end
    return setmetatable(self, Cache_mt)
 end
 
-function Cache:should_recompile(fname)
+function Cache:should_recompile(fname, cmd)
    local modtime_cur = lfs.attributes(fname, 'modification')
    if not modtime_cur then
       print(format(
@@ -1343,18 +1367,14 @@ function Cache:should_recompile(fname)
 
       os.exit()
    end
-   local modtime_cache = self.cache[fname] or 0
-
-
-
-
-
-
-
-
+   local data = self.cache[fname]
+   local modtime_cache = data and data.modtime or 0
    local should = modtime_cur > modtime_cache
    if should then
-      self.cache[fname] = modtime_cur
+      self.cache[fname] = {
+         modtime = modtime_cur,
+         cmd = cmd,
+      }
    end
    return should
 end
@@ -1487,12 +1507,55 @@ local function serial_run(queue)
    end
 end
 
+local function cache_remove()
+   push_current_dir()
+   lfs.chdir('src')
+   local err = os.remove(cache_name)
+   if not err then
+      print('cache removed')
+   end
+   pop_dir()
+end
+
+local function koh_link(objfiles_str, _args)
+   local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
+   print(cmd)
+   local pipe = io.popen(cmd)
+   print(pipe:read("*a"))
+end
+
+
+
+
+
+
+
+local function project_link(ctx, cfg, _args)
+   local flags = "-fsanitize=address"
+   if _args.make_type == 'release' then
+      flags = ""
+   end
+   local cmd = format(
+   "gcc -o \"%s\" %s %s %s %s",
+   cfg.artifact,
+   ctx.objfiles,
+   ctx.libspath,
+   flags,
+   ctx.libs)
+
+   print(cmd)
+   local pipe = io.popen(cmd)
+   print(pipe:read("*a"))
+end
+
 function actions.make(_args)
-   print('make:')
+
 
 
    local cfg
    local ok, errmsg = pcall(function()
+
+
       cfg = loadfile("bld.lua")()
    end)
 
@@ -1500,22 +1563,10 @@ function actions.make(_args)
       print("could not load config", errmsg)
       os.exit()
    end
-   print(tabular(cfg))
-
-   local cache_name = "cache.lua"
-
-   if _args.make_action == 'clean' then
-      push_current_dir()
-      lfs.chdir('src')
-      local err = os.remove(cache_name)
-      if not err then
-         print('cache removed')
-      end
-      pop_dir()
 
 
-   elseif _args.make_action == "force" then
-
+   if _args.c then
+      cache_remove()
    end
 
    print(push_current_dir())
@@ -1553,6 +1604,7 @@ function actions.make(_args)
    }, " ")
 
 
+
    local libspath_prefix = cfg.artifact and "../" or ""
    local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
    table.insert(_libdirs, "-L/usr/lib")
@@ -1574,16 +1626,12 @@ function actions.make(_args)
       local _input = output_dir .. "/" .. file
 
 
-      if cache:should_recompile(file) then
-         local cmd = format(
-         "cc -lm %s %s %s %s -o %s -c %s %s",
-         _defines, _includes, _libspath, _flags,
-         _output, _input, _libs)
+      local cmd = format(
+      "cc -lm %s %s %s %s -o %s -c %s %s",
+      _defines, _includes, _libspath, _flags,
+      _output, _input, _libs)
 
-
-
-
-
+      if cache:should_recompile(file, cmd) then
          table.insert(queue, cmd)
       end
 
@@ -1602,23 +1650,14 @@ function actions.make(_args)
    local objfiles_str = table.concat(objfiles, " ")
 
    if not cfg.artifact then
-      local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
-      print(cmd)
-      local pipe = io.popen(cmd)
-      print(pipe:read("*a"))
+      koh_link(objfiles_str, _args)
       cp("libcaustic.a", "../libcaustic.a")
    else
-      local cmd = format(
-
-      "g++ -o \"%s\" %s %s -fsanitize=address %s",
-      cfg.artifact,
-      objfiles_str,
-      _libspath,
-      _libs)
-
-      print(cmd)
-      local pipe = io.popen(cmd)
-      print(pipe:read("*a"))
+      project_link({
+         objfiles = objfiles_str,
+         libspath = _libspath,
+         libs = _libs,
+      }, cfg, _args)
    end
 
    pop_dir()
@@ -1669,12 +1708,12 @@ local function main()
    local make = parser:command("make")
    make:
    summary("build libcaustic or current project"):
-   argument("make_action"):args("?")
-   make:
-   flag('-j', 'run compilation parallel')
+   argument("make_type"):args("?")
+   make:flag('-j', 'run compilation parallel')
+   make:flag('-c', 'remove cache file')
 
    local _args = parser:parse()
-   print(tabular(_args))
+
 
 
 
