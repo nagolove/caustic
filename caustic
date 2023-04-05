@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-lua5.4 $HOME/caustic/caustic.lua
+lua5.4 $HOME/caustic/caustic.lua $1 $2 $3 $4 $5 $6

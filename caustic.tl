@@ -1,6 +1,15 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+local home = os.getenv("HOME")
+assert(home)
+package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
+	       home .. "/.luarocks/share/lua/5.4/?/init.lua;" .. 
+	       package.path
+package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
+	       	home .. "/.luarocks/lib/lua/5.4/?/init.so;" .. -- XXX: init.so?
+		package.cpath
+
 --[[
 project dir -> bld.lua
             -> src      -> main.c
