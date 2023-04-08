@@ -14,18 +14,24 @@ package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 project dir -> bld.lua
             -> src      -> main.c
                         -> other_file.c
-                        -> header.c
+                        -> header.р
                         -> cache.lua [created by caustic]
             -> assets
-            -> wasm_objects
+
             -> 3rd_party
             -> wasm_3rd_party
             -> win_3rd_party
 
-            -> linux_objects
-            -> win_objects
-            -> wasm_objects
+            -> linux_objects            | объектные файлы
+            -> win_objects              | объектные файлы
+            -> wasm_objects             | объектные файлы
 
+            -> bin  -> bin_d.linux
+                    -> bin_r.linux
+                    -> bin_d.exe
+                    -> bin_r.exe
+                    -> bin.html
+                    -> assets.zip
 --]]
 
 local serpent = require 'serpent'
@@ -1539,6 +1545,8 @@ local record LinkContext
     libs: string
 end
 
+-- TODO: link utf8proc statically
+-- TODO: link all libs statically
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local flags: string = "-fsanitize=address"
     if _args.make_type == 'release' then
@@ -1557,6 +1565,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     print(pipe:read("*a"))
 end
 
+-- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
     --print('make:')
     --print(tabular(_args))
