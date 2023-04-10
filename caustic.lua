@@ -28,6 +28,27 @@ package.cpath
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local serpent = require('serpent')
 
 local Cache = {Data = {}, }
@@ -1539,6 +1560,8 @@ end
 
 
 
+
+
 local function project_link(ctx, cfg, _args)
    local flags = "-fsanitize=address"
    if _args.make_type == 'release' then
@@ -1557,14 +1580,12 @@ local function project_link(ctx, cfg, _args)
    print(pipe:read("*a"))
 end
 
-function actions.make(_args)
+local function search_and_load_cfg_up(fname)
 
 
 
    local cfg
    local ok, errmsg = pcall(function()
-
-
       cfg = loadfile("bld.lua")()
    end)
 
@@ -1572,6 +1593,21 @@ function actions.make(_args)
       print("could not load config", errmsg)
       os.exit()
    end
+
+   return cfg
+end
+
+local function set_executable_bit(fname)
+   local pipe = io.popen("chmod +x " .. fname)
+   print(pipe:read("*a"))
+end
+
+
+function actions.make(_args)
+
+
+
+   local cfg, _ = search_and_load_cfg_up("bld.lua")
 
 
    if _args.c then
@@ -1658,6 +1694,8 @@ function actions.make(_args)
 
    local objfiles_str = table.concat(objfiles, " ")
 
+
+
    if not cfg.artifact then
       koh_link(objfiles_str, _args)
       cp("libcaustic.a", "../libcaustic.a")
@@ -1667,11 +1705,14 @@ function actions.make(_args)
          libspath = _libspath,
          libs = _libs,
       }, cfg, _args)
+
+      local dst = "../" .. cfg.artifact
+      cp(cfg.artifact, dst)
+      set_executable_bit(dst)
    end
 
    pop_dir()
 end
-
 
 local function handler_int(_)
    if cache then

@@ -10,8 +10,17 @@ package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 	       	home .. "/.luarocks/lib/lua/5.4/?/init.so;" .. -- XXX: init.so?
 		package.cpath
 
+-- TODO: В каждый каталог класть файл bld.lua, определяющий действия по сборке
+-- содержимого каталога. Внутри файла можно использовать модуль caustic для
+-- утилитарных функций.
+-- Команда init копирует соответствующие файлы из каталога bld в каждый каталог
+-- зависимости
+
 --[[
 project dir -> bld.lua
+            -> bld
+                -> lua.lua              | копируется в каталог 3rd_party/dep.name
+                -> utf8proc.lua
             -> src      -> main.c
                         -> other_file.c
                         -> header.р
@@ -19,6 +28,12 @@ project dir -> bld.lua
             -> assets
 
             -> 3rd_party
+                -> lua
+                    -> bld.lua
+                -> chipmunk
+                    -> bld.lua
+                -> raylib
+                    -> bld.lua
             -> wasm_3rd_party
             -> win_3rd_party
 
@@ -1565,15 +1580,12 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     print(pipe:read("*a"))
 end
 
--- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
-function actions.make(_args: Args)
-    --print('make:')
-    --print(tabular(_args))
-
+local function search_and_load_cfg_up(fname: string): Cfg, string
+    -- TODO: если файл не найден, то подняться на уровень выше и снова
+    -- попробовать загрузить конфиг
+    -- C какой позиции в дереве каталогов начинать сборку?
     local cfg: Cfg
     local ok, errmsg: boolean, string = pcall(function()
-        -- TODO: если файл не найден, то подняться на уровень выше и снова
-        -- попробовать загрузить конфиг
         cfg = loadfile("bld.lua")() as Cfg
     end)
 
@@ -1581,6 +1593,21 @@ function actions.make(_args: Args)
         print("could not load config", errmsg)
         os.exit()
     end
+
+    return cfg
+end
+
+local function set_executable_bit(fname: string)
+    local pipe = io.popen("chmod +x " .. fname)
+    print(pipe:read("*a"))
+end
+
+-- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
+function actions.make(_args: Args)
+    --print('make:')
+    --print(tabular(_args))
+
+    local cfg, _: Cfg, string = search_and_load_cfg_up("bld.lua")
     --print(tabular(cfg))
 
     if _args.c then
@@ -1667,6 +1694,8 @@ function actions.make(_args: Args)
 
     local objfiles_str = table.concat(objfiles, " ")
 
+    -- TODO: указывать тип - библиотека или программа в конфигурационном 
+    -- скрипте.
     if not cfg.artifact then
         koh_link(objfiles_str, _args)
         cp("libcaustic.a", "../libcaustic.a")
@@ -1676,11 +1705,14 @@ function actions.make(_args: Args)
             libspath = _libspath,
             libs = _libs,
         }, cfg, _args)
+        -- TODO: переместить файл из каталога src на уровень выше
+        local dst = "../" .. cfg.artifact
+        cp(cfg.artifact, dst)
+        set_executable_bit(dst)
     end
 
     pop_dir()
 end
---]]
 
 local function handler_int(_: integer)
     if cache then
