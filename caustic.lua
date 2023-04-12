@@ -49,6 +49,11 @@ package.cpath
 
 
 
+
+
+
+
+
 local serpent = require('serpent')
 
 local Cache = {Data = {}, }
@@ -105,6 +110,7 @@ local function cp(from, to)
    if not ok then
       print("cp() failed with", errmsg)
    end
+
 end
 
 local function copy_headers_to_wfc(_)
@@ -703,6 +709,8 @@ end
 
 
 
+
+
 local actions = {}
 
 local function _init(path, deps)
@@ -809,6 +817,134 @@ function actions.init(_args)
    _init(third_party, deps)
    _init(wasm_third_party, deps)
 
+end
+
+local site_repo = "~/nagolove.github.io/index.html"
+
+
+
+
+
+
+local function update_links_table(links, artifact)
+   local found = false
+   for _, v in ipairs(links) do
+      if string.match(v.line, artifact) then
+         found = true
+         break
+      end
+   end
+   if not found then
+      local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
+      table.insert(links, {
+         line = string.format(ptrn, artifact, artifact),
+      })
+   end
+end
+
+local function update_links(artifact)
+   local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+   local file = io.open(site_repo_tmp, "r")
+   if not file then
+      print(string.format("Could not load '%s' file", site_repo_tmp));
+      os.exit(1)
+   end
+
+   local begin_section = "begin_links_section"
+   local end_section = "end_links_section"
+
+   local links_lines = {}
+
+   local put = false
+   local line_counter = 0
+   local other_lines = {}
+   for line in file:lines() do
+
+      local begin = false
+      if string.match(line, begin_section) then
+         put = true
+         begin = true
+         goto continue
+      end
+      if string.match(line, end_section) then
+
+         put = false
+         goto continue
+      end
+
+
+      line_counter = line_counter + 1
+      if put then
+         table.insert(links_lines, {
+            line = line,
+
+         })
+      end
+      ::continue::
+      if (not put) or begin then
+         table.insert(other_lines, line)
+      end
+   end
+
+   print(tabular(links_lines))
+   print()
+   print(tabular(other_lines))
+
+   update_links_table(links_lines, artifact)
+
+   local new_lines = {}
+   for _, line in ipairs(other_lines) do
+      if string.match(line, begin_section) then
+         table.insert(new_lines, line)
+         for _, v in ipairs(links_lines) do
+            table.insert(new_lines, v.line)
+         end
+         goto continue
+      end
+      table.insert(new_lines, line)
+      ::continue::
+   end
+
+   file = io.open(site_repo_tmp .. ".tmp", "w")
+   for _, line in ipairs(new_lines) do
+      file:write(line .. "\n")
+   end
+   file:close()
+
+   local cmd1 = "mv " .. site_repo_tmp .. " " .. site_repo_tmp .. ".bak"
+   local cmd2 = "mv " .. site_repo_tmp .. ".tmp " .. site_repo_tmp
+
+
+   io.popen(cmd1)
+   io.popen(cmd2)
+
+end
+
+local function search_and_load_cfg_up(fname)
+
+
+
+   local cfg
+   local ok, errmsg = pcall(function()
+      cfg = loadfile("bld.lua")()
+   end)
+
+   if not ok then
+      print("could not load config", errmsg)
+      os.exit()
+   end
+
+   return cfg
+end
+
+function actions.publish(_args)
+   print('publish')
+   local cfg = search_and_load_cfg_up("bld.lua")
+   if cfg.artifact then
+      update_links(cfg.artifact)
+   else
+      print("Bad directory, no artifact value in bld.lua")
+   end
 end
 
 local function rec_remove_dir(dirname)
@@ -1286,11 +1422,6 @@ local function link_project(main_fname)
    lfs.chdir(prev_dir)
 end
 
-
-
-
-
-
 function actions.wbuild(_)
    local exist = lfs.attributes("caustic.lua")
    if exist then
@@ -1567,9 +1698,10 @@ local function project_link(ctx, cfg, _args)
    if _args.make_type == 'release' then
       flags = ""
    end
+   local artifact = "../" .. cfg.artifact
    local cmd = format(
    "gcc -o \"%s\" %s %s %s %s",
-   cfg.artifact,
+   artifact,
    ctx.objfiles,
    ctx.libspath,
    flags,
@@ -1578,23 +1710,6 @@ local function project_link(ctx, cfg, _args)
    print(cmd)
    local pipe = io.popen(cmd)
    print(pipe:read("*a"))
-end
-
-local function search_and_load_cfg_up(fname)
-
-
-
-   local cfg
-   local ok, errmsg = pcall(function()
-      cfg = loadfile("bld.lua")()
-   end)
-
-   if not ok then
-      print("could not load config", errmsg)
-      os.exit()
-   end
-
-   return cfg
 end
 
 local function set_executable_bit(fname)
@@ -1706,9 +1821,11 @@ function actions.make(_args)
          libs = _libs,
       }, cfg, _args)
 
-      local dst = "../" .. cfg.artifact
-      cp(cfg.artifact, dst)
-      set_executable_bit(dst)
+
+
+
+
+
    end
 
    pop_dir()
@@ -1754,6 +1871,8 @@ local function main()
    summary("build dependencies and libcaustic for webassembly platform")
    parser:command("check_updates"):
    summary("print new version of libraries")
+   parser:command("publish"):
+   summary("publish wasm code to ~/nagolove.github.io repo and push to web")
 
    local make = parser:command("make")
    make:
