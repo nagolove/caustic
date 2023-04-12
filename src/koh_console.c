@@ -110,6 +110,7 @@ struct {
     TabEngine tabe;
     TimerStore timers;
     bool can_move_right, can_move_left, can_backspace;
+    uint64_t hk_updated_times;
 } con = {0, };
 
 
@@ -136,6 +137,8 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     timerstore_init(&con.timers, 20);
     con.can_move_left = con.can_move_right = true;
     con.can_backspace = true;
+
+    con.hk_updated_times = hk_store->updated_times;
 
     tabe_init(&con.tabe, sc_get_state());
     con.i = 0;
@@ -355,6 +358,13 @@ void console_immediate_buffer_enable(bool state) {
 }
 
 void console_update(void) {
+    if (con.hk_updated_times == con.hk_store->updated_times) {
+        printf("console_update: May be HotkeyStorage was not "
+               "updated on last frame?\n");
+        exit(EXIT_FAILURE);
+    }
+    con.hk_updated_times = con.hk_store->updated_times;
+
     timerstore_update(&con.timers);
 
     if (con.editor_mode) {

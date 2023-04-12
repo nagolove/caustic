@@ -199,6 +199,7 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
 }
 
 int l_keys(lua_State *lua) {
+    // TODO: Здесь что-то изменить, проверка кажется ненадежной
     if (last_storage)
         hotkeys_enumerate(last_storage);
     return 0;
@@ -207,6 +208,7 @@ int l_keys(lua_State *lua) {
 void hotkey_init(HotkeyStorage *storage) {
     assert(storage);
     last_storage = storage;
+    storage->updated_times = 0;
 
     lua_State *lua = sc_get_state();
     if (lua)
@@ -321,6 +323,8 @@ void hotkey_process(HotkeyStorage *storage) {
             if (!mod_down && !mod2_down && is_pressed) hk->func(hk);
         }
     }
+
+    storage->updated_times++;
 }
 
 void hotkey_enable(HotkeyStorage *storage, const char *name, bool state) {

@@ -34,10 +34,11 @@ typedef struct Hotkey {
 } Hotkey;
 
 typedef struct HotkeyStorage {
-    Hotkey keys[MAX_HOTKEYS];
-    int keysnum;
+    Hotkey      keys[MAX_HOTKEYS];
+    int         keysnum;
     // Ссылка на Луа табличку связывающую номер клавиши со строкой.
-    int map_key2str_ref;
+    //int     map_key2str_ref;
+    uint64_t    updated_times;
 } HotkeyStorage;
 
 void hotkey_init(HotkeyStorage *storage);
