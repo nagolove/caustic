@@ -1,7 +1,6 @@
-#include "ann_set.h"
+#include "koh_ann_set.h"
 
 #include "genann.h"
-#include "genann_view.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
