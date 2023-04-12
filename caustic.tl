@@ -849,7 +849,6 @@ local function update_links(artifact: string)
     local end_section = "end_links_section"
 
     local links_lines: {string} = {}
-    --local put, begin = false, false
     local put = false
     local line_counter = 0
     local other_lines: {string} = {}
@@ -873,10 +872,6 @@ local function update_links(artifact: string)
             table.insert(other_lines, line)
         end
     end
-
-    --print(tabular(links_lines))
-    --print()
-    --print(tabular(other_lines))
 
     update_links_table(links_lines, artifact)
 
@@ -932,6 +927,13 @@ function actions.publish(_args: Args)
     else
         print("Bad directory, no artifact value in bld.lua")
     end
+
+    -- TODO: 
+    -- * проверка наличия wasm сборки
+    --      как сделать проверку унифицированно?
+    -- * выгрузка сборки в репозиторий сайта
+    -- * создание коммита
+    -- * выгрузка репозитория сайта на сервер
 end
 
 local function rec_remove_dir(dirname: string)
@@ -1853,7 +1855,7 @@ local function main()
     parser:command("compile_flags")
         :summary("print compile_flags.txt to stdout")
     parser:command("wbuild")
-        :summary("build dependencies and libcaustic for webassembly platform")
+        :summary("build dependencies and libcaustic for wasm or build project")
     parser:command("check_updates")
         :summary("print new version of libraries")
     parser:command("publish")
