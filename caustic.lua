@@ -15,6 +15,8 @@ package.cpath
 
 
 
+local format = string.format
+
 
 
 
@@ -821,24 +823,17 @@ end
 
 local site_repo = "~/nagolove.github.io/index.html"
 
-
-
-
-
-
 local function update_links_table(links, artifact)
    local found = false
-   for _, v in ipairs(links) do
-      if string.match(v.line, artifact) then
+   for _, line in ipairs(links) do
+      if string.match(line, artifact) then
          found = true
          break
       end
    end
    if not found then
       local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
-      table.insert(links, {
-         line = string.format(ptrn, artifact, artifact),
-      })
+      table.insert(links, format(ptrn, artifact, artifact))
    end
 end
 
@@ -859,7 +854,6 @@ local function update_links(artifact)
    local line_counter = 0
    local other_lines = {}
    for line in file:lines() do
-
       local begin = false
       if string.match(line, begin_section) then
          put = true
@@ -867,18 +861,12 @@ local function update_links(artifact)
          goto continue
       end
       if string.match(line, end_section) then
-
          put = false
          goto continue
       end
-
-
       line_counter = line_counter + 1
       if put then
-         table.insert(links_lines, {
-            line = line,
-
-         })
+         table.insert(links_lines, line)
       end
       ::continue::
       if (not put) or begin then
@@ -886,9 +874,9 @@ local function update_links(artifact)
       end
    end
 
-   print(tabular(links_lines))
-   print()
-   print(tabular(other_lines))
+
+
+
 
    update_links_table(links_lines, artifact)
 
@@ -896,8 +884,8 @@ local function update_links(artifact)
    for _, line in ipairs(other_lines) do
       if string.match(line, begin_section) then
          table.insert(new_lines, line)
-         for _, v in ipairs(links_lines) do
-            table.insert(new_lines, v.line)
+         for _, link_line in ipairs(links_lines) do
+            table.insert(new_lines, link_line)
          end
          goto continue
       end
@@ -917,7 +905,6 @@ local function update_links(artifact)
 
    io.popen(cmd1)
    io.popen(cmd2)
-
 end
 
 local function search_and_load_cfg_up(fname)
@@ -1111,8 +1098,6 @@ local function build_chipmunk()
 
    lfs.chdir(prevdir)
 end
-
-local format = string.format
 
 local function link(objfiles, libname, flags)
    print('link: ')

@@ -15,6 +15,8 @@ local record Cfg
     main: string
 end
 
+local format = string.format
+
 -- TODO: В каждый каталог класть файл bld.lua, определяющий действия по сборке
 -- содержимого каталога. Внутри файла можно использовать модуль caustic для
 -- утилитарных функций.
@@ -821,24 +823,17 @@ end
 
 local site_repo = "~/nagolove.github.io/index.html"
 
-local record LinkRec
-    line: string
-    --line_num: integer
-end
-
-local function update_links_table(links: {LinkRec}, artifact: string)
+local function update_links_table(links: {string}, artifact: string)
     local found = false
-    for _, v in ipairs(links) do
-        if string.match(v.line, artifact) then
+    for _, line in ipairs(links) do
+        if string.match(line, artifact) then
             found = true
             break
         end
     end
     if not found then
         local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
-        table.insert(links, {
-            line = string.format(ptrn, artifact, artifact)
-        })
+        table.insert(links, format(ptrn, artifact, artifact))
     end
 end
 
@@ -853,13 +848,12 @@ local function update_links(artifact: string)
     local begin_section = "begin_links_section"
     local end_section = "end_links_section"
 
-    local links_lines: {LinkRec} = {}
+    local links_lines: {string} = {}
     --local put, begin = false, false
     local put = false
     local line_counter = 0
     local other_lines: {string} = {}
     for line in file:lines() do
-        --table.insert(other_lines, line)
         local begin = false
         if string.match(line, begin_section) then
             put = true
@@ -867,18 +861,12 @@ local function update_links(artifact: string)
             goto continue
         end
         if string.match(line, end_section) then
-            --break
             put = false
             goto continue
         end
-        --print('put', put)
-        --print("line", line)
         line_counter = line_counter + 1
         if put then
-            table.insert(links_lines, {
-                line = line,
-                --line_num = line_counter
-            })
+            table.insert(links_lines, line)
         end
         :: continue ::
         if (not put) or begin then
@@ -886,9 +874,9 @@ local function update_links(artifact: string)
         end
     end
 
-    print(tabular(links_lines))
-    print()
-    print(tabular(other_lines))
+    --print(tabular(links_lines))
+    --print()
+    --print(tabular(other_lines))
 
     update_links_table(links_lines, artifact)
 
@@ -896,8 +884,8 @@ local function update_links(artifact: string)
     for _, line in ipairs(other_lines) do
         if string.match(line, begin_section) then
             table.insert(new_lines, line)
-            for _, v in ipairs(links_lines) do
-                table.insert(new_lines, v.line)
+            for _, link_line in ipairs(links_lines) do
+                table.insert(new_lines, link_line)
             end
             goto continue
         end
@@ -917,7 +905,6 @@ local function update_links(artifact: string)
     --print(cmd2)
     io.popen(cmd1)
     io.popen(cmd2)
-    --print('artifact', artifact)
 end
 
 local function search_and_load_cfg_up(fname: string): Cfg, string
@@ -1111,8 +1098,6 @@ local function build_chipmunk()
 
     lfs.chdir(prevdir)
 end
-
-local format = string.format
 
 local function link(objfiles: {string}, libname: string, flags: string)
     print('link: ')
