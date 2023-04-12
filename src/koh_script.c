@@ -151,6 +151,8 @@ int l_help(lua_State *lua) {
     if (argsnum == 1) {
         const char *arg = lua_tostring(lua, 1); 
 
+        console_buf_write_c(MAGENTA, "Список доступных функций");
+
         if (!strcmp(arg, "functions") || 
             !strcmp(arg, "funcs") || 
             !strcmp(arg, "f"))
@@ -168,8 +170,8 @@ int l_help(lua_State *lua) {
         console_buf_write_c(
             MAGENTA, "help('types') - список типов для которых доступны справка"
         );
-        console_buf_write_c(BLUE, "Примеры команды:");
-        console_buf_write_c(BLUE, "help('Tank')");
+        /*console_buf_write_c(BLUE, "Примеры команды:");*/
+        /*console_buf_write_c(BLUE, "help('Tank')");*/
     }
 
     printf("[%s]\n", stack_dump(lua));
@@ -346,7 +348,7 @@ static void print_redefine() {
     //printf("print_redefine: [%s]\n", sc_stack_dump());
 }
 
-int open_types(lua_State *lua) {
+static int open_types(lua_State *lua) {
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
     return 1;
 }
