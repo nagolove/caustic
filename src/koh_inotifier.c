@@ -142,6 +142,14 @@ static int l_inotifier_list(lua_State *lua) {
 
 void inotifier_init() {
     trace("inotifier_init:\n");
+
+    if (tbl) {
+        const char *msg = "inotifier_init: tbl ~= NULL, "
+                          "may be a double initialization?\n";
+        trace(msg);
+        exit(EXIT_FAILURE);
+    }
+
     tbl = htable_new(&(struct HTableSetup) {
         .cap = MAX_WATCHED_FILES
     });
@@ -168,7 +176,10 @@ void inotifier_init() {
 };
 
 void inotifier_update() {
-   //trace("inotifier_update\n");
+    // Система не инициализирована
+    if (!tbl) return;
+
+    //trace("inotifier_update\n");
     //fds[0].fd = STDIN_FILENO;       [> Console input <]
     //fds[0].events = POLLIN;
 
@@ -217,11 +228,15 @@ static void fnames_free() {
 void inotifier_shutdown() {
     trace("inotifier_shutdown:\n");
     htable_free(tbl);
+    tbl = NULL;
     close(fd);
     fnames_free();
 }
 
 void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
+    // Система не инициализирована
+    if (!tbl) return;
+
     if (watched_num == MAX_WATCHED_FILES) {
         trace("inotifier_watch: MAX_WATCHED_FILES reached\n");
         return;
@@ -245,6 +260,9 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
 }
 
 void inotifier_remove_watch(const char *fname) {
+    // Система не инициализирована
+    if (!tbl) return;
+
     assert(fname);
     for (int i = 0; i < watched_num; i++) {
         if (!strcmp(fname, fnames[i])) {
