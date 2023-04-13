@@ -82,6 +82,12 @@ local inspect = require 'inspect'
 --print('package.path', package.path)
 local cache: Cache
 
+local enum BuildMethod
+    "cmake"
+    "make"
+    "other"
+end
+
 -- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
 -- новых обновлений.
 -- Имена и зависимости(поля name и depends) обрабатываются в команде init
@@ -96,6 +102,7 @@ local record Dependency
     custom_build: function(dep: Dependency, dirname: string)
     after_build: function(dirname: string)
     depends: {string}
+    build_method: BuildMethod
 end
 
 local lfs = require 'lfs'
@@ -172,6 +179,7 @@ local dependencies: {Dependency} = {
         fname = "sunvox_lib-2.1c.zip",
         copy_for_wasm = false,
         after_init = sunvox_after_init,
+        --build_method = 'other',
     },
     {
         name = 'genann',
@@ -179,33 +187,39 @@ local dependencies: {Dependency} = {
         url = "https://github.com/codeplea/genann.git",
         after_build = gennann_after_build,
         copy_for_wasm = true,
+        --build_method = 'other',
     },
     {
         name = 'chipmunk',
         url = "https://github.com/nagolove/Chipmunk2D.git",
         copy_for_wasm = true,
+        --build_method = 'other',
     },
     {
         name = 'lua',
         url = "https://github.com/lua/lua.git",
         copy_for_wasm = true,
+        --build_method = 'other',
     },
     {
         name = 'raylib',
         url = "https://github.com/raysan5/raylib.git",
         copy_for_wasm = true,
+        --build_method = 'other',
     },
     {
         name = 'smallregex',
         url = "https://gitlab.com/relkom/small-regex.git",
         custom_build = small_regex_custom_build,
         copy_for_wasm = true,
+        --build_method = 'other',
         --depends = {'lua'},
     },
     {
         name = 'utf8proc',
         url = "https://github.com/JuliaLang/utf8proc.git",
         copy_for_wasm = true,
+        build_method = 'make',
         --depends = {'smallregex', "wfc"},
     },
     {
@@ -216,11 +230,13 @@ local dependencies: {Dependency} = {
         copy_for_wasm = true,
         after_init = copy_headers_to_wfc,
         depends = {'stb'},
+        --build_method = 'other',
     },
     {
         name = 'stb',
         url = "https://github.com/nothings/stb.git",
         copy_for_wasm = true,
+        --build_method = 'other',
     }
 }
 
@@ -485,7 +501,7 @@ end
 
 -- Разбить на download() и unpack()
 local function download_and_unpack_zip(dep: Dependency)
-    --local lfs = require 'lfs'
+    local lfs = require 'lfs'
     print('download_and_unpack_zip', inspect(dep))
     print('current directory', lfs.currentdir())
     local url = dep.url
@@ -725,7 +741,12 @@ local function _init(path: string, deps: {Dependency})
     end
 
     local threads: {lanes.Thread} = {}
-    local func = lanes.gen("*", dependency_init)
+    local opt_tbl = {
+        required = {
+            "lfs",
+        },
+    }
+    local func = lanes.gen("*", opt_tbl, dependency_init)
 
     local sorter = Toposorter.new()
 
@@ -823,7 +844,7 @@ end
 
 local site_repo = "~/nagolove.github.io/index.html"
 
-local function update_links_table(links: {string}, artifact: string)
+local function update_links_table(_links: {string}, artifact: string)
     local found = false
     for _, line in ipairs(links) do
         if string.match(line, artifact) then
@@ -833,7 +854,7 @@ local function update_links_table(links: {string}, artifact: string)
     end
     if not found then
         local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
-        table.insert(links, format(ptrn, artifact, artifact))
+        table.insert(_links, format(ptrn, artifact, artifact))
     end
 end
 
@@ -1058,17 +1079,37 @@ function actions.rocks(_: Args)
     end
 end
 
-local function common_build()
-    if file_exist("CMakeLists.txt") then
-        local fd = io.popen("cmake .")
-        --print(fd:read("*a"))
-        local ret = { fd:close() }
-        --if not ret[1] then
-        print(tabular(ret))
-        local _ = io.popen("make -j")
-        --print(fd2:read("*a"))
-    elseif file_exist("Makefile") or file_exist("makefile") then
-        local _ = io.popen("make -j")
+-- TODO: Сборка в другом каталоге по флагу, что-бы не срабатывал 
+-- "prevent in-tree build"
+local function build_with_cmake()
+    local fd = io.popen("cmake .")
+    --print(fd:read("*a"))
+    local ret = { fd:close() }
+    --if not ret[1] then
+    print(tabular(ret))
+    local _ = io.popen("make -j")
+    --print(fd2:read("*a"))
+end
+
+local function build_with_make()
+    local _ = io.popen("make -j")
+end
+
+-- TODO: Оставить только явный запуск сборки зависимости, указанный в виде
+-- константы в таблице данной зависимости.
+local function common_build(dep: Dependency)
+    if dep.build_method then
+        if dep.build_method == 'make' then
+            build_with_make()
+        elseif dep.build_method == 'cmake' then
+            build_with_cmake()
+        end
+    else
+        if file_exist("CMakeLists.txt") then
+            build_with_cmake()
+        elseif file_exist("Makefile") or file_exist("makefile") then
+            build_with_make()
+        end
     end
 end
 
@@ -1274,7 +1315,7 @@ local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     print('includedirs after')
     print(tabular(_includedirs))
 
-    local include_str = table.concat(includedirs, " ")
+    local include_str = table.concat(_includedirs, " ")
     print('include_str', include_str)
 
     --print("os.exit()")
@@ -1420,7 +1461,14 @@ function actions.wbuild(_: Args)
         build_utf8proc()
         build_koh()
     else
-        local cfg = loadfile("bld.lua")() as Cfg
+        local cfg: Cfg
+        local ok, errmsg: boolean, string = pcall(function()
+            cfg = loadfile("bld.lua")() as Cfg
+        end)
+        if not ok then
+            print("Failed to load bld.lua", errmsg)
+            os.exit(1)
+        end
         build_project("wasm_objects", { cfg.main })
         link_libproject()
         link_project(cfg.main)
@@ -1428,6 +1476,7 @@ function actions.wbuild(_: Args)
 end
 
 local function _build(dirname: string)
+    print("_build:", dirname)
     local prevdir = lfs.currentdir()
     lfs.chdir(dirname)
 
@@ -1442,7 +1491,7 @@ local function _build(dirname: string)
         end
     else
         local ok, errmsg: boolean, string = pcall(function()
-            common_build()
+            common_build(dep)
         end)
         if not ok then
             print('common_build() failed with', errmsg)
@@ -1746,6 +1795,7 @@ function actions.make(_args: Args)
     -- TODO: Отладочная и релизная сборка через команду
     local _flags: string = table.concat({
         "-ggdb3",
+        "-Wall",
         "-fsanitize=address",
         "-fPIC",
     }, " ")
@@ -1837,6 +1887,7 @@ local function main()
     -- Сперва скопировать их в отдельный каталог.
     -- Собрать все модули согласно спецификации bld.lua для библиотеки caustic
     -- Собрать целевую программу, слинковать ее с libcaustic.a (wasm)
+    -- TODO: документация на все опции, команда help
     parser:command("init")
         :summary("download dependencies from network")
         :option("-n --name")
@@ -1859,7 +1910,7 @@ local function main()
     parser:command("check_updates")
         :summary("print new version of libraries")
     parser:command("publish")
-        :summary("publish wasm code to ~/nagolove.github.io repo and push to web")
+        :summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
 
     local make = parser:command("make")
     make
