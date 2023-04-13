@@ -7,6 +7,7 @@ local record lanes
     type func = function(...:any): any
     --gen: function(opts: string, f: func): func
     gen: function(opts: string, f: func): Thread
+    gen: function(opts: string, opt_tbl: any, f: func): Thread
 end
 
 return lanes
