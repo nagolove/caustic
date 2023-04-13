@@ -98,6 +98,13 @@ local cache
 
 
 
+
+
+
+
+
+
+
 local lfs = require('lfs')
 
 
@@ -172,6 +179,7 @@ local dependencies = {
       fname = "sunvox_lib-2.1c.zip",
       copy_for_wasm = false,
       after_init = sunvox_after_init,
+
    },
    {
       name = 'genann',
@@ -179,21 +187,25 @@ local dependencies = {
       url = "https://github.com/codeplea/genann.git",
       after_build = gennann_after_build,
       copy_for_wasm = true,
+
    },
    {
       name = 'chipmunk',
       url = "https://github.com/nagolove/Chipmunk2D.git",
       copy_for_wasm = true,
+
    },
    {
       name = 'lua',
       url = "https://github.com/lua/lua.git",
       copy_for_wasm = true,
+
    },
    {
       name = 'raylib',
       url = "https://github.com/raysan5/raylib.git",
       copy_for_wasm = true,
+
    },
    {
       name = 'smallregex',
@@ -201,11 +213,13 @@ local dependencies = {
       custom_build = small_regex_custom_build,
       copy_for_wasm = true,
 
+
    },
    {
       name = 'utf8proc',
       url = "https://github.com/JuliaLang/utf8proc.git",
       copy_for_wasm = true,
+      build_method = 'make',
 
    },
    {
@@ -216,11 +230,13 @@ local dependencies = {
       copy_for_wasm = true,
       after_init = copy_headers_to_wfc,
       depends = { 'stb' },
+
    },
    {
       name = 'stb',
       url = "https://github.com/nothings/stb.git",
       copy_for_wasm = true,
+
    },
 }
 
@@ -485,7 +501,7 @@ end
 
 
 local function download_and_unpack_zip(dep)
-
+   local lfs = require('lfs')
    print('download_and_unpack_zip', inspect(dep))
    print('current directory', lfs.currentdir())
    local url = dep.url
@@ -725,7 +741,12 @@ local function _init(path, deps)
    end
 
    local threads = {}
-   local func = lanes.gen("*", dependency_init)
+   local opt_tbl = {
+      required = {
+         "lfs",
+      },
+   }
+   local func = lanes.gen("*", opt_tbl, dependency_init)
 
    local sorter = Toposorter.new()
 
@@ -823,7 +844,7 @@ end
 
 local site_repo = "~/nagolove.github.io/index.html"
 
-local function update_links_table(links, artifact)
+local function update_links_table(_links, artifact)
    local found = false
    for _, line in ipairs(links) do
       if string.match(line, artifact) then
@@ -833,7 +854,7 @@ local function update_links_table(links, artifact)
    end
    if not found then
       local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
-      table.insert(links, format(ptrn, artifact, artifact))
+      table.insert(_links, format(ptrn, artifact, artifact))
    end
 end
 
@@ -849,7 +870,6 @@ local function update_links(artifact)
    local end_section = "end_links_section"
 
    local links_lines = {}
-
    local put = false
    local line_counter = 0
    local other_lines = {}
@@ -873,10 +893,6 @@ local function update_links(artifact)
          table.insert(other_lines, line)
       end
    end
-
-
-
-
 
    update_links_table(links_lines, artifact)
 
@@ -932,6 +948,13 @@ function actions.publish(_args)
    else
       print("Bad directory, no artifact value in bld.lua")
    end
+
+
+
+
+
+
+
 end
 
 local function rec_remove_dir(dirname)
@@ -1056,17 +1079,37 @@ function actions.rocks(_)
    end
 end
 
-local function common_build()
-   if file_exist("CMakeLists.txt") then
-      local fd = io.popen("cmake .")
 
-      local ret = { fd:close() }
 
-      print(tabular(ret))
-      local _ = io.popen("make -j")
+local function build_with_cmake()
+   local fd = io.popen("cmake .")
 
-   elseif file_exist("Makefile") or file_exist("makefile") then
-      local _ = io.popen("make -j")
+   local ret = { fd:close() }
+
+   print(tabular(ret))
+   local _ = io.popen("make -j")
+
+end
+
+local function build_with_make()
+   local _ = io.popen("make -j")
+end
+
+
+
+local function common_build(dep)
+   if dep.build_method then
+      if dep.build_method == 'make' then
+         build_with_make()
+      elseif dep.build_method == 'cmake' then
+         build_with_cmake()
+      end
+   else
+      if file_exist("CMakeLists.txt") then
+         build_with_cmake()
+      elseif file_exist("Makefile") or file_exist("makefile") then
+         build_with_make()
+      end
    end
 end
 
@@ -1272,7 +1315,7 @@ local function build_project(output_dir, exclude)
    print('includedirs after')
    print(tabular(_includedirs))
 
-   local include_str = table.concat(includedirs, " ")
+   local include_str = table.concat(_includedirs, " ")
    print('include_str', include_str)
 
 
@@ -1418,7 +1461,14 @@ function actions.wbuild(_)
       build_utf8proc()
       build_koh()
    else
-      local cfg = loadfile("bld.lua")()
+      local cfg
+      local ok, errmsg = pcall(function()
+         cfg = loadfile("bld.lua")()
+      end)
+      if not ok then
+         print("Failed to load bld.lua", errmsg)
+         os.exit(1)
+      end
       build_project("wasm_objects", { cfg.main })
       link_libproject()
       link_project(cfg.main)
@@ -1426,6 +1476,7 @@ function actions.wbuild(_)
 end
 
 local function _build(dirname)
+   print("_build:", dirname)
    local prevdir = lfs.currentdir()
    lfs.chdir(dirname)
 
@@ -1440,7 +1491,7 @@ local function _build(dirname)
       end
    else
       local ok, errmsg = pcall(function()
-         common_build()
+         common_build(dep)
       end)
       if not ok then
          print('common_build() failed with', errmsg)
@@ -1744,6 +1795,7 @@ function actions.make(_args)
 
    local _flags = table.concat({
       "-ggdb3",
+      "-Wall",
       "-fsanitize=address",
       "-fPIC",
    }, " ")
@@ -1835,6 +1887,7 @@ local function main()
 
 
 
+
    parser:command("init"):
    summary("download dependencies from network"):
    option("-n --name")
@@ -1853,11 +1906,11 @@ local function main()
    parser:command("compile_flags"):
    summary("print compile_flags.txt to stdout")
    parser:command("wbuild"):
-   summary("build dependencies and libcaustic for webassembly platform")
+   summary("build dependencies and libcaustic for wasm or build project")
    parser:command("check_updates"):
    summary("print new version of libraries")
    parser:command("publish"):
-   summary("publish wasm code to ~/nagolove.github.io repo and push to web")
+   summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
 
    local make = parser:command("make")
    make:
