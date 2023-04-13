@@ -1,10 +1,14 @@
 #include "koh_music.h"
 
+/*#define MUSIC_SUNVOX*/
+
+#ifdef MUSIC_SUNVOX
 #ifdef PLATFORM_WEB
     #define SUNVOX_STATIC_LIB
 #else
     #define SUNVOX_MAIN /* We are using a dynamic lib. SUNVOX_MAIN adds implementation of sv_load_dll()/sv_unload_dll() */
     #include <dlfcn.h>
+#endif
 #endif
 
 #include "koh_common.h"
@@ -46,6 +50,7 @@ static void on_song_remove(
     sv_unlock_slot(song->slot);
 }
 
+#ifdef MUSIC_SUNVOX
 static void svx_init() {
 #ifndef PLATFORM_WEB
     int errcode = sv_load_dll();
@@ -66,8 +71,13 @@ static void svx_init() {
         .on_remove = on_song_remove,
     });
 }
+#else
+static void svx_init() {
+}
+#endif
 
-void svx_shutdown() {
+#ifdef MUSIC_SUNVOX
+static void svx_shutdown() {
     htable_free(songs);
     sv_deinit();
 
@@ -77,6 +87,10 @@ void svx_shutdown() {
 #endif
 
 }
+#else
+static void svx_shutdown() {
+}
+#endif
 
 #ifdef MUSIC_RAY
 static void music_init() {
@@ -126,6 +140,7 @@ void koh_music_shutdown() {
     is_inited = false;
 }
 
+#ifdef MUSIX_SUNVOX
 struct Song *koh_music_load(const char *fname) {
     assert(fname);
 
@@ -152,7 +167,13 @@ struct Song *koh_music_load(const char *fname) {
     last_slot++;
     return htable_add_s(songs, basename, &song, sizeof(song));
 }
+#else
+struct Song *koh_music_load(const char *fname) {
+    return NULL;
+}
+#endif
 
+#ifdef SUNVOX_MUSIC
 void svx_play(const char *modname) {
     assert(modname);
     struct Song *song = htable_get_s(songs, modname, NULL);
@@ -168,6 +189,10 @@ void svx_play(const char *modname) {
     err = sv_play_from_beginning(song->slot);
     trace("svx_play: sv_play_from_beginning err %d\n", err);
 }
+#else
+void svx_play(const char *modname) {
+}
+#endif
 
 void koh_music_play(const char *modname) {
     svx_play(modname);
@@ -177,6 +202,7 @@ void koh_music_play(const char *modname) {
     //}
 }
 
+#ifdef SUNVOX_MUSIC
 void koh_music_modules_list(const char *modname) {
     assert(modname);
     struct Song *song = htable_get_s(songs, modname, NULL);
@@ -190,7 +216,12 @@ void koh_music_modules_list(const char *modname) {
         trace("koh_music_modules_list: %d '%s'\n", i, _modname);
     }
 }
+#else
+void koh_music_modules_list(const char *modname) {
+}
+#endif
 
+#ifdef SUNVOX_MUSIC
 void koh_music_scope(const char *modname, int mod_num, Vector2 pos) {
     assert(modname);
     struct Song *song = htable_get_s(songs, modname, NULL);
@@ -216,3 +247,7 @@ void koh_music_scope(const char *modname, int mod_num, Vector2 pos) {
         DrawLineEx(last, next, thick, color);
     }
 }
+#else
+void koh_music_scope(const char *modname, int mod_num, Vector2 pos) {
+}
+#endif

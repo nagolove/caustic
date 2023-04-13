@@ -108,6 +108,18 @@ end
 local lfs = require 'lfs'
 --local md5 = require "md5"
 
+local function shallow_copy<X>(a: X): X
+    if type(a) == 'table' then
+        local ret = {}
+        for k, v in pairs(a as {any:any}) do
+            ret[k] = v
+        end
+        return ret as X
+    else
+        return a
+    end
+end
+
 local function cp(from: string, to: string)
     print(string.format("copy '%s' to '%s'", from, to))
     local ok, errmsg: boolean, string = pcall(function()
@@ -177,7 +189,7 @@ local dependencies: {Dependency} = {
         url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
         dir = "sunvox",
         fname = "sunvox_lib-2.1c.zip",
-        copy_for_wasm = false,
+        copy_for_wasm = true,
         after_init = sunvox_after_init,
         --build_method = 'other',
     },
@@ -501,7 +513,7 @@ end
 
 -- Разбить на download() и unpack()
 local function download_and_unpack_zip(dep: Dependency)
-    local lfs = require 'lfs'
+    --local lfs = require 'lfs'
     print('download_and_unpack_zip', inspect(dep))
     print('current directory', lfs.currentdir())
     local url = dep.url
@@ -793,6 +805,7 @@ local enum MakeAction
 end
 
 local record Args
+    minshell: string
     c: string
     j: string
     name: string
@@ -842,7 +855,8 @@ function actions.init(_args: Args)
     --_init(win_third_party, deps)
 end
 
-local site_repo = "~/nagolove.github.io/index.html"
+local site_repo = "~/nagolove.github.io"
+local site_repo_index = site_repo .. "/index.html"
 
 local function update_links_table(_links: {string}, artifact: string)
     local found = false
@@ -859,7 +873,7 @@ local function update_links_table(_links: {string}, artifact: string)
 end
 
 local function update_links(artifact: string)
-    local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+    local site_repo_tmp = string.gsub(site_repo_index, "~", os.getenv("HOME"))
     local file = io.open(site_repo_tmp, "r")
     if not file then
         print(string.format("Could not load '%s' file", site_repo_tmp));
@@ -909,6 +923,9 @@ local function update_links(artifact: string)
             :: continue ::
     end
 
+    print('new_lines')
+    print(tabular(new_lines))
+
     file = io.open(site_repo_tmp .. ".tmp", "w")
     for _, line in ipairs(new_lines) do
         file:write(line .. "\n")
@@ -917,8 +934,8 @@ local function update_links(artifact: string)
 
     local cmd1 = "mv " .. site_repo_tmp .. " " .. site_repo_tmp .. ".bak"
     local cmd2 = "mv " .. site_repo_tmp .. ".tmp " .. site_repo_tmp
-    --print(cmd1)
-    --print(cmd2)
+    print(cmd1)
+    print(cmd2)
     io.popen(cmd1)
     io.popen(cmd2)
 end
@@ -929,7 +946,7 @@ local function search_and_load_cfg_up(fname: string): Cfg, string
     -- C какой позиции в дереве каталогов начинать сборку?
     local cfg: Cfg
     local ok, errmsg: boolean, string = pcall(function()
-        cfg = loadfile("bld.lua")() as Cfg
+        cfg = loadfile(fname)() as Cfg
     end)
 
     if not ok then
@@ -940,14 +957,26 @@ local function search_and_load_cfg_up(fname: string): Cfg, string
     return cfg
 end
 
+local function check_files_in_dir(dirname: string, filelist: {string}): boolean
+    print('check_files_in_dir', dirname, inspect(filelist))
+    local dict = {}
+    for _, v in ipairs(filelist) do
+        dict[v] = true
+    end
+    for file in lfs.dir(dirname) do
+        if dict[file] then
+            dict[file] = nil
+        end
+    end
+    local elements_num = 0
+    for _, _ in pairs(dict) do
+        elements_num = elements_num + 1
+    end
+    return elements_num == 0
+end
+
 function actions.publish(_args: Args)
     print('publish')
-    local cfg: Cfg = search_and_load_cfg_up("bld.lua")
-    if cfg.artifact then
-        update_links(cfg.artifact)
-    else
-        print("Bad directory, no artifact value in bld.lua")
-    end
 
     -- TODO: 
     -- * проверка наличия wasm сборки
@@ -955,6 +984,55 @@ function actions.publish(_args: Args)
     -- * выгрузка сборки в репозиторий сайта
     -- * создание коммита
     -- * выгрузка репозитория сайта на сервер
+
+    local build_dir = "wasm_build"
+    local attrs = lfs.attributes(build_dir)
+    if not attrs then
+        print(format("There is not '%s' directory", build_dir))
+        return
+    end
+
+    print('attrs')
+    print(tabular(attrs))
+
+    if not check_files_in_dir(build_dir, {
+        "index.data",
+        "index.html"  ,
+        "index.js" ,
+        "index.wasm",
+    }) then
+        print("Not all wasm files in build directory.")
+        os.exit(1)
+    end
+
+    --print( "os.exit(1)" )
+    --os.exit(1)
+    local cfg: Cfg = search_and_load_cfg_up("bld.lua")
+    if cfg.artifact then
+        update_links(cfg.artifact)
+    else
+        print("Bad directory, no artifact value in bld.lua")
+    end
+
+    local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+    local cmd = format(
+        "cp -r %s %s/%s",
+        build_dir, site_repo_tmp, cfg.artifact
+    )
+    print(cmd)
+    io.popen(cmd)
+
+    push_current_dir()
+    lfs.chdir(site_repo_tmp)
+    print(lfs.currentdir())
+
+    --io.popen("ls")
+    --io.popen("pwd")
+
+    io.popen(format("git add %s", cfg.artifact))
+    io.popen(format('git commit -am "%s updated"', cfg.artifact))
+
+    pop_dir()
 end
 
 local function rec_remove_dir(dirname: string)
@@ -1346,7 +1424,9 @@ local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     return objfiles
 end
 
-local function link_libproject(objfiles: {string})
+local function link_wasm_libproject(objfiles: {string})
+    print('link_libproject')
+    assert(objfiles)
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_objects")
     print('currentdir', lfs.currentdir())
@@ -1379,7 +1459,30 @@ local function build_koh()
     link_koh_lib(dir)
 end
 
-local function link_project(main_fname: string)
+local function make_L(list: {string}, path_prefix: string): {string}
+    local ret = {}
+    path_prefix = path_prefix or ""
+    for _, v in ipairs(list) do
+        table.insert(ret, "-L" .. path_prefix .. v)
+    end
+    return ret
+end
+
+local function make_l(list: {string}): {string}
+    local ret = {}
+    local static_pattern = "%:static$"
+    for _, v in ipairs(list) do
+        if string.match(v, static_pattern) then
+            --table.insert(ret, "-Wl,-Bstatic")
+            table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
+        else
+            table.insert(ret, "-l" .. v)
+        end
+    end
+    return ret
+end
+
+local function link_wasm_project(main_fname: string, _args: Args)
     --local currentdir = lfs.currentdir()
     print('link_project:', lfs.currentdir())
     --local project_dir = string.match(currentdir, ".*/(.*)$")
@@ -1394,14 +1497,18 @@ local function link_project(main_fname: string)
         "-s ALLOW_MEMORY_GROWTH=1",
         "-s EMULATE_FUNCTION_POINTER_CASTS",
         "-s LLD_REPORT_UNDEFINED",
-        --"--shell-file ../caustic/3rd_party/raylib/src/minshell.html",
         --"-o index.html src/main.c",
         "--preload-file assets",
         "-Wall -flto -g3 -DPLATFORM_WEB",
         main_fname or '',
     }
 
-    table.insert(flags, format("-o %s/%s.html", project_dir, 'main'))
+    local shell = "--shell-file ../caustic/3rd_party/raylib/src/minshell.html"
+    if _args.minshell then
+        table.insert(flags, 1, shell)
+    end
+
+    table.insert(flags, format("-o %s/%s.html", project_dir, 'index'))
 
     local _includedirs = {}
     for _, v in ipairs(includedirs) do
@@ -1414,11 +1521,21 @@ local function link_project(main_fname: string)
 
     local _libs = {}
     for _, v in ipairs(links) do
-        table.insert(_libs, "-l" .. v)
+        table.insert(_libs, v)
     end
-    table.insert(_libs, "-lcaustic")
-    table.insert(_libs, "-lproject")
-    print("_libs", inspect(_libs))
+    table.insert(_libs, "caustic")
+    table.insert(_libs, "project")
+
+    -- XXX:
+    --table.insert(_libs, "sunvox")
+
+    print("_libs before", inspect(_libs))
+    _libs = make_l(_libs)
+    print("_libs after", inspect(_libs))
+
+    --print("os.exit(1)")
+    --os.exit(1)
+
     local libs_str = table.concat(_libs, " ")
 
     print(inspect(_libs))
@@ -1439,6 +1556,11 @@ local function link_project(main_fname: string)
     print('currentdir', lfs.currentdir())
     local libspath_str = table.concat(libspath, " ")
 
+    print('flags')
+    print(tabular(flags))
+    --print("os.exit(1)")
+    --os.exit(1)
+
     local flags_str = table.concat(flags, " ")
     local cmd = format(
         "emcc %s %s %s %s", libspath_str, libs_str, includes_str, flags_str
@@ -1450,7 +1572,7 @@ local function link_project(main_fname: string)
     lfs.chdir(prev_dir)
 end
 
-function actions.wbuild(_: Args)
+function actions.wbuild(_args: Args)
     local exist = lfs.attributes("caustic.lua")
     if exist then
         build_chipmunk()
@@ -1469,9 +1591,10 @@ function actions.wbuild(_: Args)
             print("Failed to load bld.lua", errmsg)
             os.exit(1)
         end
-        build_project("wasm_objects", { cfg.main })
-        link_libproject()
-        link_project(cfg.main)
+        -- TODO: parallel build
+        local objfiles = build_project("wasm_objects", { cfg.main })
+        link_wasm_libproject(objfiles)
+        link_wasm_project("src/" .. cfg.main, _args)
     end
 end
 
@@ -1582,41 +1705,6 @@ function Cache:save()
     local data = serpent.dump(self.cache)
     --print(tabular(data))
     file:write(data)
-end
-
-local function make_L(list: {string}, path_prefix: string): {string}
-    local ret = {}
-    path_prefix = path_prefix or ""
-    for _, v in ipairs(list) do
-        table.insert(ret, "-L" .. path_prefix .. v)
-    end
-    return ret
-end
-
-local function make_l(list: {string}): {string}
-    local ret = {}
-    local static_pattern = "%:static$"
-    for _, v in ipairs(list) do
-        if string.match(v, static_pattern) then
-            --table.insert(ret, "-Wl,-Bstatic")
-            table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
-        else
-            table.insert(ret, "-l" .. v)
-        end
-    end
-    return ret
-end
-
-local function shallow_copy<X>(a: X): X
-    if type(a) == 'table' then
-        local ret = {}
-        for k, v in pairs(a as {any:any}) do
-            ret[k] = v
-        end
-        return ret as X
-    else
-        return a
-    end
 end
 
 local function get_cores_num(): integer
@@ -1748,10 +1836,12 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     print(pipe:read("*a"))
 end
 
+--[[
 local function set_executable_bit(fname: string)
     local pipe = io.popen("chmod +x " .. fname)
     print(pipe:read("*a"))
 end
+--]]
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
@@ -1907,6 +1997,7 @@ local function main()
         :summary("print compile_flags.txt to stdout")
     parser:command("wbuild")
         :summary("build dependencies and libcaustic for wasm or build project")
+        :flag("-m --minshell", "use minimal web shell")
     parser:command("check_updates")
         :summary("print new version of libraries")
     parser:command("publish")

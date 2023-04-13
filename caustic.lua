@@ -108,6 +108,18 @@ local cache
 local lfs = require('lfs')
 
 
+local function shallow_copy(a)
+   if type(a) == 'table' then
+      local ret = {}
+      for k, v in pairs(a) do
+         ret[k] = v
+      end
+      return ret
+   else
+      return a
+   end
+end
+
 local function cp(from, to)
    print(string.format("copy '%s' to '%s'", from, to))
    local ok, errmsg = pcall(function()
@@ -177,7 +189,7 @@ local dependencies = {
       url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
       dir = "sunvox",
       fname = "sunvox_lib-2.1c.zip",
-      copy_for_wasm = false,
+      copy_for_wasm = true,
       after_init = sunvox_after_init,
 
    },
@@ -501,7 +513,7 @@ end
 
 
 local function download_and_unpack_zip(dep)
-   local lfs = require('lfs')
+
    print('download_and_unpack_zip', inspect(dep))
    print('current directory', lfs.currentdir())
    local url = dep.url
@@ -800,6 +812,7 @@ end
 
 
 
+
 local dir_stack = {}
 
 local function push_current_dir()
@@ -842,7 +855,8 @@ function actions.init(_args)
 
 end
 
-local site_repo = "~/nagolove.github.io/index.html"
+local site_repo = "~/nagolove.github.io"
+local site_repo_index = site_repo .. "/index.html"
 
 local function update_links_table(_links, artifact)
    local found = false
@@ -859,7 +873,7 @@ local function update_links_table(_links, artifact)
 end
 
 local function update_links(artifact)
-   local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+   local site_repo_tmp = string.gsub(site_repo_index, "~", os.getenv("HOME"))
    local file = io.open(site_repo_tmp, "r")
    if not file then
       print(string.format("Could not load '%s' file", site_repo_tmp));
@@ -917,8 +931,8 @@ local function update_links(artifact)
 
    local cmd1 = "mv " .. site_repo_tmp .. " " .. site_repo_tmp .. ".bak"
    local cmd2 = "mv " .. site_repo_tmp .. ".tmp " .. site_repo_tmp
-
-
+   print(cmd1)
+   print(cmd2)
    io.popen(cmd1)
    io.popen(cmd2)
 end
@@ -929,7 +943,7 @@ local function search_and_load_cfg_up(fname)
 
    local cfg
    local ok, errmsg = pcall(function()
-      cfg = loadfile("bld.lua")()
+      cfg = loadfile(fname)()
    end)
 
    if not ok then
@@ -940,8 +954,56 @@ local function search_and_load_cfg_up(fname)
    return cfg
 end
 
+local function check_files_in_dir(dirname, filelist)
+   print('check_files_in_dir', dirname, inspect(filelist))
+   local dict = {}
+   for _, v in ipairs(filelist) do
+      dict[v] = true
+   end
+   for file in lfs.dir(dirname) do
+      if dict[file] then
+         dict[file] = nil
+      end
+   end
+   local elements_num = 0
+   for _, _ in pairs(dict) do
+      elements_num = elements_num + 1
+   end
+   return elements_num == 0
+end
+
 function actions.publish(_args)
    print('publish')
+
+
+
+
+
+
+
+
+   local build_dir = "wasm_build"
+   local attrs = lfs.attributes(build_dir)
+   if not attrs then
+      print(format("There is not '%s' directory", build_dir))
+      return
+   end
+
+   print('attrs')
+   print(tabular(attrs))
+
+   if not check_files_in_dir(build_dir, {
+         "index.data",
+         "index.html",
+         "index.js",
+         "index.wasm",
+      }) then
+      print("Not all wasm files in build directory.")
+      os.exit(1)
+   end
+
+
+
    local cfg = search_and_load_cfg_up("bld.lua")
    if cfg.artifact then
       update_links(cfg.artifact)
@@ -949,12 +1011,25 @@ function actions.publish(_args)
       print("Bad directory, no artifact value in bld.lua")
    end
 
+   local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+   local cmd = format(
+   "cp -r %s %s/%s",
+   build_dir, site_repo_tmp, cfg.artifact)
+
+   print(cmd)
+   io.popen(cmd)
+
+   push_current_dir()
+   lfs.chdir(site_repo_tmp)
+   print(lfs.currentdir())
 
 
 
 
+   io.popen(format("git add %s", cfg.artifact))
+   io.popen(format('git commit -am "%s updated"', cfg.artifact))
 
-
+   pop_dir()
 end
 
 local function rec_remove_dir(dirname)
@@ -1346,7 +1421,9 @@ local function build_project(output_dir, exclude)
    return objfiles
 end
 
-local function link_libproject(objfiles)
+local function link_wasm_libproject(objfiles)
+   print('link_libproject')
+   assert(objfiles)
    local prevdir = lfs.currentdir()
    lfs.chdir("wasm_objects")
    print('currentdir', lfs.currentdir())
@@ -1379,7 +1456,30 @@ local function build_koh()
    link_koh_lib(dir)
 end
 
-local function link_project(main_fname)
+local function make_L(list, path_prefix)
+   local ret = {}
+   path_prefix = path_prefix or ""
+   for _, v in ipairs(list) do
+      table.insert(ret, "-L" .. path_prefix .. v)
+   end
+   return ret
+end
+
+local function make_l(list)
+   local ret = {}
+   local static_pattern = "%:static$"
+   for _, v in ipairs(list) do
+      if string.match(v, static_pattern) then
+
+         table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
+      else
+         table.insert(ret, "-l" .. v)
+      end
+   end
+   return ret
+end
+
+local function link_wasm_project(main_fname, _args)
 
    print('link_project:', lfs.currentdir())
 
@@ -1395,13 +1495,17 @@ local function link_project(main_fname)
       "-s EMULATE_FUNCTION_POINTER_CASTS",
       "-s LLD_REPORT_UNDEFINED",
 
-
       "--preload-file assets",
       "-Wall -flto -g3 -DPLATFORM_WEB",
       main_fname or '',
    }
 
-   table.insert(flags, format("-o %s/%s.html", project_dir, 'main'))
+   local shell = "--shell-file ../caustic/3rd_party/raylib/src/minshell.html"
+   if _args.minshell then
+      table.insert(flags, 1, shell)
+   end
+
+   table.insert(flags, format("-o %s/%s.html", project_dir, 'index'))
 
    local _includedirs = {}
    for _, v in ipairs(includedirs) do
@@ -1414,11 +1518,21 @@ local function link_project(main_fname)
 
    local _libs = {}
    for _, v in ipairs(links) do
-      table.insert(_libs, "-l" .. v)
+      table.insert(_libs, v)
    end
-   table.insert(_libs, "-lcaustic")
-   table.insert(_libs, "-lproject")
-   print("_libs", inspect(_libs))
+   table.insert(_libs, "caustic")
+   table.insert(_libs, "project")
+
+
+
+
+   print("_libs before", inspect(_libs))
+   _libs = make_l(_libs)
+   print("_libs after", inspect(_libs))
+
+
+
+
    local libs_str = table.concat(_libs, " ")
 
    print(inspect(_libs))
@@ -1439,6 +1553,11 @@ local function link_project(main_fname)
    print('currentdir', lfs.currentdir())
    local libspath_str = table.concat(libspath, " ")
 
+   print('flags')
+   print(tabular(flags))
+
+
+
    local flags_str = table.concat(flags, " ")
    local cmd = format(
    "emcc %s %s %s %s", libspath_str, libs_str, includes_str, flags_str)
@@ -1450,7 +1569,7 @@ local function link_project(main_fname)
    lfs.chdir(prev_dir)
 end
 
-function actions.wbuild(_)
+function actions.wbuild(_args)
    local exist = lfs.attributes("caustic.lua")
    if exist then
       build_chipmunk()
@@ -1469,9 +1588,10 @@ function actions.wbuild(_)
          print("Failed to load bld.lua", errmsg)
          os.exit(1)
       end
-      build_project("wasm_objects", { cfg.main })
-      link_libproject()
-      link_project(cfg.main)
+
+      local objfiles = build_project("wasm_objects", { cfg.main })
+      link_wasm_libproject(objfiles)
+      link_wasm_project("src/" .. cfg.main, _args)
    end
 end
 
@@ -1582,41 +1702,6 @@ function Cache:save()
    local data = serpent.dump(self.cache)
 
    file:write(data)
-end
-
-local function make_L(list, path_prefix)
-   local ret = {}
-   path_prefix = path_prefix or ""
-   for _, v in ipairs(list) do
-      table.insert(ret, "-L" .. path_prefix .. v)
-   end
-   return ret
-end
-
-local function make_l(list)
-   local ret = {}
-   local static_pattern = "%:static$"
-   for _, v in ipairs(list) do
-      if string.match(v, static_pattern) then
-
-         table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
-      else
-         table.insert(ret, "-l" .. v)
-      end
-   end
-   return ret
-end
-
-local function shallow_copy(a)
-   if type(a) == 'table' then
-      local ret = {}
-      for k, v in pairs(a) do
-         ret[k] = v
-      end
-      return ret
-   else
-      return a
-   end
 end
 
 local function get_cores_num()
@@ -1748,10 +1833,12 @@ local function project_link(ctx, cfg, _args)
    print(pipe:read("*a"))
 end
 
-local function set_executable_bit(fname)
-   local pipe = io.popen("chmod +x " .. fname)
-   print(pipe:read("*a"))
-end
+
+
+
+
+
+
 
 
 function actions.make(_args)
@@ -1906,7 +1993,8 @@ local function main()
    parser:command("compile_flags"):
    summary("print compile_flags.txt to stdout")
    parser:command("wbuild"):
-   summary("build dependencies and libcaustic for wasm or build project")
+   summary("build dependencies and libcaustic for wasm or build project"):
+   flag("-m --minshell", "use minimal web shell")
    parser:command("check_updates"):
    summary("print new version of libraries")
    parser:command("publish"):
