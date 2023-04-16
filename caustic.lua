@@ -120,6 +120,25 @@ local function shallow_copy(a)
    end
 end
 
+local dir_stack = {}
+
+local function cmd_do(_cmd)
+
+
+
+   os.execute(_cmd)
+end
+
+local function push_current_dir()
+   local dir = lfs.currentdir()
+   table.insert(dir_stack, dir)
+   return dir
+end
+
+local function pop_dir()
+   lfs.chdir(table.remove(dir_stack, #dir_stack))
+end
+
 local function cp(from, to)
    print(string.format("copy '%s' to '%s'", from, to))
    local ok, errmsg = pcall(function()
@@ -150,12 +169,10 @@ end
 
 local function gennann_after_build(dirname)
    print('linking genann to static library', dirname)
-   local prevdir = lfs.currentdir()
-   print('prevdir', prevdir);
+   push_current_dir()
    lfs.chdir(dirname)
-   local fd = io.popen("ar rcs libgenann.a genann.o")
-   print(fd:read("*a"))
-   lfs.chdir(prevdir)
+   cmd_do("ar rcs libgenann.a genann.o")
+   pop_dir()
 end
 
 local function small_regex_custom_build(_, dirname)
@@ -813,18 +830,6 @@ end
 
 
 
-local dir_stack = {}
-
-local function push_current_dir()
-   local dir = lfs.currentdir()
-   table.insert(dir_stack, dir)
-   return dir
-end
-
-local function pop_dir()
-   lfs.chdir(table.remove(dir_stack, #dir_stack))
-end
-
 
 
 
@@ -859,9 +864,12 @@ local site_repo = "~/nagolove.github.io"
 local site_repo_index = site_repo .. "/index.html"
 
 local function update_links_table(_links, artifact)
+   print('update_links_table:', artifact)
    local found = false
-   for _, line in ipairs(links) do
+   for _, line in ipairs(_links) do
+      print('line', line)
       if string.match(line, artifact) then
+         print('matched line', line)
          found = true
          break
       end
@@ -908,7 +916,13 @@ local function update_links(artifact)
       end
    end
 
+   print('link_lines before update')
+   print(tabular(links_lines))
+
    update_links_table(links_lines, artifact)
+
+   print('link_lines after update')
+   print(tabular(links_lines))
 
    local new_lines = {}
    for _, line in ipairs(other_lines) do
@@ -923,18 +937,24 @@ local function update_links(artifact)
       ::continue::
    end
 
+   print('new_lines')
+   print(tabular(new_lines))
+
    file = io.open(site_repo_tmp .. ".tmp", "w")
    for _, line in ipairs(new_lines) do
       file:write(line .. "\n")
    end
    file:close()
 
+
    local cmd1 = "mv " .. site_repo_tmp .. " " .. site_repo_tmp .. ".bak"
    local cmd2 = "mv " .. site_repo_tmp .. ".tmp " .. site_repo_tmp
+
    print(cmd1)
    print(cmd2)
-   io.popen(cmd1)
-   io.popen(cmd2)
+
+
+
 end
 
 local function search_and_load_cfg_up(fname)
@@ -1013,11 +1033,12 @@ function actions.publish(_args)
 
    local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
    local cmd = format(
-   "cp -r %s %s/%s",
+
+   "cp %s/* %s/%s",
    build_dir, site_repo_tmp, cfg.artifact)
 
    print(cmd)
-   io.popen(cmd)
+   cmd_do(cmd)
 
    push_current_dir()
    lfs.chdir(site_repo_tmp)
@@ -1026,8 +1047,9 @@ function actions.publish(_args)
 
 
 
-   io.popen(format("git add %s", cfg.artifact))
-   io.popen(format('git commit -am "%s updated"', cfg.artifact))
+   cmd_do(format("git add %s", cfg.artifact))
+   cmd_do(format('git commit -am "%s updated"', cfg.artifact))
+   cmd_do('git push origin master')
 
    pop_dir()
 end
@@ -1149,25 +1171,19 @@ function actions.rocks(_)
       'argparse',
    }
    for _, rock in ipairs(rocks) do
-      local fd = io.popen(string.format("luarocks install %s --local", rock))
-      print(fd:read("*a"))
+      cmd_do(string.format("luarocks install %s --local", rock))
    end
 end
 
 
 
 local function build_with_cmake()
-   local fd = io.popen("cmake .")
-
-   local ret = { fd:close() }
-
-   print(tabular(ret))
-   local _ = io.popen("make -j")
-
+   cmd_do("cmake .")
+   cmd_do("make -j")
 end
 
 local function build_with_make()
-   local _ = io.popen("make -j")
+   cmd_do("make -j")
 end
 
 
@@ -1202,19 +1218,13 @@ function actions.compile_flags(_)
 end
 
 local function build_chipmunk()
-   local prevdir = lfs.currentdir()
-   local f
+   push_current_dir()
    lfs.chdir("wasm_3rd_party/Chipmunk2D/")
 
-   f = io.popen("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
-   print(f:read("*a"))
-   f:close()
+   cmd_do("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
+   cmd_do("emmake make -j")
 
-   f = io.popen("emmake make -j")
-   print(f:read("*a"))
-   f:close()
-
-   lfs.chdir(prevdir)
+   pop_dir()
 end
 
 local function link(objfiles, libname, flags)
@@ -1224,11 +1234,12 @@ local function link(objfiles, libname, flags)
    print(inspect(objfiles))
    local objfiles_str = table.concat(objfiles, " ")
    local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
-   local f = io.popen(cmd)
-   print(f:read("*a"))
+   cmd_do(cmd)
 end
 
-local function filter_sources(path, cb, exclude)
+local function filter_sources(
+   path, cb, exclude)
+
 
    for file in lfs.dir(path) do
       if string.match(file, ".*%.c$") then
@@ -1275,7 +1286,7 @@ local function build_lua()
 end
 
 local function build_raylib()
-   local prevdir = lfs.currentdir()
+   push_current_dir()
    lfs.chdir("wasm_3rd_party/raylib")
 
 
@@ -1289,15 +1300,14 @@ local function build_raylib()
    local EMSDK = os.getenv('EMSDK')
    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
    print(cmd)
-   local pipe = io.popen(cmd)
-   print(pipe:read("*a"))
+   cmd_do(cmd)
 
    cp("libraylib.a", "../libraylib.a")
 
 
 
 
-   lfs.chdir(prevdir)
+   pop_dir()
 end
 
 local function build_genann()
@@ -1355,13 +1365,12 @@ local function build_smallregex()
 end
 
 local function build_utf8proc()
-   local prevdir = lfs.currentdir()
+   push_current_dir()
    lfs.chdir("wasm_3rd_party/utf8proc/")
 
-   local pipe = io.popen("emmake make")
-   print(pipe:read("*a"))
+   cmd_do("emmake make")
 
-   lfs.chdir(prevdir)
+   pop_dir()
 end
 
 
@@ -1413,8 +1422,7 @@ local function build_project(output_dir, exclude)
       output_path, path, file, include_str, define_str)
 
       print(cmd)
-      local pipe = io.popen(cmd)
-      print(pipe:read("*a"))
+      cmd_do(cmd)
       table.insert(objfiles, src2obj(file))
    end, exclude)
 
@@ -1444,8 +1452,7 @@ local function link_koh_lib(objs_dir)
    local files_str = table.concat(files, " ")
    local cmd = "emar rcs " .. objs_dir .. "/libcaustic.a " .. files_str
    print(cmd)
-   local pipe = io.popen(cmd)
-   print(pipe:read("*a"))
+   cmd_do(cmd)
 end
 
 local function build_koh()
@@ -1563,8 +1570,7 @@ local function link_wasm_project(main_fname, _args)
    "emcc %s %s %s %s", libspath_str, libs_str, includes_str, flags_str)
 
    print(cmd)
-   local pipe = io.popen(cmd)
-   print(pipe:read("*a"))
+   cmd_do(cmd)
 
    lfs.chdir(prev_dir)
 end
@@ -1802,8 +1808,7 @@ end
 local function koh_link(objfiles_str, _args)
    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
    print(cmd)
-   local pipe = io.popen(cmd)
-   print(pipe:read("*a"))
+   cmd_do(cmd)
 end
 
 
@@ -1829,8 +1834,7 @@ local function project_link(ctx, cfg, _args)
    ctx.libs)
 
    print(cmd)
-   local pipe = io.popen(cmd)
-   print(pipe:read("*a"))
+   cmd_do(cmd)
 end
 
 
