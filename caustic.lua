@@ -844,6 +844,7 @@ end
 
 
 
+
 function actions.init(_args)
    local deps = {}
    if _args.name and dependencies_name_map[_args.name] then
@@ -1948,6 +1949,17 @@ function actions.make(_args)
       koh_link(objfiles_str, _args)
       cp("libcaustic.a", "../libcaustic.a")
    else
+      push_current_dir()
+      lfs.chdir(os.getenv("HOME") .. "/caustic")
+      actions.make({
+         make = true,
+         c = _args.c,
+      })
+      pop_dir()
+
+
+
+
       project_link({
          objfiles = objfiles_str,
          libspath = _libspath,
