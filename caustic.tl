@@ -822,6 +822,7 @@ local enum MakeAction
 end
 
 local record Args
+    make: boolean
     minshell: string
     c: string
     j: string
@@ -1948,6 +1949,17 @@ function actions.make(_args: Args)
         koh_link(objfiles_str, _args)
         cp("libcaustic.a", "../libcaustic.a")
     else
+        push_current_dir()
+        lfs.chdir(os.getenv("HOME") .. "/caustic")
+        actions.make({
+            make = true,
+            c = _args.c,
+        })
+        pop_dir()
+
+        --print("_args")
+        --print(tabular(_args))
+
         project_link({
             objfiles = objfiles_str,
             libspath = _libspath,
