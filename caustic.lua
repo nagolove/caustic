@@ -200,7 +200,44 @@ local function small_regex_custom_build(_, dirname)
    lfs.chdir(prevdir)
 end
 
+local function cimgui_after_init(_)
+   cmd_do('git submodule update --init --recursive --depth 1')
+end
+
+local function rlimgui_after_init(_)
+   print("rlimgui_after_init:", lfs.currentdir())
+
+   cmd_do("wget https://github.com/raysan5/raylib/archive/refs/heads/master.zip")
+   cmd_do("mv master.zip raylib-master.zip")
+   cmd_do("aunpack raylib-master.zip")
+
+   cmd_do("wget https://github.com/ocornut/imgui/archive/refs/heads/master.zip")
+   cmd_do("mv master.zip imgui-master.zip")
+   cmd_do("aunpack imgui-master.zip")
+
+   cmd_do("premake5 gmake")
+end
+
+local function rlimgui_custom_build(_)
+   cmd_do("make config=release_x64")
+end
+
 local dependencies = {
+   {
+      name = "rlimgui",
+      url = "https://github.com/raylib-extras/rlImGui.git",
+      after_init = rlimgui_after_init,
+      dir = "rlImGui",
+      custom_build = rlimgui_custom_build,
+
+   },
+   {
+      name = 'cimgui',
+      url = 'git@github.com:cimgui/cimgui.git',
+      dir = "cimgui",
+      after_init = cimgui_after_init,
+      build_method = 'make',
+   },
    {
       name = 'sunvox',
       url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
@@ -299,6 +336,8 @@ local _includedirs = {
    "../caustic/%s/lua/",
    "../caustic/%s/utf8proc",
    "../caustic/%s/small-regex/libsmallregex",
+   "../caustic/%s/rlImGui",
+   "../caustic/%s/cimgui",
    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
@@ -311,6 +350,8 @@ local _includedirs_internal = {
    "%s/lua/",
    "%s/utf8proc",
    "%s/small-regex/libsmallregex",
+   "%s/rlImGui",
+   "%s/cimgui",
    "3rd_party/sunvox/sunvox_lib/headers",
 }
 
@@ -335,12 +376,15 @@ local libdirs_internal = {
    "./3rd_party/lua",
    "./3rd_party/small-regex/libsmallregex",
    "./3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
+   "./3rd_party/cimgui",
+   "./3rd_party/rlImGui/_bin/Release",
 }
 
 local links_internal = {
 
    "raylib",
    "m",
+   "rlImGui:static",
    "genann:static",
    "smallregex:static",
    "lua:static",
@@ -351,6 +395,7 @@ local links_internal = {
 
 local links = {
    "m",
+   "rlImGui:static",
    "raylib:static",
    "genann:static",
    "smallregex:static",
@@ -370,6 +415,7 @@ local libdirs = {
    "../caustic/3rd_party/lua",
    "../caustic/3rd_party/small-regex/libsmallregex",
    "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
+   "../caustic/3rd_party/rlImGui/_bin/Release",
 }
 
 local wasm_libdirs = {
@@ -501,7 +547,10 @@ local function after_init(dep)
    if dep.after_init then
       local ok, errmsg = pcall(function()
          print('after_init:', dep.name)
+         push_current_dir()
+         lfs.chdir(dep.dir)
          dep.after_init(dep)
+         pop_dir()
       end)
       if not ok then
          print('after_init() failed with', errmsg)
@@ -560,7 +609,7 @@ local function download_and_unpack_zip(dep)
    local old_cwd = lfs.currentdir()
    print('old_cwd', old_cwd)
 
-   lfs.chdir('sunvox')
+   lfs.chdir(dep.dir)
 
    local zip = require('zip')
    local zfile, zerr = zip.open(dep.fname)
@@ -847,8 +896,14 @@ end
 
 function actions.init(_args)
    local deps = {}
-   if _args.name and dependencies_name_map[_args.name] then
-      table.insert(deps, dependencies_name_map[_args.name])
+   if _args.name then
+      print('partial init for dependency', _args.name)
+      if dependencies_name_map[_args.name] then
+         table.insert(deps, dependencies_name_map[_args.name])
+      else
+         print("bad dependency name", _args.name)
+         return
+      end
    else
       for _, dep in ipairs(dependencies) do
          table.insert(deps, dep)
