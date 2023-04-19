@@ -203,3 +203,21 @@ Timer *timerstore_new(TimerStore *ts, Timer_Def *def) {
     return new;
 }
 
+const char *timer2str(Timer *tmr) {
+    if (!tmr) return NULL;
+
+    static char buf[128] = {0};
+    memset(buf, 0, sizeof(buf));
+    sprintf(
+        buf,
+        "timer: duration %f, every %f, waitfor %f, state %d, time %f, data %p",
+        tmr->duration,
+        tmr->every,
+        tmr->waitfor,
+        tmr->state,
+        tmr->time,
+        tmr->data
+    );
+    return buf;
+}
+

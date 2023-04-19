@@ -54,3 +54,5 @@ void timerstore_shutdown(TimerStore *ts);
 void timerstore_update(TimerStore *ts);
 Timer *timerstore_new(TimerStore *ts, Timer_Def *def);
 void timerstore_remove(TimerStore *ts, Timer *tm);
+
+const char *timer2str(Timer *tmr);
