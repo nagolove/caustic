@@ -4,8 +4,10 @@
 
 #ifdef MUSIC_SUNVOX
 #ifdef PLATFORM_WEB
+    #pragma message("sunvox static loading")
     #define SUNVOX_STATIC_LIB
 #else
+    #pragma message("sunvox dyn loading")
     #define SUNVOX_MAIN /* We are using a dynamic lib. SUNVOX_MAIN adds implementation of sv_load_dll()/sv_unload_dll() */
     #include <dlfcn.h>
 #endif
@@ -30,8 +32,10 @@ struct Playlist {
 };
 
 static bool is_inited = false;
+#ifdef MUSIC_SUNVOX
 static HTable *songs = NULL;
 static int last_slot = 0;
+#endif
 uint32_t koh_music_freq = 44100;
 
 #ifdef MUSIC_RAY
@@ -40,6 +44,7 @@ static const char *MUSIC_PATH = "assets/background";
 static struct Playlist plst = {0};
 #endif
 
+#ifdef MUSIC_SUNVOX
 static void on_song_remove(
     const void *key, int key_len, void *value, int value_len 
 ) {
@@ -49,6 +54,7 @@ static void on_song_remove(
     sv_close_slot(song->slot);
     sv_unlock_slot(song->slot);
 }
+#endif
 
 #ifdef MUSIC_SUNVOX
 static void svx_init() {

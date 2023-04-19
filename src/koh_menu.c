@@ -15,6 +15,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct Menu {
+    Color      arrow_down_color, arrow_up_color;
+    Font       fnt;
+    MenuAction render_before;
+    MenuItem   *items;
+    Rectangle  scroll_rect;
+    Timer      *tmr_arrow_blink;
+    TimerStore timers;
+    Vector2    pos;
+    bool       font_owned, input_active, is_builded;
+    const char *left_bracket, *right_bracket;
+    int        i, visible_num;
+    int        items_cap, items_num, active_item;
+    int        maxwidth;
+    void       *data;
+};
+
 static const char *left_bracket = "[[", *right_bracket = "]]";
 
 bool tmr_timer_blink(Timer *t) {
@@ -33,16 +50,27 @@ bool tmr_timer_blink(Timer *t) {
     return true;
 }
 
-void menu_init(Menu *mnu, Font fnt, bool font_owned) {
+Menu *menu_new(MenuSetup setup) {
+    Menu *mnu = calloc(1, sizeof(Menu));
     assert(mnu);
-    memset(mnu, 0, sizeof(*mnu));
-    mnu->fnt = fnt;
-    mnu->font_owned = font_owned;
-    mnu->input_active = true;
+    mnu->fnt = setup.fnt;
+    mnu->font_owned = setup.font_owned;
+    mnu->pos = setup.pos;
+    mnu->active_item = setup.active_item;
+    mnu->render_before = setup.render_before;
+    mnu->input_active = setup.input_active;
+    mnu->data = setup.data;
+
+    if (setup.scroll_rect.height != 0.)
+        mnu->scroll_rect.height = setup.scroll_rect.height;
+
+    //mnu->input_active = true;
     mnu->scroll_rect = (Rectangle) {
         .x = 0, .y = 0,
         .width = GetScreenWidth(), .height = GetScreenHeight(),
     };
+    mnu->arrow_up_color = setup.arrow_up_color;
+    mnu->arrow_down_color = setup.arrow_down_color;
     /*mnu->arrows_color = YELLOW;*/
     timerstore_init(&mnu->timers, 1);
     mnu->tmr_arrow_blink = timerstore_new(&mnu->timers, &(Timer_Def) {
@@ -56,9 +84,10 @@ void menu_init(Menu *mnu, Font fnt, bool font_owned) {
     mnu->items = calloc(mnu->items_cap, sizeof(mnu->items[0]));
     mnu->left_bracket = left_bracket;
     mnu->right_bracket = right_bracket;
+    return mnu;
 }
 
-void menu_shutdown(Menu *mnu) {
+void menu_free(Menu *mnu) {
     assert(mnu);
     free(mnu->items);
     if (mnu->font_owned) {
@@ -66,6 +95,7 @@ void menu_shutdown(Menu *mnu) {
     }
     timerstore_shutdown(&mnu->timers);
     memset(mnu, 0, sizeof(*mnu));
+    free(mnu);
 }
 
 static bool has_scroll(Menu *mnu) {
@@ -198,6 +228,7 @@ MenuItem *menu_add(Menu *mnu, const char *caption, MenuAction act) {
     assert(mnu);
     assert(caption);
     assert(act);
+    trace("menu_add: %s\n", caption);
     //assert(mnu->items_num < MAX_MENU_ITEMS);
 
     if (mnu->items_num == mnu->items_cap) {
@@ -269,5 +300,45 @@ bool menu_each(Menu *mnu, MenuIterFunc func, void *data) {
         }
     }
     return false;
+}
+
+void menu_data_set(Menu *mnu, void *data) {
+    assert(mnu);
+    mnu->data = data;
+}
+
+void *menu_data_get(Menu *mnu) {
+    assert(mnu);
+    return mnu->data;
+}
+
+Vector2 menu_pos_get(Menu *mnu) {
+    assert(mnu);
+    return mnu->pos;
+}
+
+void menu_pos_set(Menu *mnu, Vector2 pos) {
+    assert(mnu);
+    mnu->pos = pos;
+}
+
+Rectangle menu_scroll_rect_get(Menu *mnu) {
+    assert(mnu);
+    return mnu->scroll_rect;
+}
+
+void menu_input_active_set(Menu *mnu, bool state) {
+    assert(mnu);
+    mnu->input_active = state;
+}
+
+bool menu_input_active_get(Menu *mnu) {
+    assert(mnu);
+    return mnu->input_active;
+}
+
+void menu_active_reset(Menu *mnu) {
+    assert(mnu);
+    mnu->active_item = 0;
 }
 

@@ -14,7 +14,7 @@ typedef struct Stage_TestMenu {
     char *message;
     HotkeyStorage *hk_store;
     Font          fnt;
-    Menu          mshort, mlong;
+    Menu          *mshort, *mlong;
     Menu          *active;
     Timer         *tmr_select;
     TimerStore    timers;

@@ -24,6 +24,7 @@ void stage_init(void);
 Stage *stage_add(Stage *st, const char *name);
 void stage_subinit(void);
 void stage_shutdown_all(void);
+void stage_set_active(const char *name, void *data);
 void stage_update_active(void);
 const char *stage_get_active_name();
 Stage *stage_find(const char *name);

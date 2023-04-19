@@ -109,7 +109,7 @@ bool tmr_space(Timer *t) {
 
 void mnu_default(Menu *mnu, MenuItem *i) {
     trace("mnu_default:\n");
-    Stage_TestMenu *st = mnu->data;
+    Stage_TestMenu *st = menu_data_get(mnu);
     st->message = i->caption;
     st->tmr_select = timerstore_new(&st->timers, &(Timer_Def) {
         .data = st,
@@ -129,23 +129,32 @@ void stage_tstmenu_init(Stage_TestMenu *st, void *data) {
     //st->fnt = load_font_unicode("assets/veramono.ttf", 80);
     st->fnt = load_font_unicode("assets/hack-regular.ttf", 50);
 
-    menu_init(&st->mshort, st->fnt, false);
-    st->mshort.pos = (Vector2) { 0, 200 };
-    st->mshort.scroll_rect.height = 400;
-    st->mshort.data = st;
+    st->mshort = menu_new((struct MenuSetup){
+        .fnt = st->fnt,
+        .font_owned = false,
+        .pos = (Vector2) { 0, 200 },
+        .scroll_rect.height = 400,
+        .data = st,
+        .arrow_up_color = RED,
+        .arrow_down_color = RED,
+    });
 
     for (int k = 0; k < 4; ++k) {
         char buf[200] = {0};
         snprintf(buf, sizeof(buf), "%3d %s", k, lines[k]);
-        menu_add(&st->mshort, buf, mnu_default);
+        menu_add(st->mshort, buf, mnu_default);
     }
-    menu_build(&st->mshort);
-    st->mshort.arrow_up_color = st->mshort.arrow_down_color = RED;
+    menu_build(st->mshort);
 
-    menu_init(&st->mlong, st->fnt, false);
-    st->mlong.pos = (Vector2) { 50, 200 };
-    st->mlong.scroll_rect.height = 400;
-    st->mlong.data = st;
+    st->mlong = menu_new((struct MenuSetup){
+        .fnt = st->fnt,
+        .font_owned = false,
+        .pos = (Vector2) { 50, 200 },
+        .scroll_rect.height = 400,
+        .data = st,
+        .arrow_up_color = RED,
+        .arrow_down_color = RED,
+    });
 
     int linesnum = 0;
     while(lines[linesnum++]) { };
@@ -156,12 +165,11 @@ void stage_tstmenu_init(Stage_TestMenu *st, void *data) {
     for (int k = 0; k < linesnum; ++k) {
         char buf[200] = {0};
         snprintf(buf, sizeof(buf), "%3d %s", k, lines[k]);
-        menu_add(&st->mlong, buf, mnu_default);
+        menu_add(st->mlong, buf, mnu_default);
     }
-    menu_build(&st->mlong);
-    st->mlong.arrow_up_color = st->mlong.arrow_down_color = RED;
+    menu_build(st->mlong);
 
-    st->active = &st->mshort;
+    st->active = st->mshort;
 }
 
 static void handler(Menu *mnu, void *udata) {
@@ -181,18 +189,21 @@ void stage_tstmenu_update(Stage_TestMenu *st) {
     trace("stage_tstmenu_update:\n");
 
     if (IsKeyPressed(KEY_ONE)) {
-        st->active = &st->mshort;
+        st->active = st->mshort;
     } else if (IsKeyPressed(KEY_TWO)) {
-        st->active = &st->mlong;
+        st->active = st->mlong;
     } else if (IsKeyPressed(KEY_R)) {
         stage_tstmenu_shutdown(st);
         stage_tstmenu_init(st, NULL);
     }
 
     menu_update(st->active, handler, NULL);
-    Rectangle mnu_rect = st->active->scroll_rect;
-    mnu_rect.x = st->active->pos.x;
-    mnu_rect.y = st->active->pos.y;
+    Rectangle mnu_rect = menu_scroll_rect_get(st->active);
+
+    Vector2 active_pos = menu_pos_get(st->active);
+    mnu_rect.x = active_pos.x;
+    mnu_rect.y = active_pos.y;
+
     const int thick = 5;
     DrawRectangleLinesEx(mnu_rect, thick, BLUE);
 
@@ -203,8 +214,8 @@ void stage_tstmenu_update(Stage_TestMenu *st) {
 void stage_tstmenu_shutdown(Stage_TestMenu *st) {
     trace("stage_tstmenu_shutdown:\n");
     timerstore_shutdown(&st->timers);
-    menu_shutdown(&st->mlong);
-    menu_shutdown(&st->mshort);
+    menu_free(st->mlong);
+    menu_free(st->mshort);
 }
 
 //XXX: Почему _enter() функции не вызываются?
