@@ -28,6 +28,7 @@ typedef struct MenuSetup {
     MenuAction  render_before;
     bool        input_active;
     int         active_item;
+    char        *name;
 } MenuSetup;
 
 typedef struct Menu Menu;
@@ -54,4 +55,5 @@ Rectangle menu_scroll_rect_get(Menu *mnu);
 void menu_input_active_set(Menu *mnu, bool state);
 bool menu_input_active_get(Menu *mnu);
 void menu_active_reset(Menu *mnu);
+void menu_dump(Menu *mnu);
 

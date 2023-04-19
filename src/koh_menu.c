@@ -6,7 +6,8 @@
 #include "koh_common.h"
 #include "koh_console.h"
 #include "koh_logger.h"
-#include "koh_timer.h"
+#include "koh_routine.h"
+#include "koh_routine.h"
 #include "raylib.h"
 #include "utf8proc.h"
 #include <assert.h>
@@ -15,21 +16,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MENU_MAX_NAME   48
+
 struct Menu {
-    Color      arrow_down_color, arrow_up_color;
-    Font       fnt;
-    MenuAction render_before;
-    MenuItem   *items;
-    Rectangle  scroll_rect;
-    Timer      *tmr_arrow_blink;
-    TimerStore timers;
-    Vector2    pos;
-    bool       font_owned, input_active, is_builded;
-    const char *left_bracket, *right_bracket;
-    int        i, visible_num;
-    int        items_cap, items_num, active_item;
-    int        maxwidth;
-    void       *data;
+    Color       arrow_down_color, arrow_up_color;
+    Font        fnt;
+    MenuAction  render_before;
+    MenuItem    *items;
+    Rectangle   scroll_rect;
+    Timer       *tmr_arrow_blink;
+    TimerStore  timers;
+    Vector2     pos;
+    bool        font_owned, input_active, is_builded;
+    const char  *left_bracket, *right_bracket;
+    int         i, visible_num;
+    int         items_cap, items_num, active_item;
+    int         maxwidth;
+    char        name[MENU_MAX_NAME];
+    void        *data;
 };
 
 static const char *left_bracket = "[[", *right_bracket = "]]";
@@ -50,6 +54,32 @@ bool tmr_timer_blink(Timer *t) {
     return true;
 }
 
+void menu_dump(Menu *mnu) {
+    assert(mnu);
+    trace("menu_dump: '%s'\n", mnu->name);
+    trace("menu_dump: arrow_down_color %s\n", color2str(mnu->arrow_down_color));
+    trace("menu_dump: arrow_up_color %s\n", color2str(mnu->arrow_up_color));
+    trace("menu_dump: fnt %s\n", font2str(mnu->fnt));
+    trace("menu_dump: render_before %p\n", mnu->render_before);
+    trace("menu_dump: items %p\n", mnu->items);
+    trace("menu_dump: scroll_rect %s\n", rect2str(mnu->scroll_rect));
+    trace("menu_dump: tmr_arrow_blink %s\n", timer2str(mnu->tmr_arrow_blink));
+    trace("menu_dump: timers %p\n", mnu->timers);
+    trace("menu_dump: pos %s\n", Vector2_tostr(mnu->pos));
+    trace("menu_dump: font_owned %s\n", mnu->font_owned ? "true" : "false");
+    trace("menu_dump: input_active %s\n", mnu->input_active ? "true" : "false");
+    trace("menu_dump: is_builded %s\n", mnu->is_builded ? "true" : "false");
+    trace("menu_dump: left_bracket \"%s\"\n", mnu->left_bracket);
+    trace("menu_dump: right_bracket \"%s\"\n", mnu->right_bracket);
+    trace("menu_dump: i %d\n", mnu->i );
+    trace("menu_dump: visible_num %d\n", mnu->visible_num);
+    trace("menu_dump: items_cap %d\n", mnu->items_cap);
+    trace("menu_dump: items_num %d\n", mnu->items_num);
+    trace("menu_dump: active_item %d\n", mnu->active_item);
+    trace("menu_dump: maxwidth %d\n", mnu->maxwidth);
+    trace("menu_dump: data %p\n", mnu->data);
+}
+
 Menu *menu_new(MenuSetup setup) {
     Menu *mnu = calloc(1, sizeof(Menu));
     assert(mnu);
@@ -60,6 +90,9 @@ Menu *menu_new(MenuSetup setup) {
     mnu->render_before = setup.render_before;
     mnu->input_active = setup.input_active;
     mnu->data = setup.data;
+
+    if (setup.name)
+        strncpy(mnu->name, setup.name, MENU_MAX_NAME);
 
     if (setup.scroll_rect.height != 0.)
         mnu->scroll_rect.height = setup.scroll_rect.height;
@@ -136,11 +169,17 @@ void item_draw_active(Menu *mnu, Vector2 pos, int item_index) {
         buf, sizeof(buf), "%s%s%s", 
         mnu->left_bracket, caption, mnu->right_bracket
     );
+
+    printf("item_draw_active: '%s'\n", buf);
+
     DrawTextEx(mnu->fnt, buf, pos, mnu->fnt.baseSize, 0, BLACK);
 }
 
 void item_draw(Menu *mnu, Vector2 pos, int item_index) {
     char *caption = mnu->items[item_index].caption;
+
+    printf("item_draw: '%s'\n", caption);
+
     DrawTextEx(mnu->fnt, caption, pos, mnu->fnt.baseSize, 0, BLACK);
 }
 
@@ -157,9 +196,17 @@ void menu_render(Menu *mnu) {
         draw_arrows_up(mnu);
 
     //for(int i = mnu->i; i < visible_num; ++i) {
-    for(int j = 0; j < visible_num; ++j) {
-    //for(int i = mnu->i; i < mnu->items_num; ++i) {
-        /*printf("render (%f, %f)\n", pos.x, pos.y);*/
+
+    /*
+    printf(
+        "menu_render: mnu %p, mnu->name %s, mnu->visible_num %d\n",
+        mnu, mnu->name, visible_num
+    );
+    */
+
+    int num = visible_num > mnu->items_num ? 
+              mnu->items_num : visible_num;
+    for(int j = 0; j < num; ++j) {
         int item_index = mnu->i + j;
         if (item_index == mnu->active_item) {
             item_draw_active(mnu, pos, item_index);
