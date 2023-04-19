@@ -1843,8 +1843,8 @@ end
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
-    --print('make:')
-    --print(tabular(_args))
+    print('make:')
+    print(tabular(_args))
 
     local cfg, _: Cfg, string = search_and_load_cfg_up("bld.lua")
     --print(tabular(cfg))
@@ -1897,18 +1897,26 @@ function actions.make(_args: Args)
     print(tabular(_libspath))
 
     local _links = links
+    print("_links")
+    print(tabular(_links))
     if cfg.artifact then
         table.insert(_links, 1, "caustic:static")
     end
     local _libs: string = table.concat(make_l(_links), " ")
+    print('_libs')
     print(tabular(_libs))
 
     local queue = {}
+    local cwd = lfs.currentdir() .. "/"
     filter_sources(".", function(file: string)
-        print('file', file)
+        --print('file', file)
         local _output = output_dir .. "/" .. 
                         string.gsub(file, "(.*%.)c$", "%1o")
-        local _input = output_dir .. "/" .. file
+        --local _input = output_dir .. "/" .. file
+        local _input = cwd .. file
+
+        --print("_input", _input)
+        --print('_input\'', cwd .. string.sub(_input, 3, -1))
 
         -- TODO: Проверять отсутствие объектного файла
         local cmd = format(
