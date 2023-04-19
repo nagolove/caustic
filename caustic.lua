@@ -864,12 +864,9 @@ local site_repo = "~/nagolove.github.io"
 local site_repo_index = site_repo .. "/index.html"
 
 local function update_links_table(_links, artifact)
-   print('update_links_table:', artifact)
    local found = false
    for _, line in ipairs(_links) do
-      print('line', line)
       if string.match(line, artifact) then
-         print('matched line', line)
          found = true
          break
       end
@@ -1846,8 +1843,8 @@ end
 
 
 function actions.make(_args)
-
-
+   print('make:')
+   print(tabular(_args))
 
    local cfg, _ = search_and_load_cfg_up("bld.lua")
 
@@ -1900,18 +1897,26 @@ function actions.make(_args)
    print(tabular(_libspath))
 
    local _links = links
+   print("_links")
+   print(tabular(_links))
    if cfg.artifact then
       table.insert(_links, 1, "caustic:static")
    end
    local _libs = table.concat(make_l(_links), " ")
+   print('_libs')
    print(tabular(_libs))
 
    local queue = {}
+   local cwd = lfs.currentdir() .. "/"
    filter_sources(".", function(file)
-      print('file', file)
+
       local _output = output_dir .. "/" ..
       string.gsub(file, "(.*%.)c$", "%1o")
-      local _input = output_dir .. "/" .. file
+
+      local _input = cwd .. file
+
+
+
 
 
       local cmd = format(
