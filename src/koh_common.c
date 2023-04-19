@@ -958,3 +958,14 @@ uint32_t next_eq_pow2(uint32_t p) {
     exit(EXIT_FAILURE);
 }
 
+const char *font2str(Font fnt) {
+    static char buf[128] = {0};
+    memset(buf, 0, sizeof(buf));
+    sprintf(
+        buf,
+        "baseSize %d, glyphCount %d, texture.id %d",
+        fnt.baseSize, fnt.glyphCount, fnt.texture.id
+    );
+    return buf;
+}
+
