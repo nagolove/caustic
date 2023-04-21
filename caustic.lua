@@ -105,6 +105,7 @@ local cache
 
 
 
+
 local lfs = require('lfs')
 
 
@@ -126,7 +127,16 @@ local function cmd_do(_cmd)
 
 
 
-   os.execute(_cmd)
+   if type(_cmd) == 'string' then
+      os.execute(_cmd)
+   elseif (type(_cmd) == 'table') then
+      for _, v in ipairs(_cmd) do
+         os.execute(v)
+      end
+   else
+      print('Wrong type in cmd_do', type(_cmd))
+      os.exit(1)
+   end
 end
 
 local function push_current_dir()
@@ -167,10 +177,11 @@ local function sunvox_after_init()
 
 end
 
-local function gennann_after_build(dirname)
-   print('linking genann to static library', dirname)
+local function gennann_after_build(dep)
+   print('linking genann to static library', dep.dir)
    push_current_dir()
-   lfs.chdir(dirname)
+   print("dep.dir", dep.dir)
+   lfs.chdir(dep.dir)
    cmd_do("ar rcs libgenann.a genann.o")
    pop_dir()
 end
@@ -200,8 +211,39 @@ local function small_regex_custom_build(_, dirname)
    lfs.chdir(prevdir)
 end
 
+
+
+
 local function cimgui_after_init(_)
+   local use_freetype = false
+
    cmd_do('git submodule update --init --recursive --depth 1')
+   push_current_dir()
+   lfs.chdir('generator')
+   if use_freetype then
+      cmd_do('./generator.sh -t "internal noimstrv freetype"')
+   else
+      cmd_do('./generator.sh -t "internal noimstrv "')
+   end
+   pop_dir()
+
+
+   cmd_do("rm CMakeCache.txt")
+
+   if use_freetype then
+
+      cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1 -DIMGUI_ENABLE_FREETYPE=1")
+   else
+
+      cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1")
+   end
+
+   cmd_do("cat rlimgui.inc >> cimgui.cpp")
+   cmd_do("cat rlimgui.h.inc >> cimgui.h")
+   cmd_do("make -j")
+   cmd_do("mv cimgui.a libcimgui.a")
+
+
 end
 
 local function rlimgui_after_init(_)
@@ -218,25 +260,63 @@ local function rlimgui_after_init(_)
    cmd_do("premake5 gmake")
 end
 
-local function rlimgui_custom_build(_)
-   cmd_do("make config=release_x64")
+
+
+
+
+
+
+local function cimgui_after_build(_)
+   print("cimgui_after_build", lfs.currentdir())
+   cmd_do("mv cimgui.a libcimgua.a")
+end
+
+local function freetype_after_init(_)
+   cmd_do({
+      "git submodule update --init --force --recursive --depth 1",
+      "cmake -E remove CMakeCache.txt",
+      "cmake -E remove_directory CMakeFiles",
+      "cmake -E make_directory build",
+      "cmake -E chdir build cmake ..",
+   })
+
+
+
+
+
+
+   push_current_dir()
+   lfs.chdir("build")
+   cmd_do("make -j")
+   pop_dir()
 end
 
 local dependencies = {
+   {
+      name = 'freetype',
+      url = "https://github.com/freetype/freetype.git",
+      build_method = 'other',
+      dir = 'freetype',
+      after_init = freetype_after_init,
+      disabled = true,
+   },
+
    {
       name = "rlimgui",
       url = "https://github.com/raylib-extras/rlImGui.git",
       after_init = rlimgui_after_init,
       dir = "rlImGui",
-      custom_build = rlimgui_custom_build,
 
+      build_method = 'other',
    },
    {
       name = 'cimgui',
       url = 'git@github.com:cimgui/cimgui.git',
       dir = "cimgui",
       after_init = cimgui_after_init,
-      build_method = 'make',
+      build_method = 'other',
+      after_build = cimgui_after_build,
+      depends = { 'freetype' },
    },
    {
       name = 'sunvox',
@@ -316,17 +396,6 @@ local function get_urls(deps)
    return urls
 end
 
-
-
-
-
-
-
-
-
-
-
-
 local _includedirs = {
    "../caustic/src",
    "../caustic/%s/stb",
@@ -338,6 +407,7 @@ local _includedirs = {
    "../caustic/%s/small-regex/libsmallregex",
    "../caustic/%s/rlImGui",
    "../caustic/%s/cimgui",
+   "../caustic/%s/cimgui/generator/output",
    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
@@ -352,6 +422,7 @@ local _includedirs_internal = {
    "%s/small-regex/libsmallregex",
    "%s/rlImGui",
    "%s/cimgui",
+   "%s/cimgui/generator/output",
    "3rd_party/sunvox/sunvox_lib/headers",
 }
 
@@ -368,6 +439,37 @@ end
 local includedirs = template_dirs(_includedirs, third_party)
 local includedirs_internal = template_dirs(_includedirs_internal, third_party)
 
+local links_internal = {
+
+   "raylib",
+   "m",
+
+   "genann:static",
+   "smallregex:static",
+   "lua:static",
+   "utf8proc:static",
+   "chipmunk:static",
+   "cimgui:static",
+
+   "stdc++",
+
+}
+
+local links = {
+   "m",
+
+   "raylib:static",
+   "genann:static",
+   "smallregex:static",
+   "lua:static",
+   "utf8proc:static",
+   "chipmunk:static",
+   "cimgui:static",
+
+   "stdc++",
+
+}
+
 local libdirs_internal = {
    "./3rd_party/genann",
    "./3rd_party/utf8proc",
@@ -377,45 +479,23 @@ local libdirs_internal = {
    "./3rd_party/small-regex/libsmallregex",
    "./3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
    "./3rd_party/cimgui",
-   "./3rd_party/rlImGui/_bin/Release",
-}
-
-local links_internal = {
-
-   "raylib",
-   "m",
-   "rlImGui:static",
-   "genann:static",
-   "smallregex:static",
-   "lua:static",
-   "utf8proc:static",
-   "chipmunk:static",
-
-}
-
-local links = {
-   "m",
-   "rlImGui:static",
-   "raylib:static",
-   "genann:static",
-   "smallregex:static",
-   "lua:static",
-   "utf8proc:static",
-   "chipmunk:static",
+   "./3rd_party/freetype/build",
 
 }
 
 
 local libdirs = {
    "../caustic",
-   "../caustic/3rd_party/genann",
-   "../caustic/3rd_party/utf8proc",
    "../caustic/3rd_party/Chipmunk2D/src",
-   "../caustic/3rd_party/raylib/raylib",
+   "../caustic/3rd_party/cimgui",
+   "../caustic/3rd_party/freetype/build",
+   "../caustic/3rd_party/genann",
    "../caustic/3rd_party/lua",
+   "../caustic/3rd_party/raylib/raylib",
+   "../caustic/3rd_party/rlImGui/_bin/Release",
    "../caustic/3rd_party/small-regex/libsmallregex",
    "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
-   "../caustic/3rd_party/rlImGui/_bin/Release",
+   "../caustic/3rd_party/utf8proc",
 }
 
 local wasm_libdirs = {
@@ -495,7 +575,7 @@ local dependencies_name_map = get_deps_name_map(dependencies)
 
 
 
-ret_table = {
+local ret_table = {
    urls = get_urls(dependencies),
    dependencies = dependencies,
    dirnames = get_dirs(dependencies),
@@ -909,6 +989,7 @@ function actions.init(_args)
          table.insert(deps, dep)
       end
    end
+
    print('deps', inspect(deps))
 
    _init(third_party, deps)
@@ -1679,7 +1760,7 @@ local function _build(dirname)
 
    if dep and dep.after_build then
       local ok, errmsg = pcall(function()
-         dep.after_build(dirname)
+         dep.after_build(dep)
       end)
       if not ok then
          print(inspect(dep), 'failed with', errmsg)
@@ -1693,14 +1774,20 @@ function actions.build(_args)
    local prevdir = lfs.currentdir()
    lfs.chdir(third_party)
 
-   if _args.name and dependencies_name_map[_args.name] then
-      _build(get_dir(dependencies_name_map[_args.name]))
+   if _args.name then
+      if dependencies_name_map[_args.name] then
+         _build(get_dir(dependencies_name_map[_args.name]))
+      else
+         print("bad dependency name", _args.name)
+         goto exit
+      end
    else
       for _, dirname in ipairs(get_dirs(dependencies)) do
          _build(dirname)
       end
    end
 
+   ::exit::
    lfs.chdir(prevdir)
 end
 
@@ -1947,6 +2034,12 @@ function actions.make(_args)
 
 
    local libspath_prefix = cfg.artifact and "../" or ""
+   print('libspath_prefix', libspath_prefix)
+
+   print("pwd", lfs.currentdir())
+
+
+
    local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
    table.insert(_libdirs, "-L/usr/lib")
    local _libspath = table.concat(_libdirs, " ")
