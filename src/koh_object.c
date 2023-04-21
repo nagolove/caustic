@@ -374,7 +374,7 @@ const char *object_type2str(uint32_t type) {
 uint32_t object_type_count(ObjectStorage *s, uint32_t type) {
     assert(s);
     TypeStorage *ts = find_type(s, type);
-    return ts ? ts->allocated_num : -1;
+    return ts ? ts->allocated_num : UINT32_MAX;
 }
 
 int object_storage_get_allocated_size(ObjectStorage *s) {

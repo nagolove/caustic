@@ -121,7 +121,7 @@ void *object_alloc(ObjectStorage *s, uint32_t type);
 // Если тип объекта не найден в хранилише, возвращает false
 bool object_free(ObjectStorage *s, Object *obj);
 void object_type_register(ObjectStorage *s, uint32_t type, int objsize, int maxnum);
-// Возвращает количество объектов данного типа или -1 если тип не найден.
+// Возвращает количество объектов данного типа или UINT32_MAX если тип не найден.
 uint32_t object_type_count(ObjectStorage *s, uint32_t type);
 uint32_t object_type_maxcount(ObjectStorage *s, uint32_t type);
 
