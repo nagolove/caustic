@@ -128,10 +128,18 @@ local function cmd_do(_cmd)
 
 
    if type(_cmd) == 'string' then
-      os.execute(_cmd)
+      if not os.execute(_cmd) then
+         print('cmd was failed')
+         print(_cmd)
+         os.exit(1)
+      end
    elseif (type(_cmd) == 'table') then
       for _, v in ipairs(_cmd) do
-         os.execute(v)
+         if not os.execute(v) then
+            print('cmd was failed')
+            print(_cmd)
+            os.exit(1)
+         end
       end
    else
       print('Wrong type in cmd_do', type(_cmd))
@@ -1873,6 +1881,11 @@ local function parallel_run(queue)
       local output = pipe:read("*a")
       if #output > 0 then
          print(output)
+      end
+      local res = pipe:close()
+      if not res then
+         print('build_fun failed', cmd)
+         os.exit(1)
       end
    end
 
