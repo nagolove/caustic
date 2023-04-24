@@ -61,7 +61,7 @@ void parts_update(PartsEngine *pe) {
     assert(pe);
     de_ecs *r = pe->ecs;
 
-    float dt = GetFrameTime() * 100.;
+    float dt = GetFrameTime() * 100.; // XXX: Что значит 100?
     for (de_view v = de_create_view(r, 3, (de_cp_type[3]) {
         component_position, component_velocity, component_angular_velocity,
     }); de_view_valid(&v); de_view_next(&v)) {
@@ -135,6 +135,10 @@ void parts_draw(PartsEngine *pe) {
     }
 }
 
+static double drand1() {
+    return rand() / (double)RAND_MAX;
+}
+
 void parts_explode(PartsEngine *pe, struct Parts_ExplositionDef *def) {
     assert(pe);
     assert(def);
@@ -150,20 +154,23 @@ void parts_explode(PartsEngine *pe, struct Parts_ExplositionDef *def) {
         struct Component_Position* pos = de_emplace(r, e, component_position);
         pos->radius = min_radius + (rand() / (double)RAND_MAX) * radius_diff;
         pos->p = def->pos;
-        pos->angle = (rand() / (double)RAND_MAX) * 2. * M_PI;
+        pos->angle = drand1() * 2. * M_PI;
 
         Vector2* v = de_emplace(r, e, component_velocity);
-        v->x = 1. - (rand() / (double)RAND_MAX) * 2.;
-        v->y = 1. - (rand() / (double)RAND_MAX) * 2.;
+        // -1 .. 1
+        //v->x = 1. - drand1() * 2.;
+        //v->y = 1. - drand1() * 2.;
+        v->x = 1. - drand1() * 2.;
+        v->y = 1. - drand1() * 2.;
 
         float* angular_v = de_emplace(r, e, component_angular_velocity);
-        *angular_v = (rand() / (double)RAND_MAX) / 2.;
+        *angular_v = drand1() / 2.;
 
         Color *color = de_emplace(r, e, component_color);
-        *color = RED;
+        *color = def->color;
 
         double *lifetime = de_emplace(r, e, component_lifetime);
-        *lifetime = (rand() / (double)RAND_MAX) * 3.;
+        *lifetime = drand1() * def->lifetime;
 
     }
 }
