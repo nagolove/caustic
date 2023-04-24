@@ -47,7 +47,7 @@ typedef struct Object {
     uint32_t      type;
     struct        Object *next_allocated, *prev_allocated;
     struct        Object *next_free, *prev_free;
-    Object_method on_destruct;
+    Object_method on_destruct, clone;
 
     uint32_t      components_bits;  // множество компонентов
     Component     *components_root; // список компонентов
@@ -69,7 +69,7 @@ typedef ObjectAction (*CompomentIterFunc2)(Component *comp, void *data);
 
 typedef struct ComponentsStorage {
     // Тип компонента, размер объекта
-    int comp_id, object_size;
+    uint32_t comp_id, object_size;
     // Данные объектов
     char *objects;
     // Список выделенных, список свободных
@@ -84,7 +84,7 @@ typedef struct ComponentsStorage {
 
 typedef struct TypeStorage {
     // Тип объекта, размер объекта
-    int type, object_size;
+    uint32_t type, object_size;
     // Данные объектов
     char *objects;
     // Список выделенных, список свободных
