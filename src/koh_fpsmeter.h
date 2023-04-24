@@ -9,3 +9,4 @@ void koh_fpsmeter_frame_end();
 void koh_fpsmeter_draw();
 void fpsmeter_stat_set(bool state);
 bool fpsmeter_stat_get();
+void koh_fpsmeter_mark();
