@@ -170,7 +170,7 @@ void item_draw_active(Menu *mnu, Vector2 pos, int item_index) {
         mnu->left_bracket, caption, mnu->right_bracket
     );
 
-    printf("item_draw_active: '%s'\n", buf);
+    /*printf("item_draw_active: '%s'\n", buf);*/
 
     DrawTextEx(mnu->fnt, buf, pos, mnu->fnt.baseSize, 0, BLACK);
 }
@@ -178,7 +178,7 @@ void item_draw_active(Menu *mnu, Vector2 pos, int item_index) {
 void item_draw(Menu *mnu, Vector2 pos, int item_index) {
     char *caption = mnu->items[item_index].caption;
 
-    printf("item_draw: '%s'\n", caption);
+    /*printf("item_draw: '%s'\n", caption);*/
 
     DrawTextEx(mnu->fnt, caption, pos, mnu->fnt.baseSize, 0, BLACK);
 }
