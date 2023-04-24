@@ -113,3 +113,12 @@ static inline Rectangle rect_extend(Rectangle rect, float delta) {
         .height = rect.height + 2. * delta,
     };
 }
+
+static inline Color from_float4(float c[4]) {
+    return (Color) {
+        .r = c[0] * 255.,
+        .g = c[1] * 255.,
+        .b = c[2] * 255.,
+        .a = c[3] * 255.,
+    };
+}
