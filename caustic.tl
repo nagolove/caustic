@@ -299,7 +299,19 @@ local function freetype_after_init(_: Dependency)
     pop_dir()
 end
 
+local function lfs_after_init(_: Dependency)
+    --cmd_do("gcc -c src/lfs.c")
+    --cmd_do("ar rcs liblfs.a src/lfs.o")
+end
+
 local dependencies: {Dependency} = {
+    {
+        name = "lfs",
+        url = "https://github.com/lunarmodules/luafilesystem.git",
+        build_method = "make",
+        dir = "luafilesystem",
+        after_init = lfs_after_init,
+    },
     {
         name = 'freetype',
         url = "https://github.com/freetype/freetype.git",
@@ -308,7 +320,6 @@ local dependencies: {Dependency} = {
         after_init = freetype_after_init,
         disabled = true,
     },
-
     {
         name = "rlimgui",
         url = "https://github.com/raylib-extras/rlImGui.git",
@@ -416,6 +427,7 @@ local _includedirs  = {
     "../caustic/%s/rlImGui",
     "../caustic/%s/cimgui",
     "../caustic/%s/cimgui/generator/output",
+    "../caustic/%s/luafilesystem/src",
     "../caustic/3rd_party/sunvox/sunvox_lib/headers",
 }
 
@@ -431,6 +443,7 @@ local _includedirs_internal  = {
     "%s/rlImGui",
     "%s/cimgui",
     "%s/cimgui/generator/output",
+    "%s/luafilesystem/src",
     "3rd_party/sunvox/sunvox_lib/headers",
 }
 
@@ -458,6 +471,7 @@ local links_internal = {
     "utf8proc:static",
     "chipmunk:static",
     "cimgui:static",
+    "lfs:static",
     --"freetype:static",
     "stdc++",
     --"sunvox",
@@ -473,6 +487,7 @@ local links = {
     "utf8proc:static",
     "chipmunk:static",
     "cimgui:static",
+    "lfs:static",
     --"freetype:static",
     "stdc++",
     --"sunvox",
@@ -488,6 +503,7 @@ local libdirs_internal = {
     "./3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
     "./3rd_party/cimgui",
     "./3rd_party/freetype/build",
+    "./3rd_party/luafilesystem/",
     --"./3rd_party/rlImGui/_bin/Release",
 }
 
@@ -504,6 +520,7 @@ local libdirs = {
     "../caustic/3rd_party/small-regex/libsmallregex",
     "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
     "../caustic/3rd_party/utf8proc",
+    "../caustic/3rd_party/luafilesystem",
 }
 
 local wasm_libdirs = { 
