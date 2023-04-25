@@ -4,15 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "lauxlib.h"
 #include "lua.h"
-
 #include "koh_console.h"
 #include "koh_inotifier.h"
 #include "koh_logger.h"
 #include "koh_lua_tools.h"
 #include "raylib.h"
+
+#ifdef __linux__
+#include "lfs.h"
+#endif
 
 static ScriptFunc *script_funcs = NULL;
 static lua_State *lua = NULL;
@@ -355,7 +357,11 @@ static int open_types(lua_State *lua) {
 
 void sc_init(void) {
     lua = luaL_newstate();
+    trace("sc_init: lua version %f\n", lua_version(lua));
     luaL_openlibs(lua);
+#ifdef __linux__
+    luaopen_lfs(lua);
+#endif
 
     printf("[%s]\n", stack_dump(lua));
     lua_createtable(lua, 0, 0);
@@ -413,10 +419,14 @@ void load_init_script() {
               );
         lua_settop(lua, 0);
     } else
-        trace("load_init_script:\n");
+        trace(
+            "load_init_script: loading %s was failed\n",
+            init_fname, lua_tostring(lua, lua_gettop(lua))
+        );
 }
 
 void reload_init_script(const char *fname, void *data) {
+    trace("reload_init_script:\n");
     load_init_script();
     inotifier_watch(fname, reload_init_script, NULL);
 }
