@@ -630,7 +630,7 @@ int new_fullud_ref(Stage *st, Object *obj, const char *tname) {
     luaL_getmetatable(lua, tname);
     lua_setmetatable(lua, -2);
     lua_settop(lua, 0);
-    //printf("new_fullud_ref: [%s]\n", stack_dump(cmn.lua));
+    trace("new_fullud_ref: [%s]\n", stack_dump(lua));
 
     return ref;
 }
