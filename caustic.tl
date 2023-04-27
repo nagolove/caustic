@@ -153,8 +153,11 @@ local function push_current_dir(): string
     return dir
 end
 
-local function pop_dir()
-    lfs.chdir(table.remove(dir_stack, #dir_stack))
+local function pop_dir(num: integer)
+    num = num or 0
+    for _ = 0, num do
+        lfs.chdir(table.remove(dir_stack, #dir_stack))
+    end
 end
 
 local function cp(from: string, to: string)
@@ -300,15 +303,19 @@ local function freetype_after_init(_: Dependency)
 end
 
 local function lfs_after_init(_: Dependency)
-    --cmd_do("gcc -c src/lfs.c")
-    --cmd_do("ar rcs liblfs.a src/lfs.o")
+    print('lfs_after_init')
+    push_current_dir()
+    lfs.chdir('src')
+    cmd_do("gcc -c src/lfs.c")
+    pop_dir()
+    cmd_do("ar rcs liblfs.a src/lfs.o")
 end
 
 local dependencies: {Dependency} = {
     {
         name = "lfs",
         url = "https://github.com/lunarmodules/luafilesystem.git",
-        build_method = "make",
+        build_method = "other",
         dir = "luafilesystem",
         after_init = lfs_after_init,
     },
@@ -1116,10 +1123,34 @@ local function update_links(artifact: string)
     --cmd_do(cmd2)
 end
 
-local function search_and_load_cfg_up(fname: string): Cfg, string
+-- Возвращает структуру конфига и число - агрумент для pop_dir()
+local function search_and_load_cfg_up(fname: string): Cfg, integer
+    print("search_and_load_cfg_up:", fname, lfs.currentdir())
+
     -- TODO: если файл не найден, то подняться на уровень выше и снова
     -- попробовать загрузить конфиг
     -- C какой позиции в дереве каталогов начинать сборку?
+
+    local push_num = 0
+    while true do
+        local file = io.open(fname, "r")
+        print('file', file)
+        if not file then
+            push_num = push_num + 1
+            push_current_dir()
+            lfs.chdir("..")
+        else
+            break
+        end
+        print('curdir', lfs.currentdir())
+        if push_num > 10 then
+            push_num = 0
+            break
+        end
+    end
+
+    print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
+
     local cfg: Cfg
     local ok, errmsg: boolean, string = pcall(function()
         cfg = loadfile(fname)() as Cfg
@@ -1130,7 +1161,7 @@ local function search_and_load_cfg_up(fname: string): Cfg, string
         os.exit()
     end
 
-    return cfg
+    return cfg, push_num
 end
 
 local function check_files_in_dir(dirname: string, filelist: {string}): boolean
@@ -2019,7 +2050,7 @@ function actions.make(_args: Args)
     print('make:')
     print(tabular(_args))
 
-    local cfg, _: Cfg, string = search_and_load_cfg_up("bld.lua")
+    local cfg, push_num: Cfg, integer = search_and_load_cfg_up("bld.lua")
     --print(tabular(cfg))
 
     if _args.c then
@@ -2151,7 +2182,7 @@ function actions.make(_args: Args)
 
     end
 
-    pop_dir()
+    pop_dir(push_num)
 end
 
 local function handler_int(_: integer)
