@@ -821,12 +821,15 @@ void koh_qsort_soa(
     _koh_qsort_soa(&ctx);
 }
 
-void camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
+bool camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
     assert(cam);
     if (cam && IsMouseButtonDown(mouse_btn)) {
         Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
-        cam->target = Vector2Add(cam->target, delta);
+        //cam->target = Vector2Add(cam->target, delta);
+        cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
+        return true;
     }
+    return false;
 }
 
 void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx) {
