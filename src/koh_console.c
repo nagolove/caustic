@@ -127,6 +127,48 @@ void font_setup(struct ConsoleSetup *cs) {
     con.fnt = load_font_unicode(path, fnt_size);
 }
 
+static int l_cprint(lua_State *lua) {
+    int top = lua_gettop(lua);
+    int type = lua_type(lua, top);
+    switch (type) {
+        case LUA_TBOOLEAN: {
+            console_buf_write("%f", lua_toboolean(lua, top));
+            break;
+        }
+        case LUA_TNUMBER: {
+            console_buf_write("%f", lua_tonumber(lua, top));
+            break;
+        }
+        case LUA_TSTRING: {
+            console_buf_write("%s", lua_tostring(lua, top));
+            break;
+        }
+        default:
+            break;
+    }
+    return 0;
+}
+
+static void _lua_register() {
+    if (!sc_get_state()) return;
+
+    register_function(
+            l_print_random_lines, 
+            "print_random_lines", 
+            "Напечатать несколько случайных строк в буфер. Для отладки."
+    );
+    register_function(
+            l_clear,
+            "clear",
+            "Очистить буфер консоли."
+    );
+    register_function(
+        l_cprint,
+        "cprint",
+        "Печатать в буфер консоли"
+    );
+}
+
 // TODO: make arguments optional
 void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     assert(hk_store);
@@ -178,18 +220,7 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     con.visible_linesnum = (con.input_line_pos.y / con.fnt.baseSize) - 1;
     printf("con.visible_linesnum %d\n", con.visible_linesnum);
 
-    if (sc_get_state()) {
-        register_function(
-                l_print_random_lines, 
-                "print_random_lines", 
-                "Напечатать несколько случайных строк в буфер. Для отладки."
-        );
-        register_function(
-                l_clear,
-                "clear",
-                "Очистить буфер консоли."
-        );
-    }
+    _lua_register();
 
     hotkeys_register();
 }
