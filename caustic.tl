@@ -5,6 +5,7 @@ local home = os.getenv("HOME")
 assert(home)
 package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
 	       home .. "/.luarocks/share/lua/5.4/?/init.lua;" .. 
+	       home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
 	       package.path
 package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 	    home .. "/.luarocks/lib/lua/5.4/?/init.so;" .. -- XXX: init.so?
@@ -312,6 +313,11 @@ local function lfs_after_init(_: Dependency)
 end
 
 local dependencies: {Dependency} = {
+    {
+        url = "https://github.com/rxi/json.lua.git",
+        name = "json.lua",
+        dir = "json.lua",
+    },
     {
         name = "lfs",
         url = "https://github.com/lunarmodules/luafilesystem.git",
@@ -894,6 +900,7 @@ local function filter<G>(collection: {G}, cb: function(G): boolean): {G}
 end
 
 local record Actions
+    anim_convert: function(Args)
     deps: function(Args)
     verbose: function(Args)
     compile_flags: function(Args)
@@ -2045,6 +2052,92 @@ local function set_executable_bit(fname: string)
 end
 --]]
 
+local json = require "json"
+
+local record Aseprite 
+    record Meta
+        record Size
+            w: integer
+            h: integer
+        end
+        image: string
+        size: Size
+
+        app: string
+        frameTags: string
+        layers: string
+        slices: string
+        version: string
+        scale: string
+        format: string
+    end
+    record Frame
+        record _Frame
+            x: number
+            y: number
+            w: number
+            h: number
+        end
+        frame: _Frame
+        num: number -- Дополнительное поле для сортировки
+    end
+    frames: {Frame}
+    meta: Meta
+end
+
+function actions.anim_convert(_args: Args)
+    print('anim_convert', inspect(_args))
+    if not _args.name then
+        print("There is no json file path in argument")
+        os.exit(1)
+    end
+    
+    local data = io.open(_args.name, "r"):read("*a")
+    --print('data', data)
+
+    local js = json.decode(data) as Aseprite
+    if not js then
+        print("parsing error")
+        os.exit(1)
+    end
+
+    local frames: {Aseprite.Frame} = {}
+    for k, v in pairs(js.frames as {string:any}) do
+        --print(k, inspect(v))
+        local frame = v as Aseprite.Frame
+        frame.num = tonumber(string.match(k, "(%d*)%.aseprite"))
+        table.insert(frames, frame)
+    end
+
+    table.sort(frames, function(a: Aseprite.Frame, b: Aseprite.Frame): boolean
+        return a.num < b.num 
+    end)
+
+    --print('frames', inspect(frames))
+    local res: Aseprite = {}
+    res.meta = js.meta
+    res.meta.app = nil
+    res.meta.frameTags = nil
+    res.meta.layers = nil
+    res.meta.slices = nil
+    res.meta.version = nil
+    res.meta.scale = nil
+    res.meta.format = nil
+    res.frames = {}
+    for _, frame in ipairs(frames) do
+        table.insert(res.frames, {
+            x = frame.frame.x,
+            y = frame.frame.y,
+            w = frame.frame.w,
+            h = frame.frame.h,
+        })
+    end
+
+    local new_fname = string.gsub(_args.name, "%.json$", ".lua")
+    --print('new_fname', new_fname)
+    io.open(new_fname, "w"):write(serpent.dump(res))
+end
+
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
     print('make:')
@@ -2229,6 +2322,9 @@ local function main()
         :summary("print new version of libraries")
     parser:command("publish")
         :summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
+
+    parser:command("anim_convert")
+        :option("-n --name")
 
     local make = parser:command("make")
     make
