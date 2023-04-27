@@ -153,8 +153,11 @@ local function push_current_dir()
    return dir
 end
 
-local function pop_dir()
-   lfs.chdir(table.remove(dir_stack, #dir_stack))
+local function pop_dir(num)
+   num = num or 0
+   for _ = 0, num do
+      lfs.chdir(table.remove(dir_stack, #dir_stack))
+   end
 end
 
 local function cp(from, to)
@@ -300,15 +303,19 @@ local function freetype_after_init(_)
 end
 
 local function lfs_after_init(_)
-
-
+   print('lfs_after_init')
+   push_current_dir()
+   lfs.chdir('src')
+   cmd_do("gcc -c src/lfs.c")
+   pop_dir()
+   cmd_do("ar rcs liblfs.a src/lfs.o")
 end
 
 local dependencies = {
    {
       name = "lfs",
       url = "https://github.com/lunarmodules/luafilesystem.git",
-      build_method = "make",
+      build_method = "other",
       dir = "luafilesystem",
       after_init = lfs_after_init,
    },
@@ -320,7 +327,6 @@ local dependencies = {
       after_init = freetype_after_init,
       disabled = true,
    },
-
    {
       name = "rlimgui",
       url = "https://github.com/raylib-extras/rlImGui.git",
@@ -1117,9 +1123,33 @@ local function update_links(artifact)
 
 end
 
+
 local function search_and_load_cfg_up(fname)
+   print("search_and_load_cfg_up:", fname, lfs.currentdir())
 
 
+
+
+
+   local push_num = 0
+   while true do
+      local file = io.open(fname, "r")
+      print('file', file)
+      if not file then
+         push_num = push_num + 1
+         push_current_dir()
+         lfs.chdir("..")
+      else
+         break
+      end
+      print('curdir', lfs.currentdir())
+      if push_num > 10 then
+         push_num = 0
+         break
+      end
+   end
+
+   print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
 
    local cfg
    local ok, errmsg = pcall(function()
@@ -1131,7 +1161,7 @@ local function search_and_load_cfg_up(fname)
       os.exit()
    end
 
-   return cfg
+   return cfg, push_num
 end
 
 local function check_files_in_dir(dirname, filelist)
@@ -2020,7 +2050,7 @@ function actions.make(_args)
    print('make:')
    print(tabular(_args))
 
-   local cfg, _ = search_and_load_cfg_up("bld.lua")
+   local cfg, push_num = search_and_load_cfg_up("bld.lua")
 
 
    if _args.c then
@@ -2152,7 +2182,7 @@ function actions.make(_args)
 
    end
 
-   pop_dir()
+   pop_dir(push_num)
 end
 
 local function handler_int(_)
