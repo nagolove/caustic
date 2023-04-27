@@ -122,3 +122,10 @@ static inline Color from_float4(float c[4]) {
         .a = c[3] * 255.,
     };
 }
+
+static inline Vector2 screen_center() {
+    return (Vector2) {
+        GetScreenWidth() / 2.,
+        GetScreenHeight() / 2.,
+    };
+}
