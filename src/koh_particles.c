@@ -157,11 +157,12 @@ void parts_explode(PartsEngine *pe, struct Parts_ExplositionDef *def) {
         pos->angle = drand1() * 2. * M_PI;
 
         Vector2* v = de_emplace(r, e, component_velocity);
-        // -1 .. 1
+        // max - rand() * (max - min)
         //v->x = 1. - drand1() * 2.;
         //v->y = 1. - drand1() * 2.;
-        v->x = 1. - drand1() * 2.;
-        v->y = 1. - drand1() * 2.;
+        assert(def->vel_min < def->vel_max);
+        v->x = def->vel_max - drand1() * (def->vel_max - def->vel_min);
+        v->y = def->vel_max - drand1() * (def->vel_max - def->vel_min);
 
         float* angular_v = de_emplace(r, e, component_angular_velocity);
         *angular_v = drand1() / 2.;
