@@ -5,6 +5,7 @@ local home = os.getenv("HOME")
 assert(home)
 package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
 home .. "/.luarocks/share/lua/5.4/?/init.lua;" ..
+home .. "/caustic/3rd_party/json.lua/?.lua;" ..
 package.path
 package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 home .. "/.luarocks/lib/lua/5.4/?/init.so;" ..
@@ -312,6 +313,11 @@ local function lfs_after_init(_)
 end
 
 local dependencies = {
+   {
+      url = "https://github.com/rxi/json.lua.git",
+      name = "json.lua",
+      dir = "json.lua",
+   },
    {
       name = "lfs",
       url = "https://github.com/lunarmodules/luafilesystem.git",
@@ -892,6 +898,7 @@ local function filter(collection, cb)
    end
    return tmp
 end
+
 
 
 
@@ -2045,6 +2052,92 @@ end
 
 
 
+local json = require("json")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function actions.anim_convert(_args)
+   print('anim_convert', inspect(_args))
+   if not _args.name then
+      print("There is no json file path in argument")
+      os.exit(1)
+   end
+
+   local data = io.open(_args.name, "r"):read("*a")
+
+
+   local js = json.decode(data)
+   if not js then
+      print("parsing error")
+      os.exit(1)
+   end
+
+   local frames = {}
+   for k, v in pairs(js.frames) do
+
+      local frame = v
+      frame.num = tonumber(string.match(k, "(%d*)%.aseprite"))
+      table.insert(frames, frame)
+   end
+
+   table.sort(frames, function(a, b)
+      return a.num < b.num
+   end)
+
+
+   local res = {}
+   res.meta = js.meta
+   res.meta.app = nil
+   res.meta.frameTags = nil
+   res.meta.layers = nil
+   res.meta.slices = nil
+   res.meta.version = nil
+   res.meta.scale = nil
+   res.meta.format = nil
+   res.frames = {}
+   for _, frame in ipairs(frames) do
+      table.insert(res.frames, {
+         x = frame.frame.x,
+         y = frame.frame.y,
+         w = frame.frame.w,
+         h = frame.frame.h,
+      })
+   end
+
+   local new_fname = string.gsub(_args.name, "%.json$", ".lua")
+
+   io.open(new_fname, "w"):write(serpent.dump(res))
+end
+
 
 function actions.make(_args)
    print('make:')
@@ -2229,6 +2322,9 @@ local function main()
    summary("print new version of libraries")
    parser:command("publish"):
    summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
+
+   parser:command("anim_convert"):
+   option("-n --name")
 
    local make = parser:command("make")
    make:
