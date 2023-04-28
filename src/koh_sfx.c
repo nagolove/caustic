@@ -147,6 +147,7 @@ float sfx_play(const char *sfx_name) {
             return duration;
         //}
     } else {
+        // TODO: Коллекционировать эти записи, под которые нету звуков.
         trace("sfx_play: '%s' not found\n", sfx_name);
     }
     return 0.;

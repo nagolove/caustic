@@ -2,5 +2,5 @@
 
 void sfx_init();
 void sfx_shutdown();
-// XXX: Зачем возвращается float?
+// Если звук найден, то возвращается его длительность, в секундах(?)
 float sfx_play(const char *tex_name);
