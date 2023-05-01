@@ -6,6 +6,7 @@
 #include "koh_lua_tools.h"
 #include "lua.h"
 #include "lauxlib.h"
+#include "lualib.h"
 #include "stdio.h"
 
 struct koh_Animator {
@@ -30,26 +31,31 @@ koh_Animator *koh_animator_new(koh_Animator_Def *def) {
     }
 
     lua_State *lua = luaL_newstate();
+    luaL_openlibs(lua);
 
     char code[256] = {0};
-    snprintf(code, sizeof(code), "anim = loadfile('%s')", def->lua_file);
+    snprintf(code, sizeof(code), "anim = loadfile('%s')()\n", def->lua_file);
 
     if (luaL_dostring(lua, code) != LUA_OK) {
         trace(
-            "koh_animator_new: failed to luaL_dostring('%s')\n",
-            def->lua_file
+            "koh_animator_new: failed to luaL_dostring() with code [[%s]]\n",
+            code
         );
+        trace("koh_animator_new: lua error: %s\n", lua_tostring(lua, -1));
         exit(EXIT_FAILURE);
     }
 
     trace("koh_animator_new: [%s]\n", stack_dump(lua));
     lua_getglobal(lua, "anim");
+    trace("koh_animator_new: [%s]\n", stack_dump(lua));
     lua_pushstring(lua, "meta");
+    trace("koh_animator_new: [%s]\n", stack_dump(lua));
     lua_gettable(lua, -2);
     trace("koh_animator_new: [%s]\n", stack_dump(lua));
 
     lua_pushstring(lua, "image");
     lua_gettable(lua, -2);
+    trace("koh_animator_new: [%s]\n", stack_dump(lua));
 
     const char *image_fname = lua_tostring(lua, -1);
     trace("koh_animator_new: [%s]\n", stack_dump(lua));

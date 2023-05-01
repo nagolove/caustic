@@ -72,6 +72,25 @@ local Cache = {Data = {}, }
 
 
 local cache_name = "cache.lua"
+
+
+
+
+
+
+
+
+
+
+
+
+local caustic_path = os.getenv("CAUSTIC_PATH")
+if not caustic_path then
+   print("CAUSTIC_PATH is nil")
+   os.exit(1)
+end
+
+
 local third_party = "3rd_party"
 local wasm_third_party = "wasm_3rd_party"
 
@@ -123,12 +142,16 @@ local function shallow_copy(a)
 end
 
 local dir_stack = {}
+local verbose = false
 
 local function cmd_do(_cmd)
 
 
 
    if type(_cmd) == 'string' then
+      if verbose then
+         print('cmd_do', _cmd)
+      end
       if not os.execute(_cmd) then
          print('cmd was failed')
          print(_cmd)
@@ -136,6 +159,9 @@ local function cmd_do(_cmd)
       end
    elseif (type(_cmd) == 'table') then
       for _, v in ipairs(_cmd) do
+         if verbose then
+            print('cmd_do', v)
+         end
          if not os.execute(v) then
             print('cmd was failed')
             print(_cmd)
@@ -162,7 +188,7 @@ local function pop_dir(num)
 end
 
 local function cp(from, to)
-   print(string.format("copy '%s' to '%s'", from, to))
+   print(format("copy '%s' to '%s'", from, to))
    local ok, errmsg = pcall(function()
       local _in = io.open(from, 'r')
       local _out = io.open(to, 'w')
@@ -250,6 +276,7 @@ local function cimgui_after_init(_)
       cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1")
    end
 
+
    cmd_do("cat rlimgui.inc >> cimgui.cpp")
    cmd_do("cat rlimgui.h.inc >> cimgui.h")
    cmd_do("make -j")
@@ -261,15 +288,16 @@ end
 local function rlimgui_after_init(_)
    print("rlimgui_after_init:", lfs.currentdir())
 
+
    cmd_do("wget https://github.com/raysan5/raylib/archive/refs/heads/master.zip")
    cmd_do("mv master.zip raylib-master.zip")
    cmd_do("aunpack raylib-master.zip")
 
-   cmd_do("wget https://github.com/ocornut/imgui/archive/refs/heads/master.zip")
-   cmd_do("mv master.zip imgui-master.zip")
-   cmd_do("aunpack imgui-master.zip")
 
-   cmd_do("premake5 gmake")
+
+
+
+
 end
 
 
@@ -463,7 +491,7 @@ local _includedirs_internal = {
 local function template_dirs(dirs, pattern)
    local tmp = {}
    for _, v in ipairs(dirs) do
-      table.insert(tmp, string.format(v, pattern))
+      table.insert(tmp, format(v, pattern))
    end
    return tmp
 end
@@ -685,13 +713,8 @@ local function git_clone(dep)
       local fd = io.popen(git_cmd .. " " .. url)
       print(fd:read("*a"))
    else
-      local git_cmd = "git clone"
-      local fd
-      fd = io.popen(git_cmd .. " " .. url)
-      print(fd:read("*a"))
-
-      fd = io.popen("git checkout " .. url)
-      print(fd:read("*a"))
+      cmd_do("git clone " .. url)
+      cmd_do("git checkout " .. url)
    end
 end
 
@@ -707,7 +730,9 @@ local function download_and_unpack_zip(dep)
    local path = dep.dir
    local ok, err = lfs.mkdir(dep.dir)
    if not ok then
-      print('lfs.mkdir error', err)
+      print('download_and_unpack_zip: lfs.mkdir error', err)
+      print('dep', inspect(dep))
+      os.exit(1)
    end
    local fname = path .. '/' .. dep.fname
    print('fname', fname)
@@ -724,9 +749,7 @@ local function download_and_unpack_zip(dep)
    })
    cfile:close()
 
-   local old_cwd = lfs.currentdir()
-   print('old_cwd', old_cwd)
-
+   push_current_dir()
    lfs.chdir(dep.dir)
 
    local zip = require('zip')
@@ -749,9 +772,11 @@ local function download_and_unpack_zip(dep)
       end
    end
 
-   lfs.chdir(old_cwd)
+   pop_dir()
    os.remove(fname)
 end
+
+
 
 local function _dependecy_init(dep)
    local url = dep.url
@@ -930,19 +955,18 @@ local actions = {}
 
 local function _init(path, deps)
    print("_init", path, inspect(deps))
-   local prev_dir = lfs.currentdir()
+   push_current_dir()
 
    if not lfs.chdir(path) then
-      lfs.mkdir(path)
+      if not lfs.mkdir(path) then
+         print('could not do lfs.mkdir()')
+         os.exit()
+      end
       lfs.chdir(path)
    end
 
    local threads = {}
-   local opt_tbl = {
-      required = {
-         "lfs",
-      },
-   }
+   local opt_tbl = { required = { "lfs" } }
    local func = lanes.gen("*", opt_tbl, dependency_init)
 
    local sorter = Toposorter.new()
@@ -982,8 +1006,11 @@ local function _init(path, deps)
       dependency_init(dep, path)
    end
 
-   lfs.chdir(prev_dir)
+   pop_dir()
 end
+
+
+
 
 
 
@@ -1057,7 +1084,7 @@ local function update_links(artifact)
    local site_repo_tmp = string.gsub(site_repo_index, "~", os.getenv("HOME"))
    local file = io.open(site_repo_tmp, "r")
    if not file then
-      print(string.format("Could not load '%s' file", site_repo_tmp));
+      print(format("Could not load '%s' file", site_repo_tmp));
       os.exit(1)
    end
 
@@ -1368,7 +1395,7 @@ function actions.rocks(_)
       'argparse',
    }
    for _, rock in ipairs(rocks) do
-      cmd_do(string.format("luarocks install %s --local", rock))
+      cmd_do(format("luarocks install %s --local", rock))
    end
 end
 
@@ -1468,7 +1495,7 @@ local function build_lua()
       "lua.c",
    }
    filter_sources(".", function(file)
-      local cmd = string.format("emcc -c %s -Os -Wall", file)
+      local cmd = format("emcc -c %s -Os -Wall", file)
       print(cmd)
       local pipe = io.popen(cmd)
       local res = pipe:read("*a")
@@ -1518,7 +1545,7 @@ local function build_genann()
    for _, file in ipairs(sources) do
 
       local flags = "-Wall -g3 -I."
-      local cmd = string.format("emcc -c %s %s", file, flags)
+      local cmd = format("emcc -c %s %s", file, flags)
       print(cmd)
 
       local pipe = io.popen(cmd)
@@ -1545,7 +1572,7 @@ local function build_smallregex()
    for _, file in ipairs(sources) do
 
       local flags = "-Wall -g3 -I."
-      local cmd = string.format("emcc -c %s %s", file, flags)
+      local cmd = format("emcc -c %s %s", file, flags)
       print(cmd)
 
       local pipe = io.popen(cmd)
@@ -2015,7 +2042,10 @@ end
 
 
 local function project_link(ctx, cfg, _args)
-   local flags = "-fsanitize=address"
+   local flags = ""
+   if not _args.noasan then
+      flags = flags .. " -fsanitize=address "
+   end
    if _args.make_type == 'release' then
       flags = ""
    end
@@ -2126,6 +2156,18 @@ function actions.anim_convert(_args)
 end
 
 
+local function list_concat(a, b)
+   local tmp = {}
+   for _, v in ipairs(a) do
+      table.insert(tmp, v)
+   end
+   for _, v in ipairs(b) do
+      table.insert(tmp, v)
+   end
+   return tmp
+end
+
+
 function actions.make(_args)
    print('make:')
    print(tabular(_args))
@@ -2165,12 +2207,17 @@ function actions.make(_args)
 
 
 
-   local _flags = table.concat({
-      "-ggdb3",
-      "-Wall",
-      "-fsanitize=address",
-      "-fPIC",
-   }, " ")
+   local flags = {}
+   if not _args.release then
+      table.insert(flags, "-ggdb3")
+   else
+      table.insert(flags, "-O2")
+   end
+   if not _args.noasan then
+      table.insert(flags, "-fsanitize=address")
+   end
+   flags = list_concat(flags, { "-Wall", "-fPIC" })
+   local _flags = table.concat(flags, " ")
 
 
 
@@ -2239,10 +2286,15 @@ function actions.make(_args)
       cp("libcaustic.a", "../libcaustic.a")
    else
       push_current_dir()
-      lfs.chdir(os.getenv("HOME") .. "/caustic")
+      print('caustic_path', caustic_path)
+      lfs.chdir(caustic_path)
+
       actions.make({
          make = true,
          c = _args.c,
+         j = _args.j,
+         noasan = _args.noasan,
+         release = _args.release,
       })
       pop_dir()
 
@@ -2281,6 +2333,9 @@ local function main()
 
    local parser = argparse()
 
+   parser:flag("-v --verbose")
+
+
 
 
 
@@ -2298,8 +2353,10 @@ local function main()
    option("-n --name")
    parser:command("rocks"):
    summary("list of lua rocks should be installed for this script")
+
    parser:command("verbose"):
    summary("print internal data with urls, paths etc.")
+
    parser:command("compile_flags"):
    summary("print compile_flags.txt to stdout")
    parser:command("wbuild"):
@@ -2318,11 +2375,15 @@ local function main()
    summary("build libcaustic or current project"):
    argument("make_type"):args("?")
    make:flag('-j', 'run compilation parallel')
-   make:flag('-c', 'remove cache file')
+   make:flag('-c', 'full rebuild without cache info')
+   make:flag('-r --release', 'release')
+   make:flag('-a --noasan', 'no address sanitazer');
 
    local _args = parser:parse()
 
 
+   print(inspect(_args))
+   verbose = _args.verbose == true
 
 
    for k, v in pairs(_args) do

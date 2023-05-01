@@ -14,6 +14,12 @@ package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 local record Cfg
     artifact: string
     main: string
+    codegen: {Codegen}
+    record Codegen
+        file: string
+        on_read: function(line: string)
+        on_write: function(): {string}
+    end
 end
 
 local format = string.format
@@ -142,13 +148,16 @@ local function shallow_copy<X>(a: X): X
 end
 
 local dir_stack: {string} = {}
+local verbose = false
 
 local function cmd_do(_cmd: string|{string})
     --local file = io.popen(_cmd)
     --file:read("*a")
     --file:close()
     if type(_cmd) == 'string' then
-        print('cmd_do', _cmd)
+        if verbose then
+            print('cmd_do', _cmd)
+        end
         if not os.execute(_cmd as string) then
             print('cmd was failed')
             print(_cmd)
@@ -156,7 +165,9 @@ local function cmd_do(_cmd: string|{string})
         end
     elseif (type(_cmd) == 'table') then
         for _, v in ipairs(_cmd as {string}) do
-            print('cmd_do', v)
+            if verbose then
+                print('cmd_do', v)
+            end
             if not os.execute(v) then
                 print('cmd was failed')
                 print(_cmd)
@@ -1009,6 +1020,9 @@ local enum MakeAction
 end
 
 local record Args
+    release: string
+    noasan: string
+    verbose: string
     make: boolean
     minshell: string
     c: string
@@ -2034,7 +2048,10 @@ end
 -- TODO: link utf8proc statically
 -- TODO: link all libs statically
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
-    local flags: string = "-fsanitize=address"
+    local flags: string = ""
+    if not _args.noasan then
+        flags = flags .. " -fsanitize=address "
+    end
     if _args.make_type == 'release' then
         flags = ""
     end
@@ -2144,6 +2161,32 @@ function actions.anim_convert(_args: Args)
     io.open(new_fname, "w"):write(serpent.dump(res))
 end
 
+-- Возвращает новую табличку, составленную из элементов таблицы a и таблицы b
+local function list_concat(a: {string}, b: {string}): {string}
+    local tmp = {}
+    for _, v in ipairs(a) do
+        table.insert(tmp, v)
+    end
+    for _, v in ipairs(b) do
+        table.insert(tmp, v)
+    end
+    return tmp
+end
+
+local function codegen(cg: Cfg.Codegen)
+    print('codegen', inspect(cg))
+    local lines = {}
+    local file = io.open(cg.file, "r")
+    if not file then
+        print('codegen: could not open', cg.file)
+        return
+    end
+    for line in file:lines() do
+        table.insert(lines, line)
+    end
+    file:close()
+end
+
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
     print('make:')
@@ -2161,6 +2204,12 @@ function actions.make(_args: Args)
 
     -- TODO: Возможность задания каталога через bld.lua
     lfs.chdir("src")
+
+    if cfg.codegen then
+        for _, v in ipairs(cfg.codegen) do
+            codegen(v)
+        end
+    end
 
     cache = Cache.new(cache_name)
     local exclude = {}
@@ -2184,12 +2233,17 @@ function actions.make(_args: Args)
     --print(tabular(includedirs))
 
     -- TODO: Отладочная и релизная сборка через команду
-    local _flags: string = table.concat({
-        "-ggdb3",
-        "-Wall",
-        "-fsanitize=address",
-        "-fPIC",
-    }, " ")
+    local flags: {string} = {}
+    if not _args.release then
+        table.insert(flags, "-ggdb3")
+    else
+        table.insert(flags, "-O2")
+    end
+    if not _args.noasan then
+        table.insert(flags, "-fsanitize=address")
+    end
+    flags = list_concat(flags, { "-Wall", "-fPIC", })
+    local _flags: string = table.concat(flags, " ")
 
     --local _input: string = table.concat({
     --}, " ")
@@ -2258,10 +2312,15 @@ function actions.make(_args: Args)
         cp("libcaustic.a", "../libcaustic.a")
     else
         push_current_dir()
-        lfs.chdir(os.getenv("HOME") .. "/caustic")
+        print('caustic_path', caustic_path)
+        lfs.chdir(caustic_path)
+        --lfs.chdir(os.getenv("HOME") .. "/caustic")
         actions.make({
             make = true,
             c = _args.c,
+            j = _args.j,
+            noasan = _args.noasan,
+            release = _args.release
         })
         pop_dir()
 
@@ -2299,6 +2358,9 @@ local function main()
     signal(SIGINT, handler_int)
 
     local parser = argparse()
+
+    parser:flag("-v --verbose")
+
     -- Нужно собрать все исходные файлы для wasm версии.
     -- Сперва скопировать их в отдельный каталог.
     -- Собрать все модули согласно спецификации bld.lua для библиотеки caustic
@@ -2317,8 +2379,10 @@ local function main()
         :option("-n --name")
     parser:command("rocks")
         :summary("list of lua rocks should be installed for this script")
+
     parser:command("verbose")
         :summary("print internal data with urls, paths etc.")
+
     parser:command("compile_flags")
         :summary("print compile_flags.txt to stdout")
     parser:command("wbuild")
@@ -2337,11 +2401,15 @@ local function main()
         :summary("build libcaustic or current project")
         :argument("make_type"):args("?")
     make:flag('-j', 'run compilation parallel')
-    make:flag('-c', 'remove cache file')
+    make:flag('-c', 'full rebuild without cache info')
+    make:flag('-r --release', 'release')
+    make:flag('-a --noasan', 'no address sanitazer');
 
     local _args = parser:parse()
-    --print(tabular(_args))
 
+    --print(tabular(_args))
+    print(inspect(_args))
+    verbose = _args.verbose == true
     --os.exit()
 
     for k, v in pairs(_args) do
