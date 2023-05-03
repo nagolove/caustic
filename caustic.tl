@@ -16,9 +16,11 @@ local record Cfg
     main: string
     codegen: {Codegen}
     record Codegen
-        file: string
+        file_in: string
+        file_out: string
         on_read: function(line: string)
         on_write: function(): {string}
+        on_finish: function() -- XXX: Только для отладки
     end
 end
 
@@ -1020,6 +1022,7 @@ local enum MakeAction
 end
 
 local record Args
+    nocodegen: string
     release: string
     noasan: string
     verbose: string
@@ -2176,15 +2179,77 @@ end
 local function codegen(cg: Cfg.Codegen)
     print('codegen', inspect(cg))
     local lines = {}
-    local file = io.open(cg.file, "r")
+    local file = io.open(cg.file_in, "r")
     if not file then
-        print('codegen: could not open', cg.file)
+        print('codegen: could not open', cg.file_in)
         return
     end
     for line in file:lines() do
         table.insert(lines, line)
     end
     file:close()
+
+    local on_write: function(): {string}
+    if cg.on_write then
+        on_write = cg.on_write
+    else
+        print("dummy on_write")
+        on_write = function(): {string}
+            return {}
+        end
+    end
+
+    --print(tabular(lines))
+    --local new_lines: {string} = {}
+    local paste_linenum = -1
+    for i, line in ipairs(lines) do
+        if string.match(line, "{CODE_PLACE_HOLDER}") then
+            paste_linenum = i
+            print('paste_linenum', paste_linenum)
+
+            --print('tmp', inspect(tmp))
+            --print( "os.exit()" )
+            --os.exit()
+        else
+            if cg.on_read then 
+                cg.on_read(line)
+            end
+        end
+    end
+
+
+    local write_lines = {}
+    for j = 1, paste_linenum - 1 do
+        table.insert(write_lines, lines[j])
+    end
+    --for _, line in ipairs(new_lines) do
+        --table.insert(write_lines, line)
+    --end
+    for _, new_line in ipairs(cg.on_write()) do
+        print('new_line', new_line)
+        table.insert(write_lines, new_line)
+    end
+    for j = paste_linenum + 1, #lines do
+        table.insert(write_lines, lines[j])
+    end
+
+    --[[
+    print("#new_lines", #new_lines)
+    print('write_lines')
+    print(tabular(write_lines))
+    --]]
+
+    if cg.on_finish then
+        cg.on_finish()
+    end
+
+    local outfile = io.open(cg.file_out, "w")
+    if outfile then
+        outfile:write(table.concat(write_lines, "\n"))
+        outfile:close()
+    else
+        print(format("Could not open '%s' for writing", cg.file_out))
+    end
 end
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
@@ -2205,7 +2270,7 @@ function actions.make(_args: Args)
     -- TODO: Возможность задания каталога через bld.lua
     lfs.chdir("src")
 
-    if cfg.codegen then
+    if not _args.nocodegen and cfg.codegen then
         for _, v in ipairs(cfg.codegen) do
             codegen(v)
         end
@@ -2400,6 +2465,7 @@ local function main()
     make
         :summary("build libcaustic or current project")
         :argument("make_type"):args("?")
+    make:flag("-g --nocodegen", "disable codegeneration step")
     make:flag('-j', 'run compilation parallel')
     make:flag('-c', 'full rebuild without cache info')
     make:flag('-r --release', 'release')
