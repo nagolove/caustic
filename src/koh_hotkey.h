@@ -52,3 +52,6 @@ void hotkey_process(HotkeyStorage *storage);
 void hotkey_enable(HotkeyStorage *storage, const char *name, bool state);
 bool hotkey_exists(HotkeyStorage *storage, Hotkey hk, Hotkey *existing);
 void hotkeys_enumerate(HotkeyStorage *storage);
+
+void hotkey_state_push(HotkeyStorage *storage);
+void hotkey_state_pop(HotkeyStorage *storage);

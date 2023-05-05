@@ -380,3 +380,28 @@ void hotkey_group_unregister(HotkeyStorage *storage, uint8_t mask) {
     memcpy(storage->keys, new_keys, num * sizeof(Hotkey));
     storage->keysnum = num;
 }
+
+static HotkeyStorage    state_stack[8] = {0};
+static int              state_sz = 0;
+
+void hotkey_state_push(HotkeyStorage *storage) {
+    assert(storage);
+    int stack_sz = sizeof(state_stack) / sizeof(state_stack[0]);
+    if (state_sz < stack_sz) {
+        memmove(&state_stack[state_sz++], storage, sizeof(HotkeyStorage));
+    } else {
+        trace("hotkey_state_push: stack is full\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void hotkey_state_pop(HotkeyStorage *storage) {
+    assert(storage);
+    if (state_sz > 0) {
+        memmove(storage, &state_stack[state_sz--], sizeof(state_stack[0]));
+    } else {
+        trace("hotkey_state_pop: stack is empty\n");
+        exit(EXIT_FAILURE);
+    }
+}
+

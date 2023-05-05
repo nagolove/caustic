@@ -5,8 +5,8 @@
 typedef struct PartsEngine PartsEngine;
 
 struct Parts_ExplositionDef {
-    double  lifetime;
-    double  vel_min, vel_max;
+    double  lifetime, vel_min, vel_max;
+    float   spread_time; // seconds
     Color   color;
     Vector2 pos;
     int     num;

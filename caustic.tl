@@ -19,7 +19,7 @@ local record Cfg
         file_in: string
         file_out: string
         on_read: function(line: string)
-        on_write: function(): {string}
+        on_write: function(capture: string): {string}
         on_finish: function() -- XXX: Только для отладки
     end
 end
@@ -2189,23 +2189,37 @@ local function codegen(cg: Cfg.Codegen)
     end
     file:close()
 
-    local on_write: function(): {string}
+    local on_write: function(_: string): {string}
     if cg.on_write then
         on_write = cg.on_write
     else
         print("dummy on_write")
-        on_write = function(): {string}
+        on_write = function(_: string): {string}
             return {}
         end
     end
 
     --print(tabular(lines))
     --local new_lines: {string} = {}
-    local paste_linenum = -1
+    local record Mark
+        linenum: integer
+        capture: string
+    end
+
+    local marks: {Mark} = {}
+
+    --local paste_linenum = -1
     for i, line in ipairs(lines) do
-        if string.match(line, "{CODE_PLACE_HOLDER}") then
-            paste_linenum = i
-            print('paste_linenum', paste_linenum)
+        local capture = string.match(line, "{CODE_.*}")
+        if capture then
+            table.insert(marks, {
+                linenum = i,
+                capture = capture,
+            })
+
+            local last_mark = marks[#marks]
+            print('capture', last_mark.capture)
+            print('paste_linenum', last_mark.linenum)
 
             --print('tmp', inspect(tmp))
             --print( "os.exit()" )
@@ -2219,18 +2233,32 @@ local function codegen(cg: Cfg.Codegen)
 
 
     local write_lines = {}
-    for j = 1, paste_linenum - 1 do
-        table.insert(write_lines, lines[j])
-    end
-    --for _, line in ipairs(new_lines) do
-        --table.insert(write_lines, line)
-    --end
-    for _, new_line in ipairs(cg.on_write()) do
-        print('new_line', new_line)
-        table.insert(write_lines, new_line)
-    end
-    for j = paste_linenum + 1, #lines do
-        table.insert(write_lines, lines[j])
+
+    local index = 1
+    for mark_index, mark in ipairs(marks) do
+        for j = index, mark.linenum - 1 do
+            table.insert(write_lines, lines[j])
+        end
+        --for _, line in ipairs(new_lines) do
+            --table.insert(write_lines, line)
+        --end
+        local gen_lines = cg.on_write(mark.capture)
+        if not gen_lines then
+            gen_lines = {}
+        end
+        for _, new_line in ipairs(gen_lines) do
+            --print('new_line', new_line)
+            table.insert(write_lines, new_line)
+        end
+        local next_mark = marks[mark_index + 1]
+        local next_index = #lines
+        if next_mark then
+            next_index = next_mark.linenum
+        end
+        index = next_index
+        for j = mark.linenum + 1, next_index do
+            table.insert(write_lines, lines[j])
+        end
     end
 
     --[[
@@ -2270,6 +2298,7 @@ function actions.make(_args: Args)
     -- TODO: Возможность задания каталога через bld.lua
     lfs.chdir("src")
 
+    -- TODO: кэширование генерируемых файлов
     if not _args.nocodegen and cfg.codegen then
         for _, v in ipairs(cfg.codegen) do
             codegen(v)
