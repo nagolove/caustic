@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static HotkeyStorage    state_stack[8] = {0};
+static int              state_sz = 0;
 static HotkeyStorage *last_storage = NULL;
 
 struct Key2Str {
@@ -381,9 +383,6 @@ void hotkey_group_unregister(HotkeyStorage *storage, uint8_t mask) {
     storage->keysnum = num;
 }
 
-static HotkeyStorage    state_stack[8] = {0};
-static int              state_sz = 0;
-
 void hotkey_state_push(HotkeyStorage *storage) {
     assert(storage);
     int stack_sz = sizeof(state_stack) / sizeof(state_stack[0]);
@@ -396,9 +395,11 @@ void hotkey_state_push(HotkeyStorage *storage) {
 }
 
 void hotkey_state_pop(HotkeyStorage *storage) {
+    trace("hotkey_state_pop:\n");
     assert(storage);
     if (state_sz > 0) {
-        memmove(storage, &state_stack[state_sz--], sizeof(state_stack[0]));
+        trace("hotkey_state_pop: state_sz %d\n", state_sz);
+        memmove(storage, &state_stack[--state_sz], sizeof(HotkeyStorage));
     } else {
         trace("hotkey_state_pop: stack is empty\n");
         exit(EXIT_FAILURE);
