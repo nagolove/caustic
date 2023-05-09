@@ -147,6 +147,11 @@ int l_filters(lua_State *lua) {
     return 1;
 }
 
+int l_filters_num(lua_State *lua) {
+    lua_pushnumber(lua, filters_num);
+    return 1;
+}
+
 int l_filter_remove(lua_State *lua) {
     luaL_checktype(lua, 1, LUA_TNUMBER);
     int index = lua_tonumber(lua, 1);
@@ -176,6 +181,12 @@ void logger_register_functions() {
         l_filters,
         "filters",
         "Распечатывает и возвращает таблицу с установленными фильтрами"
+    );
+
+    register_function(
+        l_filters_num,
+        "filters_num",
+        "Возвращает количество фильтров"
     );
 
     register_function(
