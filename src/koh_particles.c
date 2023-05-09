@@ -1,15 +1,26 @@
+// vim: fdm=marker
 #include "koh_particles.h"
 
-#include "raymath.h"
 #include "koh_destral_ecs.h"
-#include <math.h>
+#include "koh_logger.h"
+#include "raymath.h"
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
+#include <string.h>
+
+struct PartsRequest {
+    struct Parts_ExplositionDef def;
+    double                      start_time, last_time;
+};
 
 struct PartsEngine {
     de_ecs *ecs;
+    struct PartsRequest *requests;
+    int                 requests_num, requests_cap;
 };
 
+// {{{ compoments ...
 struct Component_Position {
     Vector2 p;
     float   angle, radius;
@@ -45,23 +56,121 @@ static const de_cp_type component_lifetime = {
     .name = "lifetime",
 };
 
+// }}}
+
 PartsEngine *parts_new() {
     struct PartsEngine *pe = calloc(1, sizeof(*pe));
     pe->ecs = de_ecs_make();
+    pe->requests_num = 0;
+    pe->requests_cap = 256;
+    pe->requests = calloc(pe->requests_cap, sizeof(pe->requests[0]));
     return pe;
 }
 
 void parts_free(PartsEngine *pe) {
     assert(pe);
-    de_ecs_destroy(pe->ecs);
+    if (pe->ecs)
+        de_ecs_destroy(pe->ecs);
+    if (pe->requests)
+        free(pe->requests);
+    memset(pe, 0, sizeof(*pe));
     free(pe);
+}
+
+static double drand1() {
+    return rand() / (double)RAND_MAX;
+}
+
+// Возвращает ложь если время истечения превышено
+static bool parts_emit(PartsEngine *pe, struct PartsRequest *req) {
+    assert(pe);
+    assert(req);
+
+    struct Parts_ExplositionDef *def = &req->def;
+    assert(def);
+    double now = GetTime();
+    de_ecs *r = pe->ecs;
+
+    const float min_radius = def->min_radius;
+    const float max_radius = def->max_radius;
+    if (min_radius < max_radius) {
+        trace(
+            "parts_emit: min_radius %f < max_radius %f\n, exiting",
+            min_radius, max_radius
+        );
+        exit(EXIT_FAILURE);
+    }
+    const float radius_diff = max_radius - min_radius;
+
+    // Скопировать def и поставить в функцию обратного вызова в очередь в
+    // parts_update() до истечения spread_time
+    //int num = def->num_in_sec;
+    double time_diff = now - req->last_time;
+    //trace("parts_emit: time_diff %f\n", time_diff);
+    int num = (float)def->num_in_sec * time_diff;
+    trace("parts_emit: num %d\n", num);
+    for (int i = 0; i < num; ++i) {
+        de_entity e = de_create(r);
+
+        struct Component_Position* pos = de_emplace(r, e, component_position);
+        pos->radius = min_radius + (rand() / (double)RAND_MAX) * radius_diff;
+
+        trace("parts_emit: pos->radius %f\n", pos->radius);
+
+        pos->p = def->pos;
+        pos->angle = drand1() * 2. * M_PI;
+
+        Vector2* v = de_emplace(r, e, component_velocity);
+        assert(def->vel_min < def->vel_max);
+        v->x = def->vel_max - drand1() * (def->vel_max - def->vel_min);
+        v->y = def->vel_max - drand1() * (def->vel_max - def->vel_min);
+
+        float* angular_v = de_emplace(r, e, component_angular_velocity);
+        *angular_v = drand1() / 2.;
+
+        Color *color = de_emplace(r, e, component_color);
+        *color = def->color;
+
+        double *lifetime = de_emplace(r, e, component_lifetime);
+        *lifetime = drand1() * def->lifetime;
+    }
+
+    req->last_time = now;
+    return true;
+}
+
+void parts_explode(PartsEngine *pe, struct Parts_ExplositionDef *def) {
+    assert(pe);
+    assert(def);
+
+    if (pe->requests_num < pe->requests_cap) {
+        pe->requests[pe->requests_num++] = (struct PartsRequest){
+            .def = *def,
+            .start_time = GetTime(),
+            .last_time = GetTime(),
+        };
+    }
+
+    parts_emit(pe, &pe->requests[pe->requests_num]);
 }
 
 void parts_update(PartsEngine *pe) {
     assert(pe);
     de_ecs *r = pe->ecs;
 
+    for (int j = 0; j < pe->requests_num; j++) {
+        if (!parts_emit(pe, &pe->requests[j])) {
+            trace("parts_update: remove emitter\n");
+            int i = j;
+            // Удаление истекшего элемента
+            for (int k = j + 1; k < pe->requests_num; k++) {
+                pe->requests[i++] = pe->requests[k];
+            }
+        }
+    }
+
     float dt = GetFrameTime() * 100.; // XXX: Что значит 100?
+    // Движение и вращение
     for (de_view v = de_create_view(r, 3, (de_cp_type[3]) {
         component_position, component_velocity, component_angular_velocity,
     }); de_view_valid(&v); de_view_next(&v)) {
@@ -72,6 +181,7 @@ void parts_update(PartsEngine *pe) {
         pos->angle = pos->angle + *angular_velocity * dt;
     }
 
+    // Проверка на время жизни
     for (de_view v = de_create_view(r, 1, (de_cp_type[1]){ component_lifetime});
             de_view_valid(&v); de_view_next(&v)) {
         double *lifetime = de_view_get(&v, component_lifetime);
@@ -90,16 +200,11 @@ void parts_draw(PartsEngine *pe) {
                 component_position, component_color
         }); de_view_valid(&v); de_view_next(&v)) {
 
-        //de_entity e = de_view_entity(&v);
         struct Component_Position* p = de_view_get(&v, component_position);
         Color *c = de_view_get(&v, component_color);
 
-
         Vector2 displacement;
         Vector2 vert1, vert2, vert3;
-
-        //rlBegin(RL_TRIANGLES);
-        //rlColor4ub(c->r, c->g, c->b, c->a);
 
         displacement = (Vector2) {
             cosf(p->angle) * p->radius,
@@ -114,7 +219,6 @@ void parts_draw(PartsEngine *pe) {
             sinf(p->angle) * p->radius,
         };
         vert2 = Vector2Add(p->p, displacement);
-        //rlColor4ub(c->r, c->g, c->b, c->a);
 
         p->angle += M_PI * 2. / 3.;
 
@@ -124,55 +228,7 @@ void parts_draw(PartsEngine *pe) {
         };
         vert3 = Vector2Add(p->p, displacement);
 
-        //rlVertex2f(vert2.x, vert2.y);
-        //rlVertex2f(vert1.x, vert1.y);
-        //rlVertex2f(vert3.x, vert3.y);
-        //rlColor4ub(c->r, c->g, c->b, c->a);
-
-        //rlEnd();
-
         DrawTriangle(vert2, vert1, vert3, *c);
-    }
-}
-
-static double drand1() {
-    return rand() / (double)RAND_MAX;
-}
-
-void parts_explode(PartsEngine *pe, struct Parts_ExplositionDef *def) {
-    assert(pe);
-    assert(def);
-    de_ecs *r = pe->ecs;
-
-    const float min_radius = 2;
-    const float max_radius = 7;
-    const float radius_diff = max_radius - min_radius;
-
-    for (int i = 0; i < def->num; ++i) {
-        de_entity e = de_create(r);
-
-        struct Component_Position* pos = de_emplace(r, e, component_position);
-        pos->radius = min_radius + (rand() / (double)RAND_MAX) * radius_diff;
-        pos->p = def->pos;
-        pos->angle = drand1() * 2. * M_PI;
-
-        Vector2* v = de_emplace(r, e, component_velocity);
-        // max - rand() * (max - min)
-        //v->x = 1. - drand1() * 2.;
-        //v->y = 1. - drand1() * 2.;
-        assert(def->vel_min < def->vel_max);
-        v->x = def->vel_max - drand1() * (def->vel_max - def->vel_min);
-        v->y = def->vel_max - drand1() * (def->vel_max - def->vel_min);
-
-        float* angular_v = de_emplace(r, e, component_angular_velocity);
-        *angular_v = drand1() / 2.;
-
-        Color *color = de_emplace(r, e, component_color);
-        *color = def->color;
-
-        double *lifetime = de_emplace(r, e, component_lifetime);
-        *lifetime = drand1() * def->lifetime;
-
     }
 }
 
