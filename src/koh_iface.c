@@ -149,7 +149,9 @@ bool vcontainer_update(VContainer *c, void *udata) {
 
         double now = GetTime();
         double diff = now - c->last_time ;
-        trace("vcontainer_update: diff %f\n", diff);
+
+        //trace("vcontainer_update: diff %f\n", diff);
+
         if (diff >= 1. / 60.) {
             c->last_time = now;
 
