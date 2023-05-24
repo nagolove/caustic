@@ -1022,6 +1022,7 @@ local enum MakeAction
 end
 
 local record Args
+    cpp: string
     nocodegen: string
     release: string
     noasan: string
@@ -1471,15 +1472,15 @@ local function link(objfiles: {string}, libname: string, flags: string)
 end
 
 local function filter_sources(
-    path: string, cb: function(string), exclude: {string}
+    pattern: string, path: string, cb: function(string), exclude: {string}
 )
     --if path == "" then path = "." end
     for file in lfs.dir(path) do
-        if string.match(file, ".*%.c$") then
+        if string.match(file, pattern) then
             --print('filter_sources:', file)
             if exclude then
-                for _, pattern in ipairs(exclude) do
-                    if string.match(file, pattern) then
+                for _, pat in ipairs(exclude) do
+                    if string.match(file, pat) then
                         --print('filter_sources: excluded', file)
                         goto continie
                     end
@@ -1489,6 +1490,18 @@ local function filter_sources(
             :: continie ::
         end
     end
+end
+
+local function filter_sources_c(
+    path: string, cb: function(string), exclude: {string}
+) 
+    filter_sources(".*%.c$", path, cb, exclude)
+end
+
+local function filter_sources_cpp(
+    path: string, cb: function(string), exclude: {string}
+)
+    filter_sources(".*%.cpp$", path, cb, exclude)
 end
 
 local function src2obj(filename: string): string
@@ -1503,7 +1516,7 @@ local function build_lua()
     local exclude = {
         "lua.c"
     }
-    filter_sources(".", function(file: string)
+    filter_sources_c(".", function(file: string)
         local cmd = format("emcc -c %s -Os -Wall", file)
         print(cmd)
         local pipe = io.popen(cmd)
@@ -1642,7 +1655,7 @@ local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     lfs.mkdir(output_dir)
     local path = "src"
     local objfiles = {}
-    filter_sources(path, function(file: string)
+    filter_sources_c(path, function(file: string)
         print(file)
         local output_path = output_dir .. 
                             "/" ..string.gsub(file, "(.*%.)c$", "%1o")
@@ -2365,7 +2378,8 @@ function actions.make(_args: Args)
 
     local queue = {}
     local cwd = lfs.currentdir() .. "/"
-    filter_sources(".", function(file: string)
+
+    filter_sources_c(".", function(file: string)
         --print('file', file)
         local _output = output_dir .. "/" .. 
                         string.gsub(file, "(.*%.)c$", "%1o")
@@ -2388,6 +2402,31 @@ function actions.make(_args: Args)
         table.insert(objfiles, _output)
     end, exclude)
 
+    if _args.cpp then
+        filter_sources_cpp(".", function(file: string)
+            --print('file', file)
+            local _output = output_dir .. "/" .. 
+                            string.gsub(file, "(.*%.)cpp$", "%1o")
+            --local _input = output_dir .. "/" .. file
+            local _input = cwd .. file
+
+            --print("_input", _input)
+            --print('_input\'', cwd .. string.sub(_input, 3, -1))
+
+            -- TODO: Проверять отсутствие объектного файла
+            local cmd = format(
+                "cc -lm %s %s %s %s -o %s -c %s %s", 
+                _defines, _includes, _libspath, _flags,
+                _output, _input, _libs
+            )
+            if cache:should_recompile(file, cmd) then
+                table.insert(queue, cmd)
+            end
+
+            table.insert(objfiles, _output)
+        end, exclude)
+    end
+
     if not _args.j then
         serial_run(queue)
     else
@@ -2397,6 +2436,8 @@ function actions.make(_args: Args)
     cache:save()
     cache = nil
 
+    print('objfiles')
+    print(tabular(objfiles))
     local objfiles_str = table.concat(objfiles, " ")
 
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
@@ -2498,7 +2539,8 @@ local function main()
     make:flag('-j', 'run compilation parallel')
     make:flag('-c', 'full rebuild without cache info')
     make:flag('-r --release', 'release')
-    make:flag('-a --noasan', 'no address sanitazer');
+    make:flag('-a --noasan', 'no address sanitazer')
+    make:flag("-p --cpp", "use c++ code")
 
     local _args = parser:parse()
 

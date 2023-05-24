@@ -1049,6 +1049,7 @@ end
 
 
 
+
 function actions.init(_args)
    local deps = {}
    if _args.name then
@@ -1471,15 +1472,15 @@ local function link(objfiles, libname, flags)
 end
 
 local function filter_sources(
-   path, cb, exclude)
+   pattern, path, cb, exclude)
 
 
    for file in lfs.dir(path) do
-      if string.match(file, ".*%.c$") then
+      if string.match(file, pattern) then
 
          if exclude then
-            for _, pattern in ipairs(exclude) do
-               if string.match(file, pattern) then
+            for _, pat in ipairs(exclude) do
+               if string.match(file, pat) then
 
                   goto continie
                end
@@ -1489,6 +1490,18 @@ local function filter_sources(
          ::continie::
       end
    end
+end
+
+local function filter_sources_c(
+   path, cb, exclude)
+
+   filter_sources(".*%.c$", path, cb, exclude)
+end
+
+local function filter_sources_cpp(
+   path, cb, exclude)
+
+   filter_sources(".*%.cpp$", path, cb, exclude)
 end
 
 local function src2obj(filename)
@@ -1503,7 +1516,7 @@ local function build_lua()
    local exclude = {
       "lua.c",
    }
-   filter_sources(".", function(file)
+   filter_sources_c(".", function(file)
       local cmd = format("emcc -c %s -Os -Wall", file)
       print(cmd)
       local pipe = io.popen(cmd)
@@ -1642,7 +1655,7 @@ local function build_project(output_dir, exclude)
    lfs.mkdir(output_dir)
    local path = "src"
    local objfiles = {}
-   filter_sources(path, function(file)
+   filter_sources_c(path, function(file)
       print(file)
       local output_path = output_dir ..
       "/" .. string.gsub(file, "(.*%.)c$", "%1o")
@@ -2365,7 +2378,8 @@ function actions.make(_args)
 
    local queue = {}
    local cwd = lfs.currentdir() .. "/"
-   filter_sources(".", function(file)
+
+   filter_sources_c(".", function(file)
 
       local _output = output_dir .. "/" ..
       string.gsub(file, "(.*%.)c$", "%1o")
@@ -2388,6 +2402,31 @@ function actions.make(_args)
       table.insert(objfiles, _output)
    end, exclude)
 
+   if _args.cpp then
+      filter_sources_cpp(".", function(file)
+
+         local _output = output_dir .. "/" ..
+         string.gsub(file, "(.*%.)cpp$", "%1o")
+
+         local _input = cwd .. file
+
+
+
+
+
+         local cmd = format(
+         "cc -lm %s %s %s %s -o %s -c %s %s",
+         _defines, _includes, _libspath, _flags,
+         _output, _input, _libs)
+
+         if cache:should_recompile(file, cmd) then
+            table.insert(queue, cmd)
+         end
+
+         table.insert(objfiles, _output)
+      end, exclude)
+   end
+
    if not _args.j then
       serial_run(queue)
    else
@@ -2397,6 +2436,8 @@ function actions.make(_args)
    cache:save()
    cache = nil
 
+   print('objfiles')
+   print(tabular(objfiles))
    local objfiles_str = table.concat(objfiles, " ")
 
 
@@ -2498,7 +2539,8 @@ local function main()
    make:flag('-j', 'run compilation parallel')
    make:flag('-c', 'full rebuild without cache info')
    make:flag('-r --release', 'release')
-   make:flag('-a --noasan', 'no address sanitazer');
+   make:flag('-a --noasan', 'no address sanitazer')
+   make:flag("-p --cpp", "use c++ code")
 
    local _args = parser:parse()
 
