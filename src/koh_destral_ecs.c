@@ -770,19 +770,19 @@ size_t de_view_get_index(de_view* v, de_cp_type cp_type) {
     return 0;
 }
 
-size_t de_view_get_index_safe(de_view* v, de_cp_type cp_type) {
+int de_view_get_index_safe(de_view* v, de_cp_type cp_type) {
     assert(v);
     for (size_t i = 0; i < v->pool_count; i++) {
         if (v->to_pool_index[i] == cp_type.cp_id) {
             return i;
         }
     }
-    return 0;
+    return -1;
 }
 
 void* de_view_get_safe(de_view *v, de_cp_type cp_type) {
-    size_t index = de_view_get_index_safe(v, cp_type);
-    return index ? de_view_get_by_index(v, index) : NULL;
+    int index = de_view_get_index_safe(v, cp_type);
+    return index != -1 ? de_view_get_by_index(v, index) : NULL;
 }
 
 void* de_view_get(de_view* v, de_cp_type cp_type) {
