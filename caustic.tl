@@ -2350,6 +2350,7 @@ function actions.make(_args: Args)
         "-DPLATFORM=PLATFORM_DESKTOP",
         "-DPLATFORM_DESKTOP",
         "-DDEBUG",
+        "-g3",
     }, " ")
 
     local _includes: string = table.concat({
