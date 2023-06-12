@@ -265,3 +265,5 @@ void* de_view_get_safe(de_view *v, de_cp_type cp_type);
 void* de_view_get_by_index(de_view* v, size_t pool_index);
 void de_view_next(de_view* v);
 
+int de_typeof_num(de_ecs* r, de_cp_type cp_type);
+

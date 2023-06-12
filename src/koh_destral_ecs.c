@@ -859,3 +859,10 @@ de_entity de_view_entity(de_view* v) {
     assert(de_view_valid(v));
     return v->pool->sparse.dense[v->current_entity_index];
 }
+
+int de_typeof_num(de_ecs* r, de_cp_type cp_type) {
+    de_storage *storage = de_assure(r, cp_type);
+    assert(storage);
+    return storage ? storage->cp_data_size : 0;
+}
+
