@@ -24,6 +24,7 @@ package.cpath
 
 
 
+
 local format = string.format
 
 
@@ -277,11 +278,19 @@ local function cimgui_after_init(_)
    cmd_do("rm CMakeCache.txt")
 
    if use_freetype then
-
-      cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1 -DIMGUI_ENABLE_FREETYPE=1")
+      cmd_do(table.concat({
+         format("CXXFLAGS=-I%s/3rd_party/freetype/include", caustic_path),
+         "cmake .",
+         "-DIMGUI_STATIC=1",
+         "-DIMGUI_FREETYPE=1",
+         "-DIMGUI_ENABLE_FREETYPE=1",
+      }, " "))
    else
-
-      cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1")
+      cmd_do(table.concat({
+         format("CXXFLAGS=-I%s/3rd_party/freetype/include", caustic_path),
+         "cmake .",
+         "-DIMGUI_STATIC=1",
+      }, " "))
    end
 
 
@@ -1126,13 +1135,17 @@ local function update_links(artifact)
       end
    end
 
-   print('link_lines before update')
-   print(tabular(links_lines))
+   if verbose then
+      print('link_lines before update')
+      print(tabular(links_lines))
+   end
 
    update_links_table(links_lines, artifact)
 
-   print('link_lines after update')
-   print(tabular(links_lines))
+   if verbose then
+      print('link_lines after update')
+      print(tabular(links_lines))
+   end
 
    local new_lines = {}
    for _, line in ipairs(other_lines) do
@@ -2294,9 +2307,14 @@ local function codegen(cg)
 end
 
 
+
+
+
 function actions.make(_args)
-   print('make:')
-   print(tabular(_args))
+   if verbose then
+      print('make:')
+      print(tabular(_args))
+   end
 
    local cfg, push_num = search_and_load_cfg_up("bld.lua")
 
@@ -2308,8 +2326,8 @@ function actions.make(_args)
    print(push_current_dir())
 
 
-
-   lfs.chdir("src")
+   local src_dir = cfg.src or "src"
+   lfs.chdir(src_dir)
 
 
    if not _args.nocodegen and cfg.codegen then
@@ -2329,6 +2347,7 @@ function actions.make(_args)
       "-DPLATFORM=PLATFORM_DESKTOP",
       "-DPLATFORM_DESKTOP",
       "-DDEBUG",
+      "-g3",
    }, " ")
 
    local _includes = table.concat({},
@@ -2367,8 +2386,12 @@ function actions.make(_args)
    print(tabular(_libspath))
 
    local _links = links
-   print("_links")
-   print(tabular(_links))
+
+   if verbose then
+      print("_links")
+      print(tabular(_links))
+   end
+
    if cfg.artifact then
       table.insert(_links, 1, "caustic:static")
    end
@@ -2436,8 +2459,10 @@ function actions.make(_args)
    cache:save()
    cache = nil
 
-   print('objfiles')
-   print(tabular(objfiles))
+   if verbose then
+      print('objfiles')
+      print(tabular(objfiles))
+   end
    local objfiles_str = table.concat(objfiles, " ")
 
 
@@ -2494,7 +2519,7 @@ local function main()
 
    local parser = argparse()
 
-   parser:flag("-v --verbose")
+   parser:flag("-v --verbose", "use verbose output")
 
 
 
@@ -2541,6 +2566,7 @@ local function main()
    make:flag('-r --release', 'release')
    make:flag('-a --noasan', 'no address sanitazer')
    make:flag("-p --cpp", "use c++ code")
+
 
    local _args = parser:parse()
 
