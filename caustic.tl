@@ -12,6 +12,7 @@ package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 		package.cpath
 
 local record Cfg
+    src: string
     artifact: string
     main: string
     codegen: {Codegen}
@@ -1137,13 +1138,17 @@ local function update_links(artifact: string)
         end
     end
 
-    print('link_lines before update')
-    print(tabular(links_lines))
+    if verbose then
+        print('link_lines before update')
+        print(tabular(links_lines))
+    end
 
     update_links_table(links_lines, artifact)
 
-    print('link_lines after update')
-    print(tabular(links_lines))
+    if verbose then
+        print('link_lines after update')
+        print(tabular(links_lines))
+    end
 
     local new_lines: {string} = {}
     for _, line in ipairs(other_lines) do
@@ -2305,9 +2310,14 @@ local function codegen(cg: Cfg.Codegen)
 end
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
+--[[
+TODO:
+--]]
 function actions.make(_args: Args)
-    print('make:')
-    print(tabular(_args))
+    if verbose then
+        print('make:')
+        print(tabular(_args))
+    end
 
     local cfg, push_num: Cfg, integer = search_and_load_cfg_up("bld.lua")
     --print(tabular(cfg))
@@ -2319,8 +2329,8 @@ function actions.make(_args: Args)
     print(push_current_dir())
     --push_current_dir()
 
-    -- TODO: Возможность задания каталога через bld.lua
-    lfs.chdir("src")
+    local src_dir = cfg.src or "src"
+    lfs.chdir(src_dir)
 
     -- TODO: кэширование генерируемых файлов
     if not _args.nocodegen and cfg.codegen then
@@ -2378,8 +2388,12 @@ function actions.make(_args: Args)
     print(tabular(_libspath))
 
     local _links = links
-    print("_links")
-    print(tabular(_links))
+
+    if verbose then
+        print("_links")
+        print(tabular(_links))
+    end
+
     if cfg.artifact then
         table.insert(_links, 1, "caustic:static")
     end
@@ -2447,8 +2461,10 @@ function actions.make(_args: Args)
     cache:save()
     cache = nil
 
-    print('objfiles')
-    print(tabular(objfiles))
+    if verbose then
+        print('objfiles')
+        print(tabular(objfiles))
+    end
     local objfiles_str = table.concat(objfiles, " ")
 
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
@@ -2505,7 +2521,7 @@ local function main()
 
     local parser = argparse()
 
-    parser:flag("-v --verbose")
+    parser:flag("-v --verbose", "use verbose output")
 
     -- Нужно собрать все исходные файлы для wasm версии.
     -- Сперва скопировать их в отдельный каталог.
@@ -2552,6 +2568,7 @@ local function main()
     make:flag('-r --release', 'release')
     make:flag('-a --noasan', 'no address sanitazer')
     make:flag("-p --cpp", "use c++ code")
+    --make:flag("-v --verbose", "use verbose output")
 
     local _args = parser:parse()
 
