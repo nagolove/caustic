@@ -128,6 +128,8 @@ local record Dependency
     copy_for_wasm: boolean
     after_init: function(dep: Dependency)
     commit: string
+    -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
+    -- build_cmake, etc
     custom_build: function(dep: Dependency, dirname: string)
     after_build: function(dep: Dependency)
     depends: {string}
@@ -260,6 +262,7 @@ end
 -- TODO Добавить возможность конфигурирования каждой зависимости при помощи
 -- ключей команды caustic
 -- В частности - отключение или включение библиотеки freetype
+-- TODO: убрать сборку из коллбека after_init
 local function cimgui_after_init(_: Dependency)
     local use_freetype = false
 
