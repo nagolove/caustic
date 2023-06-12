@@ -277,11 +277,19 @@ local function cimgui_after_init(_: Dependency)
     cmd_do("rm CMakeCache.txt")
 
     if use_freetype then
-        -- TODO Убрать жестко заданный путь для CXXFLAGS
-        cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1 -DIMGUI_ENABLE_FREETYPE=1")
+        cmd_do(table.concat({
+            format("CXXFLAGS=-I%s/3rd_party/freetype/include", caustic_path),
+            "cmake .",
+            "-DIMGUI_STATIC=1",
+            "-DIMGUI_FREETYPE=1",
+            "-DIMGUI_ENABLE_FREETYPE=1",
+        }, " "))
     else
-        -- TODO Убрать жестко заданный путь для CXXFLAGS
-        cmd_do("CXXFLAGS=-I/home/nagolove/caustic/3rd_party/freetype/include cmake . -DIMGUI_STATIC=1")
+        cmd_do(table.concat({
+            format("CXXFLAGS=-I%s/3rd_party/freetype/include", caustic_path),
+            "cmake .",
+            "-DIMGUI_STATIC=1",
+        }, " "))
     end
 
     -- Как получить rlimgui.inc ?
