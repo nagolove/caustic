@@ -25,7 +25,7 @@ struct Menu {
     MenuItem    *items;
     Rectangle   scroll_rect;
     Timer       *tmr_arrow_blink;
-    TimerStore  timers;
+    koh_TimerStore  timers;
     Vector2     pos;
     bool        font_owned, input_active, is_builded;
     const char  *left_bracket, *right_bracket;
@@ -63,7 +63,7 @@ void menu_dump(Menu *mnu) {
     trace("menu_dump: render_before %p\n", mnu->render_before);
     trace("menu_dump: items %p\n", mnu->items);
     trace("menu_dump: scroll_rect %s\n", rect2str(mnu->scroll_rect));
-    trace("menu_dump: tmr_arrow_blink %s\n", timer2str(mnu->tmr_arrow_blink));
+    trace("menu_dump: tmr_arrow_blink %s\n", koh_timer2str(mnu->tmr_arrow_blink));
     trace("menu_dump: timers %p\n", mnu->timers);
     trace("menu_dump: pos %s\n", Vector2_tostr(mnu->pos));
     trace("menu_dump: font_owned %s\n", mnu->font_owned ? "true" : "false");
@@ -105,8 +105,8 @@ Menu *menu_new(MenuSetup setup) {
     mnu->arrow_up_color = setup.arrow_up_color;
     mnu->arrow_down_color = setup.arrow_down_color;
     /*mnu->arrows_color = YELLOW;*/
-    timerstore_init(&mnu->timers, 1);
-    mnu->tmr_arrow_blink = timerstore_new(&mnu->timers, &(Timer_Def) {
+    koh_timerstore_init(&mnu->timers, 1);
+    mnu->tmr_arrow_blink = koh_timerstore_new(&mnu->timers, &(Timer_Def) {
         .waitfor  = 0,
         .every    = 0.05,
         .duration = -1,
@@ -126,7 +126,7 @@ void menu_free(Menu *mnu) {
     if (mnu->font_owned) {
         UnloadFont(mnu->fnt);
     }
-    timerstore_shutdown(&mnu->timers);
+    koh_timerstore_shutdown(&mnu->timers);
     memset(mnu, 0, sizeof(*mnu));
     free(mnu);
 }
@@ -261,7 +261,7 @@ void menu_update(Menu *mnu, MenuUpdateHandler func, void *udata) {
         abort();
     }
 
-    timerstore_update(&mnu->timers);
+    koh_timerstore_update(&mnu->timers);
     menu_render(mnu);
 
     if (mnu->input_active && !console_is_editor_mode()) {
