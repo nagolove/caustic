@@ -250,7 +250,7 @@ void console_write(const char *fmt, ...) {
 }
 
 static void render_lines(void) {
-    trace("render_lines:\n");
+    //trace("render_lines:\n");
     Vector2 pos = con.im_pos;
     for(int i = 0; i < con.linesnum; ++i) {
         DrawTextEx(
