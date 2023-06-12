@@ -111,7 +111,7 @@ void mnu_default(Menu *mnu, MenuItem *i) {
     trace("mnu_default:\n");
     Stage_TestMenu *st = menu_data_get(mnu);
     st->message = i->caption;
-    st->tmr_select = timerstore_new(&st->timers, &(Timer_Def) {
+    st->tmr_select = koh_timerstore_new(&st->timers, &(Timer_Def) {
         .data = st,
         .duration = 1.,
         .every = 0,
@@ -123,7 +123,7 @@ void mnu_default(Menu *mnu, MenuItem *i) {
 void stage_tstmenu_init(Stage_TestMenu *st, void *data) {
     trace("stage_tstmenu_init:\n");
 
-    timerstore_init(&st->timers, 0);
+    koh_timerstore_init(&st->timers, 0);
 
     //st->fnt = load_font_unicode("assets/dejavusansmono.ttf", 80);
     //st->fnt = load_font_unicode("assets/veramono.ttf", 80);
@@ -208,12 +208,12 @@ void stage_tstmenu_update(Stage_TestMenu *st) {
     DrawRectangleLinesEx(mnu_rect, thick, BLUE);
 
     DrawTextEx(st->fnt, rules, (Vector2) {0, 800}, st->fnt.baseSize, 0, YELLOW);
-    timerstore_update(&st->timers);
+    koh_timerstore_update(&st->timers);
 }
 
 void stage_tstmenu_shutdown(Stage_TestMenu *st) {
     trace("stage_tstmenu_shutdown:\n");
-    timerstore_shutdown(&st->timers);
+    koh_timerstore_shutdown(&st->timers);
     menu_free(st->mlong);
     menu_free(st->mshort);
 }

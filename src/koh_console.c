@@ -108,7 +108,7 @@ struct {
 
     // Дополнение частично введеных строк информацией из Lua - машины.
     TabEngine tabe;
-    TimerStore timers;
+    koh_TimerStore timers;
     bool can_move_right, can_move_left, can_backspace;
     uint64_t hk_updated_times;
 } con = {0, };
@@ -176,7 +176,7 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
 
     setup = *cs;
 
-    timerstore_init(&con.timers, 20);
+    koh_timerstore_init(&con.timers, 20);
     con.can_move_left = con.can_move_right = true;
     con.can_backspace = true;
 
@@ -226,7 +226,7 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
 }
 
 void console_shutdown(void) {
-    timerstore_shutdown(&con.timers);
+    koh_timerstore_shutdown(&con.timers);
     tabe_shutdown(&con.tabe);
     if (con.buf) {
         for(int i = 0; i < BUF_LINES; i++) {
@@ -397,7 +397,7 @@ void console_update(void) {
     }
     con.hk_updated_times = con.hk_store->updated_times;
 
-    timerstore_update(&con.timers);
+    koh_timerstore_update(&con.timers);
 
     if (con.editor_mode) {
         render_editor();
@@ -602,7 +602,7 @@ static void hk_backspace(Hotkey *hk) {
     if (con.can_backspace) {
         Timer_Def def = timer_def_move;
         def.func = tmr_backspace;
-        timerstore_new(&con.timers, &def);
+        koh_timerstore_new(&con.timers, &def);
         con.can_backspace = false;
     }
 }
@@ -718,7 +718,7 @@ static void hk_left(Hotkey *hk) {
     if (con.can_move_left) {
         Timer_Def def = timer_def_move;
         def.func = tmr_left,
-        timerstore_new(&con.timers, &def);
+        koh_timerstore_new(&con.timers, &def);
         con.can_move_left = false;
     }
 }
@@ -736,7 +736,7 @@ static void hk_right(Hotkey *hk) {
     if (con.can_move_right) {
         Timer_Def def = timer_def_move;
         def.func = tmr_right;
-        timerstore_new(&con.timers, &def);
+        koh_timerstore_new(&con.timers, &def);
         con.can_move_right = false;
     }
 }

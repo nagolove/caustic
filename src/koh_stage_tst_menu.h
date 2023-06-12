@@ -11,13 +11,13 @@
 typedef struct Stage_TestMenu {
     Stage parent;
 
-    char *message;
-    HotkeyStorage *hk_store;
-    Font          fnt;
-    Menu          *mshort, *mlong;
-    Menu          *active;
-    Timer         *tmr_select;
-    TimerStore    timers;
+    char            *message;
+    HotkeyStorage   *hk_store;
+    Font            fnt;
+    Menu            *mshort, *mlong;
+    Menu            *active;
+    koh_Timer       *tmr_select;
+    koh_TimerStore  timers;
 } Stage_TestMenu;
 
 Stage *stage_tstmenu_new(HotkeyStorage *hk_store);

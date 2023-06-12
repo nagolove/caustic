@@ -8,7 +8,7 @@
 
 typedef struct Stage_Timers {
     Stage      parent;
-    TimerStore ts;
+    koh_TimerStore ts;
 } Stage_Timers;
 
 Stage *stage_timers_new(void);

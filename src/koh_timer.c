@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <string.h>
 
-void timerstore_init(TimerStore *ts, int capacity) {
+void koh_timerstore_init(koh_TimerStore *ts, int capacity) {
     assert(ts);
     memset(ts, 0, sizeof(*ts));
     ts->timerscap = capacity ? capacity : TIMER_STORE_CAPACITY;
@@ -28,14 +28,14 @@ void timerstore_init(TimerStore *ts, int capacity) {
     ts->initited = true;
 }
 
-void timerstore_shutdown(TimerStore *ts) {
+void koh_timerstore_shutdown(koh_TimerStore *ts) {
     if (ts && ts->timers) {
         free(ts->timers);
-        memset(ts, 0, sizeof(TimerStore));
+        memset(ts, 0, sizeof(koh_TimerStore));
     }
 }
 
-void timerstore_remove(TimerStore *ts, Timer *tm) {
+void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
     if (tm != ts->allocated) {
         Timer *next = tm->next;
         Timer *prev = tm->prev;
@@ -77,13 +77,13 @@ void timerstore_remove(TimerStore *ts, Timer *tm) {
     }
 }
 
-static void run(TimerStore *ts, Timer *cur) {
+static void run(koh_TimerStore *ts, Timer *cur) {
     if (cur->func) {
         if (cur->every == 0.) {
             if (!cur->func(cur)) {
                 if (cur->end)
                     cur->end(cur);
-                timerstore_remove(ts, cur);
+                koh_timerstore_remove(ts, cur);
             }
         } else {
             double now = GetTime();
@@ -93,21 +93,21 @@ static void run(TimerStore *ts, Timer *cur) {
                 if (!cur->func(cur)) {
                     if (cur->end)
                         cur->end(cur);
-                    timerstore_remove(ts, cur);
+                    koh_timerstore_remove(ts, cur);
                 }
             }
         }
     }
 }
 
-static void end(TimerStore *ts, Timer *cur) {
+static void end(koh_TimerStore *ts, Timer *cur) {
     if (cur->end) {
         cur->end(cur);
-        timerstore_remove(ts, cur);
+        koh_timerstore_remove(ts, cur);
     }
 }
 
-void timerstore_update(TimerStore *ts) {
+void koh_timerstore_update(koh_TimerStore *ts) {
     assert(ts);
     Timer *cur = ts->allocated;
     while(cur) {
@@ -150,7 +150,7 @@ void timerstore_update(TimerStore *ts) {
     }
 }
 
-Timer *timerstore_new(TimerStore *ts, Timer_Def *def) {
+Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def) {
     assert(ts);
     assert(def);
     assert(ts->initited);
@@ -203,7 +203,7 @@ Timer *timerstore_new(TimerStore *ts, Timer_Def *def) {
     return new;
 }
 
-const char *timer2str(Timer *tmr) {
+const char *koh_timer2str(Timer *tmr) {
     if (!tmr) return NULL;
 
     static char buf[128] = {0};

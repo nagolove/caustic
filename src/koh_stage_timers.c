@@ -65,16 +65,16 @@ bool click(Timer *tm) {
 void stage_timers_init(Stage_Timers *st, void *data) {
     //printf("stage_menu_init\n");
     srand(time(NULL));
-    timerstore_init(&st->ts, 0);
+    koh_timerstore_init(&st->ts, 0);
 
-    timerstore_new(&st->ts, &(Timer_Def){
+    koh_timerstore_new(&st->ts, &(Timer_Def){
             .data = NULL,
             .func = hello,
             .duration = 3,
             .waitfor = 0,
     });
 
-    timerstore_new(&st->ts, &(Timer_Def){
+    koh_timerstore_new(&st->ts, &(Timer_Def){
             .data = NULL,
             .func = click,
             .duration = 10,
@@ -87,13 +87,13 @@ void stage_timers_init(Stage_Timers *st, void *data) {
 
 void stage_timers_update(Stage_Timers *st) {
     //printf("stage_timers_update\n");
-    timerstore_update(&st->ts);
+    koh_timerstore_update(&st->ts);
     //click(NULL);
 }
 
 void stage_timers_shutdown(Stage_Timers *st) {
     //printf("stage_timers_shotdown\n");
-    timerstore_shutdown(&st->ts);
+    koh_timerstore_shutdown(&st->ts);
 }
 
 void stage_timers_enter(Stage_Timers *st, void *data) {

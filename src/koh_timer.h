@@ -4,11 +4,11 @@
 
 #define TIMER_STORE_CAPACITY    256
 
-typedef struct Timer Timer;
+typedef struct koh_Timer koh_Timer;
 // Что-бы остановить таймер нужно вернуть ложь
-typedef bool(*TimerFunc)(Timer *tm);
+typedef bool(*koh_TimerFunc)(koh_Timer *tm);
 
-typedef enum TimerState {
+typedef enum koh_TimerState {
     // Первая проверка
     TS_ZERO     = 0,
     // Ожидание в течении времени waitfor
@@ -17,18 +17,18 @@ typedef enum TimerState {
     TS_SECOND   = 2,
 } TimerState;
 
-typedef struct Timer {
-    Timer *next, *prev;
-    Timer *next_free, *prev_free;
+typedef struct koh_Timer {
+    koh_Timer *next, *prev;
+    koh_Timer *next_free, *prev_free;
     TimerState state;
     float waitfor, duration, every;
     double time, last_run;
     // рабочая функция и функция вызываемая по завершению
-    TimerFunc func, end;
+    koh_TimerFunc func, end;
     void *data;
 } Timer;
 
-typedef struct Timer_Def {
+typedef struct koh_Timer_Def {
     // Сколько минимум секунд ждать до первого запуска
     float     waitfor;
     // Сколько минимум времени работать, -1 для бесконечной работы
@@ -36,23 +36,24 @@ typedef struct Timer_Def {
     // Вызывать каждые every секунд или как можно более часто при every == 0
     float     every;
     void      *data;
-    TimerFunc func, end;
+    koh_TimerFunc func, end;
 } Timer_Def;
 
-typedef struct TimerStore {
+typedef struct koh_TimerStore {
     // Массив-хранилище таймеров
-    Timer *timers;
+    koh_Timer *timers;
     // Списки таймеров
-    Timer *allocated, *free;
+    koh_Timer *allocated, *free;
     int   timersnum, timerscap;
     bool  initited;
-} TimerStore;
+} koh_TimerStore;
 
-void timerstore_init(TimerStore *ts, int capacity);
-void timerstore_shutdown(TimerStore *ts);
+void koh_timerstore_init(koh_TimerStore *ts, int capacity);
+void koh_timerstore_shutdown(koh_TimerStore *ts);
 
-void timerstore_update(TimerStore *ts);
-Timer *timerstore_new(TimerStore *ts, Timer_Def *def);
-void timerstore_remove(TimerStore *ts, Timer *tm);
+void koh_timerstore_update(koh_TimerStore *ts);
+Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def);
+void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm);
 
-const char *timer2str(Timer *tmr);
+const char *koh_timer2str(Timer *tmr);
+
