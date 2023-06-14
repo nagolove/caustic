@@ -15,6 +15,20 @@
 #include <stdlib.h>
 #include "koh_logger.h"
 
+//#define DE_USE_STORAGE_CAPACITY 
+//#define DE_USE_SPARSE_CAPACITY
+
+//#define DE_NO_TRACE
+
+#ifdef DE_NO_TRACE
+static void void_printf(const char *s, ...) {
+    (void)s;
+}
+#define trace void_printf
+#endif
+
+//#define trace printf
+
 const de_entity de_null = (de_entity)DE_ENTITY_ID_MASK;
 
 /* Returns the version part of the entity */
@@ -81,15 +95,16 @@ typedef struct de_sparse {
         - index is the de_entity_id. (without version)
         - value is the index of the dense array
     */
-    de_entity* sparse;
-    size_t sparse_size, sparse_cap;
+    de_entity*  sparse;
+    size_t      sparse_size, sparse_cap;
 
     /*  Dense entities array.
         - index is linked with the sparse value.
         - value is the full de_entity
     */
-    de_entity* dense;
-    size_t dense_size, dense_cap;
+    de_entity*  dense;
+    size_t      dense_size, dense_cap;
+    size_t      initial_cap;
 } de_sparse;
 
 
@@ -142,8 +157,6 @@ static size_t de_sparse_index(de_sparse* s, de_entity e) {
     return s->sparse[de_entity_identifier(e).id];
 }
 
-#define DE_USE_SPARSE_CAPACITY
-
 static void de_sparse_emplace(de_sparse* s, de_entity e) {
 #ifdef DE_USE_SPARSE_CAPACITY
     assert(s);
@@ -151,7 +164,7 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
     const de_entity_id eid = de_entity_identifier(e);
     if (eid.id >= s->sparse_size) { // check if we need to realloc
         if (s->sparse_size == 0 && !s->sparse) {
-            s->sparse_cap = 5000;
+            s->sparse_cap = s->initial_cap;
             s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
         }
 
@@ -288,13 +301,14 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
 
 */
 typedef struct de_storage {
-    size_t cp_id; /* component id for this storage */
-    void* cp_data; /*  packed component elements array. aligned with sparse->dense*/
-    size_t cp_data_size, cp_data_cap; /* number of elements in the cp_data array */
-    size_t cp_sizeof; /* sizeof for each cp_data element */
-    de_sparse sparse;
-
+    size_t      cp_id; /* component id for this storage */
+    void*       cp_data; /*  packed component elements array. aligned with sparse->dense*/
+    size_t      cp_data_size, cp_data_cap; /* number of elements in the cp_data array */
+    size_t      cp_sizeof; /* sizeof for each cp_data element */
+    de_sparse   sparse;
     void (*on_destroy)(void *payload, de_entity e);
+    char        name[64];
+    size_t      initial_cap;
 } de_storage;
 
 
@@ -305,6 +319,9 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     s->cp_sizeof = cp_type.cp_sizeof;
     s->cp_id = cp_type.cp_id;
     s->on_destroy = cp_type.on_destroy;
+    s->initial_cap = cp_type.initial_cap ? cp_type.initial_cap : 1000;
+    s->sparse.initial_cap = cp_type.initial_cap;
+    strncpy(s->name, cp_type.name, sizeof(s->name));
     return s;
 }
 
@@ -324,7 +341,6 @@ static void de_storage_delete(de_storage* s) {
     free(s);
 }
 
-#define DE_USE_STORAGE_CAPACITY 
 
 static void* de_storage_emplace(de_storage* s, de_entity e) {
 #ifdef DE_USE_STORAGE_CAPACITY
@@ -332,7 +348,7 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 
     if (s->cp_data_size == 0 && s->cp_data_cap == 0) {
         //trace("de_storage_emplace: initial allocating for type %d\n", s->cp_id);
-        s->cp_data_cap = 5000;
+        s->cp_data_cap = s->initial_cap ? s->initial_cap : 1000;
         s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
     }
 
@@ -346,7 +362,11 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
         s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
     }
     // */
-    
+   
+    assert(s->cp_sizeof != 0);
+    assert(s->cp_data_size != 0);
+    assert(s->cp_data);
+
     // return the component data pointer (last position)
     void* cp_data_ptr = &((char*)s->cp_data)[(s->cp_data_size - 1) * s->cp_sizeof];
     
@@ -371,6 +391,7 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 }
 
 static void de_storage_remove(de_storage* s, de_entity e) {
+    trace("de_storage_remove: [%s] en %u\n", s->name, e);
     assert(s);
     size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
     if (s->on_destroy) {
@@ -388,30 +409,39 @@ static void de_storage_remove(de_storage* s, de_entity e) {
     
     // swap (memmove because if cp_data_size 1 it will overlap dst and source.
     memmove(
-        &((char*)s->cp_data)[pos_to_remove * sizeof(char) * s->cp_sizeof],
-        &((char*)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof],
+        &((char*)s->cp_data)[pos_to_remove * s->cp_sizeof],
+        &((char*)s->cp_data)[(s->cp_data_size - 1) * s->cp_sizeof],
         s->cp_sizeof);
 
     // and pop
     if (s->cp_data_size < 0.5 * s->cp_data_cap) {
         s->cp_data_cap /= 2;
-        s->cp_data = realloc(s->cp_data, s->cp_data_cap * sizeof(char) * s->cp_sizeof);
+        s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
     }
     s->cp_data_size--;
 #else
     // swap (memmove because if cp_data_size 1 it will overlap dst and source.
     memmove(
-        &((char*)s->cp_data)[pos_to_remove * sizeof(char) * s->cp_sizeof],
-        &((char*)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof],
+        &((char*)s->cp_data)[pos_to_remove * s->cp_sizeof],
+        &((char*)s->cp_data)[(s->cp_data_size - 1) * s->cp_sizeof],
         s->cp_sizeof);
 
     // and pop
-    s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof);
+    s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * s->cp_sizeof);
     s->cp_data_size--;
 #endif
 }
 
+
 static void* de_storage_get_by_index(de_storage* s, size_t index) {
+    /*
+    static int _counter = 0;
+    trace(
+        "de_storage_get_by_index: s %p, s->cp_data_size %ld, index %ld"
+        " counter %d\n",
+        s, s->cp_data_size, index, _counter++
+    );
+    */
     assert(s);
     assert(index < s->cp_data_size);
     return &((char*)s->cp_data)[index * sizeof(char) * s->cp_sizeof];
@@ -595,7 +625,8 @@ void de_remove_all(de_ecs* r, de_entity e) {
     assert(de_valid(r, e));
     
     for (size_t i = r->storages_size; i; --i) {
-        if (r->storages[i - 1] && de_sparse_contains(&r->storages[i - 1]->sparse, e)) {
+        if (r->storages[i - 1] && 
+            de_sparse_contains(&r->storages[i - 1]->sparse, e)) {
             de_storage_remove(r->storages[i - 1], e);
         }
     }
@@ -631,7 +662,10 @@ void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
     assert(de_assure(r, cp_type));
-    return de_storage_emplace(de_assure(r, cp_type), e);
+    void *ret = de_storage_emplace(de_assure(r, cp_type), e);
+    assert(ret);
+    memset(ret, 0, cp_type.cp_sizeof);
+    return ret;
 }
 
 void* de_get(de_ecs* r, de_entity e, de_cp_type cp_type) {
@@ -866,3 +900,40 @@ int de_typeof_num(de_ecs* r, de_cp_type cp_type) {
     return storage ? storage->cp_data_size : 0;
 }
 
+static void iter_each(de_ecs *in, de_entity en, void *udata) {
+    de_ecs *out = udata;
+
+    for (int i = 0; i < in->storages_size; ++i) {
+        de_cp_type type = {
+            .cp_sizeof = in->storages[i]->cp_sizeof,
+            .cp_id = in->storages[i]->cp_id,
+            .initial_cap = in->storages[i]->initial_cap,
+            .name = in->storages[i]->name, // временное сохранение указателя
+            .on_destroy = in->storages[i]->on_destroy,
+        };
+        if (de_valid(in, en) && de_has(in, en, type)) {
+            de_entity new_en = de_create(out);
+            assert(new_en != de_null);
+            void *cmp_dest = de_emplace(out, new_en, type);
+            assert(cmp_dest);
+            //memmove(cmp_data, de_get(in, en, type), type.cp_sizeof);
+            void *cmp_src = de_try_get(in, en, type);
+            //assert(cmp_src);
+            if (cmp_src)
+                memmove(cmp_dest, cmp_src, type.cp_sizeof);
+        }
+    }
+}
+
+de_ecs *de_ecs_clone(de_ecs *in) {
+    assert(in);
+    de_ecs *out = de_ecs_make();
+
+    de_each(in, iter_each, out);
+
+    return out;
+}
+
+#ifdef DE_NO_TRACE
+#undef trace
+#endif

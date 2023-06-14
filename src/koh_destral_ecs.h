@@ -2,14 +2,13 @@
 
 /*
     destral_ecs.h -- simple ECS system
-
-    Do this:
-        #define DESTRAL_ECS_IMPL
-    before you include this file in *one* C file to create the implementation.
-
-    FIX (dani) TODO proper instructions
-
+    original code https://github.com/roig/destral_ecs
+    Copyright (c) 2020 Daniel Guzman
 */
+
+// TODO: написать тестирование с созданием сущностей, креплением к ним
+// компонент, а потом с удалением сущностей. Так как кажется есть проблемы
+// с затиранием памяти при de_destroy()
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -51,10 +50,11 @@ typedef struct de_entity_id { uint32_t id; } de_entity_id;
     Component Type identifier information.
 */
 typedef struct de_cp_type {
-    size_t cp_id; // component unique id
-    size_t cp_sizeof; // component sizeof
-    void (*on_destroy)(void *payload, de_entity e);
+    size_t      cp_id; // component unique id
+    size_t      cp_sizeof; // component sizeof
+    void        (*on_destroy)(void *payload, de_entity e);
     const char* name; // component name
+    size_t      initial_cap;
 } de_cp_type;
 
 #define DE_MAKE_CP_TYPE(TypeId, TypeName) \
@@ -267,3 +267,4 @@ void de_view_next(de_view* v);
 
 int de_typeof_num(de_ecs* r, de_cp_type cp_type);
 
+de_ecs *de_ecs_clone(de_ecs *r);
