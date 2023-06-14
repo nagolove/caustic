@@ -42,6 +42,7 @@ double *read_number_table(lua_State *lua, int index, int *len);
 Rectangle read_rect(lua_State *lua, int index, bool *err);
 int make_ret_table(int num, void**arr, size_t offset);
 bool object_return_ref_script(Object *obj, int offset);
+void koh_sc_from_args(int argc, char **argv);
 
 static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
     Object_ud r = {0};

@@ -797,4 +797,20 @@ int make_ret_table(int num, void**arr, size_t offset) {
     return 1;
 }
 
+void koh_sc_from_args(int argc, char **argv) {
+    char joined_args[512] = {0};
+    for(int i = 0; i < argc; ++i) {
+        if (!strcmp(argv[i], "-e")) {
+            for (int rest = i + 1; rest < argc; rest++) {
+                int len = strlen(joined_args) + strlen(argv[rest]); 
+                if (len < sizeof(joined_args)) {
+                    strcat(joined_args, argv[rest]);
+                }
+            }
+        }
+    }
+    if (strlen(joined_args) > 0) {
+        sc_dostring(joined_args);
+    }
+}
 
