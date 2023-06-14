@@ -1,5 +1,11 @@
 #pragma once 
 
+#define KOH_EXIT(errcode)                                       \
+do {                                                            \
+    printf("exit: [%d], %s:%d\n", errcode, __FILE__, __LINE__); \
+    exit(errcode);                                              \
+} while (0);                                                    \
+
 #include "koh_adsr.h"
 #include "koh_array.h"
 #include "koh_cammode.h"
@@ -11,6 +17,7 @@
 #include "koh_destral_ecs.h"
 #include "koh_dev_draw.h"
 #include "koh_ecs.h"
+#include "koh_fpsmeter.h"
 #include "koh_genann_view.h"
 #include "koh_hashers.h"
 #include "koh_height_color.h"
@@ -43,26 +50,4 @@
 #include "koh_team.h"
 #include "koh_timer.h"
 #include "koh_wfc.h"
-
-/*
-#include "koh_stage_adsr.h"
-#include "koh_stage_bzr_curve.h"
-#include "koh_stage_ecs.h"
-#include "koh_stage_empty.h"
-#include "koh_stage_fight_menu_paste.h"
-#include "koh_stage_fight_menu_player.h"
-#include "koh_stage_heightcolor.h"
-#include "koh_stage_iface.h"
-#include "koh_stage_immediate.h"
-#include "koh_stage_inputbuf.h"
-#include "koh_stage_orandom.h"
-#include "koh_stage_paragraph.h"
-#include "koh_stage_path.h"
-#include "koh_stage_rand.h"
-#include "koh_stage_terrain2.h"
-#include "koh_stage_terrain.h"
-#include "koh_stage_timers.h"
-#include "koh_stage_tst_menu.h"
-*/
-
 
