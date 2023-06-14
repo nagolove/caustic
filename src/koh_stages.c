@@ -92,10 +92,11 @@ Stage *stage_find(const char *name) {
 
 void stage_set_active(const char *name, void *data) {
     Stage *st = stage_find(name);
-    assert(st);
+    //assert(st);
 
-    if (!st) 
+    if (!st) {
         trace("stage_set_active: '%s' not found\n", name);
+    }
 
     if (stages.cur && stages.cur->leave) {
         trace(
