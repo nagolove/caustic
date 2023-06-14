@@ -122,7 +122,8 @@ void trace(const char * format, ...) {
     vsnprintf(buf, sizeof(buf), format, args);
     va_end(args);
 
-    strset_add(traces_set, buf);
+    if (traces_set)
+        strset_add(traces_set, buf);
 
     if (!filter_match(buf))
         printf("%s", buf);
