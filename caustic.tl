@@ -532,10 +532,10 @@ local links_internal = {
     "utf8proc:static",
     "chipmunk:static",
     "cimgui:static",
-    "lfs:static",
     --"freetype:static",
     "stdc++",
     --"sunvox",
+    "lfs:static",
 }
 
 local links = { 
@@ -548,10 +548,13 @@ local links = {
     "utf8proc:static",
     "chipmunk:static",
     "cimgui:static",
-    "lfs:static",
     --"freetype:static",
     "stdc++",
     --"sunvox",
+}
+
+local links_linix_only = {
+    "lfs:static",
 }
 
 local libdirs_internal = { 
@@ -589,6 +592,7 @@ local wasm_libdirs = {
     "../caustic/wasm_3rd_party/genann",
     "../caustic/wasm_3rd_party/utf8proc",
     "../caustic/wasm_3rd_party/Chipmunk2D/src",
+    "../caustic/wasm_3rd_party/cimgui",
     --"../caustic/wasm_3rd_party/raylib/raylib",
     "../caustic/wasm_3rd_party/raylib",
     "../caustic/wasm_3rd_party/lua",
@@ -2388,7 +2392,13 @@ function actions.make(_args: Args)
     local _libspath: string = table.concat(_libdirs, " ")
     print(tabular(_libspath))
 
-    local _links = links
+    local _links = {}
+    for _, v in ipairs(links) do
+        table.insert(_links, v)
+    end
+    for _, v in ipairs(links_linix_only) do
+        table.insert(_links, v)
+    end
 
     if verbose then
         print("_links")
