@@ -972,3 +972,11 @@ const char *font2str(Font fnt) {
     return buf;
 }
 
+void koh_screenshot_incremental() {
+    static int counter = 0;
+    Image img = LoadImageFromScreen();
+    char fname[64] = {0};
+    sprintf(fname, "screen_%d.png", counter++);
+    ExportImage(img, fname);
+    UnloadImage(img);
+};
