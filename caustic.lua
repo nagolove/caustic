@@ -1,6 +1,7 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
+local ansicolors = require('ansicolors')
 local home = os.getenv("HOME")
 assert(home)
 package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
@@ -159,9 +160,13 @@ local function cmd_do(_cmd)
 
 
 
+   if verbose then
+
+      os.execute("echo `pwd`")
+   end
    if type(_cmd) == 'string' then
       if verbose then
-         print('cmd_do', _cmd)
+         print('cmd_do:', _cmd)
       end
       if not os.execute(_cmd) then
          print('cmd was failed')
@@ -1286,6 +1291,8 @@ function actions.publish(_args)
    end
 
    local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+   local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
+   lfs.mkdir(game_dir)
    local cmd = format(
 
    "cp %s/* %s/%s",
@@ -2100,7 +2107,10 @@ local function project_link(ctx, cfg, _args)
    flags,
    ctx.libs)
 
-   print(cmd)
+   if verbose then
+      print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+      print(ansicolors("%{blue}" .. cmd .. "%{reset}"))
+   end
    cmd_do(cmd)
 end
 
@@ -2331,10 +2341,17 @@ function actions.make(_args)
    end
 
    print(push_current_dir())
-
+   print('actions.make: pwd', lfs.currentdir())
 
    local src_dir = cfg.src or "src"
-   lfs.chdir(src_dir)
+   local res = lfs.chdir(src_dir)
+   print('chdir res', res)
+
+
+
+
+
+
 
 
    if not _args.nocodegen and cfg.codegen then
@@ -2497,6 +2514,7 @@ function actions.make(_args)
       })
       pop_dir()
 
+      print("before project link", lfs.currentdir())
 
 
 
