@@ -1,6 +1,7 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+local ansicolors = require 'ansicolors'
 local home = os.getenv("HOME")
 assert(home)
 package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
@@ -159,9 +160,13 @@ local function cmd_do(_cmd: string|{string})
     --local file = io.popen(_cmd)
     --file:read("*a")
     --file:close()
+    if verbose then
+        --print("cmd_do: working directory", lfs.currentdir())
+        os.execute("echo `pwd`")
+    end
     if type(_cmd) == 'string' then
         if verbose then
-            print('cmd_do', _cmd)
+            print('cmd_do:', _cmd)
         end
         if not os.execute(_cmd as string) then
             print('cmd was failed')
@@ -1286,6 +1291,8 @@ function actions.publish(_args: Args)
     end
 
     local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+    local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
+    lfs.mkdir(game_dir)
     local cmd = format(
         --"cp -r %s %s/%s",
         "cp %s/* %s/%s",
@@ -2100,7 +2107,10 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         flags,
         ctx.libs
     )
-    print(cmd)
+    if verbose then
+        print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+        print(ansicolors("%{blue}" .. cmd .. "%{reset}"))
+    end
     cmd_do(cmd)
 end
 
@@ -2331,10 +2341,17 @@ function actions.make(_args: Args)
     end
 
     print(push_current_dir())
-    --push_current_dir()
+    print('actions.make: pwd', lfs.currentdir())
 
     local src_dir = cfg.src or "src"
-    lfs.chdir(src_dir)
+    local res = lfs.chdir(src_dir)
+    print('chdir res', res)
+        --[[
+    if not lfs.chdir(src_dir) then
+        print(format("actions.make: could not chdir to '%s'", src_dir))
+        os.exit(1)
+    end
+    --]]
 
     -- TODO: кэширование генерируемых файлов
     if not _args.nocodegen and cfg.codegen then
@@ -2497,6 +2514,7 @@ function actions.make(_args: Args)
         })
         pop_dir()
 
+        print("before project link", lfs.currentdir())
         --print("_args")
         --print(tabular(_args))
 
