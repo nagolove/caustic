@@ -1,6 +1,7 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+local lfs = require 'lfs'
 local ansicolors = require 'ansicolors'
 local home = os.getenv("HOME")
 assert(home)
@@ -11,6 +12,12 @@ package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
 package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 	    home .. "/.luarocks/lib/lua/5.4/?/init.so;" .. -- XXX: init.so?
 		package.cpath
+
+local site_repo = "~/nagolove.github.io"
+local site_repo_index = site_repo .. "/index.html"
+
+local dir_stack: {string} = {}
+local verbose = false
 
 local record Cfg
     src: string
@@ -83,6 +90,95 @@ end
 
 local cache_name = "cache.lua"
 
+local function filter_sources(
+    pattern: string, path: string, cb: function(string), exclude: {string}
+)
+    --if path == "" then path = "." end
+    for file in lfs.dir(path) do
+        if string.match(file, pattern) then
+            --print('filter_sources:', file)
+            if exclude then
+                for _, pat in ipairs(exclude) do
+                    if string.match(file, pat) then
+                        --print('filter_sources: excluded', file)
+                        goto continie
+                    end
+                end
+            end
+            cb(file)
+            :: continie ::
+        end
+    end
+end
+
+local function push_current_dir(): string
+    local dir = lfs.currentdir()
+    table.insert(dir_stack, dir)
+    return dir
+end
+
+local function pop_dir(num: integer)
+    num = num or 0
+    for _ = 0, num do
+        lfs.chdir(table.remove(dir_stack, #dir_stack))
+    end
+end
+
+
+local function filter_sources_c(
+    path: string, cb: function(string), exclude: {string}
+) 
+    filter_sources(".*%.c$", path, cb, exclude)
+end
+
+local function filter_sources_cpp(
+    path: string, cb: function(string), exclude: {string}
+)
+    filter_sources(".*%.cpp$", path, cb, exclude)
+end
+
+
+-- Возвращает структуру конфига и число - агрумент для pop_dir()
+local function search_and_load_cfg_up(fname: string): Cfg, integer
+    print("search_and_load_cfg_up:", fname, lfs.currentdir())
+
+    -- TODO: если файл не найден, то подняться на уровень выше и снова
+    -- попробовать загрузить конфиг
+    -- C какой позиции в дереве каталогов начинать сборку?
+
+    local push_num = 0
+    while true do
+        local file = io.open(fname, "r")
+        print('file', file)
+        if not file then
+            push_num = push_num + 1
+            push_current_dir()
+            lfs.chdir("..")
+        else
+            break
+        end
+        print('curdir', lfs.currentdir())
+        if push_num > 10 then
+            push_num = 0
+            break
+        end
+    end
+
+    print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
+
+    local cfg: Cfg
+    local ok, errmsg: boolean, string = pcall(function()
+        cfg = loadfile(fname)() as Cfg
+    end)
+
+    if not ok then
+        print("could not load config", errmsg)
+        os.exit()
+    end
+
+    return cfg, push_num
+end
+
 --[[
 local function check_file(fname: string): boolean
     local file = io.open(fname, "r")
@@ -138,7 +234,6 @@ local record Dependency
     build_method: BuildMethod
 end
 
-local lfs = require 'lfs'
 --local md5 = require "md5"
 
 local function shallow_copy<X>(a: X): X
@@ -152,9 +247,6 @@ local function shallow_copy<X>(a: X): X
         return a
     end
 end
-
-local dir_stack: {string} = {}
-local verbose = false
 
 local function cmd_do(_cmd: string|{string})
     --local file = io.popen(_cmd)
@@ -187,19 +279,6 @@ local function cmd_do(_cmd: string|{string})
     else
         print('Wrong type in cmd_do', type(_cmd))
         os.exit(1)
-    end
-end
-
-local function push_current_dir(): string
-    local dir = lfs.currentdir()
-    table.insert(dir_stack, dir)
-    return dir
-end
-
-local function pop_dir(num: integer)
-    num = num or 0
-    for _ = 0, num do
-        lfs.chdir(table.remove(dir_stack, #dir_stack))
     end
 end
 
@@ -965,9 +1044,11 @@ local record Actions
     wbuild: function(Args)
     make: function(Args)
     publish: function(Args)
+    test: function(Args)
 end
 
 local enum ActionsEnum
+    "test"
     "publish"
     "deps"
     "verbose"
@@ -1094,8 +1175,45 @@ function actions.init(_args: Args)
     --_init(win_third_party, deps)
 end
 
-local site_repo = "~/nagolove.github.io"
-local site_repo_index = site_repo .. "/index.html"
+function actions.test(_args: Args)
+    local cfg, push_num: Cfg, integer = search_and_load_cfg_up("bld.lua")
+
+    local src_dir = cfg.src or "src"
+    if not lfs.chdir(src_dir) then
+        print(format("actions.make: could not chdir to '%s'", src_dir))
+        os.exit(1)
+    end
+
+    local cwd = lfs.currentdir() .. "/"
+
+    filter_sources_c(".", function(file: string)
+        --print('file', file)
+        print('filtered', cwd .. file)
+        --[[
+        local _output = output_dir .. "/" .. 
+                        string.gsub(file, "(.*%.)c$", "%1o")
+        --local _input = output_dir .. "/" .. file
+        local _input = cwd .. file
+
+        --print("_input", _input)
+        --print('_input\'', cwd .. string.sub(_input, 3, -1))
+
+        -- TODO: Проверять отсутствие объектного файла
+        local cmd = format(
+            "cc -lm %s %s %s %s -o %s -c %s %s", 
+            _defines, _includes, _libspath, _flags,
+            _output, _input, _libs
+        )
+        if cache:should_recompile(file, cmd) then
+            table.insert(queue, cmd)
+        end
+
+        table.insert(objfiles, _output)
+        --]]
+    end)
+
+    pop_dir(push_num)
+end
 
 local function update_links_table(_links: {string}, artifact: string)
     local found = false
@@ -1190,47 +1308,6 @@ local function update_links(artifact: string)
 
     --cmd_do(cmd1)
     --cmd_do(cmd2)
-end
-
--- Возвращает структуру конфига и число - агрумент для pop_dir()
-local function search_and_load_cfg_up(fname: string): Cfg, integer
-    print("search_and_load_cfg_up:", fname, lfs.currentdir())
-
-    -- TODO: если файл не найден, то подняться на уровень выше и снова
-    -- попробовать загрузить конфиг
-    -- C какой позиции в дереве каталогов начинать сборку?
-
-    local push_num = 0
-    while true do
-        local file = io.open(fname, "r")
-        print('file', file)
-        if not file then
-            push_num = push_num + 1
-            push_current_dir()
-            lfs.chdir("..")
-        else
-            break
-        end
-        print('curdir', lfs.currentdir())
-        if push_num > 10 then
-            push_num = 0
-            break
-        end
-    end
-
-    print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
-
-    local cfg: Cfg
-    local ok, errmsg: boolean, string = pcall(function()
-        cfg = loadfile(fname)() as Cfg
-    end)
-
-    if not ok then
-        print("could not load config", errmsg)
-        os.exit()
-    end
-
-    return cfg, push_num
 end
 
 local function check_files_in_dir(dirname: string, filelist: {string}): boolean
@@ -1496,39 +1573,6 @@ local function link(objfiles: {string}, libname: string, flags: string)
     local objfiles_str = table.concat(objfiles, " ")
     local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
     cmd_do(cmd)
-end
-
-local function filter_sources(
-    pattern: string, path: string, cb: function(string), exclude: {string}
-)
-    --if path == "" then path = "." end
-    for file in lfs.dir(path) do
-        if string.match(file, pattern) then
-            --print('filter_sources:', file)
-            if exclude then
-                for _, pat in ipairs(exclude) do
-                    if string.match(file, pat) then
-                        --print('filter_sources: excluded', file)
-                        goto continie
-                    end
-                end
-            end
-            cb(file)
-            :: continie ::
-        end
-    end
-end
-
-local function filter_sources_c(
-    path: string, cb: function(string), exclude: {string}
-) 
-    filter_sources(".*%.c$", path, cb, exclude)
-end
-
-local function filter_sources_cpp(
-    path: string, cb: function(string), exclude: {string}
-)
-    filter_sources(".*%.cpp$", path, cb, exclude)
 end
 
 local function src2obj(filename: string): string
@@ -1909,8 +1953,10 @@ local function _build(dirname: string)
     lfs.chdir(prevdir)
 end
 
+-- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
-    local prevdir = lfs.currentdir()
+    push_current_dir()
+    lfs.chdir(caustic_path)
     lfs.chdir(third_party)
 
     if _args.name then
@@ -1927,7 +1973,7 @@ function actions.build(_args: Args)
     end
 
     ::exit::
-    lfs.chdir(prevdir)
+    pop_dir()
 end
 
 function actions.deps(_args: Args)
@@ -2334,7 +2380,6 @@ function actions.make(_args: Args)
     end
 
     local cfg, push_num: Cfg, integer = search_and_load_cfg_up("bld.lua")
-    --print(tabular(cfg))
 
     if _args.c then
         cache_remove()
@@ -2344,14 +2389,10 @@ function actions.make(_args: Args)
     print('actions.make: pwd', lfs.currentdir())
 
     local src_dir = cfg.src or "src"
-    local res = lfs.chdir(src_dir)
-    print('chdir res', res)
-        --[[
     if not lfs.chdir(src_dir) then
         print(format("actions.make: could not chdir to '%s'", src_dir))
         os.exit(1)
     end
-    --]]
 
     -- TODO: кэширование генерируемых файлов
     if not _args.nocodegen and cfg.codegen then
@@ -2583,6 +2624,8 @@ local function main()
         :summary("print new version of libraries")
     parser:command("publish")
         :summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
+    parser:command("test")
+        :summary("build native test executable and run it")
 
     parser:command("anim_convert")
         :option("-n --name")
