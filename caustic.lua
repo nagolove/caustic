@@ -12,6 +12,10 @@ package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 home .. "/.luarocks/lib/lua/5.4/?/init.so;" ..
 package.cpath
 
+local site_repo = "~/nagolove.github.io"
+local site_repo_index = site_repo .. "/index.html"
+
+
 
 
 
@@ -980,6 +984,8 @@ end
 
 
 
+
+
 local actions = {}
 
 local function _init(path, deps)
@@ -1094,8 +1100,8 @@ function actions.init(_args)
 
 end
 
-local site_repo = "~/nagolove.github.io"
-local site_repo_index = site_repo .. "/index.html"
+function actions.test(_args)
+end
 
 local function update_links_table(_links, artifact)
    local found = false
@@ -1909,8 +1915,10 @@ local function _build(dirname)
    lfs.chdir(prevdir)
 end
 
+
 function actions.build(_args)
-   local prevdir = lfs.currentdir()
+   push_current_dir()
+   lfs.chdir(caustic_path)
    lfs.chdir(third_party)
 
    if _args.name then
@@ -1927,7 +1935,7 @@ function actions.build(_args)
    end
 
    ::exit::
-   lfs.chdir(prevdir)
+   pop_dir()
 end
 
 function actions.deps(_args)
@@ -2583,6 +2591,8 @@ local function main()
    summary("print new version of libraries")
    parser:command("publish"):
    summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
+   parser:command("test"):
+   summary("build native test executable and run it")
 
    parser:command("anim_convert"):
    option("-n --name")
