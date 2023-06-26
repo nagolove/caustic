@@ -2675,6 +2675,7 @@ local function main()
     make:flag("-p --cpp", "use c++ code")
     --make:flag("-v --verbose", "use verbose output")
 
+    parser:add_complete()
     local _args = parser:parse()
 
     --print(tabular(_args))
