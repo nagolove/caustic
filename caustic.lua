@@ -2675,6 +2675,7 @@ local function main()
    make:flag("-p --cpp", "use c++ code")
 
 
+   parser:add_complete()
    local _args = parser:parse()
 
 
