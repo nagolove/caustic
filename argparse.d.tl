@@ -6,6 +6,7 @@ local record argparse
 		name: function(self: Parser, name: string): Parser
 		description: function(self: Parser, description: string): Parser
 		epilog: function(self: Parser, epilog: string): Parser
+        add_complete: function(self: Parser): Parser
 
 		flag: function(self: Parser, flag: string): Option
 		flag: function(self: Parser, shortalias: string, longalias: string): Option
