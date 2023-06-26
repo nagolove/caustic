@@ -1,6 +1,7 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
+local lfs = require('lfs')
 local ansicolors = require('ansicolors')
 local home = os.getenv("HOME")
 assert(home)
@@ -15,6 +16,8 @@ package.cpath
 local site_repo = "~/nagolove.github.io"
 local site_repo_index = site_repo .. "/index.html"
 
+local dir_stack = {}
+local verbose = false
 
 
 
@@ -87,6 +90,95 @@ local Cache = {Data = {}, }
 
 local cache_name = "cache.lua"
 
+local function filter_sources(
+   pattern, path, cb, exclude)
+
+
+   for file in lfs.dir(path) do
+      if string.match(file, pattern) then
+
+         if exclude then
+            for _, pat in ipairs(exclude) do
+               if string.match(file, pat) then
+
+                  goto continie
+               end
+            end
+         end
+         cb(file)
+         ::continie::
+      end
+   end
+end
+
+local function push_current_dir()
+   local dir = lfs.currentdir()
+   table.insert(dir_stack, dir)
+   return dir
+end
+
+local function pop_dir(num)
+   num = num or 0
+   for _ = 0, num do
+      lfs.chdir(table.remove(dir_stack, #dir_stack))
+   end
+end
+
+
+local function filter_sources_c(
+   path, cb, exclude)
+
+   filter_sources(".*%.c$", path, cb, exclude)
+end
+
+local function filter_sources_cpp(
+   path, cb, exclude)
+
+   filter_sources(".*%.cpp$", path, cb, exclude)
+end
+
+
+
+local function search_and_load_cfg_up(fname)
+   print("search_and_load_cfg_up:", fname, lfs.currentdir())
+
+
+
+
+
+   local push_num = 0
+   while true do
+      local file = io.open(fname, "r")
+      print('file', file)
+      if not file then
+         push_num = push_num + 1
+         push_current_dir()
+         lfs.chdir("..")
+      else
+         break
+      end
+      print('curdir', lfs.currentdir())
+      if push_num > 10 then
+         push_num = 0
+         break
+      end
+   end
+
+   print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
+
+   local cfg
+   local ok, errmsg = pcall(function()
+      cfg = loadfile(fname)()
+   end)
+
+   if not ok then
+      print("could not load config", errmsg)
+      os.exit()
+   end
+
+   return cfg, push_num
+end
+
 
 
 
@@ -142,7 +234,6 @@ local cache
 
 
 
-local lfs = require('lfs')
 
 
 local function shallow_copy(a)
@@ -156,9 +247,6 @@ local function shallow_copy(a)
       return a
    end
 end
-
-local dir_stack = {}
-local verbose = false
 
 local function cmd_do(_cmd)
 
@@ -191,19 +279,6 @@ local function cmd_do(_cmd)
    else
       print('Wrong type in cmd_do', type(_cmd))
       os.exit(1)
-   end
-end
-
-local function push_current_dir()
-   local dir = lfs.currentdir()
-   table.insert(dir_stack, dir)
-   return dir
-end
-
-local function pop_dir(num)
-   num = num or 0
-   for _ = 0, num do
-      lfs.chdir(table.remove(dir_stack, #dir_stack))
    end
 end
 
@@ -986,6 +1061,8 @@ end
 
 
 
+
+
 local actions = {}
 
 local function _init(path, deps)
@@ -1076,6 +1153,13 @@ end
 
 
 
+function actions.run(_args)
+   local cfg, _ = search_and_load_cfg_up("bld.lua")
+   print('actions.run', inspect(_args))
+   cmd_do(format("gdb --args %s ", cfg.artifact) .. table.concat(_args.flags, " "))
+end
+
+
 
 function actions.init(_args)
    local deps = {}
@@ -1101,6 +1185,67 @@ function actions.init(_args)
 end
 
 function actions.test(_args)
+   local cfg, _ = search_and_load_cfg_up("bld.lua")
+
+   local src_dir = cfg.src or "src"
+   push_current_dir()
+   if not lfs.chdir(src_dir) then
+      print(format("actions.make: could not chdir to '%s'", src_dir))
+      os.exit(1)
+   end
+
+   local cwd = lfs.currentdir() .. "/"
+
+
+
+
+
+
+
+
+
+
+   print("gather sources")
+   filter_sources_c(".", function(file)
+
+      local fname = cwd .. file
+      print('filtered', fname)
+
+      for line in io.open(fname):lines() do
+         if string.match(line, "TEST_CALL.*_test") or
+            string.match(line, "TEST_CALL.*test_.*") then
+
+            local func_name = string.match(line, "void%s*(.*)%(")
+            print(func_name)
+         end
+      end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   end)
+   print("end of gathering sources")
+
+
+   pop_dir()
 end
 
 local function update_links_table(_links, artifact)
@@ -1196,47 +1341,6 @@ local function update_links(artifact)
 
 
 
-end
-
-
-local function search_and_load_cfg_up(fname)
-   print("search_and_load_cfg_up:", fname, lfs.currentdir())
-
-
-
-
-
-   local push_num = 0
-   while true do
-      local file = io.open(fname, "r")
-      print('file', file)
-      if not file then
-         push_num = push_num + 1
-         push_current_dir()
-         lfs.chdir("..")
-      else
-         break
-      end
-      print('curdir', lfs.currentdir())
-      if push_num > 10 then
-         push_num = 0
-         break
-      end
-   end
-
-   print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
-
-   local cfg
-   local ok, errmsg = pcall(function()
-      cfg = loadfile(fname)()
-   end)
-
-   if not ok then
-      print("could not load config", errmsg)
-      os.exit()
-   end
-
-   return cfg, push_num
 end
 
 local function check_files_in_dir(dirname, filelist)
@@ -1502,39 +1606,6 @@ local function link(objfiles, libname, flags)
    local objfiles_str = table.concat(objfiles, " ")
    local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
    cmd_do(cmd)
-end
-
-local function filter_sources(
-   pattern, path, cb, exclude)
-
-
-   for file in lfs.dir(path) do
-      if string.match(file, pattern) then
-
-         if exclude then
-            for _, pat in ipairs(exclude) do
-               if string.match(file, pat) then
-
-                  goto continie
-               end
-            end
-         end
-         cb(file)
-         ::continie::
-      end
-   end
-end
-
-local function filter_sources_c(
-   path, cb, exclude)
-
-   filter_sources(".*%.c$", path, cb, exclude)
-end
-
-local function filter_sources_cpp(
-   path, cb, exclude)
-
-   filter_sources(".*%.cpp$", path, cb, exclude)
 end
 
 local function src2obj(filename)
@@ -2343,7 +2414,6 @@ function actions.make(_args)
 
    local cfg, push_num = search_and_load_cfg_up("bld.lua")
 
-
    if _args.c then
       cache_remove()
    end
@@ -2352,14 +2422,10 @@ function actions.make(_args)
    print('actions.make: pwd', lfs.currentdir())
 
    local src_dir = cfg.src or "src"
-   local res = lfs.chdir(src_dir)
-   print('chdir res', res)
-
-
-
-
-
-
+   if not lfs.chdir(src_dir) then
+      print(format("actions.make: could not chdir to '%s'", src_dir))
+      os.exit(1)
+   end
 
 
    if not _args.nocodegen and cfg.codegen then
@@ -2403,14 +2469,10 @@ function actions.make(_args)
    flags = list_concat(flags, { "-Wall", "-fPIC" })
    local _flags = table.concat(flags, " ")
 
-
-
    local libspath_prefix = cfg.artifact and "../" or ""
    print('libspath_prefix', libspath_prefix)
 
    print("pwd", lfs.currentdir())
-
-
 
    local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
    table.insert(_libdirs, "-L/usr/lib")
@@ -2596,6 +2658,10 @@ local function main()
 
    parser:command("anim_convert"):
    option("-n --name")
+
+   parser:command("run"):
+   summary("run project native executable under gdb"):
+   argument("flags"):args("*")
 
    local make = parser:command("make")
    make:
