@@ -190,7 +190,8 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
     s->sparse[eid.id] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
     //trace("s->dense_size: %d\n", s->dense_size);
     if (s->dense_size == 0 && !s->dense) {
-        s->dense_cap = 5000;
+        // TODO: Вынести dense_cap в s->initial_dense_cap
+        s->dense_cap = s->initial_cap;
         s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
     }
 
@@ -473,11 +474,11 @@ static bool de_storage_contains(de_storage* s, de_entity e) {
     and the entities.
 */
 typedef struct de_ecs {
-    de_storage** storages; /* array to pointers to storage */
-    size_t storages_size; /* size of the storages array */
-    size_t entities_size;
-    de_entity* entities; /* contains all the created entities */
-    de_entity_id available_id; /* first index in the list to recycle */
+    de_storage**    storages; /* array to pointers to storage */
+    size_t          storages_size; /* size of the storages array */
+    size_t          entities_size;
+    de_entity*      entities; /* contains all the created entities */
+    de_entity_id    available_id; /* first index in the list to recycle */
 
     de_cp_type registry[DE_REGISTRY_MAX];
     int registry_num;
@@ -900,6 +901,7 @@ int de_typeof_num(de_ecs* r, de_cp_type cp_type) {
     return storage ? storage->cp_data_size : 0;
 }
 
+/*
 static void iter_each(de_ecs *in, de_entity en, void *udata) {
     de_ecs *out = udata;
 
@@ -924,12 +926,84 @@ static void iter_each(de_ecs *in, de_entity en, void *udata) {
         }
     }
 }
+*/
 
+/*
 de_ecs *de_ecs_clone(de_ecs *in) {
     assert(in);
     de_ecs *out = de_ecs_make();
 
     de_each(in, iter_each, out);
+
+    return out;
+}
+*/
+
+static de_sparse de_sparse_clone(const de_sparse in) {
+    de_sparse out = {};
+
+    out.sparse_size = in.sparse_size;
+    out.dense_size = in.dense_size;
+    out.sparse_cap = in.sparse_cap;
+    out.dense_cap = in.dense_cap;
+    out.initial_cap = in.initial_cap;
+
+    size_t sparse_cap = in.sparse_cap ? in.sparse_cap : in.initial_cap;
+    out.sparse = calloc(sparse_cap, sizeof(in.sparse[0]));
+    assert(out.sparse);
+    memcpy(out.sparse, in.sparse, in.sparse_size * sizeof(in.sparse[0]));
+
+    size_t dense_cap = in.dense_cap ? in.dense_cap : in.initial_cap;
+    out.dense = calloc(dense_cap, sizeof(in.dense[0]));
+    assert(out.dense);
+    memcpy(out.dense, in.dense, in.dense_size * sizeof(in.dense[0]));
+
+    return out;
+}
+
+static de_storage *de_storage_clone(const de_storage *in) {
+    de_storage *out = calloc(1, sizeof(*out));
+    assert(out);
+
+    out->cp_id = in->cp_id;
+    out->cp_data_cap = in->cp_data_cap;
+    out->cp_data_size = in->cp_data_size;
+    out->cp_sizeof = in->cp_sizeof;
+    out->sparse = de_sparse_clone(in->sparse);
+    strcpy(out->name, in->name);
+    out->initial_cap = in->initial_cap;
+
+    size_t data_cap = in->cp_data_cap ? in->cp_data_cap : in->initial_cap;
+    out->cp_data = calloc(data_cap, in->cp_sizeof);
+    assert(out->cp_data);
+    memcpy(out->cp_data, in->cp_data, in->cp_data_size * in->cp_sizeof);
+
+    out->on_destroy = in->on_destroy;
+
+    return out;
+}
+
+de_ecs *de_ecs_clone(de_ecs *in) {
+    assert(in);
+    de_ecs *out = de_ecs_make();
+    assert(out);
+
+    memcpy(out->registry, in->registry, sizeof(in->registry));
+    out->registry_num = in->registry_num;
+
+    out->storages_size = in->storages_size;
+    out->entities_size = in->entities_size;
+    out->available_id = in->available_id;
+
+    out->storages = calloc(in->storages_size, sizeof(in->storages[0]));
+    for (int i = 0; i < in->storages_size; i++) {
+        out->storages[i] = de_storage_clone(in->storages[i]);
+    }
+
+    out->entities = calloc(in->entities_size, sizeof(in->entities[0]));
+    for (int i = 0; i < in->entities_size; ++i) {
+        out->entities[i] = in->entities[i];
+    }
 
     return out;
 }
