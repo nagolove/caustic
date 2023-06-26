@@ -1034,31 +1034,33 @@ end
 
 local record Actions
     anim_convert: function(Args)
-    deps: function(Args)
-    verbose: function(Args)
-    compile_flags: function(Args)
-    init: function(Args)
-    remove: function(Args)
-    rocks: function(Args)
     build: function(Args)
-    wbuild: function(Args)
+    compile_flags: function(Args)
+    deps: function(Args)
+    init: function(Args)
     make: function(Args)
     publish: function(Args)
+    remove: function(Args)
+    rocks: function(Args)
+    run: function(Args)
     test: function(Args)
+    verbose: function(Args)
+    wbuild: function(Args)
 end
 
 local enum ActionsEnum
-    "test"
-    "publish"
-    "deps"
-    "verbose"
+    "build"
     "compile_flags"
+    "deps"
     "init"
+    "make"
+    "publish"
     "remove"
     "rocks"
-    "build"
+    "run"
+    "test"
+    "verbose"
     "wbuild"
-    "make"
 end
 
 local actions: Actions = {}
@@ -1136,6 +1138,7 @@ local record Args
     name: string
     make_type: MakeAction
     full: string
+    flags: {string}
 end
 
 --[[
@@ -1149,6 +1152,12 @@ local function check_for_unstaged(deps: {Dependency})
     pop_dir()
 end
 --]]
+
+function actions.run(_args: Args)
+    local cfg, _: Cfg, integer = search_and_load_cfg_up("bld.lua")
+    print('actions.run', inspect(_args))
+    cmd_do(format("gdb --args %s ", cfg.artifact) .. table.concat(_args.flags, " "))
+end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
@@ -1176,9 +1185,10 @@ function actions.init(_args: Args)
 end
 
 function actions.test(_args: Args)
-    local cfg, push_num: Cfg, integer = search_and_load_cfg_up("bld.lua")
+    local cfg, _: Cfg, integer = search_and_load_cfg_up("bld.lua")
 
     local src_dir = cfg.src or "src"
+    push_current_dir()
     if not lfs.chdir(src_dir) then
         print(format("actions.make: could not chdir to '%s'", src_dir))
         os.exit(1)
@@ -1186,9 +1196,30 @@ function actions.test(_args: Args)
 
     local cwd = lfs.currentdir() .. "/"
 
+    --[[
+    Найти все исходные файлы
+    Найти в исходных файлах имена тестовых функций
+    Составить список имен тестовых функций
+    Сгенерировать файл тестовой программы
+
+    `gcc -MM source.c`
+    --]]
+
+    print("gather sources")
     filter_sources_c(".", function(file: string)
         --print('file', file)
-        print('filtered', cwd .. file)
+        local fname = cwd .. file
+        print('filtered', fname)
+
+        for line in io.open(fname):lines() do
+            if string.match(line, "TEST_CALL.*_test") or 
+                string.match(line, "TEST_CALL.*test_.*") then
+                    --print(line)
+                    local func_name = string.match(line, "void%s*(.*)%(")
+                    print(func_name)
+            end
+        end
+
         --[[
         local _output = output_dir .. "/" .. 
                         string.gsub(file, "(.*%.)c$", "%1o")
@@ -1211,8 +1242,10 @@ function actions.test(_args: Args)
         table.insert(objfiles, _output)
         --]]
     end)
+    print("end of gathering sources")
 
-    pop_dir(push_num)
+    --pop_dir(push_num)
+    pop_dir()
 end
 
 local function update_links_table(_links: {string}, artifact: string)
@@ -2436,14 +2469,10 @@ function actions.make(_args: Args)
     flags = list_concat(flags, { "-Wall", "-fPIC", })
     local _flags: string = table.concat(flags, " ")
 
-    --local _input: string = table.concat({
-    --}, " ")
     local libspath_prefix = cfg.artifact and "../" or ""
     print('libspath_prefix', libspath_prefix)
 
     print("pwd", lfs.currentdir())
-    --print( "os.exit()" )
-    --os.exit()
 
     local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
     table.insert(_libdirs, "-L/usr/lib")
@@ -2629,6 +2658,10 @@ local function main()
 
     parser:command("anim_convert")
         :option("-n --name")
+
+    parser:command("run")
+        :summary("run project native executable under gdb")
+        :argument("flags"):args("*")
 
     local make = parser:command("make")
     make
