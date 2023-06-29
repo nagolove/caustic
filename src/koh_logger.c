@@ -93,10 +93,10 @@ void logger_init(void) {
     filter_init();
 }
 
-static bool iter_trace(const char *key, void *udata) {
+static StrSetAction iter_trace(const char *key, void *udata) {
     FILE *file = udata;
     fwrite(key, strlen(key), 1, file);
-    return true;
+    return SSA_next;
 }
 
 void traces_dump() {
