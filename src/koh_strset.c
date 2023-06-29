@@ -194,11 +194,45 @@ void strset_each(StrSet *set, StrSetEachCallback cb, void *udata) {
 
     for (int i = 0; i < set->cap; i++) {
         if (set->arr[i].taken) {
-            if (!cb(set->arr[i].key, udata)) {
-                    free(set->arr[i].key);
-                    set->arr[i].taken = false;
-                    set->taken--;
+                StrSetAction action = cb(set->arr[i].key, udata);
+                switch (action) {
+                    case SSA_remove:
+                        free(set->arr[i].key);
+                        set->arr[i].taken = false;
+                        set->taken--;
+                        break;
+                    case SSA_break:
+                        goto _exit;
+                        break;
+                    case SSA_next:
+                        break;
+                }
             }
         }
+_exit:
+}
+
+struct CompareCtx {
+    StrSet *set;
+    bool    eq;
+};
+
+static StrSetAction iter_compare(const char *key, void *udata) {
+    struct CompareCtx *ctx = udata;
+    if (!strset_exist(ctx->set, key)) {
+        ctx->eq = false;
+        return SSA_break;
     }
+    return SSA_next;
+}
+
+bool strset_compare(const StrSet *s1, const StrSet *s2) {
+    assert(s1);
+    assert(s2);
+    struct CompareCtx ctx = {
+        .set = (StrSet*)s2,
+        .eq = true,
+    };
+    strset_each((StrSet*)s1, iter_compare, &ctx);
+    return ctx.eq;
 }
