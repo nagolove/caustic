@@ -949,11 +949,15 @@ static de_sparse de_sparse_clone(const de_sparse in) {
     out.initial_cap = in.initial_cap;
 
     size_t sparse_cap = in.sparse_cap ? in.sparse_cap : in.initial_cap;
+    if (sparse_cap < in.sparse_size)
+        sparse_cap = in.sparse_size;
     out.sparse = calloc(sparse_cap, sizeof(in.sparse[0]));
     assert(out.sparse);
     memcpy(out.sparse, in.sparse, in.sparse_size * sizeof(in.sparse[0]));
 
     size_t dense_cap = in.dense_cap ? in.dense_cap : in.initial_cap;
+    if (dense_cap < in.dense_size)
+        dense_cap = in.dense_size;
     out.dense = calloc(dense_cap, sizeof(in.dense[0]));
     assert(out.dense);
     memcpy(out.dense, in.dense, in.dense_size * sizeof(in.dense[0]));
@@ -974,6 +978,8 @@ static de_storage *de_storage_clone(const de_storage *in) {
     out->initial_cap = in->initial_cap;
 
     size_t data_cap = in->cp_data_cap ? in->cp_data_cap : in->initial_cap;
+    if (data_cap < in->cp_data_size)
+        data_cap = in->cp_data_size;
     out->cp_data = calloc(data_cap, in->cp_sizeof);
     assert(out->cp_data);
     memcpy(out->cp_data, in->cp_data, in->cp_data_size * in->cp_sizeof);
