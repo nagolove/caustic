@@ -11,6 +11,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "koh_logger.h"
@@ -18,7 +19,7 @@
 //#define DE_USE_STORAGE_CAPACITY 
 //#define DE_USE_SPARSE_CAPACITY
 
-//#define DE_NO_TRACE
+#define DE_NO_TRACE
 
 #ifdef DE_NO_TRACE
 static void void_printf(const char *s, ...) {
@@ -163,6 +164,8 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
     assert(e != de_null);
     const de_entity_id eid = de_entity_identifier(e);
     if (eid.id >= s->sparse_size) { // check if we need to realloc
+
+        // первоначальное выделение
         if (s->sparse_size == 0 && !s->sparse) {
             s->sparse_cap = s->initial_cap;
             s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
@@ -170,6 +173,7 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
 
         const size_t new_sparse_size = eid.id + 1;
 
+        // расширение выделения
         if (new_sparse_size == s->sparse_cap) {
             s->sparse_cap *= 2;
             s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
@@ -189,12 +193,15 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
     }
     s->sparse[eid.id] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
     //trace("s->dense_size: %d\n", s->dense_size);
+
+    // первоначальное выделение
     if (s->dense_size == 0 && !s->dense) {
         // TODO: Вынести dense_cap в s->initial_dense_cap
         s->dense_cap = s->initial_cap;
         s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
     }
 
+    // расширение выделения
     if (s->dense_size == s->dense_cap) {
         s->dense_cap *= 2;
         s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
@@ -951,6 +958,10 @@ static de_sparse de_sparse_clone(const de_sparse in) {
     size_t sparse_cap = in.sparse_cap ? in.sparse_cap : in.initial_cap;
     if (sparse_cap < in.sparse_size)
         sparse_cap = in.sparse_size;
+
+    //printf("de_sparse_clone: sparce_cap %zu\n", sparse_cap);
+    //printf("de_sparse_clone: in.sparse_size %zu\n", in.sparse_size);
+
     out.sparse = calloc(sparse_cap, sizeof(in.sparse[0]));
     assert(out.sparse);
     memcpy(out.sparse, in.sparse, in.sparse_size * sizeof(in.sparse[0]));
@@ -958,6 +969,10 @@ static de_sparse de_sparse_clone(const de_sparse in) {
     size_t dense_cap = in.dense_cap ? in.dense_cap : in.initial_cap;
     if (dense_cap < in.dense_size)
         dense_cap = in.dense_size;
+
+    //printf("de_sparse_clone: dense_cap %zu\n", dense_cap);
+    //printf("de_sparse_clone: in.dense_size %zu\n", in.dense_size);
+
     out.dense = calloc(dense_cap, sizeof(in.dense[0]));
     assert(out.dense);
     memcpy(out.dense, in.dense, in.dense_size * sizeof(in.dense[0]));
