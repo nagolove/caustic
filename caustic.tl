@@ -1836,6 +1836,17 @@ local function make_l(list: {string}): {string}
     return ret
 end
 
+--[[
+#warning: Link with `-sLLD_REPORT_UNDEFINED` to get more information on undefined symbols
+#warning: To disable errors for undefined symbols use `-sERROR_ON_UNDEFINED_SYMBOLS=0`
+
+#emcc -sEVAL_CTORS
+#For example, calls to imports stop this optimization, and so if you have a
+#game engine that creates a GL context and then does some pure computation to
+#set up unrelated data structures in memory, then you could reverse that order.
+#Then the pure computation could run first, and be evalled away, and the GL
+#context creation call to an import would not prevent that. 
+--]]
 local function link_wasm_project(main_fname: string, _args: Args)
     --local currentdir = lfs.currentdir()
     print('link_project:', lfs.currentdir())
