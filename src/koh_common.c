@@ -28,6 +28,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef PLATFORM_DESKTOP
+#include <signal.h>
+#endif
+
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 
 Common cmn;
@@ -980,3 +984,9 @@ void koh_screenshot_incremental() {
     ExportImage(img, fname);
     UnloadImage(img);
 };
+
+void koh_trap() {
+#ifdef PLATFORM_DESKTOP
+    raise(SIGTRAP);
+#endif
+}

@@ -135,3 +135,4 @@ uint32_t next_eq_pow2(uint32_t p);
 
 const char *font2str(Font fnt);
 void koh_screenshot_incremental();
+void koh_trap();

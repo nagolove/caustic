@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "koh_logger.h"
+#include "koh_common.h"
 
 //#define DE_USE_STORAGE_CAPACITY 
 //#define DE_USE_SPARSE_CAPACITY
@@ -451,8 +452,14 @@ static void* de_storage_get_by_index(de_storage* s, size_t index) {
     );
     */
     assert(s);
-    assert(index < s->cp_data_size);
-    return &((char*)s->cp_data)[index * sizeof(char) * s->cp_sizeof];
+
+    //assert(index < s->cp_data_size);
+    if (index >= s->cp_data_size) {
+        //trace("de_storage_get_by_index: index %zu\n", index);
+        koh_trap();
+    }
+
+    return &((char*)s->cp_data)[index * s->cp_sizeof];
 }
 
 static void* de_storage_get(de_storage* s, de_entity e) {
