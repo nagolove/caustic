@@ -638,13 +638,23 @@ de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
 void de_remove_all(de_ecs* r, de_entity e) {
     assert(r);
     assert(de_valid(r, e));
-    
+
     for (size_t i = r->storages_size; i; --i) {
         if (r->storages[i - 1] && 
             de_sparse_contains(&r->storages[i - 1]->sparse, e)) {
             de_storage_remove(r->storages[i - 1], e);
         }
     }
+    // */
+
+    /*
+    for (size_t i = 0; i < r->storages_size; i++) {
+        if (r->storages[i] && 
+            de_sparse_contains(&r->storages[i]->sparse, e)) {
+            de_storage_remove(r->storages[i], e);
+        }
+    }
+    */
 }
 
 void de_remove(de_ecs* r, de_entity e, de_cp_type cp_type) {
