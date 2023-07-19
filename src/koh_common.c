@@ -990,3 +990,13 @@ void koh_trap() {
     raise(SIGTRAP);
 #endif
 }
+
+void koh_term_color_set(int color) {
+    assert(color >= 30 && color <= 37);
+    printf("\033[1;%dm", color);
+}
+
+void koh_term_color_reset() {
+    printf("\033[0m");
+}
+

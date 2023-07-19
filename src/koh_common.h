@@ -136,3 +136,16 @@ uint32_t next_eq_pow2(uint32_t p);
 const char *font2str(Font fnt);
 void koh_screenshot_incremental();
 void koh_trap();
+
+#define KOH_TERM_BLACK        30         
+#define KOH_TERM_RED          31         
+#define KOH_TERM_GREEN        32         
+#define KOH_TERM_YELLOW       33         
+#define KOH_TERM_BLUE         34         
+#define KOH_TERM_MAGENTA      35         
+#define KOH_TERM_CYAN         36         
+#define KOH_TERM_WHITE        37         
+
+void koh_term_color_set(int color);
+void koh_term_color_reset();
+
