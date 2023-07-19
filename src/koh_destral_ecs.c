@@ -17,36 +17,47 @@
 #include "koh_logger.h"
 #include "koh_common.h"
 
-//#define DE_USE_STORAGE_CAPACITY 
-//#define DE_USE_SPARSE_CAPACITY
+#define DE_USE_STORAGE_CAPACITY 
+#define DE_USE_SPARSE_CAPACITY
 
-#define DE_NO_TRACE
+/*#define DE_NO_TRACE*/
 
 #ifdef DE_NO_TRACE
 static void void_printf(const char *s, ...) {
     (void)s;
 }
-#define trace void_printf
+#define de_trace void_printf
+#else
+/*#define trace printf*/
+__attribute__((__format__ (__printf__, 1, 2)))
+static void de_trace(const char* fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vprintf(fmt, ap); // warning
+  va_end(ap);
+}
 #endif
-
-//#define trace printf
 
 const de_entity de_null = (de_entity)DE_ENTITY_ID_MASK;
 
 /* Returns the version part of the entity */
 de_entity_ver de_entity_version(de_entity e) {
-    return (de_entity_ver) { .ver = e >> DE_ENTITY_SHIFT }; 
+    de_entity_ver ver = { .ver = e >> DE_ENTITY_SHIFT }; 
+    de_trace("de_entity_version: en %u, ver %u\n", e, ver.ver);
+    return ver;
 }
 /* Returns the id part of the entity */
 de_entity_id de_entity_identifier(de_entity e) {
-    return (de_entity_id) { .id = e & DE_ENTITY_ID_MASK }; 
+    de_entity_id id = { .id = e & DE_ENTITY_ID_MASK }; 
+    de_trace("de_entity_identifier: en %u, id %u\n", e, id.id);
+    return id;
 }
 /* Makes a de_entity from entity_id and entity_version */
 de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
-    return id.id | (version.ver << DE_ENTITY_SHIFT); 
+    de_entity e = id.id | (version.ver << DE_ENTITY_SHIFT); 
+    de_trace("de_make_entity: id %u, ver %u, e %u\n", id.id, version.ver, e);
+    return e;
 }
-
-
 
 // SPARSE SET
 
@@ -110,8 +121,9 @@ typedef struct de_sparse {
 } de_sparse;
 
 
-
 static de_sparse* de_sparse_init(de_sparse* s) {
+    assert(s);
+    de_trace("de_sparse_init: %p\n", s);
     if (s) {
         *s = (de_sparse){ 0 };
         //s->sparse = 0;
@@ -128,6 +140,7 @@ static de_sparse* de_sparse_new() {
 
 static void de_sparse_destroy(de_sparse* s) {
     assert(s);
+    de_trace("de_sparse_destroy: %p", s);
     if (!s) return;
     if (s->sparse) {
         free(s->sparse);
@@ -149,6 +162,7 @@ static void de_sparse_delete(de_sparse* s) {
 static bool de_sparse_contains(de_sparse* s, de_entity e) {
     assert(s);
     assert(e != de_null);
+    de_trace("de_sparse_contains: de_sparse %p, e %u\n", s, e);
     const de_entity_id eid = de_entity_identifier(e);
     return (eid.id < s->sparse_size) && (s->sparse[eid.id] != de_null);
 }
@@ -156,13 +170,15 @@ static bool de_sparse_contains(de_sparse* s, de_entity e) {
 static size_t de_sparse_index(de_sparse* s, de_entity e) {
     assert(s);
     assert(de_sparse_contains(s, e));
+    de_trace("de_sparse_index: de_sparse %p, e %u\n", s, e);
     return s->sparse[de_entity_identifier(e).id];
 }
 
 static void de_sparse_emplace(de_sparse* s, de_entity e) {
-#ifdef DE_USE_SPARSE_CAPACITY
     assert(s);
     assert(e != de_null);
+    de_trace("de_sparse_emplace: de_sparse %p, e %u\n", s, e);
+#ifdef DE_USE_SPARSE_CAPACITY
     const de_entity_id eid = de_entity_identifier(e);
     if (eid.id >= s->sparse_size) { // check if we need to realloc
 
@@ -236,9 +252,10 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
 }
 
 static size_t de_sparse_remove(de_sparse* s, de_entity e) {
-#ifdef DE_USE_SPARSE_CAPACITY
     assert(s);
     assert(de_sparse_contains(s, e));
+    de_trace("de_sparse_remove: de_sparse %p, e %u\n", s, e);
+#ifdef DE_USE_SPARSE_CAPACITY
 
     const size_t pos = s->sparse[de_entity_identifier(e).id];
     const de_entity other = s->dense[s->dense_size - 1];
@@ -255,8 +272,6 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
 
     return pos;
 #else
-    assert(s);
-    assert(de_sparse_contains(s, e));
 
     const size_t pos = s->sparse[de_entity_identifier(e).id];
     const de_entity other = s->dense[s->dense_size - 1];
@@ -321,8 +336,46 @@ typedef struct de_storage {
 } de_storage;
 
 
+static char *de_cp_type2str(de_cp_type cp_type) {
+    static char buf[128] = {};
+    snprintf(
+        buf, sizeof(buf),
+        "id %zu, sizeof %zu, initial cap %zu, name '%s', on_destroy %p", 
+        cp_type.cp_id,
+        cp_type.cp_sizeof,
+        cp_type.initial_cap,
+        cp_type.name,
+        cp_type.on_destroy
+    );
+    return buf;
+}
+
+static char *de_storage2str(de_storage *s) {
+    static char buf[128] = {};
+    assert(s);
+    sprintf(
+        buf,
+        "id %zu, data %p, data_size %zu, data_cap %zu, sizeof %zu, "
+        "on_destroy %p, name %s, initial_cap %zu",
+        s->cp_id, 
+        s->cp_data,
+        s->cp_data_size, 
+        s->cp_data_cap,
+        s->cp_sizeof,
+        s->on_destroy,
+        s->name,
+        s->initial_cap
+    );
+    return buf;
+}
+
 static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     assert(s);
+    de_trace(
+        "de_storage_init: de_storage %p, type %s\n",
+        s,
+        de_cp_type2str(cp_type)
+    );
     *s = (de_storage){ 0 };
     de_sparse_init(&s->sparse);
     s->cp_sizeof = cp_type.cp_sizeof;
@@ -335,25 +388,33 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
 }
 
 static de_storage* de_storage_new(size_t cp_size, de_cp_type cp_type) {
+    de_trace(
+        "de_storage_new: size %zu, type %s\n",
+        cp_size,
+        de_cp_type2str(cp_type)
+    );
     return de_storage_init(malloc(sizeof(de_storage)), cp_type);
 }
 
 static void de_storage_destroy(de_storage* s) {
     assert(s);
+    de_trace("de_storage_destroy: de_storage %p\n", s);
     de_sparse_destroy(&s->sparse);
     free(s->cp_data);
 }
 
 static void de_storage_delete(de_storage* s) {
     assert(s);
+    de_trace("de_storage_delete: de_storage %p\n", s);
     de_storage_destroy(s);
     free(s);
 }
 
 
 static void* de_storage_emplace(de_storage* s, de_entity e) {
-#ifdef DE_USE_STORAGE_CAPACITY
     assert(s);
+    de_trace("de_storage_emplace: de_storage %p, e %u\n", s, e);
+#ifdef DE_USE_STORAGE_CAPACITY
 
     if (s->cp_data_size == 0 && s->cp_data_cap == 0) {
         //trace("de_storage_emplace: initial allocating for type %d\n", s->cp_id);
@@ -384,7 +445,6 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 
     return cp_data_ptr;
 #else
-    assert(s);
     // now allocate the data for the new component at the end of the array
     s->cp_data = realloc(s->cp_data, (s->cp_data_size + 1) * sizeof(char) * s->cp_sizeof);
     s->cp_data_size++;
@@ -400,7 +460,7 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 }
 
 static void de_storage_remove(de_storage* s, de_entity e) {
-    trace("de_storage_remove: [%s] en %u\n", s->name, e);
+    de_trace("de_storage_remove: [%s] en %u\n", s->name, e);
     assert(s);
     size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
     if (s->on_destroy) {
@@ -443,6 +503,7 @@ static void de_storage_remove(de_storage* s, de_entity e) {
 
 
 static void* de_storage_get_by_index(de_storage* s, size_t index) {
+    de_trace("de_storage_get_by_index: [%s], index %zu\n", s->name, index);
     /*
     static int _counter = 0;
     trace(
@@ -465,18 +526,21 @@ static void* de_storage_get_by_index(de_storage* s, size_t index) {
 static void* de_storage_get(de_storage* s, de_entity e) {
     assert(s);
     assert(e != de_null);
+    de_trace("de_storage_get: [%s], e %u\n", s->name, e);
     return de_storage_get_by_index(s, de_sparse_index(&s->sparse, e));
 }
 
 static void* de_storage_try_get(de_storage* s, de_entity e) {
     assert(s);
     assert(e != de_null);
+    de_trace("de_storage_try_get: [%s], e %u\n", s->name, e);
     return de_sparse_contains(&s->sparse, e) ? de_storage_get(s, e) : 0;
 }
 
 static bool de_storage_contains(de_storage* s, de_entity e) {
     assert(s);
     assert(e != de_null);
+    de_trace("de_storage_contains: [%s], e %u\n", s->name, e);
     return de_sparse_contains(&s->sparse, e);
 }
 
@@ -499,6 +563,7 @@ typedef struct de_ecs {
 } de_ecs;
 
 void de_ecs_register(de_ecs *r, de_cp_type comp) {
+    de_trace("de_ecs_register: ecs %p, type %s\n", r, de_cp_type2str(comp));
     for (int i = 0; i < r->registry_num; i++) {
         if (comp.cp_id == r->registry[i].cp_id) {
             trace(
@@ -512,6 +577,7 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
 }
 
 de_ecs* de_ecs_make() {
+    de_trace("de_ecs_make:\n");
     de_ecs* r = calloc(1, sizeof(de_ecs));
     assert(r);
     r->storages = 0;
@@ -524,9 +590,10 @@ de_ecs* de_ecs_make() {
 } 
 
 void de_ecs_destroy(de_ecs* r) {
+    de_trace("de_ecs_destroy: %r\n", r);
     assert(r);
 
-    if (!r) return;
+    /*if (!r) return;*/
 
     if (r->storages) {
         for (size_t i = 0; i < r->storages_size; i++) {
@@ -540,7 +607,7 @@ void de_ecs_destroy(de_ecs* r) {
     free(r);
 }
 
-void dump_entities(de_ecs *r) {
+static void dump_entities(de_ecs *r) {
     assert(r);
     printf("dump_entities\n");
     for (int i = 0; i < r->entities_size; i++) {
@@ -551,6 +618,7 @@ void dump_entities(de_ecs *r) {
 
 bool de_valid(de_ecs* r, de_entity e) {
     assert(r);
+    de_trace("de_valid: ecs %p, e %u\n", r, e);
     const de_entity_id id = de_entity_identifier(e);
     bool ret = id.id < r->entities_size && r->entities[id.id] == e;
     /*
@@ -569,7 +637,7 @@ bool de_valid(de_ecs* r, de_entity e) {
 static de_entity _de_generate_entity(de_ecs* r) {
     // can't create more identifiers entities
     assert(r->entities_size < DE_ENTITY_ID_MASK);
-
+    de_trace("_de_generate_entity: ecs %p\n", r);
     // alloc one more element to the entities array
     r->entities = realloc(r->entities, (r->entities_size + 1) * sizeof(de_entity));
 
@@ -584,6 +652,7 @@ static de_entity _de_generate_entity(de_ecs* r) {
 /* internal function to recycle a non used entity from the linked list */
 static de_entity _de_recycle_entity(de_ecs* r) {
     assert(r->available_id.id != de_null);
+    de_trace("_de_recycle_entity: ecs %p\n", r);
     // get the first available entity id
     const de_entity_id curr_id = r->available_id;
     // retrieve the version
@@ -598,6 +667,10 @@ static de_entity _de_recycle_entity(de_ecs* r) {
 }
 
 static void _de_release_entity(de_ecs* r, de_entity e, de_entity_ver desired_version) {
+    de_trace(
+        "_de_release_entity: ecs %p, e %u, desired_version %u\n",
+        r, e, desired_version.ver
+    );
     const de_entity_id e_id = de_entity_identifier(e);
     r->entities[e_id.id] = de_make_entity(r->available_id, desired_version);
     r->available_id = e_id;
@@ -605,6 +678,7 @@ static void _de_release_entity(de_ecs* r, de_entity e, de_entity_ver desired_ver
 
 de_entity de_create(de_ecs* r) {
     assert(r);
+    de_trace("de_create: ecs %p\n", r);
     if (r->available_id.id == de_null) {
         return _de_generate_entity(r);
     } else {
@@ -614,6 +688,7 @@ de_entity de_create(de_ecs* r) {
 
 de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     assert(r);
+    de_trace("de_assure: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
     de_storage* storage_found = NULL;
 
     for (size_t i = 0; i < r->storages_size; i++) {
@@ -638,6 +713,7 @@ de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
 void de_remove_all(de_ecs* r, de_entity e) {
     assert(r);
     assert(de_valid(r, e));
+    de_trace("de_remove_all: ecs %p, e %u\n", r, e);
 
     for (size_t i = r->storages_size; i; --i) {
         if (r->storages[i - 1] && 
@@ -660,12 +736,18 @@ void de_remove_all(de_ecs* r, de_entity e) {
 void de_remove(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
+    de_trace(
+        "de_remove: ecs %p, e %u, type %s\n",
+        r, e, de_cp_type2str(cp_type)
+    );
     de_storage_remove(de_assure(r, cp_type), e);
 }
 
 void de_destroy(de_ecs* r, de_entity e) {
     assert(r);
     assert(e != de_null);
+
+    de_trace("de_destroy: ecs %p, e %u\n", r, e);
 
     // 1) remove all the components of the entity
     de_remove_all(r, e);
@@ -680,6 +762,7 @@ bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
     assert(de_assure(r, cp_type));
+    de_trace("de_has: ecs %p, e %u, type %s\n", r, e, de_cp_type2str(cp_type));
     return de_storage_contains(de_assure(r, cp_type), e);
 }
 
@@ -687,6 +770,10 @@ void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
     assert(de_assure(r, cp_type));
+    de_trace(
+        "de_emplace: ecs %p, e %u, type %s\n", 
+        r, e, de_cp_type2str(cp_type)
+    );
     void *ret = de_storage_emplace(de_assure(r, cp_type), e);
     assert(ret);
     memset(ret, 0, cp_type.cp_sizeof);
@@ -697,10 +784,15 @@ void* de_get(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
     assert(de_valid(r, e));
     assert(de_assure(r, cp_type));
+    de_trace("de_get: ecs %p, e %u, type %s\n", r, e, de_cp_type2str(cp_type));
     return de_storage_get(de_assure(r, cp_type), e);
 }
 
 void* de_try_get(de_ecs* r, de_entity e, de_cp_type cp_type) {
+    de_trace(
+        "de_try_get: ecs %p, e %u, type %s\n", 
+        r, e, de_cp_type2str(cp_type)
+    );
     assert(r);
     assert(de_valid(r, e));
     assert(de_assure(r, cp_type));
@@ -710,6 +802,7 @@ void* de_try_get(de_ecs* r, de_entity e, de_cp_type cp_type) {
 
 void de_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata) {
     assert(r);
+    de_trace("de_each: ecs %p, fun %p\n", r, fun);
     if (!fun) {
         return;
     }
@@ -731,6 +824,7 @@ void de_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata) {
 bool de_orphan(de_ecs* r, de_entity e) {
     assert(r);
     assert(de_valid(r, e));
+    de_trace("de_orphan: ecs %p, e %u\n", r, e);
     for (size_t pool_i = 0; pool_i < r->storages_size; pool_i++) {
         if (r->storages[pool_i]) {
             if (de_storage_contains(r->storages[pool_i], e)) {
@@ -748,6 +842,7 @@ typedef struct de_orphans_fun_data {
 } de_orphans_fun_data;
 
 static void _de_orphans_each_executor(de_ecs* r, de_entity e, void* udata) {
+    de_trace("_de_orphans_each_executor: ecs %p, e %u\n", r, e);
     de_orphans_fun_data* orphans_data = udata;
     if (de_orphan(r, e)) {
         orphans_data->orphans_fun(r, e, orphans_data->orphans_udata);
@@ -755,6 +850,7 @@ static void _de_orphans_each_executor(de_ecs* r, de_entity e, void* udata) {
 }
 
 void de_orphans_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata) {
+    de_trace("de_orphans_each: ecs %p, func %p\n", r, fun);
     de_each(r, _de_orphans_each_executor, &(de_orphans_fun_data) { .orphans_udata = udata, .orphans_fun = fun });
 }
 
@@ -762,6 +858,10 @@ void de_orphans_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* ud
 
 de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type) {
     assert(r);
+    de_trace(
+        "de_create_view_single: ecs %p, type %s\n", 
+        r, de_cp_type2str(cp_type)
+    );
     de_view_single v = { 0 };
     v.pool = de_assure(r, cp_type);
     assert(v.pool);
@@ -780,21 +880,25 @@ de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type) {
 
 bool de_view_single_valid(de_view_single* v) {
     assert(v);
+    de_trace("de_view_single_valid: view %p\n", v);
     return (v->entity != de_null);
 }
 
 de_entity de_view_single_entity(de_view_single* v) {
     assert(v);
+    de_trace("de_view_single_entity: view %p\n", v);
     return v->entity;
 }
 
 void* de_view_single_get(de_view_single* v) {
     assert(v);
+    de_trace("de_view_single_get: view %p\n", v);
     return de_storage_get_by_index(v->pool, v->current_entity_index);
 }
 
 void de_view_single_next(de_view_single* v) {
     assert(v);
+    de_trace("de_view_single_next: view %p\n", v);
     if (v->current_entity_index) {
         v->current_entity_index--;
         v->entity = v->pool->sparse.dense[v->current_entity_index];
@@ -809,7 +913,7 @@ void de_view_single_next(de_view_single* v) {
 bool de_view_entity_contained(de_view* v, de_entity e) {
     assert(v);
     assert(de_view_valid(v));
-
+    de_trace("de_view_entity_contained: view %p, e %u\n", v, e);
     for (size_t pool_id = 0; pool_id < v->pool_count; pool_id++) {
         if (!de_storage_contains(v->all_pools[pool_id], e)) { 
             return false; 
@@ -820,17 +924,26 @@ bool de_view_entity_contained(de_view* v, de_entity e) {
 
 size_t de_view_get_index(de_view* v, de_cp_type cp_type) {
     assert(v);
+    de_trace(
+        "de_view_get_index: view %p, type %s\n", 
+        v, de_cp_type2str(cp_type)
+    );
     for (size_t i = 0; i < v->pool_count; i++) {
         if (v->to_pool_index[i] == cp_type.cp_id) {
             return i;
         }
     }
-    assert(0); // FIX (dani) cp not found in the view pools
+    abort();
+    /*assert(0); // FIX (dani) cp not found in the view pools*/
     return 0;
 }
 
 int de_view_get_index_safe(de_view* v, de_cp_type cp_type) {
     assert(v);
+    de_trace(
+        "de_view_get_index_safe: view %p, type %s\n", 
+        v, de_cp_type2str(cp_type)
+    );
     for (size_t i = 0; i < v->pool_count; i++) {
         if (v->to_pool_index[i] == cp_type.cp_id) {
             return i;
@@ -840,11 +953,16 @@ int de_view_get_index_safe(de_view* v, de_cp_type cp_type) {
 }
 
 void* de_view_get_safe(de_view *v, de_cp_type cp_type) {
+    de_trace(
+        "de_view_get_safe: view %p, type %s\n", 
+        v, de_cp_type2str(cp_type)
+    );
     int index = de_view_get_index_safe(v, cp_type);
     return index != -1 ? de_view_get_by_index(v, index) : NULL;
 }
 
 void* de_view_get(de_view* v, de_cp_type cp_type) {
+    de_trace("de_view_get: view %p, type %s\n", v, de_cp_type2str(cp_type));
     return de_view_get_by_index(v, de_view_get_index(v, cp_type));
 }
 
@@ -852,12 +970,14 @@ void* de_view_get_by_index(de_view* v, size_t pool_index) {
     assert(v);
     assert(pool_index >= 0 && pool_index < DE_MAX_VIEW_COMPONENTS);
     assert(de_view_valid(v));
+    de_trace("de_view_get_by_index: view %p, pool_index %zu\n", v, pool_index);
     return de_storage_get(v->all_pools[pool_index], v->current_entity);
 }
 
 void de_view_next(de_view* v) {
     assert(v);
     assert(de_view_valid(v));
+    de_trace("de_view_next: view %p\n", v);
     // find the next contained entity that is inside all pools
     do {
         if (v->current_entity_index) {
@@ -874,7 +994,21 @@ void de_view_next(de_view* v) {
 de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
     assert(r);
     assert(cp_count < DE_MAX_VIEW_COMPONENTS);
-    
+   
+#ifndef DE_NO_TRACE
+    char types_buf[1024] = {};
+    for (int i = 0; i < cp_count; ++i) {
+        size_t types_buf_len = strlen(types_buf);
+        size_t type_name_len = strlen(cp_types[i].name);
+        if (types_buf_len + types_buf_len + 2 >= sizeof(types_buf))
+            break;
+        strcat(types_buf, cp_types[i].name);
+    }
+    de_trace(
+        "de_create_view: ecs %p, count %zu, types %s\n",
+        r, cp_count, types_buf
+    );
+#endif
 
     de_view v = { 0 };
     v.pool_count = cp_count;
@@ -910,18 +1044,21 @@ de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
 
 bool de_view_valid(de_view* v) {
     assert(v);
+    de_trace("de_view_valid: view %p\n", v);
     return v->current_entity != de_null;
 }
 
 de_entity de_view_entity(de_view* v) {
     assert(v);
     assert(de_view_valid(v));
+    de_trace("de_view_entity: view %p\n", v);
     return v->pool->sparse.dense[v->current_entity_index];
 }
 
 int de_typeof_num(de_ecs* r, de_cp_type cp_type) {
     de_storage *storage = de_assure(r, cp_type);
     assert(storage);
+    de_trace("de_typeof_num: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
     return storage ? storage->cp_data_size : 0;
 }
 
@@ -964,6 +1101,7 @@ de_ecs *de_ecs_clone(de_ecs *in) {
 */
 
 static de_sparse de_sparse_clone(const de_sparse in) {
+    de_trace("de_sparse_clone:\n");
     de_sparse out = {};
 
     out.sparse_size = in.sparse_size;
@@ -998,6 +1136,7 @@ static de_sparse de_sparse_clone(const de_sparse in) {
 }
 
 static de_storage *de_storage_clone(const de_storage *in) {
+    de_trace("de_storage_clone:\n");
     de_storage *out = calloc(1, sizeof(*out));
     assert(out);
 
@@ -1023,6 +1162,7 @@ static de_storage *de_storage_clone(const de_storage *in) {
 
 de_ecs *de_ecs_clone(de_ecs *in) {
     assert(in);
+    de_trace("de_ecs_clone: ecs %p\n", in);
     de_ecs *out = de_ecs_make();
     assert(out);
 
