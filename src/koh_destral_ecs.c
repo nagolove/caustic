@@ -17,10 +17,14 @@
 #include "koh_logger.h"
 #include "koh_common.h"
 
-#define DE_USE_STORAGE_CAPACITY 
-#define DE_USE_SPARSE_CAPACITY
+//#define DE_USE_STORAGE_CAPACITY 
+//#define DE_USE_SPARSE_CAPACITY
 
 /*#define DE_NO_TRACE*/
+
+static de_options _options = {
+    .tracing = false,
+};
 
 #ifdef DE_NO_TRACE
 static void void_printf(const char *s, ...) {
@@ -31,10 +35,14 @@ static void void_printf(const char *s, ...) {
 /*#define trace printf*/
 __attribute__((__format__ (__printf__, 1, 2)))
 static void de_trace(const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vprintf(fmt, ap); // warning
-  va_end(ap);
+    if (!_options.tracing)
+        return;
+    koh_term_color_set(KOH_TERM_CYAN);
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap); // warning
+    va_end(ap);
+    koh_term_color_reset();
 }
 #endif
 
@@ -264,10 +272,14 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
     s->dense[pos] = other;
     s->sparse[pos] = de_null;
 
+    /*
+    // XXX: Возможно ошибка при работе с памятью
     if (s->dense_size < 0.5 * s->dense_cap) {
         s->dense_cap /= 2;
         s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
     }
+    */
+
     s->dense_size--;
 
     return pos;
@@ -350,6 +362,7 @@ static char *de_cp_type2str(de_cp_type cp_type) {
     return buf;
 }
 
+/*
 static char *de_storage2str(de_storage *s) {
     static char buf[128] = {};
     assert(s);
@@ -368,6 +381,7 @@ static char *de_storage2str(de_storage *s) {
     );
     return buf;
 }
+*/
 
 static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     assert(s);
@@ -463,6 +477,7 @@ static void de_storage_remove(de_storage* s, de_entity e) {
     de_trace("de_storage_remove: [%s] en %u\n", s->name, e);
     assert(s);
     size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
+
     if (s->on_destroy) {
         void *payload = &((char*)s->cp_data)[pos_to_remove * s->cp_sizeof];
         s->on_destroy(payload, e);
@@ -482,11 +497,15 @@ static void de_storage_remove(de_storage* s, de_entity e) {
         &((char*)s->cp_data)[(s->cp_data_size - 1) * s->cp_sizeof],
         s->cp_sizeof);
 
-    // and pop
+    /*
+    XXX: Возможно неправильная работа с памятью
     if (s->cp_data_size < 0.5 * s->cp_data_cap) {
         s->cp_data_cap /= 2;
         s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
     }
+    */
+
+    // and pop
     s->cp_data_size--;
 #else
     // swap (memmove because if cp_data_size 1 it will overlap dst and source.
@@ -590,7 +609,7 @@ de_ecs* de_ecs_make() {
 } 
 
 void de_ecs_destroy(de_ecs* r) {
-    de_trace("de_ecs_destroy: %r\n", r);
+    de_trace("de_ecs_destroy: %p\n", r);
     assert(r);
 
     /*if (!r) return;*/
@@ -607,6 +626,7 @@ void de_ecs_destroy(de_ecs* r) {
     free(r);
 }
 
+/*
 static void dump_entities(de_ecs *r) {
     assert(r);
     printf("dump_entities\n");
@@ -615,6 +635,7 @@ static void dump_entities(de_ecs *r) {
     }
     printf("\n");
 }
+*/
 
 bool de_valid(de_ecs* r, de_entity e) {
     assert(r);
@@ -741,6 +762,12 @@ void de_remove(de_ecs* r, de_entity e, de_cp_type cp_type) {
         r, e, de_cp_type2str(cp_type)
     );
     de_storage_remove(de_assure(r, cp_type), e);
+}
+
+void de_ecs_print(de_ecs *r) {
+    assert(r);
+    for (int i = 0; i < r->storages_size; i++) {
+    }
 }
 
 void de_destroy(de_ecs* r, de_entity e) {
@@ -1000,7 +1027,7 @@ de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
     for (int i = 0; i < cp_count; ++i) {
         size_t types_buf_len = strlen(types_buf);
         size_t type_name_len = strlen(cp_types[i].name);
-        if (types_buf_len + types_buf_len + 2 >= sizeof(types_buf))
+        if (types_buf_len + type_name_len + 2 >= sizeof(types_buf))
             break;
         strcat(types_buf, cp_types[i].name);
     }
@@ -1189,3 +1216,7 @@ de_ecs *de_ecs_clone(de_ecs *in) {
 #ifdef DE_NO_TRACE
 #undef trace
 #endif
+
+void de_set_options(de_options options) {
+    _options = options;
+}

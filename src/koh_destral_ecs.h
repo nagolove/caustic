@@ -271,3 +271,9 @@ void de_view_next(de_view* v);
 int de_typeof_num(de_ecs* r, de_cp_type cp_type);
 
 de_ecs *de_ecs_clone(de_ecs *r);
+
+typedef struct de_options {
+    bool tracing;
+} de_options;
+
+void de_set_options(de_options options);
