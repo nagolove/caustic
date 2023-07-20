@@ -128,6 +128,13 @@ typedef struct de_sparse {
     size_t      initial_cap;
 } de_sparse;
 
+static void de_sparce_print(de_sparse *s) {
+    assert(s);
+    for (int i = 0; i < s->dense_size; i++) {
+        de_trace("%u ", s->dense[i]);
+    }
+    de_trace("\n");
+}
 
 static de_sparse* de_sparse_init(de_sparse* s) {
     assert(s);
@@ -471,6 +478,15 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 
     return cp_data_ptr;
 #endif
+}
+
+static void de_storage_print(const de_storage *s) {
+    assert(s);
+    de_trace("de_storage_print: entities\n");
+    for (int i = 0; i < s->sparse.dense_size; i++) {
+        de_trace("%u, ", s->sparse.dense[i]);
+    }
+    de_trace("\n");
 }
 
 static void de_storage_remove(de_storage* s, de_entity e) {
