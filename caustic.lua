@@ -144,8 +144,6 @@ local function search_and_load_cfg_up(fname)
 
 
 
-
-
    local push_num = 0
    while true do
       local file = io.open(fname, "r")
@@ -179,17 +177,6 @@ local function search_and_load_cfg_up(fname)
    return cfg, push_num
 end
 
-
-
-
-
-
-
-
-
-
-
-
 local caustic_path = os.getenv("CAUSTIC_PATH")
 if not caustic_path then
    print("CAUSTIC_PATH is nil")
@@ -207,6 +194,20 @@ local inspect = require('inspect')
 
 
 local cache
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -444,6 +445,7 @@ local function lfs_after_init(_)
    cmd_do("ar rcs liblfs.a src/lfs.o")
 end
 
+
 local dependencies = {
    {
       url = "https://github.com/rxi/json.lua.git",
@@ -480,7 +482,7 @@ local dependencies = {
       after_init = cimgui_after_init,
       build_method = 'other',
       after_build = cimgui_after_build,
-      depends = { 'freetype' },
+      depends = { 'freetype', 'rlimgui' },
    },
    {
       name = 'sunvox',
@@ -550,7 +552,6 @@ local dependencies = {
    },
 }
 
-
 local function get_urls(deps)
    local urls = {}
    for _, dep in ipairs(deps) do
@@ -560,36 +561,39 @@ local function get_urls(deps)
    return urls
 end
 
+
 local _includedirs = {
-   "../caustic/src",
-   "../caustic/%s/stb",
-   "../caustic/%s/genann",
    "../caustic/%s/Chipmunk2D/include",
-   "../caustic/%s/raylib/src",
-   "../caustic/%s/lua/",
-   "../caustic/%s/utf8proc",
-   "../caustic/%s/small-regex/libsmallregex",
-   "../caustic/%s/rlImGui",
    "../caustic/%s/cimgui",
    "../caustic/%s/cimgui/generator/output",
+   "../caustic/%s/genann",
+   "../caustic/%s/lua/",
    "../caustic/%s/luafilesystem/src",
+   "../caustic/%s/raylib/src",
+
+   "../caustic/%s/small-regex/libsmallregex",
+   "../caustic/%s/stb",
+   "../caustic/%s/utf8proc",
    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
+   "../caustic/src",
 }
 
 local _includedirs_internal = {
-   "src",
-   "%s/stb",
-   "%s/genann",
    "%s/Chipmunk2D/include",
-   "%s/raylib/src",
-   "%s/lua/",
-   "%s/utf8proc",
-   "%s/small-regex/libsmallregex",
-   "%s/rlImGui",
+
    "%s/cimgui",
    "%s/cimgui/generator/output",
+
+   "%s/genann",
+   "%s/lua/",
    "%s/luafilesystem/src",
+   "%s/raylib/src",
+
+   "%s/small-regex/libsmallregex",
+   "%s/stb",
+   "%s/utf8proc",
    "3rd_party/sunvox/sunvox_lib/headers",
+   "src",
 }
 
 local function template_dirs(dirs, pattern)
@@ -599,7 +603,6 @@ local function template_dirs(dirs, pattern)
    end
    return tmp
 end
-
 
 
 local includedirs = template_dirs(_includedirs, third_party)
@@ -775,7 +778,6 @@ if not check_luarocks() then
 end
 
 local lanes = require("lanes").configure()
-
 local argparse = require("argparse")
 local tabular = require("tabular").show
 local sleep = require("socket").sleep
@@ -897,8 +899,6 @@ local function _dependecy_init(dep)
    end
    after_init(dep)
 end
-
-
 
 local function dependency_init(dep, destdir)
 
@@ -1093,7 +1093,9 @@ local function _init(path, deps)
       else
 
 
-         table.insert(threads, (func)(dep, path))
+         local lane_thread = (func)(dep, path)
+
+         table.insert(threads, lane_thread)
       end
    end
 
@@ -1156,7 +1158,10 @@ end
 function actions.run(_args)
    local cfg, _ = search_and_load_cfg_up("bld.lua")
    print('actions.run', inspect(_args))
-   cmd_do(format("gdb --args %s ", cfg.artifact) .. table.concat(_args.flags, " "))
+   local flags = table.concat(_args.flags, " ")
+
+
+   cmd_do(format("gdb --args %s --no-fork ", cfg.artifact) .. flags)
 end
 
 
@@ -1836,6 +1841,17 @@ local function make_l(list)
    return ret
 end
 
+
+
+
+
+
+
+
+
+
+
+
 local function link_wasm_project(main_fname, _args)
 
    print('link_project:', lfs.currentdir())
@@ -1928,6 +1944,7 @@ end
 function actions.wbuild(_args)
    local exist = lfs.attributes("caustic.lua")
    if exist then
+
       build_chipmunk()
       build_lua()
       build_raylib()
@@ -2039,6 +2056,7 @@ function Cache.new(storage)
    end
    return setmetatable(self, Cache_mt)
 end
+
 
 function Cache:should_recompile(fname, cmd)
    local modtime_cur = lfs.attributes(fname, 'modification')
@@ -2201,6 +2219,7 @@ end
 
 
 local json = require("json")
+
 
 
 
@@ -2458,6 +2477,8 @@ function actions.make(_args)
 
 
    local flags = {}
+
+
    if not _args.release then
       table.insert(flags, "-ggdb3")
    else
@@ -2693,8 +2714,3 @@ end
 if arg then
    main()
 end
-
-
-
-
-return ret_table
