@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <unistd.h>
 
 struct Bucket {
     char   *key;
@@ -165,12 +166,15 @@ void _set_remove(koh_Set *set, int remove_index) {
     --set->taken;
 }
 
-void set_remove(koh_Set *set, const void *key, int key_len) {
+bool set_remove(koh_Set *set, const void *key, int key_len) {
     assert(set);
 
     int index = _set_get(set, key, key_len);
-    if (index != -1)
+    if (index != -1) {
         _set_remove(set, index);
+        return true;
+    }
+    return false;
 }
 
 void set_each(koh_Set *set, koh_SetEachCallback cb, void *udata) {
@@ -183,10 +187,18 @@ void set_each(koh_Set *set, koh_SetEachCallback cb, void *udata) {
                 set->arr[i].key, set->arr[i].key_len, udata
             );
             switch (action) {
-                case koh_SA_remove:
+                case koh_SA_remove_next:
+                    //_set_remove(set, i);
                     free(set->arr[i].key);
                     set->arr[i].taken = false;
                     set->taken--;
+                    break;
+                case koh_SA_remove_break:
+                    //_set_remove(set, i);
+                    free(set->arr[i].key);
+                    set->arr[i].taken = false;
+                    set->taken--;
+                    goto _exit;
                     break;
                 case koh_SA_break:
                     goto _exit;
@@ -197,6 +209,7 @@ void set_each(koh_Set *set, koh_SetEachCallback cb, void *udata) {
         }
     }
 _exit:
+    return;
 }
 
 struct CompareCtx {
@@ -222,4 +235,9 @@ bool set_compare(const koh_Set *s1, const koh_Set *s2) {
     };
     set_each((koh_Set*)s1, iter_compare, &ctx);
     return ctx.eq;
+}
+
+int set_size(koh_Set *set) {
+    assert(set);
+    return set->taken;
 }
