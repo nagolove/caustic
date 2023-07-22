@@ -128,6 +128,7 @@ typedef struct de_sparse {
     size_t      initial_cap;
 } de_sparse;
 
+__attribute__((unused))
 static void de_sparce_print(de_sparse *s) {
     assert(s);
     for (int i = 0; i < s->dense_size; i++) {
@@ -480,6 +481,7 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 #endif
 }
 
+__attribute__((unused))
 static void de_storage_print(const de_storage *s) {
     assert(s);
     de_trace("de_storage_print: entities\n");
@@ -843,7 +845,7 @@ void* de_try_get(de_ecs* r, de_entity e, de_cp_type cp_type) {
 }
 
 
-void de_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata) {
+void de_each(de_ecs* r, de_function fun, void* udata) {
     assert(r);
     de_trace("de_each: ecs %p, fun %p\n", r, fun);
     if (!fun) {
@@ -852,13 +854,15 @@ void de_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata) {
 
     if (r->available_id.id == de_null) {
         for (size_t i = r->entities_size; i; --i) {
-            fun(r, r->entities[i - 1], udata);
+            if (fun(r, r->entities[i - 1], udata)) 
+                return;
         }
     } else {
         for (size_t i = r->entities_size; i; --i) {
             const de_entity e = r->entities[i - 1];
             if (de_entity_identifier(e).id == (i - 1)) {
-                fun(r, e, udata);
+                if (fun(r, e, udata))
+                    return;
             }
         }
     }
@@ -884,12 +888,13 @@ typedef struct de_orphans_fun_data {
     void (*orphans_fun)(de_ecs*, de_entity, void*);
 } de_orphans_fun_data;
 
-static void _de_orphans_each_executor(de_ecs* r, de_entity e, void* udata) {
+static bool _de_orphans_each_executor(de_ecs* r, de_entity e, void* udata) {
     de_trace("_de_orphans_each_executor: ecs %p, e %u\n", r, e);
     de_orphans_fun_data* orphans_data = udata;
     if (de_orphan(r, e)) {
         orphans_data->orphans_fun(r, e, orphans_data->orphans_udata);
     }
+    return false;
 }
 
 void de_orphans_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata) {

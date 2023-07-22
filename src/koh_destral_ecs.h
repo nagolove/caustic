@@ -181,6 +181,9 @@ void* de_get(de_ecs* r, de_entity e, de_cp_type cp_type);
 */
 void* de_try_get(de_ecs* r, de_entity e, de_cp_type cp_type);
 
+// Если возвращает истину, то цикл прерывается
+typedef bool (*de_function)(de_ecs*, de_entity, void*);
+
 /*
     Iterates all the entities that are still in use and calls
     the function pointer for each one.
@@ -189,7 +192,7 @@ void* de_try_get(de_ecs* r, de_entity e, de_cp_type cp_type);
     However it's useful for iterating all the entities still in use,
     regarding their components.
 */
-void de_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* udata);
+void de_each(de_ecs* r, de_function fun, void* udata);
 
 /*
     Returns true if an entity has no components assigned, false otherwise.
