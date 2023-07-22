@@ -988,6 +988,8 @@ void koh_screenshot_incremental() {
 void koh_trap() {
 #ifdef PLATFORM_DESKTOP
     raise(SIGTRAP);
+#else
+    abort();
 #endif
 }
 
@@ -1000,3 +1002,52 @@ void koh_term_color_reset() {
     printf("\033[0m");
 }
 
+void parse_bracketed_string(
+    const char *str, int **first, int **second, int *len
+) {
+    assert(str);
+    assert(first);
+    assert(second);
+    assert(len);
+
+    *len = 0;
+    int cap = 10;
+
+    *first = calloc(cap, sizeof(int));
+    assert(*first);
+    *second = calloc(cap, sizeof(int));
+    assert(*second);
+
+    int *_first = *first;
+    int *_second = *second;
+
+    const char *p = str;
+    while (*p) {
+        if (*p == '[') {
+            p++;
+            const char *substr = p;
+            while (*substr++ != ']');
+            char substr_buf[128] = {};
+            int substr_len = substr - p;
+            printf("len %d\n", substr_len);
+            assert(sizeof(substr_buf) > substr_len);
+            memmove(substr_buf, p, substr_len);
+            printf("substr_buf: %s\n", substr_buf);
+            int first_num, second_num;
+            sscanf(substr_buf, "%d %d", &first_num, &second_num);
+
+            if (*len == cap) {
+                cap *= 2;
+                *first = realloc(*first, sizeof(int) * cap);
+                *second = realloc(*second, sizeof(int) * cap);
+            }
+            printf("first_num %d, second_num %d\n", first_num, second_num);
+            *_first = first_num;
+            _first++;
+            *_second = second_num;
+            _second++;
+            p += substr_len;
+        }
+        p++;
+    }
+}

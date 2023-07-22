@@ -149,3 +149,12 @@ void koh_trap();
 void koh_term_color_set(int color);
 void koh_term_color_reset();
 
+/*
+   Разбирает строчку вида " [5 6]    [ 1  2][0  3 ] [ 7 8 ]"
+   Не больше 128 пробелов между цифрами.
+   Возвращает количество найденных пар и два указателя на массивы с первыми 
+   числами и вторыми числами.
+*/
+void parse_bracketed_string(
+    const char *str, int **first, int **second, int *len
+);
