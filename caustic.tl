@@ -142,8 +142,6 @@ end
 local function search_and_load_cfg_up(fname: string): Cfg, integer
     print("search_and_load_cfg_up:", fname, lfs.currentdir())
 
-    -- TODO: если файл не найден, то подняться на уровень выше и снова
-    -- попробовать загрузить конфиг
     -- C какой позиции в дереве каталогов начинать сборку?
 
     local push_num = 0
@@ -179,17 +177,6 @@ local function search_and_load_cfg_up(fname: string): Cfg, integer
     return cfg, push_num
 end
 
---[[
-local function check_file(fname: string): boolean
-    local file = io.open(fname, "r")
-    local res = file ~= nil
-    if file then
-        file:close()
-    end
-    return res
-end
---]]
-
 local caustic_path = os.getenv("CAUSTIC_PATH")
 if not caustic_path then
     print("CAUSTIC_PATH is nil")
@@ -209,28 +196,42 @@ local inspect = require 'inspect'
 local cache: Cache
 
 local enum BuildMethod
-    "cmake"
-    "make"
-    "other"
+    "cmake"             -- вызывается cmake . && make
+    "make"              -- вызвается make
+    "other"             -- явно указывается команда сборки
 end
 
--- TODO: Фиксировать версии библиотек? Или сделать команду для проверки
--- новых обновлений.
--- Имена и зависимости(поля name и depends) обрабатываются в команде init
+-- TODO: Фиксировать версии библиотек? 
+-- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
+-- значением хэша коммита
 local record Dependency
     disabled: boolean   -- временно исключает запись из обработки
+
+    -- Имена и зависимости(поля name и depends) обрабатываются в команде init
+    depends: {string}
     name: string
+
     url: string
     dir: string
     fname: string
     copy_for_wasm: boolean
     after_init: function(dep: Dependency)
     commit: string
+
+    includes: {string}  -- Список каталогов для включаемых файлов. Добавить
+                        -- поддержку шаблонов
+    libs: {string}
+    libdirs: {string}
+
+    -- TODO: Функция инициализация таблички замисимости. Нужна для установки
+    -- каких-то полей, к примеру includes устанавливаются исходя из списка
+    -- каталогов репозитория
+    init: function(dep: Dependency): Dependency
+
     -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
     -- build_cmake, etc
     custom_build: function(dep: Dependency, dirname: string)
     after_build: function(dep: Dependency)
-    depends: {string}
     build_method: BuildMethod
 end
 
@@ -444,6 +445,7 @@ local function lfs_after_init(_: Dependency)
     cmd_do("ar rcs liblfs.a src/lfs.o")
 end
 
+-- TODO: Тестировать получение и сборку каждой зависимости
 local dependencies: {Dependency} = {
     {
         url = "https://github.com/rxi/json.lua.git",
@@ -480,7 +482,7 @@ local dependencies: {Dependency} = {
         after_init = cimgui_after_init,
         build_method = 'other',
         after_build = cimgui_after_build,
-        depends = {'freetype'},
+        depends = {'freetype', 'rlimgui'},
     },
     {
         name = 'sunvox',
@@ -550,7 +552,6 @@ local dependencies: {Dependency} = {
     }
 }
 
-
 local function get_urls(deps: {Dependency}): {string}
     local urls = {}
     for _, dep in ipairs(deps) do
@@ -560,36 +561,39 @@ local function get_urls(deps: {Dependency}): {string}
     return urls
 end
 
+-- TODO: добавить каждую запись как элемент таблицы dependencies?
 local _includedirs  = { 
-    "../caustic/src",
-    "../caustic/%s/stb",
-    "../caustic/%s/genann",
     "../caustic/%s/Chipmunk2D/include",
-    "../caustic/%s/raylib/src",
-    "../caustic/%s/lua/",
-    "../caustic/%s/utf8proc",
-    "../caustic/%s/small-regex/libsmallregex",
-    "../caustic/%s/rlImGui",
     "../caustic/%s/cimgui",
     "../caustic/%s/cimgui/generator/output",
+    "../caustic/%s/genann",
+    "../caustic/%s/lua/",
     "../caustic/%s/luafilesystem/src",
+    "../caustic/%s/raylib/src",
+    --"../caustic/%s/rlImGui",
+    "../caustic/%s/small-regex/libsmallregex",
+    "../caustic/%s/stb",
+    "../caustic/%s/utf8proc",
     "../caustic/3rd_party/sunvox/sunvox_lib/headers",
+    "../caustic/src",
 }
 
 local _includedirs_internal  = { 
-    "src",
-    "%s/stb",
-    "%s/genann",
     "%s/Chipmunk2D/include",
-    "%s/raylib/src",
-    "%s/lua/",
-    "%s/utf8proc",
-    "%s/small-regex/libsmallregex",
-    "%s/rlImGui",
+
     "%s/cimgui",
     "%s/cimgui/generator/output",
+
+    "%s/genann",
+    "%s/lua/",
     "%s/luafilesystem/src",
+    "%s/raylib/src",
+    --"%s/rlImGui",
+    "%s/small-regex/libsmallregex",
+    "%s/stb",
+    "%s/utf8proc",
     "3rd_party/sunvox/sunvox_lib/headers",
+    "src",
 }
 
 local function template_dirs(dirs: {string}, pattern: string): {string}
@@ -601,7 +605,6 @@ local function template_dirs(dirs: {string}, pattern: string): {string}
 end
 
 -- XXX: Брать значения из таблички зависомостей?
---
 local includedirs = template_dirs(_includedirs, third_party)
 local includedirs_internal = template_dirs(_includedirs_internal, third_party)
 
@@ -775,7 +778,6 @@ if not check_luarocks() then
 end
 
 local lanes = require "lanes".configure()
---local lfs = require "lfs"
 local argparse = require "argparse"
 local tabular = require "tabular".show
 local sleep = require "socket".sleep
@@ -897,8 +899,6 @@ local function _dependecy_init(dep: Dependency)
     end
     after_init(dep)
 end
-
-local type Dependency_init = function(Dependency, string): any
 
 local function dependency_init(dep: Dependency, destdir: string): any
     -- Копирую в wasm каталог только если установлени специальный флажок
@@ -1092,15 +1092,17 @@ local function _init(path: string, deps: {Dependency})
             end
         else
             --sorter:add(dep.name, "null")
-            -- XXX: wtf? что за приведения типов?
-            table.insert(threads, (func as Dependency_init)(dep, path) as lanes.Thread)
+            local type Dependency_init = function(Dependency, string): any
+            local lane_thread = (func as Dependency_init)(dep, path) 
+                as lanes.Thread
+            table.insert(threads, lane_thread)
         end
     end
 
     local sorted = sorter:sort()
 
     -- XXX: На всякий случай удаляются имена null
-    -- Но они могут и отсутствовать всегда :))
+    -- Но они могут и никогда не присутствовать :))
     sorted = filter(sorted, function(node: Node): boolean
         return node.value ~= "null"
     end)
@@ -1156,7 +1158,10 @@ end
 function actions.run(_args: Args)
     local cfg, _: Cfg, integer = search_and_load_cfg_up("bld.lua")
     print('actions.run', inspect(_args))
-    cmd_do(format("gdb --args %s ", cfg.artifact) .. table.concat(_args.flags, " "))
+    local flags = table.concat(_args.flags, " ")
+    -- XXX: Передача --no-fork действительная только для программ собранных
+    -- с использованием библиотеки munit
+    cmd_do(format("gdb --args %s --no-fork ", cfg.artifact) .. flags)
 end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
@@ -1939,6 +1944,7 @@ end
 function actions.wbuild(_args: Args)
     local exist = lfs.attributes("caustic.lua")
     if exist then
+        -- TODO: эти функции должны задаваться через таблицу зависимостей.
         build_chipmunk()
         build_lua()
         build_raylib()
@@ -2051,6 +2057,7 @@ function Cache.new(storage: string): Cache
     return setmetatable(self, Cache_mt)
 end
 
+-- XXX: Сравнение времени и содержимого работает не всегда коррекно
 function Cache:should_recompile(fname: string, cmd: string): boolean
     local modtime_cur: number = lfs.attributes(fname, 'modification')
     if not modtime_cur then
@@ -2244,6 +2251,7 @@ local record Aseprite
     meta: Meta
 end
 
+-- json->lua конвертация из aseprite
 function actions.anim_convert(_args: Args)
     print('anim_convert', inspect(_args))
     if not _args.name then
@@ -2468,7 +2476,10 @@ function actions.make(_args: Args)
     --print(tabular(includedirs))
 
     -- TODO: Отладочная и релизная сборка через команду
-    local flags: {string} = {}
+    local flags: {string} = { 
+        -- Ошибки сборки с флагом последней версии языка C
+        --"-std=c2x" 
+    }
     if not _args.release then
         table.insert(flags, "-ggdb3")
     else
@@ -2704,8 +2715,3 @@ end
 if arg then
     main()
 end
-
--- TODO: 
--- Возвращать caustic_* - для сборки движка
--- Возвращать project_* - для сборки проекта на движке
-return ret_table
