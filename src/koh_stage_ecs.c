@@ -291,8 +291,9 @@ void stage_ecs_draw(Stage_ECS *st) {
     DrawText(buf, 0, 0, 45, WHITE);
 }
 
-static void entity_iter(de_ecs *ecs, de_entity e, void * data) {
+static bool entity_iter(de_ecs *ecs, de_entity e, void * data) {
     //entity_print_stuff(ecs, e);
+    return false;
 }
 
 void stage_ecs_update(Stage_ECS *st) {
