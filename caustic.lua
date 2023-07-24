@@ -1,6 +1,12 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
+local caustic_path = os.getenv("CAUSTIC_PATH")
+if not caustic_path then
+   print("CAUSTIC_PATH is nil")
+   os.exit(1)
+end
+
 local lfs = require('lfs')
 local ansicolors = require('ansicolors')
 local home = os.getenv("HOME")
@@ -18,6 +24,7 @@ local site_repo_index = site_repo .. "/index.html"
 
 local dir_stack = {}
 local verbose = false
+
 
 
 
@@ -75,6 +82,20 @@ local format = string.format
 
 
 local serpent = require('serpent')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local Cache = {Data = {}, }
 
@@ -139,8 +160,8 @@ end
 
 
 
-local function search_and_load_cfg_up(fname)
-   print("search_and_load_cfg_up:", fname, lfs.currentdir())
+local function search_and_load_cfgs_up(fname)
+   print("search_and_load_cfgs_up:", fname, lfs.currentdir())
 
 
 
@@ -162,25 +183,55 @@ local function search_and_load_cfg_up(fname)
       end
    end
 
-   print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
+   print("search_and_load_cfgs_up: cfg found at", lfs.currentdir(), push_num)
 
-   local cfg
+   local cfgs
    local ok, errmsg = pcall(function()
-      cfg = loadfile(fname)()
+      cfgs = loadfile(fname)()
    end)
+
+
+
+   if not ok then
+      print("search_and_load_cfgs_up: loadfile() failed with", errmsg)
+   end
+
+
+
+   local has_stuff = 0
+
+
+
+
+   if lfs.currentdir() ~= caustic_path then
+      for _, cfg in ipairs(cfgs) do
+         if cfg.artifact then
+            assert(type(cfg.artifact) == 'string')
+            has_stuff = has_stuff + 1
+         end
+         if cfg.main then
+            assert(type(cfg.main) == 'string')
+            has_stuff = has_stuff + 1
+         end
+         if cfg.src then
+            assert(type(cfg.src) == 'string')
+            has_stuff = has_stuff + 1
+         end
+      end
+      if has_stuff < 2 then
+         print("search_and_load_cfgs_up: has_stuff < 2", has_stuff)
+         print(debug.traceback())
+         print("exit(1)")
+         os.exit(1)
+      end
+   end
 
    if not ok then
       print("could not load config", errmsg)
       os.exit()
    end
 
-   return cfg, push_num
-end
-
-local caustic_path = os.getenv("CAUSTIC_PATH")
-if not caustic_path then
-   print("CAUSTIC_PATH is nil")
-   os.exit(1)
+   return cfgs, push_num
 end
 
 
@@ -549,6 +600,9 @@ local dependencies = {
       url = "https://github.com/nothings/stb.git",
       copy_for_wasm = true,
 
+      includes = {
+         "",
+      },
    },
 }
 
@@ -1156,12 +1210,13 @@ end
 
 
 function actions.run(_args)
-   local cfg, _ = search_and_load_cfg_up("bld.lua")
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    print('actions.run', inspect(_args))
    local flags = table.concat(_args.flags, " ")
 
 
-   cmd_do(format("gdb --args %s --no-fork ", cfg.artifact) .. flags)
+
+   cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
 end
 
 
@@ -1189,13 +1244,11 @@ function actions.init(_args)
 
 end
 
-function actions.test(_args)
-   local cfg, _ = search_and_load_cfg_up("bld.lua")
-
+local function sub_test(_args, cfg)
    local src_dir = cfg.src or "src"
    push_current_dir()
    if not lfs.chdir(src_dir) then
-      print(format("actions.make: could not chdir to '%s'", src_dir))
+      print(format("sub_test: could not chdir to '%s'", src_dir))
       os.exit(1)
    end
 
@@ -1251,6 +1304,16 @@ function actions.test(_args)
 
 
    pop_dir()
+end
+
+
+
+function actions.test(_args)
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
+
+   for _, cfg in ipairs(cfgs) do
+      sub_test(_args, cfg)
+   end
 end
 
 local function update_links_table(_links, artifact)
@@ -1366,9 +1429,7 @@ local function check_files_in_dir(dirname, filelist)
    return elements_num == 0
 end
 
-function actions.publish(_args)
-   print('publish')
-
+local function sub_publish(_args, cfg)
 
 
 
@@ -1398,7 +1459,6 @@ function actions.publish(_args)
 
 
 
-   local cfg = search_and_load_cfg_up("bld.lua")
    if cfg.artifact then
       update_links(cfg.artifact)
    else
@@ -1428,6 +1488,20 @@ function actions.publish(_args)
    cmd_do('git push origin master')
 
    pop_dir()
+end
+
+
+
+
+
+function actions.publish(_args)
+   print('publish')
+
+   local cfgs = search_and_load_cfgs_up("bld.lua")
+
+   for _, cfg in ipairs(cfgs) do
+      sub_publish(_args, cfg)
+   end
 end
 
 local function rec_remove_dir(dirname)
@@ -2421,28 +2495,17 @@ local function codegen(cg)
    end
 end
 
-
-
-
-
-function actions.make(_args)
-   if verbose then
-      print('make:')
-      print(tabular(_args))
-   end
-
-   local cfg, push_num = search_and_load_cfg_up("bld.lua")
-
+local function sub_make(_args, cfg, push_num)
    if _args.c then
       cache_remove()
    end
 
    print(push_current_dir())
-   print('actions.make: pwd', lfs.currentdir())
+   print('sub_make: pwd', lfs.currentdir())
 
    local src_dir = cfg.src or "src"
    if not lfs.chdir(src_dir) then
-      print(format("actions.make: could not chdir to '%s'", src_dir))
+      print(format("sub_make: could not chdir to '%s'", src_dir))
       os.exit(1)
    end
 
@@ -2477,6 +2540,7 @@ function actions.make(_args)
 
 
    local flags = {}
+
 
 
    if not _args.release then
@@ -2596,13 +2660,13 @@ function actions.make(_args)
       print('caustic_path', caustic_path)
       lfs.chdir(caustic_path)
 
-      actions.make({
+      sub_make({
          make = true,
          c = _args.c,
          j = _args.j,
          noasan = _args.noasan,
          release = _args.release,
-      })
+      }, search_and_load_cfgs_up('bld.lua')[1])
       pop_dir()
 
       print("before project link", lfs.currentdir())
@@ -2623,6 +2687,23 @@ function actions.make(_args)
    end
 
    pop_dir(push_num)
+end
+
+
+
+function actions.make(_args)
+   if verbose then
+      print('make:')
+      print(tabular(_args))
+   end
+
+   print("make: pwd 0", lfs.currentdir())
+   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
+   for _, cfg in ipairs(cfgs) do
+      print("make: pwd 1", lfs.currentdir())
+      sub_make(_args, cfg, push_num)
+      print("make: pwd 2", lfs.currentdir())
+   end
 end
 
 local function handler_int(_)
