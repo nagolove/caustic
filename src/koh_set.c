@@ -83,12 +83,14 @@ void set_extend(koh_Set *set) {
     free(old_arr);
 }
 
-void set_add(koh_Set *set, const void *key, int key_len) {
+koh_SetResult set_add(koh_Set *set, const void *key, int key_len) {
     assert(set);
-    if (!key) return;
+
+    if (!key || !key_len) 
+        return koh_SR_badargs;
 
     if (set_exist(set, key, key_len))
-        return;
+        return koh_SR_exists;
 
     if (set->taken >= set->cap * 0.7)
         set_extend(set);
@@ -108,6 +110,8 @@ void set_add(koh_Set *set, const void *key, int key_len) {
     set->arr[index].hash = hash;
     set->arr[index].key_len = key_len;
     set->taken++;
+
+    return koh_SR_added;
 }
 
 void set_clear(koh_Set *set) {
