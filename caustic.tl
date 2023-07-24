@@ -1,6 +1,12 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
+local caustic_path = os.getenv("CAUSTIC_PATH")
+if not caustic_path then
+    print("CAUSTIC_PATH is nil")
+    os.exit(1)
+end
+
 local lfs = require 'lfs'
 local ansicolors = require 'ansicolors'
 local home = os.getenv("HOME")
@@ -19,6 +25,7 @@ local site_repo_index = site_repo .. "/index.html"
 local dir_stack: {string} = {}
 local verbose = false
 
+-- TODO: Добавить возможность нескольких артефактов в проекте
 local record Cfg
     src: string
     artifact: string
@@ -75,6 +82,20 @@ project dir -> bld.lua
 --]]
 
 local serpent = require 'serpent'
+
+--[[
+local function cat_file(fname: string)
+    local ok, errmsg: boolean, string = pcall(function()
+        local file = io.open(fname, "r")
+        for line in file:lines() do
+            print(line)
+        end
+    end)
+    if not ok then
+        print("cat_file: failed with", errmsg)
+    end
+end
+--]]
 
 local record Cache
     record Data
@@ -138,9 +159,9 @@ local function filter_sources_cpp(
 end
 
 
--- Возвращает структуру конфига и число - агрумент для pop_dir()
-local function search_and_load_cfg_up(fname: string): Cfg, integer
-    print("search_and_load_cfg_up:", fname, lfs.currentdir())
+-- Возвращает структуры конфига и число - агрумент для pop_dir()
+local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
+    print("search_and_load_cfgs_up:", fname, lfs.currentdir())
 
     -- C какой позиции в дереве каталогов начинать сборку?
 
@@ -162,25 +183,55 @@ local function search_and_load_cfg_up(fname: string): Cfg, integer
         end
     end
 
-    print("search_and_load_cfg_up: cfg found at", lfs.currentdir(), push_num)
+    print("search_and_load_cfgs_up: cfg found at", lfs.currentdir(), push_num)
 
-    local cfg: Cfg
+    local cfgs: {Cfg}
     local ok, errmsg: boolean, string = pcall(function()
-        cfg = loadfile(fname)() as Cfg
+        cfgs = loadfile(fname)() as {Cfg}
     end)
+
+    --cat_file(fname)
+
+    if not ok then
+        print("search_and_load_cfgs_up: loadfile() failed with", errmsg)
+    end
+
+    -- Импровизированная проверка типов для _более-менее_ соблюдения 
+    -- корректности
+    local has_stuff = 0
+
+    --local inspect = require 'inspect'
+    --print("cfgs", inspect(cfgs))
+
+    if lfs.currentdir() ~= caustic_path then
+        for _, cfg in ipairs(cfgs) do
+            if cfg.artifact then
+                assert(type(cfg.artifact) == 'string')
+                has_stuff = has_stuff + 1
+            end
+            if cfg.main then
+                assert(type(cfg.main) == 'string')
+                has_stuff = has_stuff + 1
+            end
+            if cfg.src then
+                assert(type(cfg.src) == 'string')
+                has_stuff = has_stuff + 1
+            end
+        end
+        if has_stuff < 2 then
+            print("search_and_load_cfgs_up: has_stuff < 2", has_stuff)
+            print(debug.traceback())
+            print("exit(1)")
+            os.exit(1)
+        end
+    end
 
     if not ok then
         print("could not load config", errmsg)
         os.exit()
     end
 
-    return cfg, push_num
-end
-
-local caustic_path = os.getenv("CAUSTIC_PATH")
-if not caustic_path then
-    print("CAUSTIC_PATH is nil")
-    os.exit(1)
+    return cfgs, push_num
 end
 
 -- TODO: Унификация работы этих переменных
@@ -549,6 +600,9 @@ local dependencies: {Dependency} = {
         url = "https://github.com/nothings/stb.git",
         copy_for_wasm = true,
         --build_method = 'other',
+        includes = {
+            "",
+        }
     }
 }
 
@@ -1156,12 +1210,13 @@ end
 --]]
 
 function actions.run(_args: Args)
-    local cfg, _: Cfg, integer = search_and_load_cfg_up("bld.lua")
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     print('actions.run', inspect(_args))
     local flags = table.concat(_args.flags, " ")
     -- XXX: Передача --no-fork действительная только для программ собранных
     -- с использованием библиотеки munit
-    cmd_do(format("gdb --args %s --no-fork ", cfg.artifact) .. flags)
+    -- XXX: Как выбрать подпроект который запускать(не всегда первый)?
+    cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
 end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
@@ -1189,13 +1244,11 @@ function actions.init(_args: Args)
     --_init(win_third_party, deps)
 end
 
-function actions.test(_args: Args)
-    local cfg, _: Cfg, integer = search_and_load_cfg_up("bld.lua")
-
+local function sub_test(_args: Args, cfg: Cfg)
     local src_dir = cfg.src or "src"
     push_current_dir()
     if not lfs.chdir(src_dir) then
-        print(format("actions.make: could not chdir to '%s'", src_dir))
+        print(format("sub_test: could not chdir to '%s'", src_dir))
         os.exit(1)
     end
 
@@ -1251,6 +1304,16 @@ function actions.test(_args: Args)
 
     --pop_dir(push_num)
     pop_dir()
+end
+
+
+-- TODO: Обработка массива cfg
+function actions.test(_args: Args)
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+
+    for _, cfg in ipairs(cfgs) do
+        sub_test(_args, cfg)
+    end
 end
 
 local function update_links_table(_links: {string}, artifact: string)
@@ -1366,9 +1429,7 @@ local function check_files_in_dir(dirname: string, filelist: {string}): boolean
     return elements_num == 0
 end
 
-function actions.publish(_args: Args)
-    print('publish')
-
+local function sub_publish(_args: Args, cfg: Cfg)
     -- TODO: 
     -- * проверка наличия wasm сборки
     --      как сделать проверку унифицированно?
@@ -1398,7 +1459,6 @@ function actions.publish(_args: Args)
 
     --print( "os.exit(1)" )
     --os.exit(1)
-    local cfg: Cfg = search_and_load_cfg_up("bld.lua")
     if cfg.artifact then
         update_links(cfg.artifact)
     else
@@ -1428,6 +1488,20 @@ function actions.publish(_args: Args)
     cmd_do('git push origin master')
 
     pop_dir()
+end
+
+
+--[[
+TODO: Как быть с несколькими целями в bld.lua ?
+--]]
+function actions.publish(_args: Args)
+    print('publish')
+
+    local cfgs: {Cfg} = search_and_load_cfgs_up("bld.lua")
+
+    for _, cfg in ipairs(cfgs) do
+        sub_publish(_args, cfg)
+    end
 end
 
 local function rec_remove_dir(dirname: string)
@@ -2421,28 +2495,17 @@ local function codegen(cg: Cfg.Codegen)
     end
 end
 
--- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
---[[
-TODO:
---]]
-function actions.make(_args: Args)
-    if verbose then
-        print('make:')
-        print(tabular(_args))
-    end
-
-    local cfg, push_num: Cfg, integer = search_and_load_cfg_up("bld.lua")
-
+local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if _args.c then
         cache_remove()
     end
 
     print(push_current_dir())
-    print('actions.make: pwd', lfs.currentdir())
+    print('sub_make: pwd', lfs.currentdir())
 
     local src_dir = cfg.src or "src"
     if not lfs.chdir(src_dir) then
-        print(format("actions.make: could not chdir to '%s'", src_dir))
+        print(format("sub_make: could not chdir to '%s'", src_dir))
         os.exit(1)
     end
 
@@ -2597,13 +2660,13 @@ function actions.make(_args: Args)
         print('caustic_path', caustic_path)
         lfs.chdir(caustic_path)
         --lfs.chdir(os.getenv("HOME") .. "/caustic")
-        actions.make({
+        sub_make({
             make = true,
             c = _args.c,
             j = _args.j,
             noasan = _args.noasan,
             release = _args.release
-        })
+        }, search_and_load_cfgs_up('bld.lua')[1])
         pop_dir()
 
         print("before project link", lfs.currentdir())
@@ -2624,6 +2687,23 @@ function actions.make(_args: Args)
     end
 
     pop_dir(push_num)
+end
+
+
+-- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
+function actions.make(_args: Args)
+    if verbose then
+        print('make:')
+        print(tabular(_args))
+    end
+
+    print("make: pwd 0", lfs.currentdir())
+    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    for _, cfg in ipairs(cfgs) do
+        print("make: pwd 1", lfs.currentdir())
+        sub_make(_args, cfg, push_num)
+        print("make: pwd 2", lfs.currentdir())
+    end
 end
 
 local function handler_int(_: integer)
