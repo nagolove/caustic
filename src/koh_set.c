@@ -1,12 +1,13 @@
 #include "koh_set.h"
 
 #include "koh_hashers.h"
-#include <string.h>
 #include <assert.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+/*#include <unistd.h>*/
 
 struct Bucket {
     char   *key;
@@ -16,6 +17,11 @@ struct Bucket {
 };
 
 typedef struct koh_Set {
+
+    // void *keys; // гомогенный массив значений ключей
+    // Что тогда делать с удалением и добавлением ключей, как распределять
+    // память?
+
     struct Bucket *arr;
     int cap, taken;
 } koh_Set;
@@ -245,3 +251,82 @@ int set_size(koh_Set *set) {
     assert(set);
     return set->taken;
 }
+
+/*
+    индекс      taken
+    ------------------
+    0           false           
+    1           false
+    2           true        <-  set_each_begin()
+    3           false
+    4           true        <- set_each_next()
+ */
+
+bool koh_set_view_verbose = false;
+
+struct koh_SetView set_each_begin(koh_Set *set) {
+    assert(set);
+    printf("set_each_begin: cap %d\n", set->cap);
+    struct koh_SetView view = {
+        .set = set,
+        .i = -1,
+    };
+    set_each_next(&view);
+    if (koh_set_view_verbose)
+        printf("set_each_begin: view.i %d\n", view.i);
+    return view;
+}
+
+void set_each_next(struct koh_SetView *v) {
+    assert(v);
+
+    int start_i = v->i;
+
+    int i;
+    for (i = v->i + 1; i < v->set->cap; i++) {
+        if (v->set->arr[i].taken)
+            break;
+    }
+    v->i = i;
+    if (v->i + 0 >= v->set->cap)
+        v->finished = true;
+
+    if (koh_set_view_verbose)
+        printf("set_each_next: start v-> %d, end v->i %d\n", start_i, v->i);
+
+}
+
+bool set_each_valid(struct koh_SetView *v) {
+    assert(v);
+    if (v->i >= v->set->cap)
+        v->finished = true;
+    if (koh_set_view_verbose)
+        printf(
+            "set_each_valid: v->i %d, v->finished %s\n",
+            v->i, v->finished ? "true" : "false");
+    
+    return !v->finished;
+}
+
+const void *set_each_key(struct koh_SetView *v) {
+    assert(v);
+    if (koh_set_view_verbose)
+        printf(
+            "set_each_key: i %d, key %p, taken %s\n",
+            v->i,
+            v->set->arr[v->i].key, 
+            v->set->arr[v->i].taken ? "true" : "false"
+        );
+
+    return v->set->arr[v->i].key;
+}
+
+int set_each_key_len(struct koh_SetView *v) {
+    assert(v);
+    if (koh_set_view_verbose)
+        printf("set_each_key_len: v->i %d\n", v->i);
+
+    return v->set->arr[v->i].key_len;
+}
+
+#undef koh_set_view_verbose

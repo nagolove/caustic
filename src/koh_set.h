@@ -2,6 +2,11 @@
 
 #include <stdbool.h>
 
+/*
+TODO: Попробовать сделать гомогенное множество, с хранением элементов 
+множества в одном кусочке памяти.
+ */
+
 typedef enum koh_SetAction {
     koh_SA_next,
     koh_SA_break,
@@ -10,6 +15,7 @@ typedef enum koh_SetAction {
 } koh_SetAction;
 
 typedef struct koh_Set koh_Set;
+
 // Если возвращает ложь, то элемент удаляется из множества
 typedef koh_SetAction (*koh_SetEachCallback)(
     const void *key, int key_len, void *udata
@@ -30,3 +36,25 @@ bool set_remove(koh_Set *set, const void *key, int key_len);
 void set_each(koh_Set *set, koh_SetEachCallback cb, void *udata);
 bool set_compare(const koh_Set *s1, const koh_Set *s2);
 int set_size(koh_Set *set);
+
+struct koh_SetView {
+    koh_Set *set;
+    int     i;
+    bool    finished;
+};
+
+/*
+    for (struct koh_SetView v = set_each_begin(set);
+        set_each_valid(&v); set_each_next(&v)) {
+        const void *key = set_each_key(&v);
+        int key_len = set_each_key_len(&v);
+    }
+*/
+
+struct koh_SetView set_each_begin(koh_Set *set);
+bool set_each_valid(struct koh_SetView *v);
+void set_each_next(struct koh_SetView *v);
+const void *set_each_key(struct koh_SetView *v);
+int set_each_key_len(struct koh_SetView *v);
+
+extern bool koh_set_view_verbose;
