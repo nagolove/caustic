@@ -1,3 +1,7 @@
 return {
-    artifact = nil,
+    {
+        artifact = nil,
+        src = 'src',
+    },
 }
+
