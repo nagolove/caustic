@@ -1,10 +1,12 @@
 #pragma once 
 
+// XXX: Куда перенести жесткий макрос, в какой файл?
 #define KOH_EXIT(errcode)                                       \
 do {                                                            \
     printf("exit: [%d], %s:%d\n", errcode, __FILE__, __LINE__); \
     exit(errcode);                                              \
 } while (0);                                                    \
+
 
 #include "koh_adsr.h"
 #include "koh_array.h"
@@ -24,8 +26,8 @@ do {                                                            \
 #include "koh_hotkey.h"
 #include "koh_iface.h"
 #include "koh_inotifier.h"
-#include "koh_input.h"
-#include "koh_layer.h"
+//#include "koh_input.h"
+//#include "koh_layer.h"
 #include "koh_logger.h"
 #include "koh_lua_tools.h"
 #include "koh_menu.h"
@@ -50,4 +52,3 @@ do {                                                            \
 #include "koh_team.h"
 #include "koh_timer.h"
 #include "koh_wfc.h"
-

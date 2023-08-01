@@ -6,7 +6,8 @@
 #include "koh_common.h"
 #include "koh_console.h"
 #include "koh_hotkey.h"
-#include "koh_input.h"
+/*#include "koh_input.h"*/
+/*#include "koh_input.h"*/
 #include "koh_logger.h"
 #include "koh_menu.h"
 #include "koh_timer.h"
@@ -174,6 +175,8 @@ void stage_tstmenu_init(Stage_TestMenu *st, void *data) {
 
 static void handler(Menu *mnu, void *udata) {
     assert(mnu);
+    /*
+    // FIXME: Сделать обработчик ввода как для библиотеки, так и для t80
     if (input.is_up()) {
         menu_up(mnu);
     }
@@ -183,6 +186,7 @@ static void handler(Menu *mnu, void *udata) {
     if (input.is_select()) {
         menu_select(mnu);
     }
+    */
 }
 
 void stage_tstmenu_update(Stage_TestMenu *st) {

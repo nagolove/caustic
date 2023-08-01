@@ -17,10 +17,10 @@
 #include "koh_logger.h"
 #include "koh_common.h"
 
-//#define DE_USE_STORAGE_CAPACITY 
-//#define DE_USE_SPARSE_CAPACITY
+#define DE_USE_STORAGE_CAPACITY 
+#define DE_USE_SPARSE_CAPACITY
 
-/*#define DE_NO_TRACE*/
+#define DE_NO_TRACE
 
 static de_options _options = {
     .tracing = false,
@@ -553,7 +553,10 @@ static void* de_storage_get_by_index(de_storage* s, size_t index) {
 
     //assert(index < s->cp_data_size);
     if (index >= s->cp_data_size) {
-        //trace("de_storage_get_by_index: index %zu\n", index);
+        de_trace(
+            "de_storage_get_by_index: index %zu, s->cp_data_size %zu\n",
+            index, s->cp_data_size
+        );
         koh_trap();
     }
 
@@ -705,7 +708,9 @@ static de_entity _de_recycle_entity(de_ecs* r) {
     return recycled_e;
 }
 
-static void _de_release_entity(de_ecs* r, de_entity e, de_entity_ver desired_version) {
+static void _de_release_entity(
+    de_ecs* r, de_entity e, de_entity_ver desired_version
+) {
     de_trace(
         "_de_release_entity: ecs %p, e %u, desired_version %u\n",
         r, e, desired_version.ver
@@ -725,6 +730,7 @@ de_entity de_create(de_ecs* r) {
     }
 }
 
+// Находит или создает хранилище данного типа
 de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     assert(r);
     de_trace("de_assure: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
@@ -782,10 +788,22 @@ void de_remove(de_ecs* r, de_entity e, de_cp_type cp_type) {
     de_storage_remove(de_assure(r, cp_type), e);
 }
 
+static bool iter_each_print(de_ecs *r, de_entity e, void *udata) {
+    printf(
+        "(id %u, ver %u) ", 
+        de_entity_identifier(e).id,
+        de_entity_version(e).ver
+    );
+    return false;
+}
+
 void de_ecs_print(de_ecs *r) {
     assert(r);
-    for (int i = 0; i < r->storages_size; i++) {
-    }
+    koh_term_color_set(KOH_TERM_BLUE);
+    printf("de_ecs_print: ");
+    de_each(r, iter_each_print, NULL);
+    printf("\n");
+    koh_term_color_reset();
 }
 
 void de_destroy(de_ecs* r, de_entity e) {
@@ -794,13 +812,22 @@ void de_destroy(de_ecs* r, de_entity e) {
 
     de_trace("de_destroy: ecs %p, e %u\n", r, e);
 
+    printf("de_destroy: 1\n");
+    de_ecs_print(r);
+
     // 1) remove all the components of the entity
     de_remove_all(r, e);
+
+    printf("de_destroy: 2\n");
+    de_ecs_print(r);
 
     // 2) release_entity with a desired new version
     de_entity_ver new_version = de_entity_version(e);
     new_version.ver++;
     _de_release_entity(r, e, new_version);
+
+    printf("de_destroy: 3\n");
+    de_ecs_print(r);
 }
 
 bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {

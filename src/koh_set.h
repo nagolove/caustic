@@ -37,19 +37,20 @@ void set_each(koh_Set *set, koh_SetEachCallback cb, void *udata);
 bool set_compare(const koh_Set *s1, const koh_Set *s2);
 int set_size(koh_Set *set);
 
-struct koh_SetView {
-    koh_Set *set;
-    int     i;
-    bool    finished;
-};
-
 /*
+    // Пример использования koh_SetView
     for (struct koh_SetView v = set_each_begin(set);
         set_each_valid(&v); set_each_next(&v)) {
         const void *key = set_each_key(&v);
         int key_len = set_each_key_len(&v);
     }
 */
+struct koh_SetView {
+    koh_Set *set;
+    int     i;
+    bool    finished;
+};
+
 
 struct koh_SetView set_each_begin(koh_Set *set);
 bool set_each_valid(struct koh_SetView *v);

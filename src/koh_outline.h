@@ -2,18 +2,18 @@
 
 #include "raylib.h"
 
-typedef struct Outline Outline;
+typedef struct koh_Outline koh_Outline;
 
-struct Outline_def {
+struct koh_OutlineDef {
     float size;
     Color color;
 };
 
-Outline *outline_new(struct Outline_def def);
-void outline_free(Outline *outline);
+koh_Outline *outline_new(struct koh_OutlineDef def);
+void outline_free(koh_Outline *outline);
 
 void outline_render_pro(
-    Outline *outline, Texture2D tex, 
+    koh_Outline *outline, Texture2D tex, 
     Rectangle src, Rectangle dst, 
     Vector2 origin, float rotation,
     Color color

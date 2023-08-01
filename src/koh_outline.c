@@ -4,11 +4,11 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#include "koh_routine.h"
 #include "koh_common.h"
 #include "koh_inotifier.h"
+#include "koh_routine.h"
 
-struct Outline {
+struct koh_Outline {
     Shader          shader;
     int             loc_size, 
                     loc_color, 
@@ -23,7 +23,7 @@ static const char *frag_path_outline = "assets/vertex/100_outline.glsl";
 
 static void reload_shader(const char *fname, void *data) {
     assert(data);
-    struct Outline *ol = data;
+    struct koh_Outline *ol = data;
     printf("reload_shader: '%s'\n", fname);
     ol->shader = LoadShader(NULL, fname);
     ol->loc_size = GetShaderLocation(ol->shader, "outlineSize");
@@ -40,21 +40,21 @@ static void reload_shader(const char *fname, void *data) {
     inotifier_watch(frag_path_outline, reload_shader, NULL);
 }
 
-Outline *outline_new(struct Outline_def def) {
-    struct Outline *new = calloc(1, sizeof(Outline));
+koh_Outline *koh_outline_new(struct koh_OutlineDef def) {
+    struct koh_Outline *new = calloc(1, sizeof(koh_Outline));
     vec4_from_color(new->color, def.color);
     new->size = def.size;
     reload_shader(frag_path_outline, new);
     return new;
 }
 
-void outline_free(Outline *outline) {
+void koh_outline_free(koh_Outline *outline) {
     assert(outline);
     UnloadShader(outline->shader);
 }
 
-void outline_render_pro(
-    Outline *outline, Texture2D tex, 
+void koh_outline_render_pro(
+    koh_Outline *outline, Texture2D tex, 
     Rectangle src, Rectangle dst, 
     Vector2 origin, float rotation,
     Color color

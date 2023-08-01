@@ -1,7 +1,7 @@
 #include "koh_iface.h"
 
 #include "koh_dev_draw.h"
-#include "koh_input.h"
+/*#include "koh_input.h"*/
 #include "koh_logger.h"
 #include "raylib.h"
 #include "raymath.h"

@@ -1,60 +1,58 @@
 #include "koh_cammode.h"
 
+#include "koh_logger.h"
 #include "raylib.h"
-
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct {
     int mode; char *str;
-} cam_mode2str[] = {
-    { CM_FREE,  "FREE" },
-    { CM_FIXED, "FIXED" },
+} koh_cam_mode2str[] = {
+    { KOH_CM_FREE,  "FREE" },
+    { KOH_CM_FIXED, "FIXED" },
     { -1, NULL }
 };
 
 static Camera2D cam = {0};
 
-Camera2D *cam_get() {
+Camera2D *koh_cam_get() {
     return &cam;
 }
 
-const char *cam_get_mode(CamMode cm) {
+const char *koh_cam_get_mode(koh_CamMode cm) {
     const char *r = NULL;
     int i = 0;
-    while (cam_mode2str[i].str) {
-        if (cam_mode2str[i].mode == cm) {
-            return cam_mode2str[i].str;
+    while (koh_cam_mode2str[i].str) {
+        if (koh_cam_mode2str[i].mode == cm) {
+            return koh_cam_mode2str[i].str;
         }
         i++;
     }
     return r;
 }
 
-void cam_init() {
-    printf("cam_init\n");
+void koh_cam_init() {
+    trace("koh_cam_init:\n");
     memset(&cam, 0, sizeof(cam));
     cam.zoom = 1.;
 }
 
-void cam_mode_next(CamMode *camera_mode) {
+void koh_cam_mode_next(koh_CamMode *camera_mode) {
     if (!camera_mode)
         return;
 
-    if (*camera_mode + 1 >= CM_LAST_UNUSED)
-        *camera_mode = CM_FIRST_UNUSED + 1;
+    if (*camera_mode + 1 >= KOH_CM_LAST_UNUSED)
+        *camera_mode = KOH_CM_FIRST_UNUSED + 1;
     else
         *camera_mode += 1;
 }
 
-void cam_shutdown() {
-    printf("cam_shutdown\n");
+void koh_cam_shutdown() {
+    trace("koh_cam_shutdown:\n");
 }
 
 void camera_reset() {
     memset(&cam, 0, sizeof(cam));
     cam.zoom = 1.;
 }
-
-

@@ -1,5 +1,9 @@
 #pragma once
 
+/*
+ * Вертикальные меню
+ */
+
 #include "raylib.h"
 
 #include <stdbool.h>

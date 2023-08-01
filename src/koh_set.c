@@ -266,7 +266,8 @@ bool koh_set_view_verbose = false;
 
 struct koh_SetView set_each_begin(koh_Set *set) {
     assert(set);
-    printf("set_each_begin: cap %d\n", set->cap);
+    if (koh_set_view_verbose)
+        printf("set_each_begin: cap %d\n", set->cap);
     struct koh_SetView view = {
         .set = set,
         .i = -1,

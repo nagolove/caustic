@@ -79,7 +79,7 @@ void htable_extend(HTable *ht) {
     assert(ht->arr);
     for (int j = 0; j < ht->cap; j++) {
         if (ht->arr[j]) {
-            ht->arr[j]->hash = hasher_fnv32(
+            ht->arr[j]->hash = koh_hasher_fnv32(
                 get_key(ht->arr[j]), ht->arr[j]->key_len
             );
             _htable_add_uniq(&tmp, ht->arr[j]);
@@ -146,7 +146,7 @@ void *htable_add(HTable *ht, const void *key, int key_len,
 
     assert(ht->taken < ht->cap);
 
-    Hash_t hash = hasher_fnv32(key, key_len);
+    Hash_t hash = koh_hasher_fnv32(key, key_len);
     index = hash % ht->cap;
 
     while (ht->arr[index])
@@ -206,7 +206,7 @@ void htable_free(HTable *ht) {
 int _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     assert(ht);
 
-    int index = hasher_fnv32(key, key_len) % ht->cap;
+    int index = koh_hasher_fnv32(key, key_len) % ht->cap;
     for (int i = 0; i < ht->cap; i++) {
         if (!ht->arr[index])
             break;

@@ -6,7 +6,7 @@
 typedef uint32_t Hash_t;
 typedef Hash_t (*HashFunction)(const void *key, int key_len);
 
-static inline Hash_t hasher_fnv32(const void *data, int len) {
+static inline Hash_t koh_hasher_fnv32(const void *data, int len) {
     assert(data);
     assert(len > 0);
     const char *bytes = (char*)data;

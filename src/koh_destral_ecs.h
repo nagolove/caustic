@@ -280,3 +280,4 @@ typedef struct de_options {
 } de_options;
 
 void de_set_options(de_options options);
+void de_ecs_print(de_ecs *r);
