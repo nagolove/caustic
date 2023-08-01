@@ -2326,6 +2326,10 @@ local record Aseprite
 end
 
 -- json->lua конвертация из aseprite
+--[[ TODO: Сделать конвертацию данных на основе bld.lua
+    Для этого создать специальную секцию в bld.lua, со списком файлов для
+    обработки. Эта секция обрабатывается при запуске команды caustic make
+--]]
 function actions.anim_convert(_args: Args)
     print('anim_convert', inspect(_args))
     if not _args.name then
@@ -2343,6 +2347,7 @@ function actions.anim_convert(_args: Args)
     end
 
     local frames: {Aseprite.Frame} = {}
+    -- TODO: Сделать рабочий экспорт для режима hash и режима array в aseprite
     for k, v in pairs(js.frames as {string:any}) do
         --print(k, inspect(v))
         local frame = v as Aseprite.Frame
