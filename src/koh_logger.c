@@ -172,30 +172,30 @@ static int l_trace_enable(lua_State *lua) {
 }
 
 void logger_register_functions() {
-    register_function(
+    sc_register_function(
         l_filter,
         "filter",
         "Включить фильтрацию вывода по регулярному выражению"
     );
 
-    register_function(
+    sc_register_function(
         l_filters,
         "filters",
         "Распечатывает и возвращает таблицу с установленными фильтрами"
     );
 
-    register_function(
+    sc_register_function(
         l_filters_num,
         "filters_num",
         "Возвращает количество фильтров"
     );
 
-    register_function(
+    sc_register_function(
         l_filter_remove,
         "filter_remove",
         "Удаляет фильтр по индексу"
     );
-    register_function(
+    sc_register_function(
         l_trace_enable,
         "trace_enable",
         "Включить или выключить печать лога через trace()"

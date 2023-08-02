@@ -103,10 +103,10 @@ void sfx_init() {
     UnloadDirectoryFiles(filelist);
     SetTraceLogLevel(LOG_ALL);
 
-    register_function(
+    sc_register_function(
         l_sounds, "sounds", "Получить список звуков загруженных в уровень"
     );
-    register_function(
+    sc_register_function(
         l_sound_play, "sound_play", 
         "Воспроизвести звук по строковому идентификатору"
     );

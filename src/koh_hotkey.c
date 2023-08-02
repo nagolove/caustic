@@ -214,7 +214,7 @@ void hotkey_init(HotkeyStorage *storage) {
 
     lua_State *lua = sc_get_state();
     if (lua)
-        register_function(l_keys, "keys", "Клавиши управления");
+        sc_register_function(l_keys, "keys", "Клавиши управления");
 }
 
 void hotkey_register(HotkeyStorage *storage, Hotkey hk) {

@@ -89,7 +89,6 @@ Vector2 random_outrect_quad(
     xorshift32_state *st, Vector2 start, int w, int border_width
 );
 Vector2 bzr_cubic(Vector2 segments4[4], float t);
-void register_all_functions(void);
 const char *shapefilter2str(cpShapeFilter filter);
 
 void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter);
@@ -98,7 +97,6 @@ cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr);
 Vector2 camera2screen(Camera2D cam, Vector2 in);
 Color color_by_index(int colornum);
 void texture_save(Texture2D tex, const char *fname);
-void register_all_functions(void);
 // some_file.txt, .txt -> some_file
 const char *extract_filename(const char *fname, const char *ext);
 const char *rect2str(Rectangle rect);

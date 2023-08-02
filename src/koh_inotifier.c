@@ -168,7 +168,7 @@ void inotifier_init() {
         //.events = POLLIN,
     //};
 
-    register_function(
+    sc_register_function(
         l_inotifier_list,
         "inotifier_list",
         "Вывести список отслеживаемых для перезагрузки файлов."

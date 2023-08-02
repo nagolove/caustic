@@ -157,31 +157,31 @@ static void trace_shutdown(struct Trace *trace) {
 }
 
 void register_funcs() {
-    register_function(
+    sc_register_function(
         l_dev_draw_trace_set_capacity,
         "dev_draw_trace_set_capacity",
         "Установить для данной трассы максимальное количество сохраняемых "
         "элементов."
     );
-    register_function(
+    sc_register_function(
         l_dev_draw_trace_enable,
         "dev_draw_trace_enable",
         "Принимает имя трассировки и булево состояние - включить или отключить"
     );
 
-    register_function(
+    sc_register_function(
         l_dev_draw_traces_get,
         "dev_draw_traces_get",
         "Возвращает таблицу с именами трассировок"
     );
 
-    register_function(
+    sc_register_function(
         l_dev_draw_reset,
         "dev_draw_reset",
         "Сбросить списки отлалочного рисования"
     );
 
-    register_function(
+    sc_register_function(
         l_dev_draw_enable,
         "dev_draw_enable",
         "Включить или выключить отладочное рисование"

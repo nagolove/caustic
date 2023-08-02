@@ -51,7 +51,7 @@ static void fpsmeter_register() {
         return;
     }
 
-    register_function(
+    sc_register_function(
         l_fpsmeter_stat,
         "fpsmeter_stat",
         "Показать статистику по кадрам"

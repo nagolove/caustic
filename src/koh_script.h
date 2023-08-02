@@ -24,7 +24,9 @@ void sc_shutdown();
 lua_State *sc_get_state();
 void sc_init_script();
 
-void register_function(lua_CFunction f, const char *fname, const char *desc);
+ScriptFunc *sc_get_head();
+void sc_register_all_functions(void);
+void sc_register_function(lua_CFunction f, const char *fname, const char *desc);
 void sc_register_func_desc(const char *funcname, const char *description);
 const char * sc_stack_dump();
 int new_fullud_ref(Stage *st, Object *obj, const char *tname);

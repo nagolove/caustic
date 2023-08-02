@@ -152,17 +152,17 @@ static int l_cprint(lua_State *lua) {
 static void _lua_register() {
     if (!sc_get_state()) return;
 
-    register_function(
+    sc_register_function(
             l_print_random_lines, 
             "print_random_lines", 
             "Напечатать несколько случайных строк в буфер. Для отладки."
     );
-    register_function(
+    sc_register_function(
             l_clear,
             "clear",
             "Очистить буфер консоли."
     );
-    register_function(
+    sc_register_function(
         l_cprint,
         "cprint",
         "Печатать в буфер консоли"

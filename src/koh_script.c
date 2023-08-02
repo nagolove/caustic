@@ -37,7 +37,7 @@ int cmp(const void *a, const void * b) {
     return strcmp(((struct Pair*)a)->name, ((struct Pair*)b)->name);
 }
 
-void register_all_functions(void) {
+void sc_register_all_functions(void) {
     assert(ref_types_table);
     ScriptFunc *curr = script_funcs;
     while (curr) {
@@ -51,7 +51,7 @@ void register_all_functions(void) {
     }
 }
 
-void register_function(lua_CFunction f, const char *fname, const char *desc) {
+void sc_register_function(lua_CFunction f, const char *fname, const char *desc) {
     assert(f);
     assert(fname);
     assert(desc);
@@ -120,7 +120,7 @@ void print_avaible_functions(lua_State *lua) {
 
 void print_type_methods(lua_State *lua, const char *type) {
     const char *mtname = lua_tostring(lua, 1);
-    DocArray docarr = doc_get(lua, mtname);
+    DocArray docarr = doc_init(lua, mtname);
     for (int i = 0; i < docarr.num; i++) {
         DocField *docfield = &docarr.arr[i];
         console_buf_write_c(
@@ -132,7 +132,7 @@ void print_type_methods(lua_State *lua, const char *type) {
             );
         console_buf_write("");
     }
-    doc_release(&docarr);
+    doc_shutdown(&docarr);
 }
 
 void print_avaible_types(lua_State *lua) {
@@ -225,37 +225,37 @@ static int l_trace(lua_State *lua) {
 }
 
 void register_internal() {
-    register_function(
+    sc_register_function(
         l_trace,
         "trace",
         "trace(state: boolean) - включить или выключить построчную отладку"
         "сценария"
     );
 
-    register_function(l_help, "help", "List of global registered functions.");
+    sc_register_function(l_help, "help", "List of global registered functions.");
     //register_function(l_con_print, "con_print", "Print to console");
-    register_function(
+    sc_register_function(
         l_GetTime,
         "GetTime",
         "Возвращает время с начала запуска программы"
     );
-    register_function(
+    sc_register_function(
         l_GetFrameTime,
         "GetFrameTime",
         "Возвращает время за которое был нарисован прошлый кадр"
     );
 
-    register_function(
+    sc_register_function(
         l_GetScreenWidth,
         "GetScreenWidth",
         "Возвращает ширину экрана в пикселях"
     );
-    register_function(
+    sc_register_function(
         l_GetScreenHeight,
         "GetScreenHeight",
         "Возвращает высоту экрана в пикселях"
     );
-    register_function(
+    sc_register_function(
         l_GetScreenDimensions,
         "GetScreenDimensions",
         "Возвращает ширину и высоту экрана в пикселях"
@@ -264,7 +264,7 @@ void register_internal() {
     const char *desc = 
         "Вывести в файл список зарегистрированных в Lua функций"
         "и их документацию";
-    register_function(
+    sc_register_function(
         l_export_doc,
         "export_doc",
         desc
@@ -273,7 +273,7 @@ void register_internal() {
     desc =  "Загрузить и выполнить скрипт,"
         "который будет добавлен при сохранении состояния";
 
-    register_function(
+    sc_register_function(
         l_script,
         "script",
         desc

@@ -12,9 +12,13 @@
 #include <string.h>
 #include <string.h>
 
+// Максимальное количество методов в таблице. Простая защита от 
+// переполнения
+static const int max_fields_num = 100;
+
 TypeEntry *typelist;
 
-DocArray doc_get(lua_State *lua, const char *mtname) {
+DocArray doc_init(lua_State *lua, const char *mtname) {
     DocArray docarr = {0};
     //printf("doc_get: [%s]\n", stack_dump(lua));
 
@@ -78,7 +82,7 @@ DocArray doc_get(lua_State *lua, const char *mtname) {
     return docarr;
 }
 
-void doc_release(DocArray *docarr) {
+void doc_shutdown(DocArray *docarr) {
     assert(docarr);
     if (!docarr->arr) return;
 
@@ -104,6 +108,9 @@ void doc_release(DocArray *docarr) {
 // XXX: maxrecurse is unused
 void print_table(lua_State *lua, int idx, int maxrecurse) {
     /*printf("print_table: [%s]\n", stack_dump(lua));*/
+
+    if (lua_type(lua, idx) != LUA_TTABLE)
+        return;
 
     lua_pushnil(lua);  /* first key */
     while (lua_next(lua, idx) != 0) {
@@ -162,14 +169,104 @@ void print_table(lua_State *lua, int idx, int maxrecurse) {
     /*printf("print_table: [%s]\n", stack_dump(lua));*/
 }
 
-void type_alloc(const char *mtname) {
+static void type_alloc(const char *mtname, const Reg_ext *methods) {
+    assert(mtname);
+    assert(methods);
+
     TypeEntry *new = calloc(1, sizeof(*new));
+    assert(new);
+
     new->next = typelist;
-    strncpy(new->mtname, mtname, MAX_MTNAME);
+    new->mtname = strdup(mtname);
+
+    Reg_ext *cur = (Reg_ext*)methods - 1;
+    while (true) {
+        if (max_fields_num <= 0) {
+            trace(
+                "type_alloc: %d max_fields_num methods reached in "
+                "table '%s'", max_fields_num, mtname
+            );
+            break;
+        }
+        cur++;
+        if (!cur->name) break;
+
+        if (cur->desc)
+            new->reg.desc = strdup(cur->desc);
+        if (cur->desc_detailed)
+            new->reg.desc_detailed = strdup(cur->desc_detailed);
+        if (cur->name)
+            new->reg.name = strdup(cur->name);
+        if (cur->desc_detailed)
+            new->reg.func = cur->func;
+    }
+
     typelist = new;
 }
 
-void register_methods_and_doc(
+static void fill_methods_table(
+    lua_State *lua, const char *mtname, const Reg_ext *methods
+) {
+    Reg_ext *cur = (Reg_ext*)methods - 1;
+    luaL_newmetatable(lua, mtname);
+
+    lua_pushvalue(lua, -1);
+    lua_setfield(lua, -2, "__index");
+
+    lua_pushvalue(lua, -2);
+    lua_setfield(lua, -2, "__doc");
+
+    /*lua_remove(lua, -2);*/
+
+    while (true) {
+        if (max_fields_num <= 0) {
+            trace(
+                "fill_methods_table: %d max_fields_num methods reached in "
+                "table '%s'", max_fields_num, mtname
+            );
+            break;
+        }
+        cur++;
+        if (!cur->name) {
+            break;
+        }
+        lua_pushcclosure(lua, cur->func, 0);
+        lua_setfield(lua, -2, cur->name);
+        //printf("cur->func, cur->name %p, %s\n", cur->func, cur->name);
+    }
+}
+
+static void fill_help_table(
+    lua_State *lua, const char *mtname, const Reg_ext *methods
+) {
+    // табличка со справкой
+    lua_createtable(lua, 0, 0);
+    Reg_ext *cur = (Reg_ext*)methods - 1;
+
+    while (true) {
+        if (max_fields_num<= 0) {
+            trace(
+                "fill_help_table: %d max_fields_num methods reached in "
+                "table '%s'", max_fields_num, mtname
+            );
+            break;
+        }
+        cur++;
+        if (!cur->name) {
+            break;
+        }
+
+        lua_createtable(lua, 0, 0);
+        lua_pushstring(lua, cur->desc);
+        lua_seti(lua, -2, 1);
+        lua_pushstring(lua, cur->desc_detailed);
+        lua_seti(lua, -2, 2);
+
+        lua_setfield(lua, -2, cur->name);
+    }
+}
+
+void sc_register_methods_and_doc(
     lua_State *lua,
     const char *mtname,
     const Reg_ext *methods
@@ -197,54 +294,10 @@ void register_methods_and_doc(
     // }}}
      */
 
-    type_alloc(mtname);
+    type_alloc(mtname, methods);
 
-    // табличка со справкой
-    lua_createtable(lua, 0, 0);
-    Reg_ext *cur = (Reg_ext*)methods - 1;
-
-    while (true) {
-        cur++;
-        /*if (!cur->name || strlen(cur->name) == 0) {*/
-        if (!cur->name) {
-            break;
-        }
-        //printf("[%s]\n", stack_dump(lua));
-
-        lua_createtable(lua, 0, 0);
-        lua_pushstring(lua, cur->desc);
-        lua_seti(lua, -2, 1);
-        lua_pushstring(lua, cur->desc_detailed);
-        lua_seti(lua, -2, 2);
-
-        //printf("[%s]\n", stack_dump(lua));
-        lua_setfield(lua, -2, cur->name);
-        /*printf("[%s]\n", stack_dump(lua));*/
-
-        /*printf("cur->func, cur->name %p, %s\n", cur->func, cur->name);*/
-        //printf("-------------------\n");
-    }
-
-    luaL_newmetatable(lua, mtname);
-    cur = (Reg_ext*)methods - 1;
-
-    lua_pushvalue(lua, -1);
-    lua_setfield(lua, -2, "__index");
-
-    lua_pushvalue(lua, -2);
-    lua_setfield(lua, -2, "__doc");
-
-    /*lua_remove(lua, -2);*/
-
-    while (true) {
-        cur++;
-        if (!cur->name) {
-            break;
-        }
-        lua_pushcclosure(lua, cur->func, 0);
-        lua_setfield(lua, -2, cur->name);
-        //printf("cur->func, cur->name %p, %s\n", cur->func, cur->name);
-    }
+    fill_help_table(lua, mtname, methods);
+    fill_methods_table(lua, mtname,  methods);
 
     lua_pop(lua, 2);
     //printf("register_methods_and_doc: [%s]\n", stack_dump(lua));
@@ -293,6 +346,14 @@ void types_shutdown() {
     TypeEntry *curr = typelist;
     while (curr) {
         TypeEntry *next = curr->next;
+        if (curr->mtname)
+            free(curr->mtname);
+        if (curr->reg.desc)
+            free(curr->reg.desc);
+        if (curr->reg.desc_detailed)
+            free(curr->reg.desc_detailed);
+        if (curr->reg.name)
+            free(curr->reg.name);
         free(curr);
         curr = next;
     }

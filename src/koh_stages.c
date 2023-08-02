@@ -32,22 +32,22 @@ void stage_init(void) {
     
     if (!sc_get_state()) return;
 
-    register_function(
+    sc_register_function(
             l_stage_restart,
             "stage_restart",
             "Удалить и снова создать объект сцены"
     );
-    register_function(
+    sc_register_function(
             l_stage_get_active,
             "stage_get_active",
             "Возвращает имя активной сцены"
     );
-    register_function(
+    sc_register_function(
             l_stage_set_active, 
             "stage_set_active", 
             "Установить сцену по имени [\"\"]"
     );
-    register_function(
+    sc_register_function(
             l_stages_get, 
             "stages_get", 
             "Получить список зарегистрированных сцен"
