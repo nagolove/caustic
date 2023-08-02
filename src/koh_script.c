@@ -16,6 +16,11 @@
 #include "lfs.h"
 #endif
 
+typedef struct Script {
+    char fname[300];
+    struct Script *next;
+} Script;
+
 static ScriptFunc *script_funcs = NULL;
 static lua_State *lua = NULL;
 static Script *scripts = NULL;

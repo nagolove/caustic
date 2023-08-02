@@ -6,13 +6,6 @@
 #include "lualib.h"
 #include "raylib.h"
 
-typedef struct Stage_Fight Stage_Fight;
-
-typedef struct Script {
-    char fname[300];
-    struct Script *next;
-} Script;
-
 typedef struct ScriptFunc {
     lua_CFunction func;
     char fname[64], desc[256];
