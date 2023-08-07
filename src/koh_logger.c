@@ -12,6 +12,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define MAX_TRACE_GROUPS    40
 #define MAX_TRACE_LEN       120
@@ -27,6 +32,8 @@ struct FilterEntry {
 
 static struct FilterEntry *filters = {0};
 static int filters_num = 0, filters_cap = 0;
+static const char *log_fname = "/tmp/causticlog";
+static FILE *log_stream = NULL;
 
 void filter_add(const char *pattern) {
     if (pattern && strlen(pattern) == 0)
@@ -89,6 +96,10 @@ void logger_init(void) {
         .tree_new = false,
     };
 
+    log_stream = fopen(log_fname, "w");
+    if (!log_stream)
+        printf("logger_init: log fopen error %s\n", strerror(errno));
+
     traces_set = strset_new();
     filter_init();
 }
@@ -107,6 +118,8 @@ void traces_dump() {
 }
 
 void logger_shutdown() {
+    if (log_stream)
+        fclose(log_stream);
     filter_free();
     traces_dump();
     strset_free(traces_set);
@@ -125,8 +138,13 @@ void trace(const char * format, ...) {
     if (traces_set)
         strset_add(traces_set, buf);
 
-    if (!filter_match(buf))
+    if (!filter_match(buf)) {
         printf("%s", buf);
+        if (log_stream) {
+            fwrite(buf, strlen(buf), 1, log_stream);
+            fflush(log_stream);
+        }
+    }
 }
 
 int l_filter(lua_State *lua) {
