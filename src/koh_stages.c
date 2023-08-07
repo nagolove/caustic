@@ -210,39 +210,12 @@ void stages_gui_window() {
 
     igText("active stage: %s", stages.cur ? stages.cur->name : NULL);
 
-    /*
-    ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY |
-        ImGuiTableFlags_RowBg | 
-        ImGuiTableFlags_BordersOuter | 
-        ImGuiTableFlags_BordersV | 
-        ImGuiTableFlags_Resizable | 
-        ImGuiTableFlags_Reorderable | 
-        ImGuiTableFlags_Hideable;
-    // */
-    
     ImGuiTableFlags table_flags = 
         ImGuiTableFlags_SizingStretchSame |
         ImGuiTableFlags_Resizable |
         ImGuiTableFlags_BordersOuter |
         ImGuiTableFlags_BordersV |
         ImGuiTableFlags_ContextMenuInBody;
-
-    /*
-    ImGuiCond cond = ImGuiCond_FirstUseEver;
-
-    if (IsKeyDown(KEY_ONE))
-        cond = ImGuiCond_None;
-    if (IsKeyDown(KEY_TWO))
-        cond = ImGuiCond_Always;
-    if (IsKeyDown(KEY_THREE))
-        cond = ImGuiCond_Once;
-    if (IsKeyDown(KEY_FOUR))
-        cond = ImGuiCond_FirstUseEver;
-    if (IsKeyDown(KEY_FIVE))
-        cond = ImGuiCond_Appearing;
-
-    trace("stages_gui_window: cond %d\n", cond);
-    */
 
     ImGuiInputTextFlags input_flags = 0;
     static char stage_buf[64] = {};
@@ -257,8 +230,6 @@ void stages_gui_window() {
         stage_str_argument, sizeof(stage_str_argument), input_flags, 0, NULL
     );
 
-    //igSameLine(0, 0);
-
     if (igButton("[switch]", (ImVec2) {0, 0})) {
         trace("stages_gui_window: stage_buf '%s'\n", stage_buf);
         if (stage_find(stage_buf)) {
@@ -268,10 +239,6 @@ void stages_gui_window() {
     }
 
     for (int i = 0; i < stages.num; ++i) {
-        /*igSetNextItemOpen(true, ImGuiCond_Once);*/
-
-        //igSetNextItemOpen(true, 0);
-
         if (igTreeNode_Ptr((void*)(intptr_t)i, "%s", stages.stages[i]->name)) {
                 ImVec2 outer_size = {0., 0.};
                 if (igBeginTable("stage", 8, table_flags, outer_size, 0.)) {
