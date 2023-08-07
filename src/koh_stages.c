@@ -3,6 +3,10 @@
 
 #include "koh_stages.h"
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
+#include "cimgui.h"
+#include "cimgui_impl.h"
 #include "koh_console.h"
 #include "koh_logger.h"
 #include "koh_script.h"
@@ -11,6 +15,7 @@
 #include "raylib.h"
 #include <assert.h>
 #include <memory.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -191,4 +196,121 @@ void *stage_assert(Stage *st, const char *name) {
     Stage *res = stage_find(st->name);
     assert(res);
     return res;
+}
+
+static int stage_input_cb(ImGuiInputTextCallbackData* data) {
+    trace("stage_input_cb:\n");
+    return 0;
+}
+
+void stages_gui_window() {
+    bool opened = true;
+    ImGuiWindowFlags flags = 0;
+    igBegin("stages window", &opened, flags);
+
+    igText("active stage: %s", stages.cur ? stages.cur->name : NULL);
+
+    /*
+    ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY |
+        ImGuiTableFlags_RowBg | 
+        ImGuiTableFlags_BordersOuter | 
+        ImGuiTableFlags_BordersV | 
+        ImGuiTableFlags_Resizable | 
+        ImGuiTableFlags_Reorderable | 
+        ImGuiTableFlags_Hideable;
+    // */
+    
+    ImGuiTableFlags table_flags = 
+        ImGuiTableFlags_SizingStretchSame |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_BordersOuter |
+        ImGuiTableFlags_BordersV |
+        ImGuiTableFlags_ContextMenuInBody;
+
+    /*
+    ImGuiCond cond = ImGuiCond_FirstUseEver;
+
+    if (IsKeyDown(KEY_ONE))
+        cond = ImGuiCond_None;
+    if (IsKeyDown(KEY_TWO))
+        cond = ImGuiCond_Always;
+    if (IsKeyDown(KEY_THREE))
+        cond = ImGuiCond_Once;
+    if (IsKeyDown(KEY_FOUR))
+        cond = ImGuiCond_FirstUseEver;
+    if (IsKeyDown(KEY_FIVE))
+        cond = ImGuiCond_Appearing;
+
+    trace("stages_gui_window: cond %d\n", cond);
+    */
+
+    ImGuiInputTextFlags input_flags = 0;
+    static char stage_buf[64] = {};
+    igInputText(
+        "stage", stage_buf, sizeof(stage_buf), 
+        input_flags, stage_input_cb, NULL
+    );
+
+    static char stage_str_argument[64] = {};
+    igInputText(
+        "stage string argument",
+        stage_str_argument, sizeof(stage_str_argument), input_flags, 0, NULL
+    );
+
+    //igSameLine(0, 0);
+
+    if (igButton("[switch]", (ImVec2) {0, 0})) {
+        trace("stages_gui_window: stage_buf '%s'\n", stage_buf);
+        if (stage_find(stage_buf)) {
+            trace("stages_gui_window: switch to %s\n");
+            stage_set_active(stage_buf, NULL);
+        }
+    }
+
+    for (int i = 0; i < stages.num; ++i) {
+        /*igSetNextItemOpen(true, ImGuiCond_Once);*/
+
+        //igSetNextItemOpen(true, 0);
+
+        if (igTreeNode_Ptr((void*)(intptr_t)i, "%s", stages.stages[i]->name)) {
+                ImVec2 outer_size = {0., 0.};
+                if (igBeginTable("stage", 8, table_flags, outer_size, 0.)) {
+
+                    igTableSetupColumn("init", 0, 0, 0);
+                    igTableSetupColumn("shutdown", 0, 0, 1);
+                    igTableSetupColumn("draw", 0, 0, 2);
+                    igTableSetupColumn("update", 0, 0, 3);
+                    igTableSetupColumn("enter", 0, 0, 4);
+                    igTableSetupColumn("leave", 0, 0, 5);
+                    igTableSetupColumn("data", 0, 0, 6);
+                    igTableSetupColumn("name", 0, 0, 7);
+                    igTableHeadersRow();
+
+                    ImGuiTableFlags row_flags = 0;
+                    igTableNextRow(row_flags, 0);
+
+                    igTableSetColumnIndex(0);
+                    igText("%p", stages.stages[i]->init);
+                    igTableSetColumnIndex(1);
+                    igText("%p", stages.stages[i]->shutdown);
+                    igTableSetColumnIndex(2);
+                    igText("%p", stages.stages[i]->draw);
+                    igTableSetColumnIndex(3);
+                    igText("%p", stages.stages[i]->update);
+                    igTableSetColumnIndex(4);
+                    igText("%p", stages.stages[i]->enter);
+                    igTableSetColumnIndex(5);
+                    igText("%p", stages.stages[i]->leave);
+                    igTableSetColumnIndex(6);
+                    igText("%p", stages.stages[i]->data);
+                    igTableSetColumnIndex(7);
+                    igText("%s", stages.stages[i]->name);
+
+                    igEndTable();
+            }
+            igTreePop();
+        }
+    }
+
+    igEnd();
 }
