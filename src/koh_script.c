@@ -425,7 +425,7 @@ void load_init_script() {
         lua_settop(lua, 0);
     } else
         trace(
-            "load_init_script: loading %s was failed\n",
+            "load_init_script: loading %s was failed with %s\n",
             init_fname, lua_tostring(lua, lua_gettop(lua))
         );
 }

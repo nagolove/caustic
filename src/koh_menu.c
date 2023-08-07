@@ -64,7 +64,7 @@ void menu_dump(Menu *mnu) {
     trace("menu_dump: items %p\n", mnu->items);
     trace("menu_dump: scroll_rect %s\n", rect2str(mnu->scroll_rect));
     trace("menu_dump: tmr_arrow_blink %s\n", koh_timer2str(mnu->tmr_arrow_blink));
-    trace("menu_dump: timers %p\n", mnu->timers);
+    trace("menu_dump: timers num %d\n", mnu->timers.timersnum);
     trace("menu_dump: pos %s\n", Vector2_tostr(mnu->pos));
     trace("menu_dump: font_owned %s\n", mnu->font_owned ? "true" : "false");
     trace("menu_dump: input_active %s\n", mnu->input_active ? "true" : "false");
