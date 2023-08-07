@@ -19,7 +19,10 @@ extern LogPoints logger;
 void logger_init(void);
 void logger_register_functions();
 void logger_shutdown();
+
+__attribute__((__format__ (__printf__, 1, 2)))
 void trace(const char *format, ...);
+
 void trace_pop_group();
 void trace_push_group(const char *group_name);
 void traceg(const char *format, ...);
