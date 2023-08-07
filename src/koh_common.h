@@ -156,3 +156,14 @@ void koh_term_color_reset();
 void parse_bracketed_string(
     const char *str, int **first, int **second, int *len
 );
+
+struct FilesSearchResult {
+    char    *path, *regex_pattern;
+    char    **names;
+    int     num, capacity;
+};
+
+struct FilesSearchResult koh_search_files(
+    const char *path, const char *regex_pattern
+);
+void koh_search_files_shutdown(struct FilesSearchResult *fsr);

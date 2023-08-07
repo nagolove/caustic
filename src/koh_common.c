@@ -22,11 +22,14 @@
 #include <libgen.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <dirent.h>
+#include "libsmallregex.h"
 
 #ifdef PLATFORM_DESKTOP
 #include <signal.h>
@@ -1050,4 +1053,99 @@ void parse_bracketed_string(
         }
         p++;
     }
+}
+
+static void search_files_rec(struct FilesSearchResult *fsr) {
+
+    if (fsr->names) {
+        fsr->capacity = 100;
+        fsr->names = calloc(fsr->capacity, sizeof(fsr->names[0]));
+    }
+
+    DIR *dir = opendir(fsr->path);
+
+    if (!dir) 
+        return;
+
+    trace(
+        "search_files_rec: path %s, regex_pattern %s\n",
+        fsr->path,
+        fsr->regex_pattern
+    );
+
+    struct small_regex *regex = regex_compile(fsr->regex_pattern);
+    assert(regex);
+
+    struct dirent *entry = NULL;
+    while ((entry = readdir(dir))) {
+        char file_type[32] = {};
+
+        switch (entry->d_type) {
+            case DT_DIR: strcpy(file_type, "directory"); break;
+            case DT_REG: strcpy(file_type, "regular"); break;
+        }
+
+        trace(
+            "search_files_rec: entry->d_name %s with type %s\n",
+            entry->d_name,
+            file_type
+        );
+        int found = regex_matchp(regex, entry->d_name);
+        if (found == -1)
+            continue;
+
+        char fname[512] = {};
+        strcat(fname, fsr->path);
+        strcat(fname, "/");
+        strcat(fname, entry->d_name);
+
+        trace("koh_search_files: fname %s\n", fname);
+
+        if (fsr->num == fsr->capacity) {
+            fsr->capacity *= 2;
+            fsr->capacity += 2;
+            size_t size = fsr->capacity * sizeof(fsr->names[0]);
+            fsr->names = realloc(fsr->names, size);
+        }
+
+        fsr->names[fsr->num] = strdup(fname);
+        fsr->num++;
+    }
+
+    closedir(dir);
+    regex_free(regex);
+}
+
+struct FilesSearchResult koh_search_files(
+    const char *path, const char *regex_pattern
+) {
+    struct FilesSearchResult fsr = {};
+
+    if (!path || !regex_pattern)
+        return fsr;
+
+    fsr.path = strdup(path);
+    fsr.regex_pattern = strdup(regex_pattern);
+
+    //search_files_rec(&fsr);
+
+    return fsr;
+}
+
+void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
+    if (!fsr)
+        return;
+
+    for (int i = 0; i < fsr->num; ++i) {
+        free(fsr->names[i]);
+    }
+
+    if (fsr->names)
+        free(fsr->names);
+    if (fsr->path)
+        free(fsr->path);
+    if (fsr->regex_pattern)
+        free(fsr->regex_pattern);
+
+    memset(fsr, 0, sizeof(*fsr));
 }
