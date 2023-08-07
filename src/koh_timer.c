@@ -36,6 +36,9 @@ void koh_timerstore_shutdown(koh_TimerStore *ts) {
 }
 
 void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
+    assert(ts);
+    assert(tm);
+
     if (tm != ts->allocated) {
         Timer *next = tm->next;
         Timer *prev = tm->prev;

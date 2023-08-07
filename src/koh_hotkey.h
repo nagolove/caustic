@@ -5,6 +5,11 @@
 
 #include "raylib.h"
 
+/*
+    Хоткеи должны переключаться в зависимости от активной сцены. Если сцена
+    не активна, то ее хоткеи не обрабатываются.
+*/
+
 #define MAX_HOTKEYS 64
 
 typedef struct Hotkey Hotkey;
@@ -25,12 +30,12 @@ typedef struct HotkeyCombo {
 
 typedef struct Hotkey {
     HotkeyCombo combo;
-    HotkeyFunc func;
-    char *description;
-    char *name;
-    void *data;
-    bool enabled;
-    uint8_t groups;    // Маска с группами
+    HotkeyFunc  func;
+    char        *description;
+    char        *name;
+    void        *data;
+    bool        enabled;
+    uint8_t     groups;    // Маска с группами
 } Hotkey;
 
 typedef struct HotkeyStorage {
