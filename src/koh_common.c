@@ -7,18 +7,16 @@
 #include "chipmunk/chipmunk_private.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
-#include "koh_console.h"
-#include "koh_logger.h"
-#include "koh_lua_tools.h"
-#include "koh_rand.h"
-#include "koh_routine.h"
+#include "koh.h"
 #include "lauxlib.h"
+#include "libsmallregex.h"
 #include "lua.h"
 #include "lualib.h"
 #include "raylib.h"
 #include "raymath.h"
 #include <assert.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <libgen.h>
 #include <math.h>
 #include <stdbool.h>
@@ -28,12 +26,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <dirent.h>
-#include "libsmallregex.h"
 
 #ifdef PLATFORM_DESKTOP
 #include <signal.h>
 #endif
+
+struct FilesSearchResultInternal {
+    struct small_regex *regex;
+};
 
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 
@@ -1055,65 +1055,79 @@ void parse_bracketed_string(
     }
 }
 
-static void search_files_rec(struct FilesSearchResult *fsr) {
+static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
 
-    if (fsr->names) {
+    if (!fsr->names) {
         fsr->capacity = 100;
         fsr->names = calloc(fsr->capacity, sizeof(fsr->names[0]));
     }
 
-    DIR *dir = opendir(fsr->path);
+    trace(
+        "search_files_rec: path %s, regex_pattern %s\n",
+        path, fsr->regex_pattern
+    );
+
+    assert(path);
+    DIR *dir = opendir(path);
 
     if (!dir) 
         return;
 
-    trace(
-        "search_files_rec: path %s, regex_pattern %s\n",
-        fsr->path,
-        fsr->regex_pattern
-    );
-
-    struct small_regex *regex = regex_compile(fsr->regex_pattern);
-    assert(regex);
+    assert(fsr->internal);
+    struct small_regex *regex = fsr->internal->regex;
 
     struct dirent *entry = NULL;
     while ((entry = readdir(dir))) {
-        char file_type[32] = {};
-
         switch (entry->d_type) {
-            case DT_DIR: strcpy(file_type, "directory"); break;
-            case DT_REG: strcpy(file_type, "regular"); break;
+            case DT_DIR: {
+                if (!strcmp(entry->d_name, ".") || 
+                    !strcmp(entry->d_name, ".."))
+                    break;
+                trace("search_files_rec: directory %s\n", entry->d_name);
+                char new_path[1024] = {};
+
+                strcat(new_path, path);
+                strcat(new_path, "/");
+                strcat(new_path, entry->d_name);
+
+                search_files_rec(fsr, new_path);
+                break;
+            }
+            case DT_REG: {
+                trace("search_files_rec: regular %s\n", entry->d_name);
+
+                int found = regex_matchp(regex, entry->d_name);
+                if (found == -1)
+                    break;;
+
+                char fname[1024] = {};
+                strcat(fname, path);
+                strcat(fname, "/");
+                strcat(fname, entry->d_name);
+
+                /*trace("search_files_rec: fname %s\n", fname);*/
+
+                if (fsr->num + 1 == fsr->capacity) {
+                    trace(
+                        "search_files_rec: realloc num %d, capacity %d\n",
+                        fsr->num, fsr->capacity
+                    );
+                    fsr->capacity *= 2;
+                    fsr->capacity += 2;
+                    size_t size = fsr->capacity * sizeof(fsr->names[0]);
+                    fsr->names = realloc(fsr->names, size);
+                }
+
+
+                fsr->names[fsr->num] = strdup(fname);
+                fsr->num++;
+                break;
+            }
         }
 
-        trace(
-            "search_files_rec: entry->d_name %s with type %s\n",
-            entry->d_name,
-            file_type
-        );
-        int found = regex_matchp(regex, entry->d_name);
-        if (found == -1)
-            continue;
-
-        char fname[512] = {};
-        strcat(fname, fsr->path);
-        strcat(fname, "/");
-        strcat(fname, entry->d_name);
-
-        trace("koh_search_files: fname %s\n", fname);
-
-        if (fsr->num == fsr->capacity) {
-            fsr->capacity *= 2;
-            fsr->capacity += 2;
-            size_t size = fsr->capacity * sizeof(fsr->names[0]);
-            fsr->names = realloc(fsr->names, size);
-        }
-
-        fsr->names[fsr->num] = strdup(fname);
-        fsr->num++;
     }
 
     closedir(dir);
-    regex_free(regex);
 }
 
 struct FilesSearchResult koh_search_files(
@@ -1125,9 +1139,24 @@ struct FilesSearchResult koh_search_files(
         return fsr;
 
     fsr.path = strdup(path);
+    size_t path_len = strlen(fsr.path);
+    if (fsr.path[path_len - 1] == '/') {
+        fsr.path[path_len - 1] = 0;
+    }
     fsr.regex_pattern = strdup(regex_pattern);
 
-    //search_files_rec(&fsr);
+    fsr.internal = malloc(sizeof(*fsr.internal));
+    fsr.internal->regex = regex_compile(fsr.regex_pattern);
+    if (!fsr.internal->regex) {
+        trace(
+            "koh_search_files: could not compile regex '%s'\n",
+            fsr.regex_pattern
+        );
+        koh_search_files_shutdown(&fsr);
+        return fsr;
+    }
+
+    search_files_rec(&fsr, fsr.path);
 
     return fsr;
 }
@@ -1136,8 +1165,13 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
     if (!fsr)
         return;
 
-    for (int i = 0; i < fsr->num; ++i) {
+    for (int i = 0; i < fsr->num; ++i)
         free(fsr->names[i]);
+
+    if (fsr->internal) {
+        if (fsr->internal->regex)
+            regex_free(fsr->internal->regex);
+        free(fsr->internal);
     }
 
     if (fsr->names)
@@ -1148,4 +1182,11 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
         free(fsr->regex_pattern);
 
     memset(fsr, 0, sizeof(*fsr));
+}
+
+void koh_search_files_print(struct FilesSearchResult *fsr) {
+    assert(fsr);
+    for (int i = 0; i < fsr->num; ++i) {
+        trace("koh_search_files_print: '%s'\n", fsr->names[i]);
+    }
 }
