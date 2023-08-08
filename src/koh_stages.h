@@ -18,7 +18,7 @@ typedef void (*Stage_data_callback)(struct Stage *s, void *data);
 typedef struct Stage {
     Stage_data_callback init;
     Stage_callback      shutdown;
-    Stage_callback      draw, update;
+    Stage_callback      draw, update, gui;
     Stage_data_callback enter, leave;
 
     void *data;
@@ -46,3 +46,4 @@ void *stage_assert(Stage *st, const char *name);
 void stages_print();
 // ImGui окошко работы со сценами
 void stages_gui_window();
+void stage_active_gui_render();

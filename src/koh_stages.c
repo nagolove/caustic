@@ -81,6 +81,7 @@ void stage_shutdown_all(void) {
     }
 }
 
+// TODO: Разделить обновление и рисование в разные функции
 void stage_update_active(void) {
     Stage *st = stages.cur;
     if (st && st->update) st->update(st);
@@ -261,27 +262,102 @@ void stages_gui_window() {
             snprintf(
                 label, sizeof(label), "label %s\n", stages.stages[i]->name
             );
-            igSelectable_BoolPtr(label, &stages.selected[i], 0, (ImVec2){0, 0});
+            igSelectable_BoolPtr(
+                label, &stages.selected[i],
+                ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
+            );
 
-            igTableSetColumnIndex(0);
+            //igTableSetColumnIndex(0);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->init);
-            igTableSetColumnIndex(1);
+            //igTableSetColumnIndex(1);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->shutdown);
-            igTableSetColumnIndex(2);
+            //igTableSetColumnIndex(2);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->draw);
-            igTableSetColumnIndex(3);
+            //igTableSetColumnIndex(3);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->update);
-            igTableSetColumnIndex(4);
+            //igTableSetColumnIndex(4);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->enter);
-            igTableSetColumnIndex(5);
+            //igTableSetColumnIndex(5);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->leave);
-            igTableSetColumnIndex(6);
+            //igTableSetColumnIndex(6);
+            igTableNextColumn();
             igText("%p", stages.stages[i]->data);
-            igTableSetColumnIndex(7);
+            //igTableSetColumnIndex(7);
+            igTableNextColumn();
             igText("%s", stages.stages[i]->name);
         }
         igEndTable();
     }
 
+    if (igBeginTable("XXXX", 2, 0, outer_size, 0.)) {
+
+        igTableSetupColumn("init", 0, 0, 0);
+        igTableSetupColumn("shutdown", 0, 0, 1);
+        igTableHeadersRow();
+
+        static const char *lines[] = {
+            "HE",
+            "ME",
+            "PI",
+            "GO",
+            NULL
+        };
+        static bool is_selected[] = {
+            0, 0, 0, 0, 0, 0
+        };
+
+        int i = 0;
+        const char **line = (const char**)lines;
+        while (*line) {
+            trace("stages_gui_window: %s\n", *line);
+
+            ImGuiTableFlags row_flags = 0;
+            igTableNextRow(row_flags, 0);
+
+            char label[128] = {};
+            snprintf(
+                label, sizeof(label), "%s", *line
+            );
+
+            //igTableSetColumnIndex(0);
+            igTableNextColumn();
+
+            igSelectable_BoolPtr(
+                label, &is_selected[i],
+                ImGuiSelectableFlags_SpanAllColumns, 
+                (ImVec2){0, 0}
+            );
+
+            //igText("%s", *line);
+            //igTableSetColumnIndex(1);
+            igTableNextColumn();
+
+            /*
+            igSelectable_BoolPtr(
+                label, &is_selected[i],
+                //ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
+                0, (ImVec2){0, 0}
+            );
+            */
+            
+            igText("%d", i);
+
+            line++;
+            i++;
+        }
+
+        igEndTable();
+    }
     igEnd();
+}
+
+void stage_active_gui_render() {
+    Stage *st = stages.cur;
+    if (st && st->gui) st->gui(st);
 }
