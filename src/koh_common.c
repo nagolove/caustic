@@ -1098,7 +1098,7 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
 
                 int found = regex_matchp(regex, entry->d_name);
                 if (found == -1)
-                    break;;
+                    break;
 
                 char fname[1024] = {};
                 strcat(fname, path);
