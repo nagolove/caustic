@@ -2,21 +2,19 @@
 // vim: fdm=marker
 
 #include "koh_stages.h"
-#include <stdio.h>
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
 #include "cimgui.h"
 #include "cimgui_impl.h"
-#include "koh_console.h"
-#include "koh_logger.h"
-#include "koh_script.h"
+#include "koh.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include "raylib.h"
 #include <assert.h>
 #include <memory.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -206,6 +204,14 @@ static int stage_input_cb(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
+static Stage *get_selected_stage() {
+    for (int i = 0; i < stages.num; i++) {
+        if (stages.selected[i])
+            return stages.stages[i];
+    }
+    return NULL;
+}
+
 void stages_gui_window() {
     bool opened = true;
     ImGuiWindowFlags flags = 0;
@@ -233,16 +239,22 @@ void stages_gui_window() {
         stage_str_argument, sizeof(stage_str_argument), input_flags, 0, NULL
     );
 
-    if (igButton("[update]", (ImVec2) {0, 0})) {
+    if (igButton("switch to selected stage", (ImVec2) {0, 0})) {
         trace("stages_gui_window: stage_buf '%s'\n", stage_buf);
+        /*
         if (stage_find(stage_buf)) {
             trace("stages_gui_window: switch to %s\n", stage_buf);
             stage_set_active(stage_buf, NULL);
         }
+        */
+        const Stage *selected = get_selected_stage();
+        if (selected)
+            stage_set_active(selected->name, NULL);
     }
 
     ImVec2 outer_size = {0., 0.};
-    if (igBeginTable("stage", 8, table_flags, outer_size, 0.)) {
+    const int columns_num = 8;
+    if (igBeginTable("stage", columns_num, table_flags, outer_size, 0.)) {
 
         igTableSetupColumn("init", 0, 0, 0);
         igTableSetupColumn("shutdown", 0, 0, 1);
@@ -262,39 +274,50 @@ void stages_gui_window() {
             snprintf(
                 label, sizeof(label), "label %s\n", stages.stages[i]->name
             );
-            igSelectable_BoolPtr(
-                label, &stages.selected[i],
-                ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
-            );
 
-            //igTableSetColumnIndex(0);
-            igTableNextColumn();
+            igTableSetColumnIndex(0);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->init);
-            //igTableSetColumnIndex(1);
-            igTableNextColumn();
+            igTableSetColumnIndex(1);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->shutdown);
-            //igTableSetColumnIndex(2);
-            igTableNextColumn();
+            igTableSetColumnIndex(2);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->draw);
-            //igTableSetColumnIndex(3);
-            igTableNextColumn();
+            igTableSetColumnIndex(3);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->update);
-            //igTableSetColumnIndex(4);
-            igTableNextColumn();
+            igTableSetColumnIndex(4);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->enter);
-            //igTableSetColumnIndex(5);
-            igTableNextColumn();
+            igTableSetColumnIndex(5);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->leave);
-            //igTableSetColumnIndex(6);
-            igTableNextColumn();
+            igTableSetColumnIndex(6);
+            //igTableNextColumn();
             igText("%p", stages.stages[i]->data);
-            //igTableSetColumnIndex(7);
-            igTableNextColumn();
-            igText("%s", stages.stages[i]->name);
+
+            igTableSetColumnIndex(7);
+            //igTableNextColumn();
+
+            char name_label[64] = {};
+            sprintf(name_label, "%s", stages.stages[i]->name);
+            if (igSelectable_BoolPtr(
+                name_label, &stages.selected[i],
+                ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
+            )) {
+                for (int j = 0; j < stages.num; ++j) {
+                    if (j != i)
+                        stages.selected[j] = false;
+                }
+            }
+
+            //igText("%s", stages.stages[i]->name);
         }
         igEndTable();
     }
 
+    /*
     if (igBeginTable("XXXX", 2, 0, outer_size, 0.)) {
 
         igTableSetupColumn("init", 0, 0, 0);
@@ -312,10 +335,20 @@ void stages_gui_window() {
             0, 0, 0, 0, 0, 0
         };
 
-        int i = 0;
+        //static bool selected = false;
+        //static int selected_index = 0;
+
+        int lines_num = 0;
         const char **line = (const char**)lines;
         while (*line) {
-            trace("stages_gui_window: %s\n", *line);
+            line++;
+            lines_num++;
+        }
+
+        int i = 0;
+        line = (const char**)lines;
+        while (*line) {
+            //trace("stages_gui_window: %s\n", *line);
 
             ImGuiTableFlags row_flags = 0;
             igTableNextRow(row_flags, 0);
@@ -328,23 +361,35 @@ void stages_gui_window() {
             //igTableSetColumnIndex(0);
             igTableNextColumn();
 
-            igSelectable_BoolPtr(
+            // TODO: Выделяется только один элемент
+            if (igSelectable_BoolPtr(
                 label, &is_selected[i],
                 ImGuiSelectableFlags_SpanAllColumns, 
                 (ImVec2){0, 0}
-            );
+            )) {
+                //selected_index = i;
+                for (int j = 0; j < lines_num; j++) {
+                    if (j != i)
+                        //is_selected[j] = !is_selected[j];
+                        is_selected[j] = false;
+                }
+            }
+
+            trace("stages_gui_window: ");
+            for (int j = 0; j < lines_num; j++)
+                trace("%s ", is_selected[j] ? "true" : "false");
+            trace("\n");
+
 
             //igText("%s", *line);
             //igTableSetColumnIndex(1);
             igTableNextColumn();
 
-            /*
-            igSelectable_BoolPtr(
-                label, &is_selected[i],
-                //ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
-                0, (ImVec2){0, 0}
-            );
-            */
+            //igSelectable_BoolPtr(
+                //label, &is_selected[i],
+                ////ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
+                //0, (ImVec2){0, 0}
+            //);
             
             igText("%d", i);
 
@@ -354,6 +399,8 @@ void stages_gui_window() {
 
         igEndTable();
     }
+    */
+
     igEnd();
 }
 
