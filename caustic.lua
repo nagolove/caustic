@@ -10,6 +10,9 @@ local function remove_last_backslash(path)
    return path
 end
 
+local path_third_party = remove_last_backslash("3rd_party")
+local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
+
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
    print("CAUSTIC_PATH is nil")
@@ -23,10 +26,17 @@ local tabular = require("tabular").show
 local lfs = require('lfs')
 local ansicolors = require('ansicolors')
 local home = os.getenv("HOME")
+
 assert(home)
+assert(path_caustic)
+assert(path_third_party)
+assert(path_wasm_third_party)
+
 package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
 home .. "/.luarocks/share/lua/5.4/?/init.lua;" ..
-home .. "/caustic/3rd_party/json.lua/?.lua;" ..
+
+
+path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..
 package.path
 package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
 home .. "/.luarocks/lib/lua/5.4/?/init.so;" ..
@@ -246,11 +256,6 @@ local function search_and_load_cfgs_up(fname)
 
    return cfgs, push_num
 end
-
-
-local path_third_party = "3rd_party"
-local path_wasm_third_party = "wasm_3rd_party"
-
 
 local signal = require("posix").signal.signal
 local inspect = require('inspect')
@@ -718,20 +723,34 @@ local function gather_includedirs(deps, path_prefix)
    return tmp_includedirs
 end
 
-local includedirs2 = 
-gather_includedirs(dependencies, path_third_party)
+local function prefix_add(prefix, t)
+   local prefixed_t = {}
+   for _, s in ipairs(t) do
+      table.insert(prefixed_t, prefix .. s)
+   end
+   return prefixed_t
+end
+
+includedirs = prefix_add(
+path_caustic .. "/", gather_includedirs(dependencies, path_third_party))
+
+table.insert(includedirs, path_caustic .. "/src")
 
 print('includedirs')
 print(tabular(includedirs))
 
-print('includedirs2')
-print(tabular(includedirs2))
 
-print("os.exit()")
-os.exit()
 
-local includedirs_internal = 
-template_dirs(_includedirs_internal, path_third_party)
+
+
+
+
+
+
+
+local includedirs_internal = prefix_add(
+path_caustic .. "/", gather_includedirs(dependencies, path_third_party))
+
 
 local links_internal = {
 
@@ -882,17 +901,6 @@ get_deps_name_map(dependencies)
 
 
 
-
-local ret_table = {
-   urls = get_urls(dependencies),
-   dependencies = dependencies,
-   dirnames = get_dirs(dependencies),
-   includedirs = includedirs,
-   links = links,
-   libdirs = libdirs,
-   libdirs_internal = libdirs_internal,
-   links_internal = links_internal,
-}
 
 local function check_luarocks()
    local fd = io.popen("luarocks --version")
@@ -1773,7 +1781,16 @@ local function common_build(dep)
 end
 
 function actions.verbose(_)
-   print(tabular(ret_table))
+   print(tabular({
+      urls = get_urls(dependencies),
+      dependencies = dependencies,
+      dirnames = get_dirs(dependencies),
+      includedirs = includedirs,
+      links = links,
+      libdirs = libdirs,
+      libdirs_internal = libdirs_internal,
+      links_internal = links_internal,
+   }))
 end
 
 function actions.compile_flags(_)
@@ -2717,9 +2734,15 @@ local function sub_make(_args, cfg, push_num)
    local _includes = table.concat({},
    " ")
    local dirs = cfg.artifact and includedirs or includedirs_internal
+
    for _, v in ipairs(dirs) do
-      _includes = _includes .. " -I../" .. v
+      _includes = _includes .. " -I" .. v
    end
+
+
+   print(tabular(dirs))
+   print(tabular(_includes))
+
 
 
 

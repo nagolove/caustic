@@ -65,13 +65,11 @@ end
 
 local format = string.format
 
--- TODO: В каждый каталог класть файл bld.lua, определяющий действия по сборке
--- содержимого каталога. Внутри файла можно использовать модуль caustic для
--- утилитарных функций.
+--[[
+-- {{{
 -- Команда init копирует соответствующие файлы из каталога bld в каждый каталог
 -- зависимости
 
---[[
 project dir -> bld.lua
             -> bld
                 -> lua.lua              | копируется в каталог 3rd_party/dep.name
@@ -102,6 +100,7 @@ project dir -> bld.lua
                     -> bin_r.exe
                     -> bin.html
                     -> assets.zip
+-- }}}
 --]]
 
 local serpent = require 'serpent'
@@ -292,9 +291,11 @@ local record Dependency
     -- глубину и после копирования вызвается git checkout commit
     commit: string      
 
-    includes: {string}  -- Список каталогов для включаемых файлов. Добавить
-                        -- поддержку шаблонов
-    libs: {string}
+    -- TODO: Возможно добавить поддержку шаблонов
+    includes: {string}  -- Список каталогов для включаемых файлов.
+
+    links_internal: {string}
+    links: {string}
     libdirs: {string}
 
     -- TODO: Функция инициализация таблички замисимости. Нужна для установки
@@ -305,7 +306,7 @@ local record Dependency
 
     -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
     -- build_cmake, etc
-    custom_build: function(dep: Dependency, dirname: string)
+    custom_build: function(dep: Dependency)
     after_build: function(dep: Dependency)
 
     build_method: BuildMethod
@@ -326,9 +327,6 @@ local function shallow_copy<X>(a: X): X
 end
 
 local function cmd_do(_cmd: string|{string})
-    --local file = io.popen(_cmd)
-    --file:read("*a")
-    --file:close()
     if verbose then
         --print("cmd_do: working directory", lfs.currentdir())
         os.execute("echo `pwd`")
@@ -396,8 +394,16 @@ local function gennann_after_build(dep: Dependency)
     pop_dir()
 end
 
-local function small_regex_custom_build(_: Dependency, dirname: string)
-    print('custom_build', dirname)
+local function pcre2_custom_build(_: Dependency)
+    print("pcre2_custom_build", lfs.currentdir())
+
+    cmd_do("rm CMakeCache.txt")
+    cmd_do("cmake .")
+    cmd_do("make -j")
+end
+
+local function small_regex_custom_build(dep: Dependency)
+    print('custom_build', dep.dir)
     print('currentdir', lfs.currentdir())
     local prevdir = lfs.currentdir()
     local ok, errmsg = lfs.chdir('libsmallregex')
@@ -529,6 +535,10 @@ local dependencies: {Dependency} = {
         url = "https://github.com/PhilipHazel/pcre2.git",
         name = "pcre2",
         dir = "pcre2",
+        custom_build = pcre2_custom_build,
+        includes = { "pcre2/src" },
+        build_method = "other",
+        links_internal = { "libpcre2-8.a" },
     },
     {
         url = "https://github.com/rxi/json.lua.git",
@@ -537,6 +547,7 @@ local dependencies: {Dependency} = {
     },
     {
         name = "lfs",
+        links_internal = { "lfs:static" },
         url = "https://github.com/lunarmodules/luafilesystem.git",
         includes = { "luafilesystem/src" },
         build_method = "other",
@@ -561,6 +572,7 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'cimgui',
+        links_internal = { "cimgui:static" },
         includes = {
             "cimgui",
             "cimgui/generator/output",
@@ -587,15 +599,15 @@ local dependencies: {Dependency} = {
         commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         url = "https://github.com/codeplea/genann.git",
         includes = { "genann" },
+        links_internal = { "genann:static" },
         after_build = gennann_after_build,
         copy_for_wasm = true,
         --build_method = 'other',
     },
     {
         name = 'chipmunk',
-        includes = {
-            "Chipmunk2D/include",
-        },
+        links_internal = { "chipmunk:static" },
+        includes = { "Chipmunk2D/include", },
         url = "https://github.com/nagolove/Chipmunk2D.git",
         copy_for_wasm = true,
         --build_method = 'other',
@@ -603,12 +615,14 @@ local dependencies: {Dependency} = {
     {
         name = 'lua',
         url = "https://github.com/lua/lua.git",
+        links_internal = { "lua:static" },
         includes = { "lua" },
         copy_for_wasm = true,
         --build_method = 'other',
     },
     {
         name = 'raylib',
+        links_internal = { "raylib" },
         includes = { "raylib/src" },
         url = "https://github.com/raysan5/raylib.git",
         copy_for_wasm = true,
@@ -616,6 +630,7 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'smallregex',
+        links_internal = { "smallregex:static" },
         includes = { "small-regex/libsmallregex" },
         url = "https://gitlab.com/relkom/small-regex.git",
         custom_build = small_regex_custom_build,
@@ -625,6 +640,7 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'utf8proc',
+        links_internal = { "utf8proc:static" },
         includes = { "utf8proc" },
         url = "https://github.com/JuliaLang/utf8proc.git",
         copy_for_wasm = true,
@@ -659,7 +675,7 @@ local function get_urls(deps: {Dependency}): {string}
     return urls
 end
 
--- TODO: добавить каждую запись как элемент таблицы dependencies?
+-- TODO: Окончательно удалить использование данной таблички
 local _includedirs  = { 
     --"../caustic/%s/rlImGui",                          
     "../caustic/%s/Chipmunk2D/include",                 -- ok
@@ -702,13 +718,13 @@ local function template_dirs(dirs: {string}, pattern: string): {string}
     return tmp
 end
 
--- XXX: Брать значения из таблички зависомостей?
-local includedirs = 
-    template_dirs(_includedirs, path_third_party)
+--local includedirs = 
+    --template_dirs(_includedirs, path_third_party)
 
 -- TODO: Проверка на дубликаты путей
 local function gather_includedirs(deps: {Dependency}, path_prefix: string): {string}
     assert(deps)
+    path_prefix = remove_last_backslash(path_prefix)
     local tmp_includedirs = {}
     for _, dep in ipairs(deps) do
         if dep.includes then
@@ -731,13 +747,13 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
-includedirs = prefix_add(
+local includedirs = prefix_add(
     path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
 )
 table.insert(includedirs, path_caustic .. "/src")
 
-print('includedirs')
-print(tabular(includedirs))
+--print('includedirs')
+--print(tabular(includedirs))
 
 --print('includedirs2')
 --print(tabular(includedirs2))
@@ -752,36 +768,49 @@ local includedirs_internal = prefix_add(
     path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
 )
 
+local function gather_links_internal(deps: {Dependency}): {string}
+    local tmp_links_internal = {}
+    for _, dep in ipairs(deps) do
+        if dep.links_internal then
+            for _, link_internal in ipairs(dep.links_internal) do
+                table.insert(tmp_links_internal, link_internal)
+            end
+        end
+    end
+    return tmp_links_internal
+end
+
+--[[
 local links_internal = { 
-    --"raylib:static",
-    "raylib",
-    "m",
-    --"rlImGui:static",
-    "genann:static",
-    "smallregex:static",
-    "lua:static",
-    "utf8proc:static",
-    "chipmunk:static",
-    "cimgui:static",
-    --"freetype:static",
-    "stdc++",
-    --"sunvox",
-    "lfs:static",
+    "raylib",                   -- ok
+    "genann:static",            -- ok
+    "smallregex:static",        -- ok
+    "lua:static",               -- ok
+    "utf8proc:static",          -- ok
+    "chipmunk:static",          -- ok
+    "cimgui:static",            -- ok
+    "lfs:static",               --
 }
+--]]
+
+
+local links_internal = merge_tables(gather_links_internal(dependencies),
+    {
+        "stdc++",                   
+        "m",                       
+    }
+)
 
 local links = { 
-    "m",
-    --"rlImGui:static",
-    "raylib:static",
-    "genann:static",
-    "smallregex:static",
-    "lua:static",
-    "utf8proc:static",
-    "chipmunk:static",
-    "cimgui:static",
-    --"freetype:static",
-    "stdc++",
-    --"sunvox",
+    "m",                        --
+    "raylib:static",            --
+    "genann:static",            --
+    "smallregex:static",        --
+    "lua:static",               --
+    "utf8proc:static",          --
+    "chipmunk:static",          --
+    "cimgui:static",            --
+    "stdc++",                   --
 }
 
 local links_linix_only = {
@@ -1211,7 +1240,145 @@ local enum ActionsEnum
     "build_smart"
 end
 
+local record ParserSetup
+    summary: string
+    options: {string}
+    flags: {{string}}
+    arguments: {{string}}
+end
+
+local parser_setup: {string:ParserSetup} = {
+    -- {{{
+    build = {
+        summary = "build dependendies for native platform",
+        options = { "-n --name" },
+    },
+    compile_flags = {
+        summary = "print compile_flags.txt to stdout",
+    },
+    deps = {
+        summary = "list of dependendies",
+        flags = { 
+            { "-f --full", "full nodes info" },
+        },
+    },
+    init = {
+        summary = "download dependencies from network",
+        options = { "-n --name" },
+    },
+    make = {
+        summary = "build libcaustic or current project",
+        arguments = { 
+            { "make_type", "?" }
+        },
+        flags = {
+            { "-g --nocodegen", "disable codegeneration step" },
+            { "-j", "run compilation parallel" },
+            { "-c", "full rebuild without cache info" },
+            { "-r --release", "release" },
+            { "-a --noasan", "no address sanitazer" },
+            { "-p --cpp", "use c++ code" },
+        },
+    },
+    publish = {
+        summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
+    },
+    remove = {
+        summary = "remove all 3rd_party files",
+        options = { "-n --name" },
+    },
+    rocks = {
+        summary = "list of lua rocks should be installed for this script",
+    },
+    run = {
+        summary = "run project native executable under gdb",
+        arguments = {
+            { "flags", "*" }
+        },
+    },
+    test = {
+        summary = "build native test executable and run it",
+    },
+    verbose = {
+        summary = "print internal data with urls, paths etc.",
+    },
+    wbuild = {
+        summary = "build dependencies and libcaustic for wasm or build project",
+        flags = {
+            { "-m --minshell", "use minimal web shell" },
+        }
+    },
+    init_smart = {
+        summary = "install new dependencies",
+        options = { "-n --name" },
+    },
+    build_smart = {
+        summary = "build dependendies for native platform",
+        options = { "n --name" },
+    },
+}
+-- }}}
+--]]
+
 local actions: Actions = {}
+
+local function _init_smart(path: string, deps: {Dependency})
+    print("_init", path, inspect(deps))
+    push_current_dir()
+
+    if not lfs.chdir(path) then
+        if not lfs.mkdir(path) then
+            print('could not do lfs.mkdir()')
+            os.exit()
+        end
+        lfs.chdir(path)
+    end
+
+    local threads: {lanes.Thread} = {}
+    local opt_tbl = { required = { "lfs", }, }
+    local func = lanes.gen("*", opt_tbl, dependency_init)
+
+    local sorter = Toposorter.new()
+
+    for _, dep in ipairs(deps) do
+        assert(type(dep.url) == 'string')
+        assert(dep.name)
+        if dep.depends then
+            for _, dep_name in ipairs(dep.depends) do
+                sorter:add(dep.name, dep_name)
+            end
+        else
+            --sorter:add(dep.name, "null")
+            local type Dependency_init = function(Dependency, string): any
+            local lane_thread = (func as Dependency_init)(dep, path) 
+                as lanes.Thread
+            table.insert(threads, lane_thread)
+        end
+    end
+
+    local sorted = sorter:sort()
+
+    -- XXX: На всякий случай удаляются имена null
+    -- Но они могут и никогда не присутствовать :))
+    sorted = filter(sorted, function(node: Node): boolean
+        return node.value ~= "null"
+    end)
+
+    print(tabular(threads))
+    wait_threads(threads)
+    for _, thread in ipairs(threads) do
+        local result, errcode = thread:join()
+        print(result, errcode)
+    end
+
+    for _, node in ripairs(sorted) do
+        local dep = dependencies_name_map[(node as Node).value as string]
+        --print('dep', inspect(dep))
+        dependency_init(dep, path)
+    end
+
+    pop_dir()
+end
 
 local function _init(path: string, deps: {Dependency})
     print("_init", path, inspect(deps))
@@ -1333,15 +1500,17 @@ function actions.init_smart(_args: Args)
             return
         end
     else
-        for _, dep in ipairs(dependencies) do
-            table.insert(deps, dep)
-        end
+        print("only one named dependency supported")
+        os.exit()
+        --for _, dep in ipairs(dependencies) do
+            --table.insert(deps, dep)
+        --end
     end
 
     print('deps', inspect(deps))
     --check_for_unstaged(deps)
-    _init(path_third_party, deps)
-    _init(path_wasm_third_party, deps)
+    _init_smart(path_third_party, deps)
+    _init_smart(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
 
@@ -2189,7 +2358,7 @@ local function _build_smart(dep: Dependency)
 
     if dep.custom_build then
         local ok, errmsg: boolean, string = pcall(function()
-            dep.custom_build(dep, dirname)
+            dep.custom_build(dep)
         end)
         if not ok then
             print('custom_build error:', errmsg)
@@ -2224,7 +2393,7 @@ local function _build(dirname: string)
 
     if dep.custom_build then
         local ok, errmsg: boolean, string = pcall(function()
-            dep.custom_build(dep, dirname)
+            dep.custom_build(dep)
         end)
         if not ok then
             print('custom_build error:', errmsg)
@@ -2580,18 +2749,6 @@ function actions.anim_convert(_args: Args)
     io.open(new_fname, "w"):write(serpent.dump(res))
 end
 
--- Возвращает новую табличку, составленную из элементов таблицы a и таблицы b
-local function list_concat(a: {string}, b: {string}): {string}
-    local tmp = {}
-    for _, v in ipairs(a) do
-        table.insert(tmp, v)
-    end
-    for _, v in ipairs(b) do
-        table.insert(tmp, v)
-    end
-    return tmp
-end
-
 local function codegen(cg: Cfg.Codegen)
     print('codegen', inspect(cg))
     local lines = {}
@@ -2758,7 +2915,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if not _args.noasan then
         table.insert(flags, "-fsanitize=address")
     end
-    flags = list_concat(flags, { "-Wall", "-fPIC", })
+    flags = merge_tables(flags, { "-Wall", "-fPIC", })
     local _flags: string = table.concat(flags, " ")
 
     local libspath_prefix = cfg.artifact and "../" or ""
@@ -2923,15 +3080,48 @@ local function handler_int(_: integer)
     os.exit()
 end
 
+local argparse = require 'argparse'
+
+local function do_parser_setup(parser: argparse.Parser)
+    for cmd_name, setup_tbl in pairs(parser_setup) do
+        local p = parser:command(cmd_name)
+        if setup_tbl.summary then
+            p:summary(setup_tbl.summary)
+        end
+        if setup_tbl.options then
+            for _, option in ipairs(setup_tbl.options) do
+                p:option(option)
+            end
+        end
+        if setup_tbl.flags then
+            for _, flag_tbl in ipairs(setup_tbl.flags) do
+                assert(type(flag_tbl[1]) == "string")
+                assert(type(flag_tbl[2]) == "string")
+                p:flag(flag_tbl[1], flag_tbl[2])
+            end
+        end
+        if setup_tbl.arguments then
+            for _, argument_tbl in ipairs(setup_tbl.arguments) do
+                assert(type(argument_tbl[1]) == "string")
+                assert(type(argument_tbl[2]) == "string")
+                p:argument(argument_tbl[1]):args(argument_tbl[2])
+            end
+        end
+    end
+end
+
 local function main()
     local SIGINT = 2
     signal(SIGINT, handler_int)
 
-    local argparse = require 'argparse'
     local parser = argparse()
+
+    do_parser_setup(parser)
 
     parser:flag("-v --verbose", "use verbose output")
 
+    --[[
+    -- {{{
     -- Нужно собрать все исходные файлы для wasm версии.
     -- Сперва скопировать их в отдельный каталог.
     -- TODO: документация на все опции, команда help
@@ -2939,7 +3129,7 @@ local function main()
     parser:command("init")
         :summary("download dependencies from network")
         :option("-n --name")
-    parser:command("init_add")
+    parser:command("init_smart")
         :summary("install new dependencies")
         :option("-n --name")
     parser:command("deps")
@@ -2964,8 +3154,8 @@ local function main()
     parser:command("wbuild")
         :summary("build dependencies and libcaustic for wasm or build project")
         :flag("-m --minshell", "use minimal web shell")
-    parser:command("check_updates")
-        :summary("print new version of libraries")
+    --parser:command("check_updates")
+        --:summary("print new version of libraries")
     parser:command("publish")
         :summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
     parser:command("test")
@@ -2988,11 +3178,14 @@ local function main()
     make:flag('-r --release', 'release')
     make:flag('-a --noasan', 'no address sanitazer')
     make:flag("-p --cpp", "use c++ code")
-    --make:flag("-v --verbose", "use verbose output")
+    -- }}}
+    --]]
 
-    --local block = parser:command("block"):summary("block") as argparse.Parser
-    --block:command("new"):summary("new")
-    --block:command("check"):summary("check")
+    --[[
+    local block = parser:command("block"):summary("block") as argparse.Parser
+    block:command("new"):summary("new")
+    block:command("check"):summary("check")
+    --]]
 
     parser:add_complete()
     local _args = parser:parse()
