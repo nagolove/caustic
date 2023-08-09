@@ -259,15 +259,20 @@ local record Dependency
     disabled: boolean   -- временно исключает запись из обработки
 
     -- Имена и зависимости(поля name и depends) обрабатываются в команде init
-    depends: {string}
-    name: string
+    name: string        -- имя зависимости
+    depends: {string}   -- список имен зависомостей от которых зависит данная
 
-    url: string
-    dir: string
-    fname: string
+    url: string         -- git ссылка или ссылка на zip для wget
+
+    -- имя каталога в который производится копирование и сборка
+    dir: string         
+
+    fname: string       -- ??
     copy_for_wasm: boolean
-    after_init: function(dep: Dependency)
-    commit: string
+
+    -- если значение поля присутствует, то репозиторий копируется на всю 
+    -- глубину и после копирования вызвается git checkout commit
+    commit: string      
 
     includes: {string}  -- Список каталогов для включаемых файлов. Добавить
                         -- поддержку шаблонов
@@ -278,11 +283,13 @@ local record Dependency
     -- каких-то полей, к примеру includes устанавливаются исходя из списка
     -- каталогов репозитория
     init: function(dep: Dependency): Dependency
+    after_init: function(dep: Dependency)
 
     -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
     -- build_cmake, etc
     custom_build: function(dep: Dependency, dirname: string)
     after_build: function(dep: Dependency)
+
     build_method: BuildMethod
 end
 
@@ -789,8 +796,14 @@ local function get_deps_name_map(deps: {Dependency}): {string: Dependency}
     return map
 end
 
-local dependencies_map = get_deps_map(dependencies)
-local dependencies_name_map = get_deps_name_map(dependencies)
+-- ??
+local dependencies_map: {string: Dependency} = 
+    get_deps_map(dependencies)
+
+-- имя зависимости
+local dependencies_name_map: {string: Dependency} = 
+    get_deps_name_map(dependencies)
+
 --print('dependencies_map', inspect(dependencies_map))
 
 --[[
@@ -832,7 +845,6 @@ if not check_luarocks() then
 end
 
 local lanes = require "lanes".configure()
-local argparse = require "argparse"
 local tabular = require "tabular".show
 local sleep = require "socket".sleep
 
@@ -873,6 +885,8 @@ local function git_clone(dep: Dependency)
     print(tabular(dep))
     local url = dep.url
     if not dep.commit then
+        -- TODO: Если есть поле dep.commit заполнено, то копировать репозиторий
+        -- на всю глубину
         local git_cmd = "git clone --depth 1"
         local fd = io.popen(git_cmd .. " " .. url)
         print(fd:read("*a"))
@@ -1092,6 +1106,11 @@ local record Actions
     compile_flags: function(Args)
     deps: function(Args)
     init: function(Args)
+    init_add: function(Args)
+    
+    -- новая версия init, которая работает только с таблицей dependencies
+    init_smart: function(Args)
+
     make: function(Args)
     publish: function(Args)
     remove: function(Args)
@@ -1115,6 +1134,8 @@ local enum ActionsEnum
     "test"
     "verbose"
     "wbuild"
+    "init_add"
+    "init_smart"
 end
 
 local actions: Actions = {}
@@ -1217,6 +1238,38 @@ function actions.run(_args: Args)
     -- с использованием библиотеки munit
     -- XXX: Как выбрать подпроект который запускать(не всегда первый)?
     cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
+end
+
+function actions.init_add(_args: Args)
+    print("init_add")
+
+end
+
+-- TODO: сделать проверку на наличие несохраненных изменений в репозитории
+-- зависимости
+function actions.init_smart(_args: Args)
+    print('init_smart', inspect(_args))
+
+    local deps = {}
+    if _args.name then
+        print('partial init for dependency', _args.name)
+        if dependencies_name_map[_args.name] then
+            table.insert(deps, dependencies_name_map[_args.name])
+        else
+            print("bad dependency name", _args.name)
+            return
+        end
+    else
+        for _, dep in ipairs(dependencies) do
+            table.insert(deps, dep)
+        end
+    end
+
+    print('deps', inspect(deps))
+    --check_for_unstaged(deps)
+    _init(third_party, deps)
+    _init(wasm_third_party, deps)
+    --_init(win_third_party, deps)
 end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
@@ -2042,6 +2095,52 @@ function actions.wbuild(_args: Args)
     end
 end
 
+local function _build_smart(dep: Dependency)
+    assert(dep)
+
+    print("_build_smart:")
+    print(tabular(dep))
+
+    local dirname = dep.dir
+
+    if not dirname then
+        print(format(
+            "_build_smart: dependency %s has not 'dir' field", dep.name
+        ))
+        return
+    end
+
+    local prevdir = lfs.currentdir()
+    lfs.chdir(dirname)
+
+    if dep.custom_build then
+        local ok, errmsg: boolean, string = pcall(function()
+            dep.custom_build(dep, dirname)
+        end)
+        if not ok then
+            print('custom_build error:', errmsg)
+        end
+    else
+        local ok, errmsg: boolean, string = pcall(function()
+            common_build(dep)
+        end)
+        if not ok then
+            print('common_build() failed with', errmsg)
+        end
+    end
+
+    if dep and dep.after_build then
+        local ok, errmsg: boolean, string = pcall(function()
+            dep.after_build(dep)
+        end)
+        if not ok then
+            print(inspect(dep), 'failed with', errmsg)
+        end
+    end
+
+    lfs.chdir(prevdir)
+end
+
 local function _build(dirname: string)
     print("_build:", dirname)
     local prevdir = lfs.currentdir()
@@ -2725,6 +2824,7 @@ local function main()
     local SIGINT = 2
     signal(SIGINT, handler_int)
 
+    local argparse = require 'argparse'
     local parser = argparse()
 
     parser:flag("-v --verbose", "use verbose output")
@@ -2736,6 +2836,9 @@ local function main()
     -- TODO: документация на все опции, команда help
     parser:command("init")
         :summary("download dependencies from network")
+        :option("-n --name")
+    parser:command("init_add")
+        :summary("install new dependencies")
         :option("-n --name")
     parser:command("deps")
         :summary("list of dependendies")
@@ -2782,12 +2885,18 @@ local function main()
     make:flag("-p --cpp", "use c++ code")
     --make:flag("-v --verbose", "use verbose output")
 
+    --local block = parser:command("block"):summary("block") as argparse.Parser
+    --block:command("new"):summary("new")
+    --block:command("check"):summary("check")
+
     parser:add_complete()
     local _args = parser:parse()
 
     --print(tabular(_args))
     print(inspect(_args))
     verbose = _args.verbose == true
+
+    --print("os.exit()")
     --os.exit()
 
     for k, v in pairs(_args) do
