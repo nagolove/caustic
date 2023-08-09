@@ -10,6 +10,18 @@ local function remove_last_backslash(path)
    return path
 end
 
+
+local function merge_tables(a, b)
+   local tmp = {}
+   for _, v in ipairs(a) do
+      table.insert(tmp, v)
+   end
+   for _, v in ipairs(b) do
+      table.insert(tmp, v)
+   end
+   return tmp
+end
+
 local path_third_party = remove_last_backslash("3rd_party")
 local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 
@@ -64,7 +76,6 @@ local verbose = false
 
 
 local format = string.format
-
 
 
 
@@ -313,6 +324,8 @@ local cache
 
 
 
+
+
 local function shallow_copy(a)
    if type(a) == 'table' then
       local ret = {}
@@ -396,8 +409,16 @@ local function gennann_after_build(dep)
    pop_dir()
 end
 
-local function small_regex_custom_build(_, dirname)
-   print('custom_build', dirname)
+local function pcre2_custom_build(_)
+   print("pcre2_custom_build", lfs.currentdir())
+
+   cmd_do("rm CMakeCache.txt")
+   cmd_do("cmake .")
+   cmd_do("make -j")
+end
+
+local function small_regex_custom_build(dep)
+   print('custom_build', dep.dir)
    print('currentdir', lfs.currentdir())
    local prevdir = lfs.currentdir()
    local ok, errmsg = lfs.chdir('libsmallregex')
@@ -529,6 +550,7 @@ local dependencies = {
       url = "https://github.com/PhilipHazel/pcre2.git",
       name = "pcre2",
       dir = "pcre2",
+      custom_build = pcre2_custom_build,
    },
    {
       url = "https://github.com/rxi/json.lua.git",
@@ -537,6 +559,7 @@ local dependencies = {
    },
    {
       name = "lfs",
+      links_internal = { "lfs:static" },
       url = "https://github.com/lunarmodules/luafilesystem.git",
       includes = { "luafilesystem/src" },
       build_method = "other",
@@ -561,6 +584,7 @@ local dependencies = {
    },
    {
       name = 'cimgui',
+      links_internal = { "cimgui:static" },
       includes = {
          "cimgui",
          "cimgui/generator/output",
@@ -587,15 +611,15 @@ local dependencies = {
       commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
       url = "https://github.com/codeplea/genann.git",
       includes = { "genann" },
+      links_internal = { "genann:static" },
       after_build = gennann_after_build,
       copy_for_wasm = true,
 
    },
    {
       name = 'chipmunk',
-      includes = {
-         "Chipmunk2D/include",
-      },
+      links_internal = { "chipmunk:static" },
+      includes = { "Chipmunk2D/include" },
       url = "https://github.com/nagolove/Chipmunk2D.git",
       copy_for_wasm = true,
 
@@ -603,12 +627,14 @@ local dependencies = {
    {
       name = 'lua',
       url = "https://github.com/lua/lua.git",
+      links_internal = { "lua:static" },
       includes = { "lua" },
       copy_for_wasm = true,
 
    },
    {
       name = 'raylib',
+      links_internal = { "raylib" },
       includes = { "raylib/src" },
       url = "https://github.com/raysan5/raylib.git",
       copy_for_wasm = true,
@@ -616,6 +642,7 @@ local dependencies = {
    },
    {
       name = 'smallregex',
+      links_internal = { "smallregex:static" },
       includes = { "small-regex/libsmallregex" },
       url = "https://gitlab.com/relkom/small-regex.git",
       custom_build = small_regex_custom_build,
@@ -625,6 +652,7 @@ local dependencies = {
    },
    {
       name = 'utf8proc',
+      links_internal = { "utf8proc:static" },
       includes = { "utf8proc" },
       url = "https://github.com/JuliaLang/utf8proc.git",
       copy_for_wasm = true,
@@ -703,12 +731,12 @@ local function template_dirs(dirs, pattern)
 end
 
 
-local includedirs = 
-template_dirs(_includedirs, path_third_party)
+
 
 
 local function gather_includedirs(deps, path_prefix)
    assert(deps)
+   path_prefix = remove_last_backslash(path_prefix)
    local tmp_includedirs = {}
    for _, dep in ipairs(deps) do
       if dep.includes then
@@ -731,13 +759,13 @@ local function prefix_add(prefix, t)
    return prefixed_t
 end
 
-includedirs = prefix_add(
+local includedirs = prefix_add(
 path_caustic .. "/", gather_includedirs(dependencies, path_third_party))
 
 table.insert(includedirs, path_caustic .. "/src")
 
-print('includedirs')
-print(tabular(includedirs))
+
+
 
 
 
@@ -752,26 +780,41 @@ local includedirs_internal = prefix_add(
 path_caustic .. "/", gather_includedirs(dependencies, path_third_party))
 
 
-local links_internal = {
+local function gather_links_internal(deps)
+   local tmp_links_internal = {}
+   for _, dep in ipairs(deps) do
+      if dep.links_internal then
+         for _, link_internal in ipairs(dep.links_internal) do
+            table.insert(tmp_links_internal, link_internal)
+         end
+      end
+   end
+   return tmp_links_internal
+end
 
-   "raylib",
-   "m",
 
-   "genann:static",
-   "smallregex:static",
-   "lua:static",
-   "utf8proc:static",
-   "chipmunk:static",
-   "cimgui:static",
 
+
+
+
+
+
+
+
+
+
+
+
+
+local links_internal = merge_tables(gather_links_internal(dependencies),
+{
    "stdc++",
+   "m",
+})
 
-   "lfs:static",
-}
 
 local links = {
    "m",
-
    "raylib:static",
    "genann:static",
    "smallregex:static",
@@ -779,9 +822,7 @@ local links = {
    "utf8proc:static",
    "chipmunk:static",
    "cimgui:static",
-
    "stdc++",
-
 }
 
 local links_linix_only = {
@@ -1211,7 +1252,145 @@ end
 
 
 
+
+
+
+
+
+
+
+local parser_setup = {
+
+   build = {
+      summary = "build dependendies for native platform",
+      options = { "-n --name" },
+   },
+   compile_flags = {
+      summary = "print compile_flags.txt to stdout",
+   },
+   deps = {
+      summary = "list of dependendies",
+      flags = {
+         { "-f --full", "full nodes info" },
+      },
+   },
+   init = {
+      summary = "download dependencies from network",
+      options = { "-n --name" },
+   },
+   make = {
+      summary = "build libcaustic or current project",
+      arguments = {
+         { "make_type", "?" },
+      },
+      flags = {
+         { "-g --nocodegen", "disable codegeneration step" },
+         { "-j", "run compilation parallel" },
+         { "-c", "full rebuild without cache info" },
+         { "-r --release", "release" },
+         { "-a --noasan", "no address sanitazer" },
+         { "-p --cpp", "use c++ code" },
+      },
+   },
+   publish = {
+      summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
+   },
+   remove = {
+      summary = "remove all 3rd_party files",
+      options = { "-n --name" },
+   },
+   rocks = {
+      summary = "list of lua rocks should be installed for this script",
+   },
+   run = {
+      summary = "run project native executable under gdb",
+      arguments = {
+         { "flags", "*" },
+      },
+   },
+   test = {
+      summary = "build native test executable and run it",
+   },
+   verbose = {
+      summary = "print internal data with urls, paths etc.",
+   },
+   wbuild = {
+      summary = "build dependencies and libcaustic for wasm or build project",
+      flags = {
+         { "-m --minshell", "use minimal web shell" },
+      },
+   },
+   init_smart = {
+      summary = "install new dependencies",
+      options = { "-n --name" },
+   },
+   build_smart = {
+      summary = "build dependendies for native platform",
+      options = { "n --name" },
+   },
+}
+
+
+
 local actions = {}
+
+local function _init_smart(path, deps)
+   print("_init", path, inspect(deps))
+   push_current_dir()
+
+   if not lfs.chdir(path) then
+      if not lfs.mkdir(path) then
+         print('could not do lfs.mkdir()')
+         os.exit()
+      end
+      lfs.chdir(path)
+   end
+
+   local threads = {}
+   local opt_tbl = { required = { "lfs" } }
+   local func = lanes.gen("*", opt_tbl, dependency_init)
+
+   local sorter = Toposorter.new()
+
+   for _, dep in ipairs(deps) do
+      assert(type(dep.url) == 'string')
+      assert(dep.name)
+      if dep.depends then
+         for _, dep_name in ipairs(dep.depends) do
+            sorter:add(dep.name, dep_name)
+         end
+      else
+
+
+         local lane_thread = (func)(dep, path)
+
+         table.insert(threads, lane_thread)
+      end
+   end
+
+   local sorted = sorter:sort()
+
+
+
+   sorted = filter(sorted, function(node)
+      return node.value ~= "null"
+   end)
+
+   print(tabular(threads))
+   wait_threads(threads)
+   for _, thread in ipairs(threads) do
+      local result, errcode = thread:join()
+      print(result, errcode)
+   end
+
+   for _, node in ripairs(sorted) do
+      local dep = dependencies_name_map[(node).value]
+
+      dependency_init(dep, path)
+   end
+
+   pop_dir()
+end
 
 local function _init(path, deps)
    print("_init", path, inspect(deps))
@@ -1333,15 +1512,17 @@ function actions.init_smart(_args)
          return
       end
    else
-      for _, dep in ipairs(dependencies) do
-         table.insert(deps, dep)
-      end
+      print("only one named dependency supported")
+      os.exit()
+
+
+
    end
 
    print('deps', inspect(deps))
 
-   _init(path_third_party, deps)
-   _init(path_wasm_third_party, deps)
+   _init_smart(path_third_party, deps)
+   _init_smart(path_wasm_third_party, deps)
 
 end
 
@@ -2189,7 +2370,7 @@ local function _build_smart(dep)
 
    if dep.custom_build then
       local ok, errmsg = pcall(function()
-         dep.custom_build(dep, dirname)
+         dep.custom_build(dep)
       end)
       if not ok then
          print('custom_build error:', errmsg)
@@ -2224,7 +2405,7 @@ local function _build(dirname)
 
    if dep.custom_build then
       local ok, errmsg = pcall(function()
-         dep.custom_build(dep, dirname)
+         dep.custom_build(dep)
       end)
       if not ok then
          print('custom_build error:', errmsg)
@@ -2580,18 +2761,6 @@ function actions.anim_convert(_args)
    io.open(new_fname, "w"):write(serpent.dump(res))
 end
 
-
-local function list_concat(a, b)
-   local tmp = {}
-   for _, v in ipairs(a) do
-      table.insert(tmp, v)
-   end
-   for _, v in ipairs(b) do
-      table.insert(tmp, v)
-   end
-   return tmp
-end
-
 local function codegen(cg)
    print('codegen', inspect(cg))
    local lines = {}
@@ -2758,7 +2927,7 @@ local function sub_make(_args, cfg, push_num)
    if not _args.noasan then
       table.insert(flags, "-fsanitize=address")
    end
-   flags = list_concat(flags, { "-Wall", "-fPIC" })
+   flags = merge_tables(flags, { "-Wall", "-fPIC" })
    local _flags = table.concat(flags, " ")
 
    local libspath_prefix = cfg.artifact and "../" or ""
@@ -2923,12 +3092,43 @@ local function handler_int(_)
    os.exit()
 end
 
+local argparse = require('argparse')
+
+local function do_parser_setup(parser)
+   for cmd_name, setup_tbl in pairs(parser_setup) do
+      local p = parser:command(cmd_name)
+      if setup_tbl.summary then
+         p:summary(setup_tbl.summary)
+      end
+      if setup_tbl.options then
+         for _, option in ipairs(setup_tbl.options) do
+            p:option(option)
+         end
+      end
+      if setup_tbl.flags then
+         for _, flag_tbl in ipairs(setup_tbl.flags) do
+            assert(type(flag_tbl[1]) == "string")
+            assert(type(flag_tbl[2]) == "string")
+            p:flag(flag_tbl[1], flag_tbl[2])
+         end
+      end
+      if setup_tbl.arguments then
+         for _, argument_tbl in ipairs(setup_tbl.arguments) do
+            assert(type(argument_tbl[1]) == "string")
+            assert(type(argument_tbl[2]) == "string")
+            p:argument(argument_tbl[1]):args(argument_tbl[2])
+         end
+      end
+   end
+end
+
 local function main()
    local SIGINT = 2
    signal(SIGINT, handler_int)
 
-   local argparse = require('argparse')
    local parser = argparse()
+
+   do_parser_setup(parser)
 
    parser:flag("-v --verbose", "use verbose output")
 
@@ -2936,58 +3136,63 @@ local function main()
 
 
 
-   parser:command("init"):
-   summary("download dependencies from network"):
-   option("-n --name")
-   parser:command("init_add"):
-   summary("install new dependencies"):
-   option("-n --name")
-   parser:command("deps"):
-   summary("list of dependendies"):
-   flag("-f --full", "full nodes info")
-   parser:command("build"):
-   summary("build dependendies for native platform"):
-   option("-n --name")
-   parser:command("build_smart"):
-   summary("build dependendies for native platform"):
-   option("-n --name")
-   parser:command("remove"):summary("remove all 3rd_party files"):
-   option("-n --name")
-   parser:command("rocks"):
-   summary("list of lua rocks should be installed for this script")
 
-   parser:command("verbose"):
-   summary("print internal data with urls, paths etc.")
 
-   parser:command("compile_flags"):
-   summary("print compile_flags.txt to stdout")
-   parser:command("wbuild"):
-   summary("build dependencies and libcaustic for wasm or build project"):
-   flag("-m --minshell", "use minimal web shell")
-   parser:command("check_updates"):
-   summary("print new version of libraries")
-   parser:command("publish"):
-   summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
-   parser:command("test"):
-   summary("build native test executable and run it")
 
-   parser:command("anim_convert"):
-   option("-n --name")
 
-   parser:command("run"):
-   summary("run project native executable under gdb"):
-   argument("flags"):args("*")
 
-   local make = parser:command("make")
-   make:
-   summary("build libcaustic or current project"):
-   argument("make_type"):args("?")
-   make:flag("-g --nocodegen", "disable codegeneration step")
-   make:flag('-j', 'run compilation parallel')
-   make:flag('-c', 'full rebuild without cache info')
-   make:flag('-r --release', 'release')
-   make:flag('-a --noasan', 'no address sanitazer')
-   make:flag("-p --cpp", "use c++ code")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
