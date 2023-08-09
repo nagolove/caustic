@@ -1139,6 +1139,7 @@ struct FilesSearchResult koh_search_files(
         return fsr;
 
     fsr.path = strdup(path);
+    assert(fsr.path);
     size_t path_len = strlen(fsr.path);
     if (fsr.path[path_len - 1] == '/') {
         fsr.path[path_len - 1] = 0;
@@ -1146,6 +1147,11 @@ struct FilesSearchResult koh_search_files(
     fsr.regex_pattern = strdup(regex_pattern);
 
     fsr.internal = malloc(sizeof(*fsr.internal));
+    assert(fsr.internal);
+    trace(
+        "koh_search_files: path '%s' regex_pattern '%s'\n", 
+        fsr.path, fsr.regex_pattern
+    );
     fsr.internal->regex = regex_compile(fsr.regex_pattern);
     if (!fsr.internal->regex) {
         trace(
