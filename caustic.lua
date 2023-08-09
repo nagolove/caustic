@@ -288,6 +288,10 @@ local cache
 
 
 
+
+
+
+
 local function shallow_copy(a)
    if type(a) == 'table' then
       local ret = {}
@@ -832,7 +836,6 @@ if not check_luarocks() then
 end
 
 local lanes = require("lanes").configure()
-local argparse = require("argparse")
 local tabular = require("tabular").show
 local sleep = require("socket").sleep
 
@@ -873,6 +876,8 @@ local function git_clone(dep)
    print(tabular(dep))
    local url = dep.url
    if not dep.commit then
+
+
       local git_cmd = "git clone --depth 1"
       local fd = io.popen(git_cmd .. " " .. url)
       print(fd:read("*a"))
@@ -1117,6 +1122,8 @@ end
 
 
 
+
+
 local actions = {}
 
 local function _init(path, deps)
@@ -1217,6 +1224,11 @@ function actions.run(_args)
 
 
    cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
+end
+
+function actions.init_add(_args)
+   print("init_add")
+
 end
 
 
@@ -2326,6 +2338,10 @@ local json = require("json")
 
 
 
+
+
+
+
 function actions.anim_convert(_args)
    print('anim_convert', inspect(_args))
    if not _args.name then
@@ -2343,6 +2359,7 @@ function actions.anim_convert(_args)
    end
 
    local frames = {}
+
    for k, v in pairs(js.frames) do
 
       local frame = v
@@ -2720,6 +2737,7 @@ local function main()
    local SIGINT = 2
    signal(SIGINT, handler_int)
 
+   local argparse = require('argparse')
    local parser = argparse()
 
    parser:flag("-v --verbose", "use verbose output")
@@ -2731,6 +2749,9 @@ local function main()
 
    parser:command("init"):
    summary("download dependencies from network"):
+   option("-n --name")
+   parser:command("init_add"):
+   summary("install new dependencies"):
    option("-n --name")
    parser:command("deps"):
    summary("list of dependendies"):
@@ -2777,12 +2798,18 @@ local function main()
    make:flag("-p --cpp", "use c++ code")
 
 
+
+
+
+
    parser:add_complete()
    local _args = parser:parse()
 
 
    print(inspect(_args))
    verbose = _args.verbose == true
+
+
 
 
    for k, v in pairs(_args) do
