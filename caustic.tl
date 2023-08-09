@@ -10,6 +10,18 @@ local function remove_last_backslash(path: string): string
     return path
 end
 
+-- Возвращает новую табличку, составленную из элементов таблицы a и таблицы b
+local function merge_tables(a: {string}, b: {string}): {string}
+    local tmp = {}
+    for _, v in ipairs(a) do
+        table.insert(tmp, v)
+    end
+    for _, v in ipairs(b) do
+        table.insert(tmp, v)
+    end
+    return tmp
+end
+
 local path_third_party = remove_last_backslash("3rd_party")
 local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 
