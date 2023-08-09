@@ -1,12 +1,25 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
-local caustic_path = os.getenv("CAUSTIC_PATH")
-if not caustic_path then
-    print("CAUSTIC_PATH is nil")
-    os.exit(1)
+-- Удалить последнюю наклонную черту если она есть и путь не указывает в
+-- корень файловой системы
+local function remove_last_backslash(path: string): string
+    if #path > 1 and string.sub(path, -1, -1) == "/" then
+        return string.sub(path, 1, -1)
+    end
+    return path
 end
 
+local path_caustic = os.getenv("CAUSTIC_PATH")
+if not path_caustic then
+    print("CAUSTIC_PATH is nil")
+    os.exit(1)
+else
+    path_caustic = remove_last_backslash(path_caustic)
+    print("$CAUSTIC_PATH", path_caustic)
+end
+
+local tabular = require "tabular".show
 local lfs = require 'lfs'
 local ansicolors = require 'ansicolors'
 local home = os.getenv("HOME")
@@ -203,7 +216,7 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     --local inspect = require 'inspect'
     --print("cfgs", inspect(cfgs))
 
-    if lfs.currentdir() ~= caustic_path then
+    if lfs.currentdir() ~= path_caustic then
         for _, cfg in ipairs(cfgs) do
             if cfg.artifact then
                 assert(type(cfg.artifact) == 'string')
@@ -235,8 +248,8 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
 end
 
 -- TODO: Унификация работы этих переменных
-local third_party = "3rd_party"
-local wasm_third_party = "wasm_3rd_party"
+local path_third_party = "3rd_party"
+local path_wasm_third_party = "wasm_3rd_party"
 --local win_third_party = "win_3rd_party"
 
 local signal = require "posix".signal.signal
@@ -425,7 +438,7 @@ local function cimgui_after_init(_: Dependency)
 
     if use_freetype then
         cmd_do(table.concat({
-            format("CXXFLAGS=-I%s/3rd_party/freetype/include", caustic_path),
+            format("CXXFLAGS=-I%s/3rd_party/freetype/include", path_caustic),
             "cmake .",
             "-DIMGUI_STATIC=1",
             "-DIMGUI_FREETYPE=1",
@@ -433,7 +446,7 @@ local function cimgui_after_init(_: Dependency)
         }, " "))
     else
         cmd_do(table.concat({
-            format("CXXFLAGS=-I%s/3rd_party/freetype/include", caustic_path),
+            format("CXXFLAGS=-I%s/3rd_party/freetype/include", path_caustic),
             "cmake .",
             "-DIMGUI_STATIC=1",
         }, " "))
@@ -504,7 +517,14 @@ local function lfs_after_init(_: Dependency)
 end
 
 -- TODO: Тестировать получение и сборку каждой зависимости
+-- TODO: Если поле dir не указано, то попробовать извлечить имя каталога из 
+-- ссылка, если она не указывает на zip архив
 local dependencies: {Dependency} = {
+    {
+        url = "https://github.com/PhilipHazel/pcre2.git",
+        name = "pcre2",
+        dir = "pcre2",
+    },
     {
         url = "https://github.com/rxi/json.lua.git",
         name = "json.lua",
@@ -513,6 +533,7 @@ local dependencies: {Dependency} = {
     {
         name = "lfs",
         url = "https://github.com/lunarmodules/luafilesystem.git",
+        includes = { "luafilesystem/src" },
         build_method = "other",
         dir = "luafilesystem",
         after_init = lfs_after_init,
@@ -535,6 +556,10 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'cimgui',
+        includes = {
+            "cimgui",
+            "cimgui/generator/output",
+        },
         url = 'git@github.com:cimgui/cimgui.git',
         dir = "cimgui",
         after_init = cimgui_after_init,
@@ -544,6 +569,7 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'sunvox',
+        includes = { "sunvox/sunvox_lib/headers" },
         url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
         dir = "sunvox",
         fname = "sunvox_lib-2.1c.zip",
@@ -555,12 +581,16 @@ local dependencies: {Dependency} = {
         name = 'genann',
         commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         url = "https://github.com/codeplea/genann.git",
+        includes = { "genann" },
         after_build = gennann_after_build,
         copy_for_wasm = true,
         --build_method = 'other',
     },
     {
         name = 'chipmunk',
+        includes = {
+            "Chipmunk2D/include",
+        },
         url = "https://github.com/nagolove/Chipmunk2D.git",
         copy_for_wasm = true,
         --build_method = 'other',
@@ -568,17 +598,20 @@ local dependencies: {Dependency} = {
     {
         name = 'lua',
         url = "https://github.com/lua/lua.git",
+        includes = { "lua" },
         copy_for_wasm = true,
         --build_method = 'other',
     },
     {
         name = 'raylib',
+        includes = { "raylib/src" },
         url = "https://github.com/raysan5/raylib.git",
         copy_for_wasm = true,
         --build_method = 'other',
     },
     {
         name = 'smallregex',
+        includes = { "small-regex/libsmallregex" },
         url = "https://gitlab.com/relkom/small-regex.git",
         custom_build = small_regex_custom_build,
         copy_for_wasm = true,
@@ -587,6 +620,7 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'utf8proc',
+        includes = { "utf8proc" },
         url = "https://github.com/JuliaLang/utf8proc.git",
         copy_for_wasm = true,
         build_method = 'make',
@@ -604,12 +638,10 @@ local dependencies: {Dependency} = {
     },
     {
         name = 'stb',
+        includes = { "stb" },
         url = "https://github.com/nothings/stb.git",
         copy_for_wasm = true,
         --build_method = 'other',
-        includes = {
-            "",
-        }
     }
 }
 
@@ -624,19 +656,19 @@ end
 
 -- TODO: добавить каждую запись как элемент таблицы dependencies?
 local _includedirs  = { 
-    "../caustic/%s/Chipmunk2D/include",
-    "../caustic/%s/cimgui",
-    "../caustic/%s/cimgui/generator/output",
-    "../caustic/%s/genann",
-    "../caustic/%s/lua/",
-    "../caustic/%s/luafilesystem/src",
-    "../caustic/%s/raylib/src",
-    --"../caustic/%s/rlImGui",
-    "../caustic/%s/small-regex/libsmallregex",
-    "../caustic/%s/stb",
-    "../caustic/%s/utf8proc",
-    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
-    "../caustic/src",
+    --"../caustic/%s/rlImGui",                          
+    "../caustic/%s/Chipmunk2D/include",                 -- ok
+    "../caustic/%s/cimgui",                             -- ok
+    "../caustic/%s/cimgui/generator/output",            -- ok
+    "../caustic/%s/genann",                             -- ok
+    "../caustic/%s/lua/",                               -- ok
+    "../caustic/%s/luafilesystem/src",                  -- ok
+    "../caustic/%s/raylib/src",                         -- ok
+    "../caustic/%s/small-regex/libsmallregex",          -- ok
+    "../caustic/%s/stb",                                -- ok
+    "../caustic/%s/utf8proc",                           -- ok
+    "../caustic/3rd_party/sunvox/sunvox_lib/headers",   -- ok
+    "../caustic/src",                                   --
 }
 
 local _includedirs_internal  = { 
@@ -666,8 +698,40 @@ local function template_dirs(dirs: {string}, pattern: string): {string}
 end
 
 -- XXX: Брать значения из таблички зависомостей?
-local includedirs = template_dirs(_includedirs, third_party)
-local includedirs_internal = template_dirs(_includedirs_internal, third_party)
+local includedirs = 
+    template_dirs(_includedirs, path_third_party)
+
+-- TODO: Проверка на дубликаты путей
+local function gather_includedirs(deps: {Dependency}, path_prefix: string): {string}
+    assert(deps)
+    local tmp_includedirs = {}
+    for _, dep in ipairs(deps) do
+        if dep.includes then
+            for _, include_path in ipairs(dep.includes) do
+                table.insert(tmp_includedirs, remove_last_backslash(include_path))
+            end
+        end
+    end
+    for i, str in ipairs(tmp_includedirs) do
+        tmp_includedirs[i] = path_prefix .. "/" .. str
+    end
+    return tmp_includedirs
+end
+
+local includedirs2 = 
+    gather_includedirs(dependencies, path_third_party)
+
+print('includedirs')
+print(tabular(includedirs))
+
+print('includedirs2')
+print(tabular(includedirs2))
+
+print("os.exit()")
+os.exit()
+
+local includedirs_internal = 
+    template_dirs(_includedirs_internal, path_third_party)
 
 local links_internal = { 
     --"raylib:static",
@@ -819,17 +883,6 @@ local function get_dirs()
 end
 --]]
 
-local ret_table = {
-    urls = get_urls(dependencies),
-    dependencies = dependencies,
-    dirnames = get_dirs(dependencies),
-    includedirs = includedirs, 
-    links = links,
-    libdirs = libdirs,
-    libdirs_internal = libdirs_internal,
-    links_internal = links_internal,
-}
-
 local function check_luarocks(): string
     local fd = io.popen("luarocks --version")
     local version: string
@@ -845,7 +898,6 @@ if not check_luarocks() then
 end
 
 local lanes = require "lanes".configure()
-local tabular = require "tabular".show
 local sleep = require "socket".sleep
 
 --[[
@@ -1119,6 +1171,7 @@ local record Actions
     test: function(Args)
     verbose: function(Args)
     wbuild: function(Args)
+    build_smart: function(Args)
 end
 
 local enum ActionsEnum
@@ -1136,6 +1189,7 @@ local enum ActionsEnum
     "wbuild"
     "init_add"
     "init_smart"
+    "build_smart"
 end
 
 local actions: Actions = {}
@@ -1267,8 +1321,8 @@ function actions.init_smart(_args: Args)
 
     print('deps', inspect(deps))
     --check_for_unstaged(deps)
-    _init(third_party, deps)
-    _init(wasm_third_party, deps)
+    _init(path_third_party, deps)
+    _init(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
 
@@ -1292,8 +1346,8 @@ function actions.init(_args: Args)
 
     print('deps', inspect(deps))
     --check_for_unstaged(deps)
-    _init(third_party, deps)
-    _init(wasm_third_party, deps)
+    _init(path_third_party, deps)
+    _init(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
 
@@ -1655,8 +1709,8 @@ function actions.remove(_args: Args)
             table.insert(dirnames, dirname)
         end
     end
-    _remove(third_party, dirnames)
-    _remove(wasm_third_party, dirnames)
+    _remove(path_third_party, dirnames)
+    _remove(path_wasm_third_party, dirnames)
     --_remove(win_third_party, dirnames)
 end
 
@@ -1708,7 +1762,16 @@ local function common_build(dep: Dependency)
 end
 
 function actions.verbose(_: Args)
-    print(tabular(ret_table))
+    print(tabular({
+        urls = get_urls(dependencies),
+        dependencies = dependencies,
+        dirnames = get_dirs(dependencies),
+        includedirs = includedirs, 
+        links = links,
+        libdirs = libdirs,
+        libdirs_internal = libdirs_internal,
+        links_internal = links_internal,
+    }))
 end
 
 function actions.compile_flags(_: Args)
@@ -1786,9 +1849,6 @@ local function build_raylib()
 
     cp("libraylib.a", "../libraylib.a")
 
-    --print('os.exit')
-    --os.exit()
-
     pop_dir()
 end
 
@@ -1861,7 +1921,7 @@ local type ObjectFiles = {string}
 -- по ссылке
 local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     print('build_project:', output_dir)
-    local tmp_includedirs = template_dirs(_includedirs, wasm_third_party)
+    local tmp_includedirs = template_dirs(_includedirs, path_wasm_third_party)
     print('includedirs before')
     print(tabular(includedirs))
 
@@ -1884,8 +1944,6 @@ local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     local include_str = table.concat(_includedirs, " ")
     print('include_str', include_str)
 
-    --print("os.exit()")
-    --os.exit()
     local define_str = "-DPLATFORM_WEB=1"
 
     lfs.mkdir(output_dir)
@@ -1895,9 +1953,6 @@ local function build_project(output_dir: string, exclude: {string}): ObjectFiles
         print(file)
         local output_path = output_dir .. 
                             "/" ..string.gsub(file, "(.*%.)c$", "%1o")
-
-        --print(output_path)
-        --os.exit()
 
         local cmd = format(
             "emcc -o %s -c %s/%s -Wall %s %s",
@@ -2176,11 +2231,34 @@ local function _build(dirname: string)
     lfs.chdir(prevdir)
 end
 
+function actions.build_smart(_args: Args)
+    push_current_dir()
+    lfs.chdir(path_caustic)
+    lfs.chdir(path_third_party)
+
+    if _args.name then
+        if dependencies_name_map[_args.name] then
+            _build_smart(dependencies_name_map[_args.name])
+        else
+            print("bad dependency name", _args.name)
+            goto exit
+        end
+    else
+        for _, dep in ipairs(dependencies) do
+            _build_smart(dep)
+        end
+    end
+
+    ::exit::
+    pop_dir()
+end
+
+
 -- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
     push_current_dir()
-    lfs.chdir(caustic_path)
-    lfs.chdir(third_party)
+    lfs.chdir(path_caustic)
+    lfs.chdir(path_third_party)
 
     if _args.name then
         if dependencies_name_map[_args.name] then
@@ -2230,7 +2308,7 @@ function Cache.new(storage: string): Cache
     return setmetatable(self, Cache_mt)
 end
 
--- XXX: Сравнение времени и содержимого работает не всегда коррекно
+-- XXX: Сравнение времени и содержимого работает не всегда корректно
 function Cache:should_recompile(fname: string, cmd: string): boolean
     local modtime_cur: number = lfs.attributes(fname, 'modification')
     if not modtime_cur then
@@ -2761,8 +2839,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         cp("libcaustic.a", "../libcaustic.a")
     else
         push_current_dir()
-        print('caustic_path', caustic_path)
-        lfs.chdir(caustic_path)
+        print('caustic_path', path_caustic)
+        lfs.chdir(path_caustic)
         --lfs.chdir(os.getenv("HOME") .. "/caustic")
         sub_make({
             make = true,
@@ -2831,9 +2909,8 @@ local function main()
 
     -- Нужно собрать все исходные файлы для wasm версии.
     -- Сперва скопировать их в отдельный каталог.
-    -- Собрать все модули согласно спецификации bld.lua для библиотеки caustic
-    -- Собрать целевую программу, слинковать ее с libcaustic.a (wasm)
     -- TODO: документация на все опции, команда help
+    -- FIXME: команды build и init, оставить только одну из них?
     parser:command("init")
         :summary("download dependencies from network")
         :option("-n --name")
@@ -2844,6 +2921,9 @@ local function main()
         :summary("list of dependendies")
         :flag("-f --full", "full nodes info")
     parser:command("build")
+        :summary("build dependendies for native platform")
+        :option("-n --name")
+    parser:command("build_smart")
         :summary("build dependendies for native platform")
         :option("-n --name")
     parser:command("remove"):summary("remove all 3rd_party files")
