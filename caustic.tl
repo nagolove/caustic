@@ -543,6 +543,8 @@ end
 -- TODO: Тестировать получение и сборку каждой зависимости
 -- TODO: Если поле dir не указано, то попробовать извлечить имя каталога из 
 -- ссылка, если она не указывает на zip архив
+-- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
+-- каталогов библиотек и т.д.
 local dependencies: {Dependency} = {
     {
         build_method = "other",
@@ -551,7 +553,7 @@ local dependencies: {Dependency} = {
         dir = "pcre2",
         includes = { "pcre2/src" },
         libdirs = { "pcre2" },
-        links = { "libpcre2-8.a" },
+        links = { "pcre2-8" },
         links_internal = { "libpcre2-8.a" },
         name = "pcre2",
         url = "https://github.com/PhilipHazel/pcre2.git",
@@ -672,7 +674,7 @@ local dependencies: {Dependency} = {
         custom_build = small_regex_custom_build,
         description = "простая библиотека для регулярных выражений",
         includes = { "small-regex/libsmallregex" },
-        libdirs = { "smallregex/libsmallregex" },
+        libdirs = { "small-regex/libsmallregex" },
         links = { "smallregex:static" },
         links_internal = { "smallregex:static" },
         name = 'smallregex',
@@ -813,16 +815,21 @@ local includedirs_internal = prefix_add(
     path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
 )
 
-local function gather_links_internal(deps: {Dependency}): {string}
-    local tmp_links_internal = {}
+local enum LinksType
+    "links_internal"
+    "links"
+end
+
+local function gather_links(deps: {Dependency}, linkstype: LinksType): {string}
+    local links_tbl = {}
     for _, dep in ipairs(deps) do
-        if dep.links_internal then
-            for _, link_internal in ipairs(dep.links_internal) do
-                table.insert(tmp_links_internal, link_internal)
+        if (dep as {any:any})[linkstype as string] then
+            for _, link_internal in ipairs((dep as {any:any})[linkstype] as {string}) do
+                table.insert(links_tbl, link_internal)
             end
         end
     end
-    return tmp_links_internal
+    return links_tbl
 end
 
 --[[
@@ -839,13 +846,14 @@ local links_internal = {
 --]]
 
 
-local links_internal = merge_tables(gather_links_internal(dependencies),
+local links_internal = merge_tables(gather_links(dependencies, "links_internal"),
     {
         "stdc++",                   
         "m",                       
     }
 )
 
+--[[
 local links = { 
     "chipmunk:static",          --
     "cimgui:static",            --
@@ -857,6 +865,13 @@ local links = {
     "stdc++",                   --
     "utf8proc:static",          --
 }
+--]]
+
+local links = merge_tables(gather_links(dependencies, "links"), {
+    "stdc++",
+    "m",
+    "caustic",
+})
 
 local links_linix_only = {
     "lfs:static",
@@ -2018,7 +2033,7 @@ function actions.verbose(_: Args)
         dependencies = dependencies,
         dirnames = get_dirs(dependencies),
         includedirs = includedirs, 
-        links = links,
+        --links = links,
         libdirs = libdirs,
         links_internal = links_internal,
     }))
@@ -2957,12 +2972,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     for _, v in ipairs(dirs) do
         _includes = _includes .. " -I" .. v
     end
-    --_includes = _includes .. " " .. table.concat(dirs, " -I")
 
     print(tabular(dirs))
     print(tabular(_includes))
-    --print("os.exit()")
-    --os.exit()
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
@@ -2993,6 +3005,10 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     --os.exit()
 
     table.insert(_libdirs, "-L/usr/lib")
+    if cfg.artifact then
+        table.insert(_libdirs, "-L" .. path_caustic)
+    end
+
     local _libspath: string = table.concat(_libdirs, " ")
     print(tabular(_libspath))
 
