@@ -828,7 +828,7 @@ void koh_qsort_soa(
     _koh_qsort_soa(&ctx);
 }
 
-bool camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
+bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
     assert(cam);
     if (cam && IsMouseButtonDown(mouse_btn)) {
         Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);

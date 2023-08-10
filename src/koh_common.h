@@ -94,13 +94,15 @@ const char *shapefilter2str(cpShapeFilter filter);
 void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter);
 cpShape *circle2polyshape(cpSpace *space, cpShape *inshape);
 cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr);
+
+// XXX: Что делает camera2screen()?
 Vector2 camera2screen(Camera2D cam, Vector2 in);
+
 Color color_by_index(int colornum);
 void texture_save(Texture2D tex, const char *fname);
 // some_file.txt, .txt -> some_file
 const char *extract_filename(const char *fname, const char *ext);
 const char *rect2str(Rectangle rect);
-void camera_reset();
 
 // Проверяет на наличие суффикса вида _01 в строке и возвращает статическую
 // строку без суффикса
@@ -117,7 +119,7 @@ void koh_qsort_soa(
 );
 
 cpSpaceDebugColor from_Color(Color c);
-bool camera_process_mouse_drag(int mouse_btn, Camera2D *cam);
+bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam);
 
 struct CameraAxisDrawCtx {
     Color color_offset, color_target;
