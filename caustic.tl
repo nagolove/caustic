@@ -31,7 +31,7 @@ if not path_caustic then
     os.exit(1)
 else
     path_caustic = remove_last_backslash(path_caustic)
-    print("$CAUSTIC_PATH", path_caustic)
+    print("CAUSTIC_PATH", path_caustic)
 end
 
 local tabular = require "tabular".show
@@ -798,18 +798,6 @@ local includedirs = prefix_add(
     path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
 )
 table.insert(includedirs, path_caustic .. "/src")
-
---print('includedirs')
---print(tabular(includedirs))
-
---print('includedirs2')
---print(tabular(includedirs2))
-
---print("os.exit()")
---os.exit()
-
---local includedirs_internal = 
-    --template_dirs(_includedirs_internal, path_third_party)
 
 local includedirs_internal = prefix_add(
     path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
@@ -1893,14 +1881,6 @@ local function rec_remove_dir(dirname: string)
                 local path = dirname .. '/' .. k
                 local attrs = lfs.attributes(path)
 
-                --[[
-                print('path', path)
-                if attrs then
-                    print(path)
-                    print(tabular(attrs))
-                end
-                --]]
-
                 -- XXX: Не для всех артефактов сборки получается прочитать 
                 -- аттрибуты
                 if attrs and attrs.mode == 'file' then
@@ -2187,24 +2167,24 @@ local type ObjectFiles = {string}
 local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     print('build_project:', output_dir)
     local tmp_includedirs = template_dirs(_includedirs, path_wasm_third_party)
-    print('includedirs before')
-    print(tabular(includedirs))
+    --print('includedirs before')
+    --print(tabular(includedirs))
 
     if exclude then
         for k, v in ipairs(exclude) do
             exclude[k] = string.match(v, ".*/(.*)$") or v
         end
     end
-    print('exclude')
-    print(tabular(exclude))
+    --print('exclude')
+    --print(tabular(exclude))
 
     local _includedirs = {}
     for _, v in ipairs(tmp_includedirs) do
         table.insert(_includedirs, "-I" .. v)
     end
 
-    print('includedirs after')
-    print(tabular(_includedirs))
+    --print('includedirs after')
+    --print(tabular(_includedirs))
 
     local include_str = table.concat(_includedirs, " ")
     print('include_str', include_str)
@@ -2369,7 +2349,7 @@ local function link_wasm_project(main_fname: string, _args: Args)
         libspath[k] = "-L" .. v
     end
 
-    print(tabular(libspath))
+    --print(tabular(libspath))
     print('currentdir', lfs.currentdir())
     local libspath_str = table.concat(libspath, " ")
 
@@ -2973,8 +2953,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         _includes = _includes .. " -I" .. v
     end
 
-    print(tabular(dirs))
-    print(tabular(_includes))
+    --print(tabular(dirs))
+    --print(tabular(_includes))
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
@@ -2999,10 +2979,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     local _libdirs = make_L(shallow_copy(libdirs), path_third_party)
 
-    print("_libdirs")
-    print(tabular(_libdirs))
-    --print("os.exit()")
-    --os.exit()
+    --print("_libdirs")
+    --print(tabular(_libdirs))
 
     table.insert(_libdirs, "-L/usr/lib")
     if cfg.artifact then
