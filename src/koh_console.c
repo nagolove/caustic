@@ -108,9 +108,12 @@ struct {
 
     // Дополнение частично введеных строк информацией из Lua - машины.
     TabEngine tabe;
+
     koh_TimerStore timers;
     bool can_move_right, can_move_left, can_backspace;
     uint64_t hk_updated_times;
+
+    Camera2D    cam;
 } con = {0, };
 
 
@@ -174,7 +177,10 @@ void console_init(HotkeyStorage *hk_store, struct ConsoleSetup *cs) {
     assert(hk_store);
     assert(cs);
 
-    setup = *cs;
+    if (cs)
+        setup = *cs;
+
+    con.cam.zoom = 1.;
 
     koh_timerstore_init(&con.timers, 20);
     con.can_move_left = con.can_move_right = true;
@@ -390,6 +396,8 @@ void console_immediate_buffer_enable(bool state) {
 }
 
 void console_update(void) {
+    BeginMode2D(con.cam);
+
     if (con.hk_updated_times == con.hk_store->updated_times) {
         printf("console_update: May be HotkeyStorage was not "
                "updated on last frame?\n");
@@ -425,6 +433,8 @@ void console_update(void) {
         scroll_down(1);
     else if (wheelmove == 1.)
         scroll_up(1);
+
+    EndMode2D();
 }
 
 bool console_is_editor_mode(void) {
