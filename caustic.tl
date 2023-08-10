@@ -285,6 +285,7 @@ end
 -- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
 -- значением хэша коммита
 local record Dependency
+    description: string -- описание компонента зависимости
     disabled: boolean   -- временно исключает запись из обработки
 
     -- Имена и зависимости(поля name и depends) обрабатываются в команде init
@@ -544,137 +545,169 @@ end
 -- ссылка, если она не указывает на zip архив
 local dependencies: {Dependency} = {
     {
-        url = "https://github.com/PhilipHazel/pcre2.git",
-        name = "pcre2",
-        dir = "pcre2",
+        build_method = "other",
         custom_build = pcre2_custom_build,
+        description = "регулярные выражения с обработкой ошибок и группами захвата",
+        dir = "pcre2",
         includes = { "pcre2/src" },
-        build_method = "other",
+        libdirs = { "pcre2" },
+        links = { "libpcre2-8.a" },
         links_internal = { "libpcre2-8.a" },
+        name = "pcre2",
+        url = "https://github.com/PhilipHazel/pcre2.git",
     },
     {
-        url = "https://github.com/rxi/json.lua.git",
-        name = "json.lua",
+        description = "загрузчик json данных в lua",
         dir = "json.lua",
+        name = "json.lua",
+        url = "https://github.com/rxi/json.lua.git",
     },
     {
-        name = "lfs",
-        links_internal = { "lfs:static" },
-        url = "https://github.com/lunarmodules/luafilesystem.git",
-        includes = { "luafilesystem/src" },
-        build_method = "other",
-        dir = "luafilesystem",
         after_init = lfs_after_init,
+        build_method = "other",
+        description = "C lua модуль для поиска файлов",
+        dir = "luafilesystem",
+        includes = { "luafilesystem/src" },
+        libdirs = { "luafilesystem" },
+        links_internal = { "lfs:static" },
+        name = "lfs",
+        url = "https://github.com/lunarmodules/luafilesystem.git",
     },
     {
+        after_init = freetype_after_init,
+        build_method = 'other',
+        description = "загрузчик ttf шрифтов. используется в imgui",
+        dir = 'freetype',
+        disabled = true,
+        libdirs = { "freetype/bld/build" },
         name = 'freetype',
         url = "https://github.com/freetype/freetype.git",
-        build_method = 'other',
-        dir = 'freetype',
-        after_init = freetype_after_init,
-        disabled = true,
     },
     {
+        --custom_build = rlimgui_custom_build,
+        after_init = rlimgui_after_init,
+        build_method = 'other',
+        description = "raylib обвязка над imgui",
+        dir = "rlImGui",
+        disabled = true,
         name = "rlimgui",
         url = "https://github.com/raylib-extras/rlImGui.git",
-        after_init = rlimgui_after_init,
-        dir = "rlImGui",
-        --custom_build = rlimgui_custom_build,
-        build_method = 'other',
     },
     {
-        name = 'cimgui',
-        links_internal = { "cimgui:static" },
-        includes = {
-            "cimgui",
-            "cimgui/generator/output",
-        },
-        url = 'git@github.com:cimgui/cimgui.git',
-        dir = "cimgui",
+        after_build = cimgui_after_build,
         after_init = cimgui_after_init,
         build_method = 'other',
-        after_build = cimgui_after_build,
         depends = {'freetype', 'rlimgui'},
+        description = "C биндинг для imgui",
+        dir = "cimgui",
+        includes = { "cimgui", "cimgui/generator/output", },
+        libdirs = { "cimgui" },
+        links = { "cimgui:static" },
+        links_internal = { "cimgui:static" },
+        name = 'cimgui',
+        url = 'git@github.com:cimgui/cimgui.git',
     },
     {
-        name = 'sunvox',
-        includes = { "sunvox/sunvox_lib/headers" },
-        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
+        --build_method = 'other',
+        after_init = sunvox_after_init,
+        copy_for_wasm = true,
+        description = "модульный звуковой синтезатор",
         dir = "sunvox",
         fname = "sunvox_lib-2.1c.zip",
-        copy_for_wasm = true,
-        after_init = sunvox_after_init,
-        --build_method = 'other',
+        includes = { "sunvox/sunvox_lib/headers" },
+        libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" }, -- XXX: Зачем путь к .so файлу?
+        name = 'sunvox',
+        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
     },
     {
-        name = 'genann',
-        commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
-        url = "https://github.com/codeplea/genann.git",
-        includes = { "genann" },
-        links_internal = { "genann:static" },
+        --build_method = 'other',
         after_build = gennann_after_build,
+        commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         copy_for_wasm = true,
-        --build_method = 'other',
+        description = "простая библиотека для многослойного персетрона",
+        includes = { "genann" },
+        libdirs = { "genann" },
+        links  = { "genann:static" },
+        links_internal = { "genann:static" },
+        name = 'genann',
+        url = "https://github.com/codeplea/genann.git",
     },
     {
-        name = 'chipmunk',
-        links_internal = { "chipmunk:static" },
+        --build_method = 'other',
+        copy_for_wasm = true,
+        description = "плоский игровой физический движок",
         includes = { "Chipmunk2D/include", },
+        libdirs = { "Chipmunk2D/src" },
+        links = { "chipmunk:static" },
+        links_internal = { "chipmunk:static" },
+        name = 'chipmunk',
         url = "https://github.com/nagolove/Chipmunk2D.git",
-        copy_for_wasm = true,
-        --build_method = 'other',
     },
     {
+        --build_method = 'other',
+        copy_for_wasm = true,
+        description = "lua интерпритатор",
+        includes = { "lua" },
+        libdirs = { "lua" },
+        links  = { "lua:static" },
+        links_internal = { "lua:static" },
         name = 'lua',
         url = "https://github.com/lua/lua.git",
-        links_internal = { "lua:static" },
-        includes = { "lua" },
-        copy_for_wasm = true,
-        --build_method = 'other',
     },
     {
-        name = 'raylib',
-        links_internal = { "raylib" },
+        --build_method = 'other',
+        copy_for_wasm = true,
+        description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
         includes = { "raylib/src" },
+        libdirs = { "raylib/raylib" },
+        links = { "raylib" },
+        links_internal = { "raylib" },
+        name = 'raylib',
         url = "https://github.com/raysan5/raylib.git",
-        copy_for_wasm = true,
-        --build_method = 'other',
     },
     {
-        name = 'smallregex',
-        links_internal = { "smallregex:static" },
-        includes = { "small-regex/libsmallregex" },
-        url = "https://gitlab.com/relkom/small-regex.git",
-        custom_build = small_regex_custom_build,
-        copy_for_wasm = true,
         --build_method = 'other',
         --depends = {'lua'},
-    },
-    {
-        name = 'utf8proc',
-        links_internal = { "utf8proc:static" },
-        includes = { "utf8proc" },
-        url = "https://github.com/JuliaLang/utf8proc.git",
         copy_for_wasm = true,
-        build_method = 'make',
-        --depends = {'smallregex', "wfc"},
+        custom_build = small_regex_custom_build,
+        description = "простая библиотека для регулярных выражений",
+        includes = { "small-regex/libsmallregex" },
+        libdirs = { "smallregex/libsmallregex" },
+        links = { "smallregex:static" },
+        links_internal = { "smallregex:static" },
+        name = 'smallregex',
+        url = "https://gitlab.com/relkom/small-regex.git",
     },
     {
+        --depends = {'smallregex', "wfc"},
+        build_method = 'make',
+        copy_for_wasm = true,
+        description = "библиотека для работы с utf8 Юникодом",
+        includes = { "utf8proc" },
+        libdirs = { "utf8proc" },
+        links = { "utf8proc:static" },
+        links_internal = { "utf8proc:static" },
+        name = 'utf8proc',
+        url = "https://github.com/JuliaLang/utf8proc.git",
+    },
+    {
+        --after_build = wfc_after_build,
+        --before_build = wfc_before_build,
+        --build_method = 'other',
+        after_init = copy_headers_to_wfc,
+        copy_for_wasm = true,
+        depends = {'stb'},
+        description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
         name = 'wfc',
         url = "https://github.com/krychu/wfc.git",
-        --before_build = wfc_before_build,
-        --after_build = wfc_after_build,
-        copy_for_wasm = true,
-        after_init = copy_headers_to_wfc,
-        depends = {'stb'},
-        --build_method = 'other',
     },
     {
-        name = 'stb',
-        includes = { "stb" },
-        url = "https://github.com/nothings/stb.git",
-        copy_for_wasm = true,
         --build_method = 'other',
+        copy_for_wasm = true,
+        description = "набор библиотека заголовочных файлов для разных нужд",
+        includes = { "stb" },
+        name = 'stb',
+        url = "https://github.com/nothings/stb.git",
     }
 }
 
@@ -794,14 +827,14 @@ end
 
 --[[
 local links_internal = { 
-    "raylib",                   -- ok
-    "genann:static",            -- ok
-    "smallregex:static",        -- ok
-    "lua:static",               -- ok
-    "utf8proc:static",          -- ok
     "chipmunk:static",          -- ok
     "cimgui:static",            -- ok
-    "lfs:static",               --
+    "genann:static",            -- ok
+    "lfs:static",               -- ok
+    "lua:static",               -- ok
+    "raylib",                   -- ok
+    "smallregex:static",        -- ok
+    "utf8proc:static",          -- ok
 }
 --]]
 
@@ -814,21 +847,22 @@ local links_internal = merge_tables(gather_links_internal(dependencies),
 )
 
 local links = { 
-    "m",                        --
-    "raylib:static",            --
-    "genann:static",            --
-    "smallregex:static",        --
-    "lua:static",               --
-    "utf8proc:static",          --
     "chipmunk:static",          --
     "cimgui:static",            --
+    "genann:static",            --
+    "lua:static",               --
+    "m",                        --
+    "raylib:static",            --
+    "smallregex:static",        --
     "stdc++",                   --
+    "utf8proc:static",          --
 }
 
 local links_linix_only = {
     "lfs:static",
 }
 
+--[[
 local libdirs_internal = { 
     "./3rd_party/genann",
     "./3rd_party/utf8proc",
@@ -838,26 +872,43 @@ local libdirs_internal = {
     "./3rd_party/small-regex/libsmallregex",
     "./3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
     "./3rd_party/cimgui",
-    "./3rd_party/freetype/build",
+    --"./3rd_party/freetype/build",
     "./3rd_party/luafilesystem/",
     --"./3rd_party/rlImGui/_bin/Release",
 }
+--]]
 
 -- TODO: Расширить имена до полных путей
+--[[
 local libdirs = { 
     "../caustic",
     "../caustic/3rd_party/Chipmunk2D/src",
     "../caustic/3rd_party/cimgui",
-    "../caustic/3rd_party/freetype/build",
+    --"../caustic/3rd_party/freetype/build",
     "../caustic/3rd_party/genann",
     "../caustic/3rd_party/lua",
     "../caustic/3rd_party/raylib/raylib",
-    "../caustic/3rd_party/rlImGui/_bin/Release",
+    --"../caustic/3rd_party/rlImGui/_bin/Release",
     "../caustic/3rd_party/small-regex/libsmallregex",
     "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
     "../caustic/3rd_party/utf8proc",
     "../caustic/3rd_party/luafilesystem",
 }
+--]]
+
+local function gather_libdirs(deps: {Dependency}): {string}
+    local libdirs_tbl = {}
+    for _, dep in ipairs(deps) do
+        if dep.libdirs then
+            for _, libdir in ipairs(dep.libdirs) do
+                table.insert(libdirs_tbl, libdir)
+            end
+        end
+    end
+    return libdirs_tbl
+end
+
+local libdirs = gather_libdirs(dependencies)
 
 local wasm_libdirs = { 
     "../caustic/wasm_objects/",
@@ -1969,7 +2020,6 @@ function actions.verbose(_: Args)
         includedirs = includedirs, 
         links = links,
         libdirs = libdirs,
-        libdirs_internal = libdirs_internal,
         links_internal = links_internal,
     }))
 end
@@ -2200,11 +2250,11 @@ local function build_koh()
     link_koh_lib(dir)
 end
 
-local function make_L(list: {string}, path_prefix: string): {string}
+local function make_L(list: {string}, third_party_prefix: string): {string}
     local ret = {}
-    path_prefix = path_prefix or ""
+    local prefix = "-L" .. path_caustic .. "/" .. third_party_prefix .. "/"
     for _, v in ipairs(list) do
-        table.insert(ret, "-L" .. path_prefix .. v)
+        table.insert(ret, prefix .. v)
     end
     return ret
 end
@@ -2930,12 +2980,18 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     flags = merge_tables(flags, { "-Wall", "-fPIC", })
     local _flags: string = table.concat(flags, " ")
 
-    local libspath_prefix = cfg.artifact and "../" or ""
-    print('libspath_prefix', libspath_prefix)
+    --local libspath_prefix = cfg.artifact and "../" or ""
+    --print('libspath_prefix', libspath_prefix)
 
     print("pwd", lfs.currentdir())
 
-    local _libdirs = make_L(shallow_copy(libdirs), libspath_prefix)
+    local _libdirs = make_L(shallow_copy(libdirs), path_third_party)
+
+    print("_libdirs")
+    print(tabular(_libdirs))
+    --print("os.exit()")
+    --os.exit()
+
     table.insert(_libdirs, "-L/usr/lib")
     local _libspath: string = table.concat(_libdirs, " ")
     print(tabular(_libspath))
