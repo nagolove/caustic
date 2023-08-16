@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <memory.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string.h>
@@ -105,9 +107,7 @@ void doc_shutdown(DocArray *docarr) {
     docarr->arr = NULL;
 }
 
-// XXX: maxrecurse is unused
-void print_table(lua_State *lua, int idx, int maxrecurse) {
-    /*printf("print_table: [%s]\n", stack_dump(lua));*/
+void print_table(lua_State *lua, int idx) {
 
     if (lua_type(lua, idx) != LUA_TTABLE)
         return;
@@ -167,6 +167,143 @@ void print_table(lua_State *lua, int idx, int maxrecurse) {
     }
 
     /*printf("print_table: [%s]\n", stack_dump(lua));*/
+}
+
+// TODO: Сделать рекурсивную распачатку таблицы
+char *table_get_print(
+    lua_State *lua, int idx, const struct TablePrintOpts *opts
+) {
+    static char buf[2048] = {};
+    // Статические переменные на случай реализацити рекурсивного вызова
+    static char *pbuf;
+    static int buf_used;
+
+    buf_used = 0;
+    pbuf = buf;
+
+    if (lua_type(lua, idx) != LUA_TTABLE)
+        return buf;
+
+    lua_pushnil(lua);  /* first key */
+    while (lua_next(lua, idx) != 0) {
+        /* uses 'key' (at index -2) and 'value' (at index -1) */
+        int tmp_idx = -2;
+
+        int t = lua_type(lua, tmp_idx);
+
+        if (opts && opts->tabulate) {
+            int num = sprintf(pbuf, "%s", "    ");
+            buf_used += num;
+            if (buf_used + 1 == sizeof(buf))
+                return buf;
+            pbuf += num;
+        }
+
+        switch (t) {
+            int num;
+            // {{{ parse type
+            case LUA_TSTRING:
+                num = sprintf(pbuf, "%s", lua_tostring(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            case LUA_TBOOLEAN: 
+                num = sprintf(
+                    pbuf, "%s", lua_toboolean(lua, tmp_idx) ? "true" : "false"
+                );
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += buf_used;
+                break;
+            case LUA_TNUMBER: 
+                num = sprintf(pbuf, "%g", lua_tonumber(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            case LUA_TFUNCTION: 
+                num = sprintf(pbuf, "%p\n", lua_topointer(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            case LUA_TTABLE:
+                num = sprintf(pbuf, "%p\n", lua_tostring(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            default: 
+                num = sprintf(pbuf, "%s", lua_typename(lua, t));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            // }}}
+        }
+
+        int n = sprintf(pbuf, " = ");
+        buf_used += n;
+        if (buf_used + 1 == sizeof(buf))
+            return buf;
+        pbuf += n;
+
+        tmp_idx = -1;
+        t = lua_type(lua, tmp_idx);
+        switch (t) {
+            int num;
+            // {{{ parse value
+            case LUA_TSTRING: 
+                num = sprintf(pbuf, "%s,\n", lua_tostring(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            case LUA_TBOOLEAN: 
+                num = sprintf(pbuf, "%s,\n", lua_toboolean(lua, tmp_idx) ? "true" : "false");
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            case LUA_TNUMBER: 
+                num = sprintf(pbuf, "%g,\n", lua_tonumber(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            case LUA_TFUNCTION: 
+                num = sprintf(pbuf, "function(%p),\n", lua_topointer(lua, tmp_idx));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            default: 
+                num = sprintf(pbuf, "%s,\n", lua_typename(lua, t));
+                buf_used += num;
+                if (buf_used + 1 == sizeof(buf))
+                    return buf;
+                pbuf += num;
+                break;
+            // }}}
+        }
+
+        /* removes 'value'; keeps 'key' for next iteration */
+        lua_pop(lua, 1);
+    }
+
+    /*printf("print_table: [%s]\n", stack_dump(lua));*/
+    return buf;
 }
 
 static void type_alloc(const char *mtname, const Reg_ext *methods) {
@@ -364,3 +501,38 @@ TypeEntry *types_getlist() {
     return typelist;
 }
 
+char *table_dump2allocated_str(lua_State *l) {
+    const char *code =  "function DUMP(tbl)\n"
+                        "   local serpent\n"
+                        "   local ok, errmsg = pcall(function()\n"
+                        "       serpent = require 'serpent'\n"
+                        "   end)\n"
+                        "   if ok then\n"
+                        "       return serpent.dump(tbl)\n"
+                        "   else\n"
+                        // XXX Отдадочная печать!
+                        "       print(errmsg)\n"
+                        "       return nil\n"
+                        "   end\n"
+                        "end\n"
+                        "return DUMP";
+
+    luaL_loadstring(l, code);
+    lua_call(l, 0, LUA_MULTRET);
+
+    lua_pushvalue(l, -2);
+
+    lua_call(l, 1, LUA_MULTRET);
+
+    if (lua_type(l, -1) != LUA_TSTRING) {
+        return NULL;
+    }
+    const char *dumped_data = lua_tostring(l, -1);
+    if (dumped_data) {
+        lua_remove(l, -1);
+        lua_remove(l, -1);
+        return strdup(dumped_data);
+    }
+
+    return NULL;
+}

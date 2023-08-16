@@ -1,8 +1,9 @@
 #pragma once
 
+#include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <lauxlib.h>
+#include <stdbool.h>
 
 #define MAX_MTNAME  64
 
@@ -47,4 +48,16 @@ DocArray doc_init(lua_State *lua, const char *mtname);
 void doc_shutdown(DocArray *docarr);
 
 const char *stack_dump(lua_State *lua);
-void print_table(lua_State *lua, int idx, int maxrecurse);
+void print_table(lua_State *lua, int idx);
+
+struct TablePrintOpts {
+    bool tabulate;
+};
+
+char *table_get_print(
+    lua_State *lua, int idx, const struct TablePrintOpts *opts
+);
+// На вершине стека должна лежать таблица которая будет записана модулем
+// serpent в строку. Возвращаемая память выделяется через alloc()
+// Стандартные библиотеки Луа должны быть открыты
+char *table_dump2allocated_str(lua_State *l);
