@@ -102,8 +102,8 @@ static void process_event(const struct inotify_event *event) {
     }
 }
 
-static void handle_events() {
-    trace("handle_events:\n");
+static void inotifier_handle_events() {
+    trace("inotifier_handle_events:\n");
     char buf[4096]
         __attribute__ ((aligned(__alignof__(struct inotify_event))));
     const struct inotify_event *event;
@@ -146,7 +146,7 @@ void inotifier_init() {
     if (tbl) {
         const char *msg = "inotifier_init: tbl ~= NULL, "
                           "may be a double initialization?\n";
-        trace(msg);
+        trace("%s", msg);
         exit(EXIT_FAILURE);
     }
 
@@ -215,7 +215,7 @@ void inotifier_update() {
 
     if (poll_num > 0 && fds[0].revents & POLLIN) {
         /*trace(" fds[0].revents & POLLIN %d\n", fds[0].revents & POLLIN);*/
-        handle_events();
+        inotifier_handle_events();
     }
 }
 
