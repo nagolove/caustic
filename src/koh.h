@@ -7,7 +7,6 @@ do {                                                            \
     exit(errcode);                                              \
 } while (0);                                                    \
 
-
 #include "koh_adsr.h"
 #include "koh_array.h"
 #include "koh_cammode.h"
@@ -26,8 +25,6 @@ do {                                                            \
 #include "koh_hotkey.h"
 #include "koh_iface.h"
 #include "koh_inotifier.h"
-//#include "koh_input.h"
-//#include "koh_layer.h"
 #include "koh_logger.h"
 #include "koh_lua_tools.h"
 #include "koh_menu.h"
@@ -42,6 +39,7 @@ do {                                                            \
 #include "koh_reasings.h"
 #include "koh_render.h"
 #include "koh_resource.h"
+#include "koh_ribbonframe.h"
 #include "koh_routine.h"
 #include "koh_script.h"
 #include "koh_sfx.h"
@@ -52,3 +50,5 @@ do {                                                            \
 #include "koh_team.h"
 #include "koh_timer.h"
 #include "koh_wfc.h"
+//#include "koh_input.h"
+//#include "koh_layer.h"
