@@ -502,7 +502,7 @@ TypeEntry *types_getlist() {
 }
 
 char *table_dump2allocated_str(lua_State *l) {
-    const char *code =  "function DUMP(tbl)\n"
+    const char *code =  "local function DUMP(tbl)\n"
                         "   local serpent\n"
                         "   local ok, errmsg = pcall(function()\n"
                         "       serpent = require 'serpent'\n"
