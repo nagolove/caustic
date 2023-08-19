@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "koh.h"
+#include "koh_common.h"
 #include "raylib.h"
 #include "raymath.h"
 
@@ -13,6 +14,7 @@ enum State {
     S_HANDLE_CAN_RESIZE,
 };
 
+/*
 static const char *state2str(enum State s) {
     switch (s) {
         case S_NONE: return "S_NONE";
@@ -74,6 +76,9 @@ void ribbonframe_shutdown(struct RibbonFrame *rf) {
 static void selection_start(struct RibbonFrame *rf) {
     assert(rf);
     assert(rf->internal);
+
+    trace("selection_start:\n");
+
     struct RibbonFrameInternal *internal = rf->internal;
     Vector2 mp = GetMousePosition();
 
@@ -129,12 +134,13 @@ static void handles_check(
     }
 }
 
+//__attribute__((unused))
 static void handle_resize(
     struct RibbonFrame *rf, Vector2 handle_diff
 ) {
     assert(rf);
     assert(rf->internal);
-    assert(rf->internal->corner_index != -1);
+    //assert(rf->internal->corner_index != -1);
     trace("handle_resize: corner_index %d\n", rf->internal->corner_index);
     switch (rf->internal->corner_index) {
         case 0:
@@ -158,8 +164,26 @@ static void handle_resize(
             rf->rect.height += handle_diff.y;
             break;
     }
+
+    if (rf->internal->snap) {
+        int snap_size = rf->internal->snap_size;
+        trace("handle_resize: snap_size %d\n", snap_size);
+        assert(snap_size >= 1);
+        trace("handle_resize: rf->rect before %s\n", rect2str(rf->rect));
+        int dx = (int)rf->rect.x % snap_size;
+        int dy = (int)rf->rect.y % snap_size;
+        rf->rect.x = rf->rect.x - dx;
+        rf->rect.y = rf->rect.y - dy;
+        //rf->rect.width = rf->rect.width - dx;
+        //rf->rect.height = rf->rect.height - dy;
+        trace("handle_resize: rf->rect after %s\n", rect2str(rf->rect));
+
+        //printf("exit(EXIT_SUCCESS);\n");
+        //exit(EXIT_SUCCESS);
+    }
 }
 
+/*
 void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
     assert(rf);
     struct RibbonFrameInternal *internal = rf->internal;
@@ -197,34 +221,32 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
         // Проверка радиуса попадания в ручку управления
         handles_check(internal, points, points_num, mp);
 
-        /*
-        if (internal->corner_index != -1) {
-            SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
+        //if (internal->corner_index != -1) {
+            //SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
 
-            internal->state = S_HANDLE_CAN_RESIZE;
+            //internal->state = S_HANDLE_CAN_RESIZE;
 
-            if (IsMouseButtonDown(internal->mouse_button_bind)) {
-                //Vector2 new_mp = GetMousePosition();
-                Vector2 handle_diff = Vector2Subtract(
-                    //new_mp, 
-                    mp,
-                    internal->last_points[internal->corner_index]
-                );
-
-                //trace(
-                    //"ribbonframe_update: handle_diff %s\n", 
-                    //Vector2_tostr(handle_diff)
+            //if (IsMouseButtonDown(internal->mouse_button_bind)) {
+                ////Vector2 new_mp = GetMousePosition();
+                //Vector2 handle_diff = Vector2Subtract(
+                    ////new_mp, 
+                    //mp,
+                    //internal->last_points[internal->corner_index]
                 //);
 
-                rf->internal->state = S_HANDLE_RESIZE;
-                handle_resize(rf, handle_diff);
-            }
-        } else {
-            SetMouseCursor(0);
-            if (internal->state != S_HANDLE_RESIZE)
-                internal->state = S_NONE;
-        }
-        */
+                ////trace(
+                    ////"ribbonframe_update: handle_diff %s\n", 
+                    ////Vector2_tostr(handle_diff)
+                ////);
+
+                //rf->internal->state = S_HANDLE_RESIZE;
+                //handle_resize(rf, handle_diff);
+            //}
+        //} else {
+            //SetMouseCursor(0);
+            //if (internal->state != S_HANDLE_RESIZE)
+                //internal->state = S_NONE;
+        //}
 
         if (internal->corner_index != -1) {
             SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
@@ -259,6 +281,74 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
 
     trace("ribbonframe_update: state %s\n", state2str(internal->state));
 
+}
+*/
+
+void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
+    assert(rf);
+    struct RibbonFrameInternal *internal = rf->internal;
+    Vector2 mp = GetMousePosition();
+
+    // Обход по часовой стрелке
+    const Vector2 points[] = {
+        { rf->rect.x, rf->rect.y }, 
+        { rf->rect.x + rf->rect.width, rf->rect.y }, 
+        { rf->rect.x + rf->rect.width, rf->rect.y + rf->rect.height },
+        { rf->rect.x, rf->rect.y + rf->rect.height }, 
+    };
+    const int points_num = sizeof(points) / sizeof(points[0]);
+
+    last_points_copy(internal, points, points_num);
+    internal->corner_index = -1;
+
+    // Проверка радиуса попадания в ручку управления
+    handles_check(internal, points, points_num, mp);
+    
+    // TODO: Правильный учет камеры
+    if (cam) {
+        mp.x += cam->offset.x;
+        mp.y += cam->offset.y;
+    }
+
+    if (IsMouseButtonDown(internal->mouse_button_bind)) {
+
+        if (internal->state == S_NONE)
+            if (internal->corner_index != -1) {
+                internal->state = S_HANDLE_CAN_RESIZE;
+                SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
+            }
+
+        switch(internal->state) {
+            case S_NONE: 
+                selection_start(rf);
+                break;
+            case S_RESIZE:
+                selection_start(rf);
+                break;
+            case S_HANDLE_RESIZE:
+                break;
+            case S_HANDLE_CAN_RESIZE: {
+                trace("ribbonframe_update: S_HANDLE_CAN_RESIZE\n");
+                Vector2 handle_diff = Vector2Subtract(
+                        mp, internal->last_points[internal->corner_index]
+                        );
+
+                //rf->internal->state = S_HANDLE_RESIZE;
+                //if (internal->corner_index != -1)
+                    handle_resize(rf, handle_diff);
+                break;
+            }
+        };
+
+        //trace("ribbonframe_update: state %s\n", state2str(internal->state));
+
+    } else {
+        internal->state = S_NONE;
+        SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+    }
+
+
+    //trace("ribbonframe_update: state %s\n", state2str(internal->state));
 }
 
 void ribbonframe_draw(struct RibbonFrame *rf) {
