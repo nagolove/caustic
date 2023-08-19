@@ -1,12 +1,16 @@
 #include "koh_timer.h"
 
 #include "raylib.h"
+#include "koh.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+
+static uint32_t id = 1;
 
 void koh_timerstore_init(koh_TimerStore *ts, int capacity) {
     assert(ts);
@@ -38,6 +42,11 @@ void koh_timerstore_shutdown(koh_TimerStore *ts) {
 void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
     assert(ts);
     assert(tm);
+
+    assert(tm->state >= TS_ZERO);
+    assert(tm->state < TS_LAST);
+    assert(tm->id > 0);
+    assert(tm->id < id);
 
     if (tm != ts->allocated) {
         Timer *next = tm->next;
@@ -147,6 +156,8 @@ void koh_timerstore_update(koh_TimerStore *ts) {
                     run(ts, cur);
                 }
             }
+            case TS_LAST:
+                break;
         }
 
         cur = cur->next;
@@ -202,6 +213,12 @@ Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def) {
     new->func = def->func;
     new->end = def->end;
     new->every = def->every;
+
+    if (id + 1 == UINT32_MAX) {
+        trace("koh_timerstore_new: timer id limit reached\n");
+        exit(EXIT_FAILURE);
+    }
+    new->id = id++;
 
     return new;
 }

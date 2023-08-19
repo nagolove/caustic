@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include "raylib.h"
 
 #define TIMER_STORE_CAPACITY    256
@@ -15,16 +16,19 @@ typedef enum koh_TimerState {
     TS_FIRST    = 1,
     // Работа в течении времени duration
     TS_SECOND   = 2,
+    // Последнее значение в перечислении
+    TS_LAST     = 3,
 } TimerState;
 
 typedef struct koh_Timer {
-    koh_Timer *next, *prev;
-    koh_Timer *next_free, *prev_free;
-    TimerState state;
-    float waitfor, duration, every;
-    double time, last_run;
+    uint32_t        id;
+    koh_Timer       *next, *prev;
+    koh_Timer       *next_free, *prev_free;
+    TimerState      state;
+    float           waitfor, duration, every;
+    double          time, last_run;
     // рабочая функция и функция вызываемая по завершению
-    koh_TimerFunc func, end;
+    koh_TimerFunc   func, end;
     void *data;
 } Timer;
 
