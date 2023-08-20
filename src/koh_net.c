@@ -1,6 +1,7 @@
 // vim: fdm=marker
 #include "koh_net.h"
 
+#include "koh.h"
 #include <string.h>
 #include <arpa/inet.h>
 #include <assert.h>
@@ -54,12 +55,14 @@ typedef struct Server {
 } Server;
 
 Net *net_new() {
+    trace("net_new:\n");
     Net *n = calloc(1, sizeof(Net));
     assert(n);
     return n;
 }
 
 void net_free(Net *n) {
+    trace("net_free:\n");
     assert(n);
     atomic_store(&n->command, THRD_CMD_BREAK);
     if (n->worker > 0) {
