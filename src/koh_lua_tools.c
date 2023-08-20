@@ -18,7 +18,7 @@
 // переполнения
 static const int max_fields_num = 100;
 
-TypeEntry *typelist;
+TypeEntry *typelist = NULL;
 
 DocArray doc_init(lua_State *lua, const char *mtname) {
     DocArray docarr = {0};
