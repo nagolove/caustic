@@ -75,12 +75,12 @@ struct MetaLoaderFilesList {
 struct MetaLoaderFilesList metaloader_fileslist(MetaLoader *ml);
 void metaloader_fileslist_shutdown(struct MetaLoaderFilesList *fl);
 
-#define METALOADER_MAX_PIECES   32
+#define METALOADER_MAX_OBJECTS   32
 
 struct MetaLoaderObjects {
     int         num;
-    Rectangle   rects[METALOADER_MAX_PIECES];
-    char        *names[METALOADER_MAX_PIECES];
+    Rectangle   rects[METALOADER_MAX_OBJECTS];
+    char        *names[METALOADER_MAX_OBJECTS];
 };
 
 struct MetaLoaderObjects metaloader_objects_get(

@@ -54,7 +54,11 @@ bool metaloader_load(MetaLoader *ml, const char *fname) {
     print_table(ml->lua, 1);
 
     const char *fname_noext = extract_filename(fname, ".lua");
-    trace("metaloader_load: fname_noext '%s'\n", fname_noext);
+    trace(
+        "metaloader_load: fname '%s', noext '%s'\n",
+        fname,
+        fname_noext
+    );
     lua_pushstring(ml->lua, fname_noext);
     trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
 
@@ -119,11 +123,44 @@ void metaloader_print(MetaLoader *ml) {
 struct MetaLoaderFilesList metaloader_fileslist(MetaLoader *ml) {
     assert(ml);
     struct MetaLoaderFilesList fl = {};
+    lua_State *l = ml->lua;
+    lua_settop(l, 0);
+
+    int cap = 10;
+    fl.fnames = calloc(cap, sizeof(fl.fnames[0]));
+
+    lua_pushnil(l);
+    while (lua_next(l, 1)) {
+        if (fl.num + 1 == cap) {
+            void *new_mem = realloc(fl.fnames, sizeof(fl.fnames[0]));
+            if (!new_mem) {
+                trace("metaloader_fileslist: bad realloc\n");
+                memset(&fl, 0, sizeof(fl));
+                return fl;
+            }
+            fl.fnames = new_mem;
+        }
+
+        const char *fname = lua_tostring(l, -2);
+        assert(fname);
+
+        fl.fnames[fl.num++] = strdup(fname);
+
+        lua_pop(l, 1);
+    }
+
     return fl;
 }
 
 void metaloader_fileslist_shutdown(struct MetaLoaderFilesList *fl) {
     assert(fl);
+    for (int u = 0; u < fl->num; u++) {
+        if (fl->fnames[u]) {
+            free(fl->fnames[u]);
+            fl->fnames[u] = 0;
+        }
+    }
+    free(fl);
 }
 
 struct MetaLoaderObjects metaloader_objects_get(
@@ -132,24 +169,88 @@ struct MetaLoaderObjects metaloader_objects_get(
     assert(ml);
     struct MetaLoaderObjects object = {};
 
-    lua_settop(ml->lua, 0);
+    lua_State *l = ml->lua;
+    lua_settop(l, 0);
 
-    int type = lua_rawgeti(ml->lua, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    int type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
     assert(type == LUA_TTABLE);
 
-    trace("metaloader_objects_get: [%s]\n", stack_dump(ml->lua));
+    trace("metaloader_objects_get: [%s]\n", stack_dump(l));
 
-    lua_pushstring(ml->lua, fname_noext);
-    if (lua_gettable(ml->lua, -2) == LUA_TTABLE) {
+    lua_pushstring(l, fname_noext);
+    if (lua_gettable(l, -2) != LUA_TTABLE) {
+        return (struct MetaLoaderObjects){};
     }
 
-    trace("metaloader_objects_get: [%s]\n", stack_dump(ml->lua));
+    lua_pushnil(l);
+    int tbl_index = lua_gettop(l) - 1;
+    while (lua_next(l, tbl_index)) {
+        if (object.num + 1 == METALOADER_MAX_OBJECTS) {
+            lua_settop(l, 0);
+            trace("metaloader_objects_get: METALOADER_MAX_OBJECTS reached\n");
+            return object;
+        }
+
+        const char *field_name = lua_tostring(l, -2);
+        printf("field_name '%s'\n", field_name);
+        if (!field_name)
+            goto _next;
+        object.names[object.num] = strdup(field_name);
+
+        trace(
+            "metaloader_objects_get: %s - %s\n", 
+            lua_tostring(l, -1),
+            lua_tostring(l, -2)
+        );
+
+        {
+            printf("before pushnil [%s]\n", stack_dump(l));
+            lua_pushnil(l);
+
+            lua_next(l, lua_gettop(l) - 1);
+            printf("%f\n", lua_tonumber(l, -1));
+            object.rects[object.num].x = lua_tonumber(l, -1);
+            lua_pop(l, 1);
+
+            lua_next(l, lua_gettop(l) - 1);
+            printf("%f\n", lua_tonumber(l, -1));
+            object.rects[object.num].y = lua_tonumber(l, -1);
+            lua_pop(l, 1);
+
+            lua_next(l, lua_gettop(l) - 1);
+            printf("%f\n", lua_tonumber(l, -1));
+            object.rects[object.num].width = lua_tonumber(l, -1);
+            lua_pop(l, 1);
+
+            lua_next(l, lua_gettop(l) - 1);
+            printf("%f\n", lua_tonumber(l, -1));
+            object.rects[object.num].height = lua_tonumber(l, -1);
+            lua_pop(l, 1);
+
+            lua_pop(l, 1);
+            printf("HERR [%s]\n", stack_dump(l));
+        }
+
+        object.num++;
+_next:
+        lua_pop(l, 1);
+        printf("iter\n");
+    }
+    trace("metaloader_objects_get: [%s]\n", stack_dump(l));
+    lua_settop(l, 0);
 
     return object;
 }
 
 void metaloader_objects_shutdown(struct MetaLoaderObjects *objects) {
     assert(objects);
+
+    for (int j = 0; objects->num; ++j) {
+        if (objects->names[j]) {
+            free(objects->names[j]);
+            objects->names[j] = NULL;
+        }
+    }
 }
 
 void metaloader_file_new(MetaLoader *ml, const char *new_fname_noext) {
