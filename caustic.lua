@@ -1688,7 +1688,7 @@ function actions.selftest(_args)
 
 
 
-   local selftest_fname = "selftest.lua"
+   local selftest_fname = path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(selftest_fname)()
       print('test_dirs', inspect(test_dirs))
