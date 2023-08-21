@@ -806,28 +806,29 @@ void de_ecs_print(de_ecs *r) {
     koh_term_color_reset();
 }
 
+// XXX: Отладочный вывод из-за удаления элементов в 2048 с поля
 void de_destroy(de_ecs* r, de_entity e) {
     assert(r);
     assert(e != de_null);
 
-    de_trace("de_destroy: ecs %p, e %u\n", r, e);
+    //de_trace("de_destroy: ecs %p, e %u\n", r, e);
 
-    printf("de_destroy: 1\n");
-    de_ecs_print(r);
+    //printf("de_destroy: 1\n");
+    //de_ecs_print(r);
 
     // 1) remove all the components of the entity
     de_remove_all(r, e);
 
-    printf("de_destroy: 2\n");
-    de_ecs_print(r);
+    //printf("de_destroy: 2\n");
+    //de_ecs_print(r);
 
     // 2) release_entity with a desired new version
     de_entity_ver new_version = de_entity_version(e);
     new_version.ver++;
     _de_release_entity(r, e, new_version);
 
-    printf("de_destroy: 3\n");
-    de_ecs_print(r);
+    //printf("de_destroy: 3\n");
+    //de_ecs_print(r);
 }
 
 bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
