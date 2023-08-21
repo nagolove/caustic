@@ -1313,6 +1313,9 @@ end
 
 
 
+
+
+
 local parser_setup = {
 
    build = {
@@ -1361,9 +1364,15 @@ local parser_setup = {
       arguments = {
          { "flags", "*" },
       },
+      flags = {
+         { "-c", "clean run without gdb" },
+      },
    },
    test = {
       summary = "build native test executable and run it",
+   },
+   selftest = {
+      summary = "build and run tests from selftest.lua",
    },
    verbose = {
       summary = "print internal data with urls, paths etc.",
@@ -1543,7 +1552,11 @@ function actions.run(_args)
 
 
 
-   cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
+   if _args.c then
+      cmd_do(format("./%s", cfgs[1].artifact) .. flags)
+   else
+      cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
+   end
 end
 
 function actions.init_add(_args)
@@ -1605,6 +1618,15 @@ function actions.init(_args)
 
 end
 
+
+
+
+
+
+
+
+
+
 local function sub_test(_args, cfg)
    local src_dir = cfg.src or "src"
    push_current_dir()
@@ -1614,15 +1636,6 @@ local function sub_test(_args, cfg)
    end
 
    local cwd = lfs.currentdir() .. "/"
-
-
-
-
-
-
-
-
-
 
    print("gather sources")
    filter_sources_c(".", function(file)
@@ -1667,11 +1680,35 @@ local function sub_test(_args, cfg)
    pop_dir()
 end
 
+function actions.selftest(_args)
+   print('selftestring')
 
+
+
+
+
+
+   local selftest_fname = "selftest.lua"
+   local ok, errmsg = pcall(function()
+      local test_dirs = loadfile(selftest_fname)()
+      print('test_dirs', inspect(test_dirs))
+      push_current_dir()
+      for _, dir in ipairs(test_dirs) do
+         assert(type(dir) == "string")
+         lfs.chdir(dir)
+         cmd_do("caustic make")
+         cmd_do("caustic run -c")
+      end
+      pop_dir()
+   end)
+   if not ok then
+      print(format("Could not load %s with %s", selftest_fname, errmsg))
+      os.exit(1)
+   end
+end
 
 function actions.test(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
-
    for _, cfg in ipairs(cfgs) do
       sub_test(_args, cfg)
    end
@@ -3080,7 +3117,8 @@ local function sub_make(_args, cfg, push_num)
 
    if not cfg.artifact then
       koh_link(objfiles_str, _args)
-      cp("libcaustic.a", "../libcaustic.a")
+
+      cmd_do("cp libcaustic.a ../libcaustic.a")
    else
       push_current_dir()
       print('caustic_path', path_caustic)
@@ -3144,8 +3182,10 @@ end
 
 local argparse = require('argparse')
 
-local function do_parser_setup(parser)
-   for cmd_name, setup_tbl in pairs(parser_setup) do
+local function do_parser_setup(
+   parser, setup)
+
+   for cmd_name, setup_tbl in pairs(setup) do
       local p = parser:command(cmd_name)
       if setup_tbl.summary then
          p:summary(setup_tbl.summary)
@@ -3178,62 +3218,9 @@ local function main()
 
    local parser = argparse()
 
-   do_parser_setup(parser)
+   do_parser_setup(parser, parser_setup)
 
    parser:flag("-v --verbose", "use verbose output")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
