@@ -16,6 +16,6 @@ test_*
 *.make
 tex_*.png
 nohup.out
-.*
+#.*
 gen_height_textures
 godbolt.c
