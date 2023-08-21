@@ -100,9 +100,15 @@ Vector2 camera2screen(Camera2D cam, Vector2 in);
 
 Color color_by_index(int colornum);
 void texture_save(Texture2D tex, const char *fname);
-// some_file.txt, .txt -> some_file
+
+// Применение:
+// extract_filename("/some/file/path/some_file.txt", ".txt") -> "some_file"
+// extract_filename("some_file.txt", ".txt") -> "some_file"
+// extract_filename("some_file", ".txt") -> "some_file"
 const char *extract_filename(const char *fname, const char *ext);
+
 const char *rect2str(Rectangle rect);
+Rectangle rect_from_arr(const float xywh[4]);
 
 // Проверяет на наличие суффикса вида _01 в строке и возвращает статическую
 // строку без суффикса

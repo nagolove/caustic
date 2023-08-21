@@ -705,27 +705,37 @@ void texture_save(Texture2D tex, const char *fname) {
     UnloadImage(img);
 }
 
-// Применение:
-// extract_filename(/some/file/path/some_file.txt, .txt) -> some_file
 const char *extract_filename(const char *fname, const char *ext) {
     const char *last_slash = fname, *prev_slash = NULL;
+    int slashes_num = 0;
     do {
         prev_slash = last_slash;
+        //last_slash = strstr(last_slash + 1, "/");
         last_slash = strstr(last_slash + 1, "/");
+        if (last_slash)
+            slashes_num++;
     } while (last_slash);
 
-    fname = prev_slash + 1;
+    //printf("extract_filename: slashes_num %d\n", slashes_num);
+
+    if (slashes_num)
+        fname = prev_slash + 1;
+    else if (fname[0] == '/')
+        fname = prev_slash + 1;
+    else
+        fname = prev_slash;
 
     assert(fname);
     assert(ext);
-    char *pos_ptr = strstr(fname, ext);
+    const char *pos_ptr = strstr(fname, ext);
+    static char only_name[256] = {0};
+    memset(only_name, 0, sizeof(only_name));
     if (pos_ptr) {
-        static char only_name[256] = {0};
-        memset(only_name, 0, sizeof(only_name));
         strncpy(only_name, fname, pos_ptr - fname);
-        return only_name;
-    } else 
-        return NULL;
+    } else {
+        strncpy(only_name, fname, strlen(fname));
+    }
+    return only_name;
 }
 
 const char *rect2str(Rectangle rect) {
@@ -1195,4 +1205,13 @@ void koh_search_files_print(struct FilesSearchResult *fsr) {
     for (int i = 0; i < fsr->num; ++i) {
         trace("koh_search_files_print: '%s'\n", fsr->names[i]);
     }
+}
+
+Rectangle rect_from_arr(const float xywh[4]) {
+    return (Rectangle) {
+        .x = xywh[0],
+        .y = xywh[1],
+        .width = xywh[2],
+        .height = xywh[3],
+    };
 }
