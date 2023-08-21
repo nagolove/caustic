@@ -1688,7 +1688,7 @@ function actions.selftest(_args: Args)
     Вызвать исполняемый файл подпроекта
     --]]
     --local _, test_dirs = serpent.load("selftest.lua")
-    local selftest_fname = "selftest.lua"
+    local selftest_fname = path_caustic .. "/selftest.lua"
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(selftest_fname)() as {string}
         print('test_dirs', inspect(test_dirs))
