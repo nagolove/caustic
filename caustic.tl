@@ -1273,8 +1273,10 @@ local record Actions
     deps: function(Args)
     init: function(Args)
     init_add: function(Args)
+    selftest: function(Args)
     
-    -- новая версия init, которая работает только с таблицей dependencies
+    -- новая версия init, которая работает с таблицей dependencies через
+    -- аргумент функции
     init_smart: function(Args)
 
     make: function(Args)
@@ -1289,6 +1291,7 @@ local record Actions
 end
 
 local enum ActionsEnum
+    "selftest"
     "build"
     "compile_flags"
     "deps"
@@ -1361,9 +1364,15 @@ local parser_setup: {string:ParserSetup} = {
         arguments = {
             { "flags", "*" }
         },
+        flags = {
+            { "-c", "clean run without gdb" },
+        },
     },
     test = {
         summary = "build native test executable and run it",
+    },
+    selftest = {
+        summary = "build and run tests from selftest.lua",
     },
     verbose = {
         summary = "print internal data with urls, paths etc.",
@@ -1543,7 +1552,11 @@ function actions.run(_args: Args)
     -- XXX: Передача --no-fork действительная только для программ собранных
     -- с использованием библиотеки munit
     -- XXX: Как выбрать подпроект который запускать(не всегда первый)?
-    cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
+    if _args.c then
+        cmd_do(format("./%s", cfgs[1].artifact) .. flags)
+    else
+        cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
+    end
 end
 
 function actions.init_add(_args: Args)
@@ -1605,6 +1618,15 @@ function actions.init(_args: Args)
     --_init(win_third_party, deps)
 end
 
+--[[
+TODO:
+Найти все исходные файлы
+Найти в исходных файлах имена тестовых функций
+Составить список имен тестовых функций
+Сгенерировать файл тестовой программы
+
+`gcc -MM source.c`
+--]]
 local function sub_test(_args: Args, cfg: Cfg)
     local src_dir = cfg.src or "src"
     push_current_dir()
@@ -1614,15 +1636,6 @@ local function sub_test(_args: Args, cfg: Cfg)
     end
 
     local cwd = lfs.currentdir() .. "/"
-
-    --[[
-    Найти все исходные файлы
-    Найти в исходных файлах имена тестовых функций
-    Составить список имен тестовых функций
-    Сгенерировать файл тестовой программы
-
-    `gcc -MM source.c`
-    --]]
 
     print("gather sources")
     filter_sources_c(".", function(file: string)
@@ -1667,11 +1680,35 @@ local function sub_test(_args: Args, cfg: Cfg)
     pop_dir()
 end
 
+function actions.selftest(_args: Args)
+    print('selftestring')
+    --[[
+    Прочитать строки файла selftest.lua
+    Перекомпилировать каждый подпроект 
+    Вызвать исполняемый файл подпроекта
+    --]]
+    --local _, test_dirs = serpent.load("selftest.lua")
+    local selftest_fname = "selftest.lua"
+    local ok, errmsg: boolean, string = pcall(function()
+        local test_dirs = loadfile(selftest_fname)() as {string}
+        print('test_dirs', inspect(test_dirs))
+        push_current_dir()
+        for _, dir in ipairs(test_dirs) do
+            assert(type(dir) == "string")
+            lfs.chdir(dir)
+            cmd_do("caustic make")
+            cmd_do("caustic run -c")
+        end
+        pop_dir()
+    end)
+    if not ok then
+        print(format("Could not load %s with %s", selftest_fname, errmsg))
+        os.exit(1)
+    end
+end
 
--- TODO: Обработка массива cfg
 function actions.test(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-
     for _, cfg in ipairs(cfgs) do
         sub_test(_args, cfg)
     end
@@ -3080,7 +3117,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     -- скрипте.
     if not cfg.artifact then
         koh_link(objfiles_str, _args)
-        cp("libcaustic.a", "../libcaustic.a")
+        --cp("libcaustic.a", "../libcaustic.a")
+        cmd_do("cp libcaustic.a ../libcaustic.a")
     else
         push_current_dir()
         print('caustic_path', path_caustic)
@@ -3144,8 +3182,10 @@ end
 
 local argparse = require 'argparse'
 
-local function do_parser_setup(parser: argparse.Parser)
-    for cmd_name, setup_tbl in pairs(parser_setup) do
+local function do_parser_setup(
+    parser: argparse.Parser, setup: {string:ParserSetup}
+)
+    for cmd_name, setup_tbl in pairs(setup) do
         local p = parser:command(cmd_name)
         if setup_tbl.summary then
             p:summary(setup_tbl.summary)
@@ -3178,7 +3218,7 @@ local function main()
 
     local parser = argparse()
 
-    do_parser_setup(parser)
+    do_parser_setup(parser, parser_setup)
 
     parser:flag("-v --verbose", "use verbose output")
 
@@ -3188,59 +3228,6 @@ local function main()
     -- Сперва скопировать их в отдельный каталог.
     -- TODO: документация на все опции, команда help
     -- FIXME: команды build и init, оставить только одну из них?
-    parser:command("init")
-        :summary("download dependencies from network")
-        :option("-n --name")
-    parser:command("init_smart")
-        :summary("install new dependencies")
-        :option("-n --name")
-    parser:command("deps")
-        :summary("list of dependendies")
-        :flag("-f --full", "full nodes info")
-    parser:command("build")
-        :summary("build dependendies for native platform")
-        :option("-n --name")
-    parser:command("build_smart")
-        :summary("build dependendies for native platform")
-        :option("-n --name")
-    parser:command("remove"):summary("remove all 3rd_party files")
-        :option("-n --name")
-    parser:command("rocks")
-        :summary("list of lua rocks should be installed for this script")
-
-    parser:command("verbose")
-        :summary("print internal data with urls, paths etc.")
-
-    parser:command("compile_flags")
-        :summary("print compile_flags.txt to stdout")
-    parser:command("wbuild")
-        :summary("build dependencies and libcaustic for wasm or build project")
-        :flag("-m --minshell", "use minimal web shell")
-    --parser:command("check_updates")
-        --:summary("print new version of libraries")
-    parser:command("publish")
-        :summary("publish wasm code to ~/nagolove.github.io repo and push it to web")
-    parser:command("test")
-        :summary("build native test executable and run it")
-
-    parser:command("anim_convert")
-        :option("-n --name")
-
-    parser:command("run")
-        :summary("run project native executable under gdb")
-        :argument("flags"):args("*")
-
-    local make = parser:command("make")
-    make
-        :summary("build libcaustic or current project")
-        :argument("make_type"):args("?")
-    make:flag("-g --nocodegen", "disable codegeneration step")
-    make:flag('-j', 'run compilation parallel')
-    make:flag('-c', 'full rebuild without cache info')
-    make:flag('-r --release', 'release')
-    make:flag('-a --noasan', 'no address sanitazer')
-    make:flag("-p --cpp", "use c++ code")
-    -- }}}
     --]]
 
     --[[
