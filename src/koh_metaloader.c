@@ -2,6 +2,7 @@
 
 #include "koh_common.h"
 #include "koh_logger.h"
+#include <stdbool.h>
 #include <string.h>
 #include "koh_lua_tools.h"
 #include "lauxlib.h"
@@ -13,6 +14,60 @@ struct MetaLoader {
     lua_State   *lua;
     int         ref_tbl_root;
 };
+
+// На верху луа стека должна лежать загруженная строка кода
+static bool _metaloader_load(
+    MetaLoader *ml, const char *fname_noext
+) {
+    assert(ml);
+    lua_State *l = ml->lua;
+
+    trace(
+        "_metaloader_load: fname_noext '%s' [%s]\n",
+        fname_noext, stack_dump(l)
+    );
+    assert(lua_type(l, -1) == LUA_TFUNCTION);
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    lua_call(l, 0, LUA_MULTRET);
+    int tbl_data_index = lua_gettop(l);
+    //table_print(l, -1);
+
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
+
+    if (!l) {
+        trace("_metaloader_load: l == NULL\n");
+        return false;
+    }
+
+    int type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    if (type != LUA_TTABLE)  {
+        trace(
+            "_metaloader_load: could not get ref_tbl_root as table [%s]\n", 
+            stack_dump(l)
+        );
+        return false;
+    }
+    int tbl_index = lua_gettop(l);
+
+    lua_pushstring(l, fname_noext);
+    trace("_metaloader_load: before lua_copy [%s]\n", stack_dump(l));
+    lua_pushvalue(l, tbl_data_index);
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    lua_settable(l, tbl_index);
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
+
+    //trace("metaloader_load: [%s]\n", stack_dump(l));
+    //lua_call(l, 0, 1);
+    //trace("metaloader_load: [%s]\n", stack_dump(l));
+    //table_print(l, 1);
+    //lua_rawset(l, 1);
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    //lua_pop(l, 1);
+    lua_settop(l, 0);
+
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    return true;
+}
 
 MetaLoader *metaloader_new() {
     MetaLoader *ml = calloc(1, sizeof(MetaLoader));
@@ -32,63 +87,13 @@ void metaloader_free(MetaLoader *ml) {
     free(ml);
 }
 
-bool metaloader_load(MetaLoader *ml, const char *fname) {
+bool metaloader_load_f(MetaLoader *ml, const char *fname) {
     assert(ml);
-    trace("metaloader_load:\n");
-    trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
-
-    if (!ml->lua) {
-        trace("metaloader_load: ml->lua == NULL\n");
-        return false;
-    }
-
-    int type = lua_rawgeti(ml->lua, LUA_REGISTRYINDEX, ml->ref_tbl_root);
-    if (type != LUA_TTABLE)  {
-        trace(
-            "metaloader_load: could not get ref_tbl_root as table [%s]\n", 
-            stack_dump(ml->lua)
-        );
-        return false;
-    }
-
-    print_table(ml->lua, 1);
-
+    assert(fname);
     const char *fname_noext = extract_filename(fname, ".lua");
-    trace(
-        "metaloader_load: fname '%s', noext '%s'\n",
-        fname,
-        fname_noext
-    );
-    lua_pushstring(ml->lua, fname_noext);
-    trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
-
-    if (luaL_loadfile(ml->lua, fname) != LUA_OK) {
-        trace(
-            "metaloader_load: could not load '%s'\n", 
-            lua_tostring(ml->lua, -1)
-        );
-        trace(
-            "metaloader_load: [%s]\n", 
-            stack_dump(ml->lua)
-        );
-        // Скинуть ref_tbl_root таблицу и сообщение об ошибке
-        lua_pop(ml->lua, 2);
-        trace(
-            "metaloader_load: [%s]\n", 
-            stack_dump(ml->lua)
-        );
+    if (luaL_loadfilex(ml->lua, fname, "r") != LUA_OK)
         return false;
-    }
-
-    trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
-    lua_call(ml->lua, 0, 1);
-    trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
-    print_table(ml->lua, 1);
-    lua_rawset(ml->lua, 1);
-    trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
-    lua_remove(ml->lua, 1);
-    trace("metaloader_load: [%s]\n", stack_dump(ml->lua));
-    return true;
+    return _metaloader_load(ml, fname_noext);
 }
 
 Rectangle *metaloader_get(
@@ -172,13 +177,21 @@ struct MetaLoaderObjects metaloader_objects_get(
     lua_State *l = ml->lua;
     lua_settop(l, 0);
 
-    int type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    int type;
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
     assert(type == LUA_TTABLE);
 
-    trace("metaloader_objects_get: [%s]\n", stack_dump(l));
+    trace(
+        "metaloader_objects_get: fname_noext '%s' [%s]\n",
+        fname_noext, 
+        stack_dump(l)
+    );
 
     lua_pushstring(l, fname_noext);
-    if (lua_gettable(l, -2) != LUA_TTABLE) {
+    type = lua_gettable(l, -2);
+    trace("metaloader_objects_get: type %s\n", lua_typename(l, type));
+    if (type != LUA_TTABLE) {
+        trace("metaloader_objects_get: could not get table by ref_tbl_root\n");
         return (struct MetaLoaderObjects){};
     }
 
@@ -197,13 +210,14 @@ struct MetaLoaderObjects metaloader_objects_get(
             goto _next;
         object.names[object.num] = strdup(field_name);
 
+        /*
         trace(
             "metaloader_objects_get: %s - %s\n", 
             lua_tostring(l, -1),
             lua_tostring(l, -2)
         );
-
-        {
+        */
+        if (lua_istable(l, -1)) {
             printf("before pushnil [%s]\n", stack_dump(l));
             lua_pushnil(l);
 
@@ -244,8 +258,8 @@ _next:
 
 void metaloader_objects_shutdown(struct MetaLoaderObjects *objects) {
     assert(objects);
-
-    for (int j = 0; objects->num; ++j) {
+    //trace("metaloader_objects_shutdown: objects->num %d\n", objects->num);
+    for (int j = 0; j < objects->num; ++j) {
         if (objects->names[j]) {
             free(objects->names[j]);
             objects->names[j] = NULL;
@@ -262,4 +276,21 @@ void metaloader_object_set(
     MetaLoader *ml, const char *fname_noext, 
     const char *objname, Rectangle rect
 ) {
+}
+
+bool metaloader_load_s(
+    MetaLoader *ml, const char *fname, const char *luacode
+) {
+    assert(ml);
+    assert(fname);
+    assert(luacode);
+    if (luaL_loadstring(ml->lua, luacode) != LUA_OK) {
+        trace(
+            "metaloader_load_d: could not do luaL_loadstring() with %s\n",
+            lua_tostring(ml->lua, -1)
+        );
+        return false;
+    }
+    const char *fname_noext = extract_filename(fname, ".lua");
+    return _metaloader_load(ml, fname_noext);
 }

@@ -49,9 +49,12 @@ metaloader_shutdown(&mt);
 MetaLoader *metaloader_new();
 void metaloader_free(MetaLoader *ml);
 
-bool metaloader_load(MetaLoader *ml, const char *fname);
+bool metaloader_load_f(MetaLoader *ml, const char *fname);
+bool metaloader_load_s(MetaLoader *ml, const char *fname, const char *luacode);
+
 // Попытка записать все загруженные файлы на диск
 void metaloader_write(MetaLoader *ml);
+
 Rectangle *metaloader_get(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
