@@ -107,7 +107,7 @@ void doc_shutdown(DocArray *docarr) {
     docarr->arr = NULL;
 }
 
-void print_table(lua_State *lua, int idx) {
+void table_print(lua_State *lua, int idx) {
 
     if (lua_type(lua, idx) != LUA_TTABLE)
         return;

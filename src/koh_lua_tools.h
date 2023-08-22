@@ -48,7 +48,7 @@ DocArray doc_init(lua_State *lua, const char *mtname);
 void doc_shutdown(DocArray *docarr);
 
 const char *stack_dump(lua_State *lua);
-void print_table(lua_State *lua, int idx);
+void table_print(lua_State *lua, int idx);
 
 struct TablePrintOpts {
     bool tabulate;
