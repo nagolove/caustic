@@ -35,7 +35,7 @@ void set_free(koh_Set *set);
 bool set_remove(koh_Set *set, const void *key, int key_len);
 void set_each(koh_Set *set, koh_SetEachCallback cb, void *udata);
 bool set_compare(const koh_Set *s1, const koh_Set *s2);
-int set_size(koh_Set *set);
+int set_size(const koh_Set *set);
 
 /*
     // Пример использования koh_SetView

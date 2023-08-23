@@ -243,11 +243,13 @@ bool set_compare(const koh_Set *s1, const koh_Set *s2) {
         .set = (koh_Set*)s2,
         .eq = true,
     };
+    if (set_size(s1) != set_size(s2))
+        return false;
     set_each((koh_Set*)s1, iter_compare, &ctx);
     return ctx.eq;
 }
 
-int set_size(koh_Set *set) {
+int set_size(const koh_Set *set) {
     assert(set);
     return set->taken;
 }
