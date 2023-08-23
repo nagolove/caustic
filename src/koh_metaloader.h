@@ -58,6 +58,8 @@ void metaloader_write(MetaLoader *ml);
 Rectangle *metaloader_get(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
+
+__attribute__((__format__ (__printf__, 3, 4)))
 Rectangle *metaloader_get_fmt(
     MetaLoader *ml, const char *fname_noext, const char *objname_fmt, ...
 );
