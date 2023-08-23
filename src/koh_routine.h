@@ -5,6 +5,7 @@
 #include "raymath.h"
 #include "chipmunk/chipmunk.h"
 #include <assert.h>
+#include <float.h>
 #include <stdio.h>
 
 static inline void vec4_from_color(float vec[4], Color c) {
@@ -128,4 +129,19 @@ static inline Vector2 screen_center() {
         GetScreenWidth() / 2.,
         GetScreenHeight() / 2.,
     };
+}
+
+static inline bool rect_cmp_hard(const Rectangle r1, const Rectangle r2) {
+    return  r1.x == r2.x &&
+            r1.y == r2.y &&
+            r1.width == r2.width &&
+            r1.height == r2.height;
+}
+
+static inline bool rect_cmp(const Rectangle r1, const Rectangle r2) {
+    // XXX: < or <= ??
+    return  r1.x - r2.x <= FLT_EPSILON &&
+            r1.y - r2.y <= FLT_EPSILON &&
+            r1.width - r2.width <= FLT_EPSILON &&
+            r1.height - r2.height <= FLT_EPSILON;
 }
