@@ -107,17 +107,65 @@ bool metaloader_load_f(MetaLoader *ml, const char *fname) {
 }
 
 Rectangle *metaloader_get(
-    MetaLoader *ml, const char * fname, const char *objname
+    MetaLoader *ml, const char *fname_noext, const char *objname
 ) {
     trace("metaloader_get:\n");
-    return NULL;
+    return metaloader_get_fmt(ml, fname_noext, "%s", objname);
 }
 
 Rectangle *metaloader_get_fmt(
-    MetaLoader *ml, const char * fname, const char *objname_fmt, ...
+    MetaLoader *ml, const char *fname_noext, const char *objname_fmt, ...
 ) {
     trace("metaloader_get_fmt:\n");
-    return NULL;
+
+    assert(ml);
+    assert(fname_noext);
+    assert(objname_fmt);
+
+    char tbl_name[64] = {};
+    va_list args;
+    va_start(args, objname_fmt);
+    vsnprintf(tbl_name, sizeof(tbl_name) - 1, objname_fmt, args);
+    va_end(args);
+
+    lua_State *l = ml->lua;
+    lua_settop(l, 0);
+
+    int type;
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    assert(type == LUA_TTABLE);
+
+    trace(
+        "metaloader_get_fmt: tbl_name '%s'\n",
+        tbl_name
+    );
+    lua_pushstring(l, tbl_name);
+    type = lua_gettable(l, -2);
+    //assert(type == LUA_TTABLE);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get_fmt: no such object name '%s' in table, "
+            "instead type is %s\n",
+            tbl_name,
+            lua_typename(l, lua_type(l, -1))
+        );
+        lua_settop(l, 0);
+        return NULL;
+    }
+
+    lua_pushnil(l);
+    int top = lua_gettop(l) - 1, i = 0;
+    float values[4] = {};
+    while (lua_next(l, top)) {
+        values[i++] = lua_tonumber(l, -1);
+        lua_pop(l, 1);
+    }
+    assert(i == 4);
+    lua_settop(l, 0);
+    static Rectangle rect = {};
+    rect = rect_from_arr(values);
+
+    return &rect;
 }
 
 void metaloader_write(MetaLoader *ml) {
