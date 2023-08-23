@@ -129,10 +129,10 @@ void trace(const char * format, ...) {
     if (!is_trace_enabled)
         return;
 
-    char buf[512];
+    char buf[512] = {};
     va_list args;
     va_start(args, format);
-    vsnprintf(buf, sizeof(buf), format, args);
+    vsnprintf(buf, sizeof(buf) - 1, format, args);
     va_end(args);
 
     if (traces_set)
