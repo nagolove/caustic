@@ -22,17 +22,20 @@ static bool _metaloader_load(
     assert(ml);
     lua_State *l = ml->lua;
 
+    /*
     trace(
         "_metaloader_load: fname_noext '%s' [%s]\n",
         fname_noext, stack_dump(l)
     );
+    */
+
     assert(lua_type(l, -1) == LUA_TFUNCTION);
-    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    //trace("_metaloader_load: [%s]\n", stack_dump(l));
     lua_call(l, 0, LUA_MULTRET);
     int tbl_data_index = lua_gettop(l);
     //table_print(l, -1);
 
-    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    //trace("_metaloader_load: [%s]\n", stack_dump(l));
 
     if (!l) {
         trace("_metaloader_load: l == NULL\n");
@@ -50,22 +53,24 @@ static bool _metaloader_load(
     int tbl_index = lua_gettop(l);
 
     lua_pushstring(l, fname_noext);
-    trace("_metaloader_load: before lua_copy [%s]\n", stack_dump(l));
+    //trace("_metaloader_load: before lua_copy [%s]\n", stack_dump(l));
     lua_pushvalue(l, tbl_data_index);
-    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    //trace("_metaloader_load: [%s]\n", stack_dump(l));
     lua_settable(l, tbl_index);
-    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    //trace("_metaloader_load: [%s]\n", stack_dump(l));
 
     //trace("metaloader_load: [%s]\n", stack_dump(l));
     //lua_call(l, 0, 1);
     //trace("metaloader_load: [%s]\n", stack_dump(l));
     //table_print(l, 1);
     //lua_rawset(l, 1);
-    trace("_metaloader_load: [%s]\n", stack_dump(l));
+
+    //trace("_metaloader_load: [%s]\n", stack_dump(l));
+    
     //lua_pop(l, 1);
     lua_settop(l, 0);
 
-    trace("_metaloader_load: [%s]\n", stack_dump(l));
+    //trace("_metaloader_load: [%s]\n", stack_dump(l));
     return true;
 }
 
@@ -90,9 +95,14 @@ void metaloader_free(MetaLoader *ml) {
 bool metaloader_load_f(MetaLoader *ml, const char *fname) {
     assert(ml);
     assert(fname);
-    const char *fname_noext = extract_filename(fname, ".lua");
-    if (luaL_loadfilex(ml->lua, fname, "r") != LUA_OK)
+    if (luaL_loadfile(ml->lua, fname) != LUA_OK) {
+        trace(
+            "metaloader_load_f: could not do luaL_loadfile() with %s\n",
+            lua_tostring(ml->lua, -1)
+        );
         return false;
+    }
+    const char *fname_noext = extract_filename(fname, ".lua");
     return _metaloader_load(ml, fname_noext);
 }
 
@@ -181,17 +191,14 @@ struct MetaLoaderObjects metaloader_objects_get(
     type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
     assert(type == LUA_TTABLE);
 
-    trace(
-        "metaloader_objects_get: fname_noext '%s' [%s]\n",
-        fname_noext, 
-        stack_dump(l)
-    );
-
     lua_pushstring(l, fname_noext);
     type = lua_gettable(l, -2);
-    trace("metaloader_objects_get: type %s\n", lua_typename(l, type));
     if (type != LUA_TTABLE) {
-        trace("metaloader_objects_get: could not get table by ref_tbl_root\n");
+        trace(
+            "metaloader_objects_get: could not get table '%s' "
+            "by ref_tbl_root\n",
+            fname_noext
+        );
         return (struct MetaLoaderObjects){};
     }
 
@@ -204,53 +211,53 @@ struct MetaLoaderObjects metaloader_objects_get(
             return object;
         }
 
-        const char *field_name = lua_tostring(l, -2);
-        printf("field_name '%s'\n", field_name);
-        if (!field_name)
-            goto _next;
-        object.names[object.num] = strdup(field_name);
-
-        /*
-        trace(
-            "metaloader_objects_get: %s - %s\n", 
-            lua_tostring(l, -1),
-            lua_tostring(l, -2)
-        );
-        */
+        int i = 0;
         if (lua_istable(l, -1)) {
-            printf("before pushnil [%s]\n", stack_dump(l));
             lua_pushnil(l);
 
-            lua_next(l, lua_gettop(l) - 1);
-            printf("%f\n", lua_tonumber(l, -1));
-            object.rects[object.num].x = lua_tonumber(l, -1);
-            lua_pop(l, 1);
+            float values[4] = {};
+            while (lua_next(l, lua_gettop(l) - 1)) {
+                if (lua_isnumber(l, -1)) 
+                    values[i++] = lua_tonumber(l, -1);
+                else {
+                    lua_pop(l, 2);
+                    goto _skip_next;
+                }
+                lua_pop(l, 1);
 
-            lua_next(l, lua_gettop(l) - 1);
-            printf("%f\n", lua_tonumber(l, -1));
-            object.rects[object.num].y = lua_tonumber(l, -1);
-            lua_pop(l, 1);
+                if (i == 4)
+                    break;
+            }
 
-            lua_next(l, lua_gettop(l) - 1);
-            printf("%f\n", lua_tonumber(l, -1));
-            object.rects[object.num].width = lua_tonumber(l, -1);
-            lua_pop(l, 1);
+            if (i > 0) 
+                lua_pop(l, 1);
+            object.rects[object.num] = rect_from_arr(values);
+        } else 
+            continue; // встретилось что-то другое - строка, число и т.д.
 
-            lua_next(l, lua_gettop(l) - 1);
-            printf("%f\n", lua_tonumber(l, -1));
-            object.rects[object.num].height = lua_tonumber(l, -1);
+        const char *field_name = lua_tostring(l, -2);
+        if (!field_name) {
+            trace(
+                "metaloader_objects_get: no field_name [%s]\n",
+                stack_dump(l)
+            );
             lua_pop(l, 1);
-
-            lua_pop(l, 1);
-            printf("HERR [%s]\n", stack_dump(l));
+            continue;
         }
 
-        object.num++;
-_next:
+        //trace("metaloader_objects_get: field_name '%s'\n", field_name);
+
+        // Добавляем объект только если все значения для массива прямоугольника
+        // заполнены
+        if (i == 4) {
+            object.names[object.num] = strdup(field_name);
+            object.num++;
+        }
+
+_skip_next:
+
         lua_pop(l, 1);
-        printf("iter\n");
     }
-    trace("metaloader_objects_get: [%s]\n", stack_dump(l));
     lua_settop(l, 0);
 
     return object;
@@ -286,7 +293,7 @@ bool metaloader_load_s(
     assert(luacode);
     if (luaL_loadstring(ml->lua, luacode) != LUA_OK) {
         trace(
-            "metaloader_load_d: could not do luaL_loadstring() with %s\n",
+            "metaloader_load_s: could not do luaL_loadstring() with %s\n",
             lua_tostring(ml->lua, -1)
         );
         return false;
