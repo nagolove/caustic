@@ -1,5 +1,5 @@
-#pragma once
 // vim: fdm=marker
+#pragma once
 
 #include "raylib.h"
 
@@ -65,12 +65,21 @@ Rectangle *metaloader_get_fmt(
 );
 
 void metaloader_file_new(MetaLoader *ml, const char *new_fname_noext);
-void metaloader_object_set(
-    MetaLoader *ml, const char *fname_noext, 
-    const char *objname, Rectangle rect
+void metaloader_set(
+    MetaLoader *ml, 
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *objname
+);
+void metaloader_set_fmt(
+    MetaLoader *ml,
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *objname, ...
 );
 
 void metaloader_print(MetaLoader *ml);
+void metaloader_print_all(MetaLoader *ml);
 
 struct MetaLoaderFilesList {
     char    **fnames;

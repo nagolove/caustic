@@ -22,20 +22,25 @@ static bool _metaloader_load(
     assert(ml);
     lua_State *l = ml->lua;
 
-    /*
     trace(
         "_metaloader_load: fname_noext '%s' [%s]\n",
         fname_noext, stack_dump(l)
     );
-    */
+    // */
 
     assert(lua_type(l, -1) == LUA_TFUNCTION);
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
     lua_call(l, 0, LUA_MULTRET);
     int tbl_data_index = lua_gettop(l);
+
     //table_print(l, -1);
+    //table_print(l, lua_gettop(l) - 1);
 
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
+    char *str = table_dump2allocated_str(l);
+    trace("_metaloader_load: '%s'\n", str);
+    if (str)
+        free(str);
 
     if (!l) {
         trace("_metaloader_load: l == NULL\n");
@@ -70,7 +75,7 @@ static bool _metaloader_load(
     //lua_pop(l, 1);
     lua_settop(l, 0);
 
-    //trace("_metaloader_load: [%s]\n", stack_dump(l));
+    trace("_metaloader_load: done [%s]\n", stack_dump(l));
     return true;
 }
 
@@ -122,32 +127,39 @@ Rectangle *metaloader_get_fmt(
     assert(fname_noext);
     assert(objname_fmt);
 
-    char tbl_name[64] = {};
-    va_list args;
-    va_start(args, objname_fmt);
-    vsnprintf(tbl_name, sizeof(tbl_name) - 1, objname_fmt, args);
-    va_end(args);
-
     lua_State *l = ml->lua;
     lua_settop(l, 0);
 
     int type;
     type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
     assert(type == LUA_TTABLE);
+    
+    char obj_name[64] = {};
+    va_list args;
+    va_start(args, objname_fmt);
+    vsnprintf(obj_name, sizeof(obj_name) - 1, objname_fmt, args);
+    va_end(args);
 
-    trace(
-        "metaloader_get_fmt: tbl_name '%s'\n",
-        tbl_name
-    );
-    lua_pushstring(l, tbl_name);
+    lua_pushstring(l, fname_noext);
     type = lua_gettable(l, -2);
     //assert(type == LUA_TTABLE);
     if (type != LUA_TTABLE) {
         trace(
-            "metaloader_get_fmt: no such object name '%s' in table, "
+            "metaloader_get_fmt: no such fname name '%s' in table, "
             "instead type is %s\n",
-            tbl_name,
+            fname_noext,
             lua_typename(l, lua_type(l, -1))
+        );
+        lua_settop(l, 0);
+        return NULL;
+    }
+
+    lua_pushstring(l, obj_name);
+    type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get_fmt: no such object '%s' in table %s",
+            obj_name, fname_noext
         );
         lua_settop(l, 0);
         return NULL;
@@ -172,13 +184,67 @@ void metaloader_write(MetaLoader *ml) {
     trace("metaloader_write:\n");
 }
 
+void metaloader_print_all(MetaLoader *ml) {
+    assert(ml);
+    assert(ml->lua);
+
+    if (!ml->ref_tbl_root) {
+        trace("metaloader_print_all: ref_tbl_root == 0\n");
+        return;
+    }
+
+    lua_State *l = ml->lua;
+    int type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    if (type != LUA_TTABLE) {
+        lua_settop(l, 0);
+        return;
+    }
+
+    lua_pushnil(l);
+    while (lua_next(l, lua_gettop(l) - 1)) {
+        trace(
+            "metaloader_print_all: type %s - type %s\n",
+            lua_typename(l, lua_type(l, -1)),
+            lua_typename(l, lua_type(l, -2))
+        );
+
+        char *s = NULL;
+
+        lua_pushvalue(l, -1);
+        s = table_dump2allocated_str(l);
+        trace("metaloader_print: dump '%s'\n", s);
+        if (s)
+            free(s);
+
+        lua_pushvalue(l, -3);
+        s = table_dump2allocated_str(l);
+        trace("metaloader_print: dump '%s'\n", s);
+        if (s)
+            free(s);
+
+        trace("metaloader_print_all: [%s]\n", stack_dump(l));
+
+        //lua_pop(l, 1);
+
+        lua_pop(l, 1);
+        trace("metaloader_print_all: [%s]\n", stack_dump(l));
+    }
+
+    lua_settop(l, 0);
+}
+
 void metaloader_print(MetaLoader *ml) {
     assert(ml);
     assert(ml->lua);
     int type = lua_rawgeti(ml->lua, LUA_REGISTRYINDEX, ml->ref_tbl_root);
     if (type == LUA_TTABLE) {
         int top = lua_gettop(ml->lua);
+        //trace("metaloader_print: %s\n", table_get_print(ml->lua, top, NULL));
+        char *s = table_dump2allocated_str(ml->lua);
         trace("metaloader_print: %s\n", table_get_print(ml->lua, top, NULL));
+        trace("metaloader_print: dump %s\n", s);
+        if (s)
+            free(s);
         lua_pop(ml->lua, 1);
     }
 }
@@ -344,8 +410,86 @@ bool metaloader_load_s(
             "metaloader_load_s: could not do luaL_loadstring() with %s\n",
             lua_tostring(ml->lua, -1)
         );
+        lua_settop(ml->lua, 0);
         return false;
     }
     const char *fname_noext = extract_filename(fname, ".lua");
     return _metaloader_load(ml, fname_noext);
+}
+
+void metaloader_set_fmt(
+    MetaLoader *ml,
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *obj_name_fmt, ...
+) {
+    assert(ml);
+    assert(fname_noext);
+    assert(obj_name_fmt);
+    lua_State *l = ml->lua;
+
+    lua_settop(l, 0);
+
+    int type;
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    assert(type == LUA_TTABLE);
+    
+    char obj_name[64] = {};
+    va_list args;
+    va_start(args, obj_name_fmt);
+    vsnprintf(obj_name, sizeof(obj_name) - 1, obj_name_fmt, args);
+    va_end(args);
+
+    lua_pushstring(l, fname_noext);
+    type = lua_gettable(l, -2);
+    //assert(type == LUA_TTABLE);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get_fmt: no such fname name '%s' in table, "
+            "instead type is %s\n",
+            fname_noext,
+            lua_typename(l, lua_type(l, -1))
+        );
+        lua_settop(l, 0);
+        return;
+    }
+
+    lua_pushstring(l, obj_name);
+    type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get_fmt: no such object '%s' in table %s",
+            obj_name, fname_noext
+        );
+        lua_settop(l, 0);
+        return;
+    }
+
+    // TODO: На вершине стека лежит таблица, все элементы которой нужно
+    // поменять на другие.
+    // Или просто заменить таблицу новой.
+
+    /*
+    lua_pushnil(l);
+    int top = lua_gettop(l) - 1, i = 0;
+    float values[4] = {};
+    while (lua_next(l, top)) {
+        values[i++] = lua_tonumber(l, -1);
+        lua_pop(l, 1);
+    }
+    assert(i == 4);
+    lua_settop(l, 0);
+    static Rectangle rect = {};
+    rect = rect_from_arr(values);
+    */
+
+}
+
+void metaloader_set(
+    MetaLoader *ml, 
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *objname
+) {
+    metaloader_set_fmt(ml, rect, fname_noext, "%s", objname);
 }
