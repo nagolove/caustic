@@ -79,7 +79,7 @@ static void selection_start(struct RibbonFrame *rf) {
     assert(rf);
     assert(rf->internal);
 
-    trace("selection_start:\n");
+    /*trace("selection_start:\n");*/
 
     struct RibbonFrameInternal *internal = rf->internal;
     Vector2 mp = GetMousePosition();
