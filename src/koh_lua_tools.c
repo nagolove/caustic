@@ -517,6 +517,9 @@ char *table_dump2allocated_str(lua_State *l) {
                         "end\n"
                         "return DUMP";
 
+    //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
+    int top = lua_gettop(l);
+
     luaL_loadstring(l, code);
     lua_call(l, 0, LUA_MULTRET);
 
@@ -528,9 +531,11 @@ char *table_dump2allocated_str(lua_State *l) {
         return NULL;
     }
     const char *dumped_data = lua_tostring(l, -1);
+    printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
     if (dumped_data) {
-        lua_remove(l, -1);
-        lua_remove(l, -1);
+        lua_pop(l, 1);
+        //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
+        assert(lua_gettop(l) == top);
         return strdup(dumped_data);
     }
 
