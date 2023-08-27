@@ -27,4 +27,12 @@ void ribbonframe_update_opts(
 );
 void ribbonframe_shutdown(struct RibbonFrame *rf);
 void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam);
-void ribbonframe_draw(struct RibbonFrame *rf);
+
+struct RibbonFrameDrawOpts {
+    bool draw_axises;
+};
+
+// TODO: Рисование перекрестия и центра прямоугольника
+void ribbonframe_draw(
+    struct RibbonFrame *rf, struct RibbonFrameDrawOpts *opts
+);

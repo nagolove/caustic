@@ -248,7 +248,9 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
 
 }
 
-void ribbonframe_draw(struct RibbonFrame *rf) {
+void ribbonframe_draw(
+    struct RibbonFrame *rf, struct RibbonFrameDrawOpts *opts
+) {
     //trace("ribbonframe_draw:\n");
     assert(rf);
     assert(rf->internal);
