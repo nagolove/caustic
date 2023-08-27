@@ -21,12 +21,18 @@ static bool _metaloader_load(
 ) {
     assert(ml);
     lua_State *l = ml->lua;
+    char *str;
 
     trace(
         "_metaloader_load: fname_noext '%s' [%s]\n",
         fname_noext, stack_dump(l)
     );
-    // */
+
+    /*lua_pushvalue(l, -1);*/
+    str = table_dump2allocated_str(l);
+    trace("_metaloader_load: dump '%s'\n", str);
+    if (str)
+        free(str);
 
     assert(lua_type(l, -1) == LUA_TFUNCTION);
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
@@ -35,9 +41,9 @@ static bool _metaloader_load(
 
     //table_print(l, -1);
     //table_print(l, lua_gettop(l) - 1);
-
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
-    char *str = table_dump2allocated_str(l);
+    
+    str = table_dump2allocated_str(l);
     trace("_metaloader_load: '%s'\n", str);
     if (str)
         free(str);
@@ -185,6 +191,7 @@ void metaloader_write(MetaLoader *ml) {
 }
 
 void metaloader_print_all(MetaLoader *ml) {
+    /*
     assert(ml);
     assert(ml->lua);
 
@@ -231,6 +238,7 @@ void metaloader_print_all(MetaLoader *ml) {
     }
 
     lua_settop(l, 0);
+    */
 }
 
 void metaloader_print(MetaLoader *ml) {
@@ -305,6 +313,11 @@ struct MetaLoaderObjects metaloader_objects_get(
     type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
     assert(type == LUA_TTABLE);
 
+    char *str = table_dump2allocated_str(l);
+    trace("metaloader_objects_get: dump '%s'\n", str);
+    if (str)
+        free(str);
+
     lua_pushstring(l, fname_noext);
     type = lua_gettable(l, -2);
     if (type != LUA_TTABLE) {
@@ -326,10 +339,12 @@ struct MetaLoaderObjects metaloader_objects_get(
         }
 
         int i = 0;
+        // Таблица со значениями для Rectangle
         if (lua_istable(l, -1)) {
             lua_pushnil(l);
 
             float values[4] = {};
+            // Чтение полей значений Rectangle
             while (lua_next(l, lua_gettop(l) - 1)) {
                 if (lua_isnumber(l, -1)) 
                     values[i++] = lua_tonumber(l, -1);
@@ -350,6 +365,7 @@ struct MetaLoaderObjects metaloader_objects_get(
             continue; // встретилось что-то другое - строка, число и т.д.
 
         const char *field_name = lua_tostring(l, -2);
+        trace("metaloader_objects_get: field_name %s\n", field_name);
         if (!field_name) {
             trace(
                 "metaloader_objects_get: no field_name [%s]\n",
@@ -391,12 +407,14 @@ void metaloader_objects_shutdown(struct MetaLoaderObjects *objects) {
 void metaloader_file_new(MetaLoader *ml, const char *new_fname_noext) {
     assert(ml);
     assert(new_fname_noext);
+    trace("metaloader_file_new:\n");
 }
 
 void metaloader_object_set(
     MetaLoader *ml, const char *fname_noext, 
     const char *objname, Rectangle rect
 ) {
+    trace("metaloader_object_set:\n");
 }
 
 bool metaloader_load_s(
