@@ -5,6 +5,7 @@
 #include <string.h>
 #include "koh.h"
 #include "koh_common.h"
+#include "koh_routine.h"
 #include "raylib.h"
 #include "raymath.h"
 
@@ -75,18 +76,31 @@ void ribbonframe_shutdown(struct RibbonFrame *rf) {
     }
 }
 
-static void selection_start(struct RibbonFrame *rf) {
+static Vector2 mouse_with_cam(const Camera2D *cam) {
+    Vector2 cam_offset = cam ? cam->offset : Vector2Zero();
+    float scale = cam ? cam->zoom : 1.;
+    Vector2 mp = Vector2Subtract(
+        GetMousePosition(), Vector2Scale(cam_offset, 1. / scale)
+    );
+    //Vector2 mp = Vector2Scale(
+        //Vector2Add(
+        //GetMousePosition(), cam_offset), scale
+    //);
+    return mp;
+}
+
+static void selection_start(struct RibbonFrame *rf, const Camera2D *cam) {
     assert(rf);
     assert(rf->internal);
 
     /*trace("selection_start:\n");*/
 
     struct RibbonFrameInternal *internal = rf->internal;
-    Vector2 mp = GetMousePosition();
+    Vector2 mp = mouse_with_cam(cam);
 
     if (internal->state == S_NONE) {
-        rf->rect.x = GetMouseX();
-        rf->rect.y = GetMouseY();
+        rf->rect.x = mp.x;
+        rf->rect.y = mp.y;
     }
 
     internal->state = S_RESIZE;
@@ -191,7 +205,7 @@ static void handle_resize(
 void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
     assert(rf);
     struct RibbonFrameInternal *internal = rf->internal;
-    Vector2 mp = GetMousePosition();
+    Vector2 mp = mouse_with_cam(cam);
 
     // Обход по часовой стрелке
     const Vector2 points[] = {
@@ -208,12 +222,6 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
     // Проверка радиуса попадания в ручку управления
     handles_check(internal, points, points_num, mp);
     
-    // TODO: Правильный учет камеры
-    if (cam) {
-        mp.x += cam->offset.x;
-        mp.y += cam->offset.y;
-    }
-
     if (IsMouseButtonDown(internal->mouse_button_bind)) {
 
         if (internal->state == S_NONE)
@@ -224,10 +232,10 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
 
         switch(internal->state) {
             case S_NONE: 
-                selection_start(rf);
+                selection_start(rf, cam);
                 break;
             case S_RESIZE:
-                selection_start(rf);
+                selection_start(rf, cam);
                 break;
             case S_HANDLE_RESIZE:
                 break;
