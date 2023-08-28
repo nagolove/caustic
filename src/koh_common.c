@@ -838,6 +838,26 @@ void koh_qsort_soa(
     _koh_qsort_soa(&ctx);
 }
 
+bool koh_camera_process_mouse_scale_wheel(Camera2D *cam) {
+    assert(cam);
+    float mouse_wheel = GetMouseWheelMove();
+    if (cam && (mouse_wheel > EPSILON || mouse_wheel < -EPSILON)) {
+        trace(
+            "koh_camera_process_mouse_scale_wheel: mouse_wheel %f\n",
+            mouse_wheel
+        );
+        const float scale_speed = 0.01;
+        const float d = copysignf(scale_speed, mouse_wheel);
+        trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);
+        cam->zoom = cam->zoom + d;
+        Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
+        //cam->target = Vector2Add(cam->target, delta);
+        cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
+        return true;
+    }
+    return false;
+}
+
 bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
     assert(cam);
     if (cam && IsMouseButtonDown(mouse_btn)) {
