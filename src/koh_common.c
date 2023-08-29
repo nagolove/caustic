@@ -838,17 +838,16 @@ void koh_qsort_soa(
     _koh_qsort_soa(&ctx);
 }
 
-bool koh_camera_process_mouse_scale_wheel(Camera2D *cam) {
+bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value) {
     assert(cam);
     float mouse_wheel = GetMouseWheelMove();
     if (cam && (mouse_wheel > EPSILON || mouse_wheel < -EPSILON)) {
-        trace(
-            "koh_camera_process_mouse_scale_wheel: mouse_wheel %f\n",
-            mouse_wheel
-        );
-        const float scale_speed = 0.01;
-        const float d = copysignf(scale_speed, mouse_wheel);
-        trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);
+        /*trace(*/
+            /*"koh_camera_process_mouse_scale_wheel: mouse_wheel %f\n",*/
+            /*mouse_wheel*/
+        /*);*/
+        const float d = copysignf(dscale_value, mouse_wheel);
+        /*trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);*/
         cam->zoom = cam->zoom + d;
         Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
         //cam->target = Vector2Add(cam->target, delta);
@@ -1234,4 +1233,9 @@ Rectangle rect_from_arr(const float xywh[4]) {
         .width = xywh[2],
         .height = xywh[3],
     };
+}
+
+bool color_eq(Color c1, Color c2) {
+    return  c1.a == c2.a || c1.r == c2.r ||
+            c1.g == c2.g || c1.b == c2.b;
 }
