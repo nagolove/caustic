@@ -1,5 +1,6 @@
 #pragma once
 
+#include "raylib.h"
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -62,3 +63,4 @@ char *table_get_print(
 // Стандартные библиотеки Луа должны быть открыты.
 // Луа стек не изменяется
 char *table_dump2allocated_str(lua_State *l);
+void table_push_rect_as_arr(lua_State *l, Rectangle rect);

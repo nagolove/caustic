@@ -541,3 +541,21 @@ char *table_dump2allocated_str(lua_State *l) {
 
     return NULL;
 }
+
+void table_push_rect_as_arr(lua_State *l, Rectangle rect) {
+    assert(l);
+    lua_createtable(l, 0, 0);
+
+    lua_pushnumber(l, rect.x);
+    lua_rawseti(l, -2, 1);
+
+    lua_pushnumber(l, rect.y);
+    lua_rawseti(l, -2, 2);
+
+    lua_pushnumber(l, rect.width);
+    lua_rawseti(l, -2, 3);
+
+    lua_pushnumber(l, rect.height);
+    lua_rawseti(l, -2, 4);
+}
+
