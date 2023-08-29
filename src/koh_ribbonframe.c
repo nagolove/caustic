@@ -79,14 +79,8 @@ void ribbonframe_shutdown(struct RibbonFrame *rf) {
 static Vector2 mouse_with_cam(const Camera2D *cam) {
     Vector2 cam_offset = cam ? cam->offset : Vector2Zero();
     float scale = cam ? cam->zoom : 1.;
-    Vector2 mp = Vector2Subtract(
-        GetMousePosition(), Vector2Scale(cam_offset, 1. / scale)
-    );
-    //Vector2 mp = Vector2Scale(
-        //Vector2Add(
-        //GetMousePosition(), cam_offset), scale
-    //);
-    return mp;
+    Vector2 mp = Vector2Subtract(GetMousePosition(), cam_offset);
+    return Vector2Scale(mp, 1. / scale);
 }
 
 static void selection_start(struct RibbonFrame *rf, const Camera2D *cam) {
@@ -293,4 +287,7 @@ void ribbonframe_update_opts(
         internal->mouse_button_bind = new_opts->mouse_button_bind;
     internal->snap_size = new_opts->snap_size;
     internal->snap = new_opts->snap;
+    internal->line_color = new_opts->line_color;
+    internal->handle_color = new_opts->handle_color;
+    internal->line_thick = new_opts->line_thick;
 }

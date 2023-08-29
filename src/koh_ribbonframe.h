@@ -17,6 +17,8 @@ struct RibbonFrameOpts {
     // Размер сетки для прилипания, >= 1
     int     snap_size;
     bool    snap;
+    Color   line_color, handle_color;
+    float   line_thick;
 };
 
 void ribbonframe_init(
