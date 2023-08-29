@@ -150,7 +150,7 @@ static void handle_resize(
     assert(rf);
     assert(rf->internal);
     //assert(rf->internal->corner_index != -1);
-    trace("handle_resize: corner_index %d\n", rf->internal->corner_index);
+    //trace("handle_resize: corner_index %d\n", rf->internal->corner_index);
     switch (rf->internal->corner_index) {
         case 0:
             rf->rect.x += handle_diff.x;
@@ -287,7 +287,11 @@ void ribbonframe_update_opts(
         internal->mouse_button_bind = new_opts->mouse_button_bind;
     internal->snap_size = new_opts->snap_size;
     internal->snap = new_opts->snap;
-    internal->line_color = new_opts->line_color;
-    internal->handle_color = new_opts->handle_color;
-    internal->line_thick = new_opts->line_thick;
+
+    /*if (!color_eq(new_opts->line_color, internal->line_color))*/
+        internal->line_color = new_opts->line_color;
+    /*if (!color_eq(new_opts->handle_color, internal->handle_color))*/
+        internal->handle_color = new_opts->handle_color;
+    /*if (new_opts->line_thick != internal->line_thick)*/
+        internal->line_thick = new_opts->line_thick;
 }
