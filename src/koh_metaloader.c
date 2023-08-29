@@ -7,6 +7,7 @@
 #include "koh_lua_tools.h"
 #include "lauxlib.h"
 #include "lua.h"
+#include "raylib.h"
 #include <assert.h>
 #include <stdlib.h>
 
@@ -16,8 +17,10 @@ struct MetaLoader {
 };
 
 // На верху луа стека должна лежать загруженная строка кода
+// fname - необязательный агрумент для последующего сохранения файлов через
+// metaloader_write()
 static bool _metaloader_load(
-    MetaLoader *ml, const char *fname_noext
+    MetaLoader *ml, const char *fname_noext, const char *fname
 ) {
     assert(ml);
     lua_State *l = ml->lua;
@@ -28,11 +31,12 @@ static bool _metaloader_load(
         fname_noext, stack_dump(l)
     );
 
-    /*lua_pushvalue(l, -1);*/
+    //////////// DEBUG
     str = table_dump2allocated_str(l);
     trace("_metaloader_load: dump '%s'\n", str);
     if (str)
         free(str);
+    //////////// DEBUG
 
     assert(lua_type(l, -1) == LUA_TFUNCTION);
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
@@ -42,11 +46,13 @@ static bool _metaloader_load(
     //table_print(l, -1);
     //table_print(l, lua_gettop(l) - 1);
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
-    
+
+    //////////// DEBUG
     str = table_dump2allocated_str(l);
     trace("_metaloader_load: '%s'\n", str);
     if (str)
         free(str);
+    //////////// DEBUG
 
     if (!l) {
         trace("_metaloader_load: l == NULL\n");
@@ -114,7 +120,7 @@ bool metaloader_load_f(MetaLoader *ml, const char *fname) {
         return false;
     }
     const char *fname_noext = extract_filename(fname, ".lua");
-    return _metaloader_load(ml, fname_noext);
+    return _metaloader_load(ml, fname_noext, fname);
 }
 
 Rectangle *metaloader_get(
@@ -432,7 +438,7 @@ bool metaloader_load_s(
         return false;
     }
     const char *fname_noext = extract_filename(fname, ".lua");
-    return _metaloader_load(ml, fname_noext);
+    return _metaloader_load(ml, fname_noext, NULL);
 }
 
 void metaloader_set_fmt(
@@ -458,6 +464,26 @@ void metaloader_set_fmt(
     vsnprintf(obj_name, sizeof(obj_name) - 1, obj_name_fmt, args);
     va_end(args);
 
+    trace("metaloader_set_fmt: [%s]\n", stack_dump(l));
+
+    /*
+    char *dump;
+    dump = table_dump2allocated_str(l);
+    if (dump) {
+        trace("metaloader_set_fmt: dump '%s'\n", dump);
+        free(dump);
+    }
+    */
+
+    /*
+    trace("metaloader_set_fmt: [%s]\n", stack_dump(l));
+    dump = table_dump2allocated_str(l);
+    if (dump) {
+        trace("metaloader_set_fmt: dump '%s'\n", dump);
+        free(dump);
+    }
+    */
+
     lua_pushstring(l, fname_noext);
     type = lua_gettable(l, -2);
     //assert(type == LUA_TTABLE);
@@ -472,6 +498,11 @@ void metaloader_set_fmt(
         return;
     }
 
+    lua_pushstring(l, fname_noext);
+    table_push_rect_as_arr(l, rect);
+    lua_settable(l, -3);
+
+    /*
     lua_pushstring(l, obj_name);
     type = lua_gettable(l, -2);
     if (type != LUA_TTABLE) {
@@ -486,6 +517,8 @@ void metaloader_set_fmt(
     // TODO: На вершине стека лежит таблица, все элементы которой нужно
     // поменять на другие.
     // Или просто заменить таблицу новой.
+
+    */
 
     /*
     lua_pushnil(l);
