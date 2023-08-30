@@ -73,9 +73,12 @@ Stage *stage_add(Stage *st, const char *name) {
 void stage_shutdown_all(void) {
     for(int i = 0; i < stages.num; i++) {
         Stage *st = stages.stages[i];
-        if (st->shutdown) 
-            st->shutdown(st);
-        free(st);
+        if (st) {
+            if (st->shutdown) 
+                st->shutdown(st);
+            free(st);
+            stages.stages[i] = NULL;
+        }
     }
 }
 
