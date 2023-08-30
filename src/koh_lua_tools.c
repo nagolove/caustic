@@ -480,20 +480,31 @@ void types_init() {
 }
 
 void types_shutdown() {
+    int i = 0;
     TypeEntry *curr = typelist;
     while (curr) {
         TypeEntry *next = curr->next;
-        if (curr->mtname)
+        if (curr->mtname) {
             free(curr->mtname);
-        if (curr->reg.desc)
+            curr->mtname = NULL;
+        }
+        if (curr->reg.desc) {
             free(curr->reg.desc);
-        if (curr->reg.desc_detailed)
+            curr->reg.desc = NULL;
+        }
+        if (curr->reg.desc_detailed) {
             free(curr->reg.desc_detailed);
-        if (curr->reg.name)
+            curr->reg.desc_detailed = NULL;
+        }
+        if (curr->reg.name) {
             free(curr->reg.name);
+            curr->reg.name = NULL;
+        }
         free(curr);
         curr = next;
+        i++;
     }
+    trace("types_shutdown: %d type freed\n", i);
     typelist = NULL;
 }
 
@@ -519,6 +530,8 @@ char *table_dump2allocated_str(lua_State *l) {
 
     //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
     int top = lua_gettop(l);
+
+    // XXX: Что делать с принудительной загрузкой библиотек?
     luaL_openlibs(l);
 
     luaL_loadstring(l, code);
@@ -532,7 +545,7 @@ char *table_dump2allocated_str(lua_State *l) {
         return NULL;
     }
     const char *dumped_data = lua_tostring(l, -1);
-    printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
+    /*printf("table_dump2allocated_str: [%s]\n", stack_dump(l));*/
     if (dumped_data) {
         lua_pop(l, 1);
         //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
