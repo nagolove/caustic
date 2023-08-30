@@ -4,6 +4,15 @@
 
 typedef struct RibbonFrameInternal RibbonFrameInternal;
 
+enum SelectionToolMode {
+    STM_POLYLINE,
+    STM_RECTANGLE,
+    STM_RECTANGLE_ORIENTED,
+    STM_SECTOR,
+};
+
+// XXX: Добавлять ли другие ограны управления в ribbonframe?
+// Переименовать в selectiontool | seltool
 struct RibbonFrame {
     bool                        exist;
     Rectangle                   rect;
