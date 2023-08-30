@@ -71,17 +71,32 @@ void metaloader_set(
     const char *fname_noext, 
     const char *objname
 );
+__attribute__((__format__ (__printf__, 4, 5)))
 void metaloader_set_fmt(
     MetaLoader *ml,
     Rectangle rect,
     const char *fname_noext, 
     const char *objname, ...
 );
+__attribute__((__format__ (__printf__, 3, 4)))
+void metaloader_remove_fmt(
+    MetaLoader *ml,
+    const char *fname_noext, 
+    const char *objname_fmt, ...
+);
+__attribute__((__format__ (__printf__, 4, 5)))
+void metaloader_set_rename_fmt(
+    MetaLoader *ml,
+    const char *fname_noext, 
+    const char *prev_objname,
+    const char *new_objname_fmt, ...
+);
 
 void metaloader_print(MetaLoader *ml);
 void metaloader_print_all(MetaLoader *ml);
 
 struct MetaLoaderFilesList {
+    // Массив имен файлов без путей и расширений
     char    **fnames;
     int     num;
 };
