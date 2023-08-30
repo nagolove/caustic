@@ -519,6 +519,7 @@ char *table_dump2allocated_str(lua_State *l) {
 
     //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
     int top = lua_gettop(l);
+    luaL_openlibs(l);
 
     luaL_loadstring(l, code);
     lua_call(l, 0, LUA_MULTRET);
