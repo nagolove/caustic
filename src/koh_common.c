@@ -838,15 +838,21 @@ void koh_qsort_soa(
     _koh_qsort_soa(&ctx);
 }
 
-bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value) {
-    assert(cam);
+bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
+/*bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value) {*/
+    assert(cps);
+    assert(cps->cam);
     float mouse_wheel = GetMouseWheelMove();
-    if (cam && (mouse_wheel > EPSILON || mouse_wheel < -EPSILON)) {
+    Camera2D *cam = cps->cam;
+    bool modpressed =   cps->modifier_key_down ? 
+                        IsKeyDown(cps->modifier_key_down) : true;
+    bool wheel_in_eps = mouse_wheel > EPSILON || mouse_wheel < -EPSILON;
+    if (cam && modpressed && wheel_in_eps) {
         /*trace(*/
             /*"koh_camera_process_mouse_scale_wheel: mouse_wheel %f\n",*/
             /*mouse_wheel*/
         /*);*/
-        const float d = copysignf(dscale_value, mouse_wheel);
+        const float d = copysignf(cps->dscale_value, mouse_wheel);
         /*trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);*/
         cam->zoom = cam->zoom + d;
         Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
@@ -912,15 +918,23 @@ const char *transform2str(cpTransform tr) {
     return buf;
 }
 
-const char *camera2str(Camera2D cam) {
+const char *camera2str(Camera2D cam, bool multiline) {
     static char buf[128] = {0};
     memset(buf, 0, sizeof(buf));
+    static char mt[4] = {};
+    memset(mt, 0, sizeof(mt));
+    if (multiline)
+        strcat(mt, "\n");
+    else
+        strcat(mt, ",");
     snprintf(
         buf,
-        sizeof(buf),
-        "offset: %s, target: %s, rotation: %f, zoom: %f", 
-        Vector2_tostr(cam.offset), Vector2_tostr(cam.target), 
-        cam.rotation, cam.zoom
+        sizeof(buf) - 1,
+        "offset: %s%s target: %s%s rotation: %f%s zoom: %f", 
+        Vector2_tostr(cam.offset), mt,
+        Vector2_tostr(cam.target), mt,
+        cam.rotation, mt,
+        cam.zoom
     );
     return buf;
 }

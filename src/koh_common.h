@@ -19,6 +19,8 @@
 #include "raylib.h"
 #include "raymath.h"
 
+// XXX: Как-то избавится от типа Object или переименовать его во что-то
+// специфичное
 typedef struct Object Object;
 
 typedef struct {
@@ -126,7 +128,15 @@ void koh_qsort_soa(
 
 cpSpaceDebugColor from_Color(Color c);
 bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam);
-bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value);
+
+struct CameraProcessScale {
+    Camera2D    *cam;
+    float       dscale_value;
+    KeyboardKey modifier_key_down;
+};
+
+bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps);
+//bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value);
 bool color_eq(Color c1, Color c2);
 
 struct CameraAxisDrawCtx {
@@ -137,7 +147,7 @@ struct CameraAxisDrawCtx {
 
 void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx);
 const char *transform2str(cpTransform tr);
-const char *camera2str(Camera2D cam);
+const char *camera2str(Camera2D cam, bool multiline);
 Color random_raylib_color();
 uint32_t next_eq_pow2(uint32_t p);
 
