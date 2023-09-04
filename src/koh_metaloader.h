@@ -5,6 +5,49 @@
 
 typedef struct MetaLoader MetaLoader;
 
+/*
+enum SelectionToolMode {
+    STM_POLYLINE,
+    STM_RECTANGLE,
+    STM_RECTANGLE_ORIENTED,
+    STM_SECTOR,
+};
+*/
+
+enum MetaLoaderType {
+    MLT_POLYLINE,
+    MLT_RECTANGLE,
+    MLT_RECTANGLE_ORIENTED,
+    MLT_SECTOR,
+};
+
+struct MetaLoaderReturn {
+    enum MetaLoaderType type;
+};
+
+struct MetaLoaderPolyline {
+    struct MetaLoaderReturn ret;;
+    Vector2                 *points;
+    int                     num;
+};
+
+struct MetaLoaderRectangle {
+    struct MetaLoaderReturn ret;;
+    Rectangle               rect;
+};
+
+struct MetaLoaderRectangleOriented {
+    struct MetaLoaderReturn ret;;
+    Rectangle               rect;
+    float                   a; // in radian
+};
+
+struct MetaLoaderSector {
+    struct MetaLoaderReturn ret;;
+    float                   radius, a1, a2;
+    Vector2                 position;
+};
+
 /* {{{
 Какие задачи стоят по выделению спрайтов из текстуры?
 Выделять прямоугольники, сохранять метаданные в lua файлы,
@@ -56,6 +99,10 @@ bool metaloader_load_s(MetaLoader *ml, const char *fname, const char *luacode);
 void metaloader_write(MetaLoader *ml);
 
 Rectangle *metaloader_get(
+    MetaLoader *ml, const char *fname_noext, const char *objname
+);
+
+struct MetaLoaderReturn *metaloader_get2(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
 
