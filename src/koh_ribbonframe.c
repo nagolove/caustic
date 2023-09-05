@@ -262,6 +262,31 @@ void ribbonframe_draw(
         rf->rect, rf->internal->line_thick, rf->internal->line_color
     );
 
+    if (opts && opts->draw_axises) {
+        DrawLineEx(
+            (Vector2) {
+                .x = rf->rect.x + rf->rect.width / 2.,
+                .y = rf->rect.y,
+            },
+            (Vector2) {
+                .x = rf->rect.x + rf->rect.width / 2.,
+                .y = rf->rect.y + rf->rect.height,
+            },
+            rf->internal->line_thick, rf->internal->line_color
+        );
+        DrawLineEx(
+            (Vector2) {
+                .x = rf->rect.x,
+                .y = rf->rect.y + rf->rect.height / 2.,
+            },
+            (Vector2) {
+                .x = rf->rect.x + rf->rect.width,
+                .y = rf->rect.y + rf->rect.height / 2.,
+            },
+            rf->internal->line_thick, rf->internal->line_color
+        );
+    }
+
     if (internal->corner_index == 0 || internal->corner_index == 2) {
         DrawCircleV(
             rf->internal->corner_point,

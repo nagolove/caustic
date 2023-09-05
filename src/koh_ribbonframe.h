@@ -36,7 +36,7 @@ struct RibbonFrameDrawOpts {
     bool draw_axises;
 };
 
-// TODO: Рисование перекрестия и центра прямоугольника
 void ribbonframe_draw(
     struct RibbonFrame *rf, struct RibbonFrameDrawOpts *opts
 );
+
