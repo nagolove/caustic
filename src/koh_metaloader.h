@@ -25,6 +25,7 @@ struct MetaLoaderReturn {
     enum MetaLoaderType type;
 };
 
+// TODO: Сделать освобождение памяти
 struct MetaLoaderPolyline {
     struct MetaLoaderReturn ret;;
     Vector2                 *points;

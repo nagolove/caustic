@@ -13,7 +13,9 @@
 
 struct MetaLoader {
     lua_State   *lua;
-    int         ref_tbl_root;
+    int         ref_tbl_root, 
+                // Таблица ["имя_файла_без_расширения"] =  "путь+имя_файла"
+                ref_tbl_fnames; 
 };
 
 // На верху луа стека должна лежать загруженная строка кода
