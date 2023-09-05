@@ -9,10 +9,8 @@
 #define MAX_MTNAME  64
 
 typedef struct Reg_ext {
-    //const char *name;
     char *name;
     lua_CFunction func;
-    //const char *desc, *desc_detailed;
     char *desc, *desc_detailed;
 } Reg_ext;
 
