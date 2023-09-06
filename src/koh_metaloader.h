@@ -29,7 +29,7 @@ struct MetaLoaderReturn {
 struct MetaLoaderPolyline {
     struct MetaLoaderReturn ret;;
     Vector2                 *points;
-    int                     num;
+    int                     num, cap;
 };
 
 struct MetaLoaderRectangle {
@@ -164,3 +164,18 @@ struct MetaLoaderObjects metaloader_objects_get(
     struct MetaLoader *ml, const char *fname_noext
 );
 void metaloader_objects_shutdown(struct MetaLoaderObjects *object);
+
+
+struct MetaLoaderObjects2 {
+    int         num;
+    Rectangle   rects[METALOADER_MAX_OBJECTS];
+    char        *names[METALOADER_MAX_OBJECTS];
+
+    struct MetaLoaderReturn *objs[METALOADER_MAX_OBJECTS];
+    //int                     num;
+};
+
+struct MetaLoaderObjects2 metaloader_objects_get2(
+    struct MetaLoader *ml, const char *fname_noext
+);
+void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *object);

@@ -99,8 +99,13 @@ MetaLoader *metaloader_new() {
     assert(ml->lua);
     trace("metaloader_new:\n");
     luaL_openlibs(ml->lua);
+
     lua_createtable(ml->lua, 0, 0);
     ml->ref_tbl_root = luaL_ref(ml->lua, LUA_REGISTRYINDEX);
+
+    lua_createtable(ml->lua, 0, 0);
+    ml->ref_tbl_fnames = luaL_ref(ml->lua, LUA_REGISTRYINDEX);
+
     return ml;
 }
 
@@ -195,7 +200,12 @@ Rectangle *metaloader_get_fmt(
 }
 
 void metaloader_write(MetaLoader *ml) {
+    assert(ml);
     trace("metaloader_write:\n");
+
+    // Цикл по таблице ml->ref_tbl_fnames
+    // Запрос значения
+    // Сохранение значения
 }
 
 void metaloader_print_all(MetaLoader *ml) {
@@ -702,4 +712,428 @@ void metaloader_remove_fmt(
     lua_settable(l, -3);
 _cleanup:
     lua_settop(l, 0);
+}
+
+enum ReadObjectResult {
+    ROR_NONE,
+    ROR_CONTINUE,
+    ROR_SKIP,
+};
+
+static enum ReadObjectResult read_object_untyped(
+    lua_State *l, struct MetaLoaderObjects2 *object
+) {
+    assert(l);
+    assert(object);
+
+    printf("read_object_untyped:\n");
+
+    int i = 0;
+    // Таблица со значениями для Rectangle
+    if (lua_istable(l, -1)) {
+        lua_pushnil(l);
+
+        float values[4] = {};
+        // Чтение полей значений Rectangle
+        while (lua_next(l, lua_gettop(l) - 1)) {
+            if (lua_isnumber(l, -1)) 
+                values[i++] = lua_tonumber(l, -1);
+            else {
+                lua_pop(l, 2);
+                return ROR_SKIP;
+            }
+            lua_pop(l, 1);
+
+            if (i == 4)
+                break;
+        }
+
+        if (i > 0) 
+            lua_pop(l, 1);
+        object->rects[object->num] = rect_from_arr(values);
+    } else 
+        return ROR_CONTINUE;
+
+    const char *field_name = lua_tostring(l, -2);
+    /*trace("metaloader_objects_get: field_name %s\n", field_name);*/
+    if (!field_name) {
+        trace(
+            "metaloader_objects_get: no field_name [%s]\n",
+            stack_dump(l)
+        );
+        lua_pop(l, 1);
+        return ROR_CONTINUE;
+    }
+
+    //trace("metaloader_objects_get: field_name '%s'\n", field_name);
+
+    // Добавляем объект только если все значения для массива прямоугольника
+    // заполнены
+    if (i == 4) {
+        object->names[object->num] = strdup(field_name);
+        object->num++;
+    }
+
+    return ROR_SKIP;
+}
+
+static Rectangle *_read_object_rect(lua_State *l) {
+    //read_object_untyped(l, object);
+    assert(l);
+
+    static Rectangle rect = {};
+    trace("_read_object_untyped:\n");
+    
+    lua_pushstring(l, "rect");
+    int type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace("_read_object_rect: has not table on key 'rect'\n");
+        return NULL;
+    }
+
+    int i = 0;
+    // Таблица со значениями для Rectangle
+    if (lua_istable(l, -1)) {
+        lua_pushnil(l);
+
+        float values[4] = {};
+        // Чтение полей значений Rectangle
+        while (lua_next(l, lua_gettop(l) - 1)) {
+            if (lua_isnumber(l, -1)) 
+                values[i++] = lua_tonumber(l, -1);
+            else {
+                lua_pop(l, 2);
+                //return ROR_SKIP;
+                return NULL;
+            }
+            lua_pop(l, 1);
+
+            if (i == 4)
+                break;
+        }
+
+        if (i > 0) 
+            lua_pop(l, 1);
+        rect = rect_from_arr(values);
+    } else 
+        //return ROR_CONTINUE;
+        return NULL;
+
+    const char *field_name = lua_tostring(l, -2);
+    /*trace("metaloader_objects_get: field_name %s\n", field_name);*/
+    if (!field_name) {
+        trace(
+            "_read_object_rect: no field_name [%s]\n", stack_dump(l)
+        );
+        lua_pop(l, 1);
+        //return ROR_CONTINUE;
+        return NULL;
+    }
+
+    // Добавляем объект только если все значения для массива прямоугольника
+    // заполнены
+    /*
+    if (i == 4) {
+        object->names[object->num] = strdup(field_name);
+        object->num++;
+    }
+    */
+
+    //return ROR_SKIP;
+    return &rect;
+}
+
+static struct MetaLoaderReturn *read_object_rect_oriented(lua_State *l) {
+    assert(l);
+
+    lua_pushstring(l, "angle");
+    int type = lua_gettable(l, -2);
+    if (type != LUA_TNUMBER) {
+        trace("read_object_rect_oriented: angle is not a number\n");
+        //lua_pop(l, 1);
+    }
+    double angle = lua_tonumber(l, -1);
+    lua_pop(l, 1);
+
+    const Rectangle *rect = _read_object_rect(l);
+    struct MetaLoaderRectangleOriented *ret = calloc(1, sizeof(*ret));
+    assert(ret);
+    ret->ret.type = MLT_RECTANGLE_ORIENTED;
+    ret->a = angle;
+    if (rect)
+        ret->rect = *rect;
+    return (struct MetaLoaderReturn*)ret;
+}
+
+static struct MetaLoaderReturn *read_object_rect(lua_State *l) {
+    assert(l);
+    struct MetaLoaderRectangle *ret = calloc(1, sizeof(*ret));
+    assert(ret);
+    Rectangle *rect = _read_object_rect(l);
+    if (rect)
+        ret->rect = *rect;
+    ret->ret.type = MLT_RECTANGLE;
+    return (struct MetaLoaderReturn*)ret;
+}
+
+static struct MetaLoaderReturn *read_object_sector(lua_State *l) {
+    assert(l);
+    int type;
+
+    lua_pushstring(l, "radius");
+    type = lua_gettable(l, -2);
+    if (type != LUA_TNUMBER) {
+        trace("read_object_sector: 'radius' key is not a number\n");
+    }
+    float radius = lua_tonumber(l, -1);
+    lua_pop(l, 1);
+
+    lua_pushstring(l, "a1");
+    type = lua_gettable(l, -2);
+    if (type != LUA_TNUMBER) {
+        trace("read_object_sector: 'a1' key is not a number\n");
+    }
+    float a1 = lua_tonumber(l, -1);
+    lua_pop(l, 1);
+
+    lua_pushstring(l, "a2");
+    type = lua_gettable(l, -2);
+    if (type != LUA_TNUMBER) {
+        trace("read_object_sector: 'a2' key is not a number\n");
+    }
+    float a2 = lua_tonumber(l, -1);
+    lua_pop(l, 1);
+
+    struct MetaLoaderSector *sector = calloc(1, sizeof(*sector));
+    assert(sector);
+    sector->ret.type = MLT_SECTOR;
+    sector->a1 = a1;
+    sector->a2 = a2;
+    sector->radius = radius;
+
+    return (struct MetaLoaderReturn*)sector;
+}
+
+static struct MetaLoaderReturn *read_object_polyline(
+	lua_State *l, struct MetaLoaderObjects2 *object
+) {
+    lua_pushstring(l, "points");
+    int type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace("read_object_polyline: type is not a table\n");
+        // TODO: скинуть лишнее значение со стека и выйти из функции?
+    }
+
+    struct MetaLoaderPolyline *pl = calloc(1, sizeof(*pl));
+    assert(pl);
+
+    pl->cap = 10;
+    pl->points = calloc(pl->cap, sizeof(pl->points[0]));
+    assert(pl->points);
+
+    int points_num = 0, num = 0;
+    lua_pushnil(l);
+    while (lua_next(l, -2)) {
+        Vector2 point = {};
+
+        if (lua_type(l, -1) != LUA_TNUMBER) {
+            trace("read_object_polyline: not number in points table\n");
+        } else {
+            point.x = lua_tonumber(l, -1);
+        }
+        num++;
+
+        lua_pop(l, 1);
+        if (!lua_next(l, -2)) {
+            trace(
+                "read_object_polyline: break reading points at %d num\n", num
+            );
+            break;
+        }
+        num++;
+
+        if (lua_type(l, -1) != LUA_TNUMBER) {
+            trace("read_object_polyline: not number in points table\n");
+        } else {
+            point.y = lua_tonumber(l, -1);
+        }
+        lua_pop(l, 1);
+
+        points_num++;
+        if (pl->cap >= points_num) {
+            pl->cap += 1;
+            pl->cap *= 2;
+            int bytes = sizeof(pl->points[0]) * pl->cap;
+            void *new_ptr = realloc(pl->points, bytes);
+            if (!new_ptr) {
+                // TODO: Не выходить, а возвращать те точки, 
+                // что получилось считать
+                trace(
+                    "read_object_polyline: could not do realloc"
+                    "with capacity %d\n",
+                    pl->cap
+                );
+                exit(EXIT_FAILURE);
+            }
+            pl->points = new_ptr;
+        }
+
+        pl->points[pl->num++] = point;
+    }
+
+    return (struct MetaLoaderReturn*)pl;
+}
+
+static enum ReadObjectResult read_object(
+    lua_State *l, struct MetaLoaderObjects2 *object
+) {
+    assert(l);
+    assert(object);
+
+    if (lua_istable(l, -1)) {
+        //printf("read_object: [%s]\n", stack_dump(l));
+        lua_pushstring(l, "type");
+        //printf("read_object: [%s]\n", stack_dump(l));
+        int type = lua_gettable(l, -2);
+        //printf("read_object: [%s]\n", stack_dump(l));
+        //printf("type %s\n", lua_typename(l, type));
+        //printf("read_object: has type %s\n", lua_typename(l, type));
+
+        if (type == LUA_TSTRING) {
+            printf("read_object_typed:\n");
+            const char *type_str = lua_tostring(l, -1);
+            lua_pop(l, 1);
+
+            if (!strcmp(type_str, "rect_oriented")) {
+                read_object_rect_oriented(l, object);
+            } else if (!strcmp(type_str, "rect")) {
+                read_object_rect(l, object);
+            } else if (!strcmp(type_str, "sector")) {
+                read_object_sector(l, object);
+            } else if (!strcmp(type_str, "polyline")) {
+                read_object_polyline(l, object);
+            }
+
+        } else {
+            lua_pop(l, 1);
+            return read_object_untyped(l, object);
+        }
+    } else {
+        trace("read_object: object is not a table, skipping\n");
+        return ROR_CONTINUE;
+    }
+
+    return ROR_NONE;
+}
+
+struct MetaLoaderObjects2 metaloader_objects_get2(
+    struct MetaLoader *ml, const char *fname_noext
+) {
+    assert(ml);
+    struct MetaLoaderObjects2 object = {};
+
+    lua_State *l = ml->lua;
+    lua_settop(l, 0);
+
+    int type;
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    assert(type == LUA_TTABLE);
+
+    /*
+    char *str = table_dump2allocated_str(l);
+    trace("metaloader_objects_get: dump '%s'\n", str);
+    if (str)
+        free(str);
+    */
+
+    lua_pushstring(l, fname_noext);
+    type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_objects_get: could not get table '%s' "
+            "by ref_tbl_root\n",
+            fname_noext
+        );
+        return (struct MetaLoaderObjects2){};
+    }
+
+    lua_pushnil(l);
+    int tbl_index = lua_gettop(l) - 1;
+    while (lua_next(l, tbl_index)) {
+        if (object.num + 1 == METALOADER_MAX_OBJECTS) {
+            lua_settop(l, 0);
+            trace("metaloader_objects_get: METALOADER_MAX_OBJECTS reached\n");
+            return object;
+        }
+
+        switch (read_object(l, &object)) {
+            case ROR_SKIP:
+            case ROR_NONE:
+                lua_pop(l, 1);
+                break;
+            case ROR_CONTINUE:
+                break;
+        }
+
+    }
+    lua_settop(l, 0);
+
+    return object;
+}
+
+void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *objects) {
+    assert(objects);
+    //trace("metaloader_objects_shutdown: objects->num %d\n", objects->num);
+    for (int j = 0; j < objects->num; ++j) {
+        if (objects->names[j]) {
+            free(objects->names[j]);
+            objects->names[j] = NULL;
+        }
+    }
+
+    for (int j = 0; j < objects->num; ++j) {
+        struct MetaLoaderReturn *obj = objects->objs[j];
+
+        if (!obj) continue;
+
+        switch (obj->type) {
+            case MLT_POLYLINE: {
+                struct MetaLoaderPolyline *pl = (struct MetaLoaderPolyline*)obj;
+                if (pl->points) {
+                    free(pl->points);
+                    pl->points = NULL;
+                }
+                break;
+            }
+            case MLT_RECTANGLE:
+                break;
+            case MLT_RECTANGLE_ORIENTED:
+                break;
+            case MLT_SECTOR:
+                break;
+        }
+
+        free(obj);
+        objects->objs[j] = NULL;
+    }
+}
+
+void metaloader_return_shutdown(struct MetaLoaderReturn *ret) {
+    assert(ret);
+    switch (ret->type) {
+        case MLT_POLYLINE: {
+            struct MetaLoaderPolyline *pl = (struct MetaLoaderPolyline*)ret;
+            if (pl->points) {
+                free(pl->points);
+                pl->points = NULL;
+            }
+            break;
+        }
+        case MLT_RECTANGLE:
+            break;
+        case MLT_RECTANGLE_ORIENTED:
+            break;
+        case MLT_SECTOR:
+            break;
+    }
 }
