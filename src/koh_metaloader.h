@@ -106,6 +106,7 @@ Rectangle *metaloader_get(
 struct MetaLoaderReturn *metaloader_get2(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
+void metaloader_return_shutdown(struct MetaLoaderReturn *ret);
 
 __attribute__((__format__ (__printf__, 3, 4)))
 Rectangle *metaloader_get_fmt(

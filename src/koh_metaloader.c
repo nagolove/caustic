@@ -914,9 +914,7 @@ static struct MetaLoaderReturn *read_object_sector(lua_State *l) {
     return (struct MetaLoaderReturn*)sector;
 }
 
-static struct MetaLoaderReturn *read_object_polyline(
-	lua_State *l, struct MetaLoaderObjects2 *object
-) {
+static struct MetaLoaderReturn *read_object_polyline(lua_State *l) {
     lua_pushstring(l, "points");
     int type = lua_gettable(l, -2);
     if (type != LUA_TTABLE) {
@@ -1004,15 +1002,19 @@ static enum ReadObjectResult read_object(
             const char *type_str = lua_tostring(l, -1);
             lua_pop(l, 1);
 
+            struct MetaLoaderReturn *ret = NULL;
+
             if (!strcmp(type_str, "rect_oriented")) {
-                read_object_rect_oriented(l, object);
+                ret = read_object_rect_oriented(l);
             } else if (!strcmp(type_str, "rect")) {
-                read_object_rect(l, object);
+                ret = read_object_rect(l);
             } else if (!strcmp(type_str, "sector")) {
-                read_object_sector(l, object);
+                ret = read_object_sector(l);
             } else if (!strcmp(type_str, "polyline")) {
-                read_object_polyline(l, object);
+                ret = read_object_polyline(l);
             }
+
+            object->objs[object->num++] = ret;
 
         } else {
             lua_pop(l, 1);
@@ -1075,6 +1077,16 @@ struct MetaLoaderObjects2 metaloader_objects_get2(
                 break;
         }
 
+        const char *field_name = lua_tostring(l, -2);
+        /*trace("metaloader_objects_get: field_name %s\n", field_name);*/
+        if (!field_name) {
+            trace(
+                "metaloader_objects_get2: no field_name [%s]\n",
+                stack_dump(l)
+            );
+            lua_pop(l, 1);
+            continue;
+        }
     }
     lua_settop(l, 0);
 
