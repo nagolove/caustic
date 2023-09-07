@@ -60,7 +60,7 @@ static void link_free(const void *key, int key_len, void *data, int data_len) {
 struct genann_view *genann_view_new(const char *ann_name, Font *fnt) {
     struct genann_view *view = calloc(1, sizeof(*view));
     assert(view);
-    strncpy(view->name, ann_name, MAX_ANN_NAME);
+    strncpy(view->name, ann_name, MAX_ANN_NAME - 1);
     view->fnt = fnt;
     view->neuron_radius = 10.;
     view->background_rect_gap = 25.;

@@ -62,8 +62,8 @@ void sc_register_function(lua_CFunction f, const char *fname, const char *desc) 
     assert(desc);
 
     ScriptFunc *sfunc = calloc(1, sizeof(*sfunc));
-    strncpy(sfunc->desc, desc, sizeof(sfunc->desc));
-    strncpy(sfunc->fname, fname, sizeof(sfunc->fname));
+    strncpy(sfunc->desc, desc, sizeof(sfunc->desc) - 1);
+    strncpy(sfunc->fname, fname, sizeof(sfunc->fname) - 1);
     sfunc->next = script_funcs;
     script_funcs = sfunc;
 

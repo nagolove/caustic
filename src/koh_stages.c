@@ -66,7 +66,7 @@ Stage *stage_add(Stage *st, const char *name) {
     assert(stages.num <= MAX_STAGES_NUM);
 
     stages.stages[stages.num++] = st;
-    strncpy(st->name, name, MAX_STAGE_NAME);
+    strncpy(st->name, name, MAX_STAGE_NAME - 1);
     return st;
 }
 

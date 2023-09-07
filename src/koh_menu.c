@@ -92,7 +92,7 @@ Menu *menu_new(MenuSetup setup) {
     mnu->data = setup.data;
 
     if (setup.name)
-        strncpy(mnu->name, setup.name, MENU_MAX_NAME);
+        strncpy(mnu->name, setup.name, MENU_MAX_NAME - 1);
 
     if (setup.scroll_rect.height != 0.)
         mnu->scroll_rect.height = setup.scroll_rect.height;

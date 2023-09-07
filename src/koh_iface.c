@@ -64,7 +64,7 @@ VContainer *vcontainer_new(
     cont->color_border = BLACK;
     cont->mousebtn_click = MOUSE_BUTTON_LEFT;
     cont->mousebtn_open = mousebtn_open;
-    strncpy(cont->name, name, sizeof(cont->name));
+    strncpy(cont->name, name, sizeof(cont->name) - 1);
     cont->last_time = GetTime();
 
     cont->next = container_head;

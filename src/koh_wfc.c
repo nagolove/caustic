@@ -286,6 +286,11 @@ typedef struct PackedColor {
     unsigned char b: 8;        // Color blue value
     unsigned char a: 8;        // Color alpha value
 } PackedColor;
+
+typedef union PackedColorU {
+    PackedColor c;
+    uint32_t    u;
+} PackedColorU;
 #pragma pack(pop)
 
 PackedColor pack_color(Color color) {
@@ -298,8 +303,15 @@ PackedColor pack_color(Color color) {
 }
 
 static inline uint32_t get_color(Image *img, int x, int y) {
-    PackedColor pcolor = pack_color(GetImageColor(*img, x, y));
-    return *((uint32_t*)&pcolor);
+    PackedColorU color;
+    color.c = pack_color(GetImageColor(*img, x, y));
+    //return *((uint32_t*)&pcolor);
+    _Static_assert(
+        sizeof(PackedColor) == sizeof(uint32_t) &&
+        sizeof(PackedColorU) == sizeof(uint32_t),
+        "PackedColor is not equal uint32_t"
+    );
+    return color.u;
 }
 
 void colors_add(wfc_model_overlapping *model, uint32_t color) {

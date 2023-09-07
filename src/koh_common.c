@@ -733,7 +733,8 @@ const char *extract_filename(const char *fname, const char *ext) {
     if (pos_ptr) {
         strncpy(only_name, fname, pos_ptr - fname);
     } else {
-        strncpy(only_name, fname, strlen(fname));
+        /*strncpy(only_name, fname, strlen(fname));*/
+        strncpy(only_name, fname, sizeof(only_name) - 1);
     }
     return only_name;
 }
@@ -765,7 +766,7 @@ const char *get_basename(const char *path) {
     memset(buf, 0, sizeof(buf));
     char* ret = basename((char*)path);
     if (ret)
-        strncpy(buf, ret, sizeof(buf));
+        strncpy(buf, ret, sizeof(buf) - 1);
     return buf;
 }
 
@@ -919,7 +920,7 @@ const char *transform2str(cpTransform tr) {
 }
 
 const char *camera2str(Camera2D cam, bool multiline) {
-    static char buf[128] = {0};
+    static char buf[256] = {0};
     memset(buf, 0, sizeof(buf));
     static char mt[4] = {};
     memset(mt, 0, sizeof(mt));

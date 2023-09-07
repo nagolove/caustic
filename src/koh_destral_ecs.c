@@ -405,7 +405,7 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     s->on_destroy = cp_type.on_destroy;
     s->initial_cap = cp_type.initial_cap ? cp_type.initial_cap : 1000;
     s->sparse.initial_cap = cp_type.initial_cap;
-    strncpy(s->name, cp_type.name, sizeof(s->name));
+    strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
     return s;
 }
 
