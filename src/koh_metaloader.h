@@ -25,7 +25,6 @@ struct MetaLoaderReturn {
     enum MetaLoaderType type;
 };
 
-// TODO: Сделать освобождение памяти
 struct MetaLoaderPolyline {
     struct MetaLoaderReturn ret;;
     Vector2                 *points;
@@ -76,11 +75,20 @@ if (!rect) {
     printf("could not find\n");
 }
 
-Rectangle chassis = *metaloader_get(&mt, "wheel-chassis.lua", "chassis");
+Rectangle chassis = *metaloader_get(&mt, "wheel-chassis", "chassis");
 
+// ПРИМЕР 1
 Rectangle wheels[8] = {};
 for (int i = 0; i < 8; i++) {
-    wheels[i] = *metaloader_get_fmt(&mt, "wheel-chassis.lua", "wheel%d", i);
+    wheels[i] = *metaloader_get_fmt(&mt, "wheel-chassis", "wheel%d", i);
+}
+
+// ПРИМЕР 2
+Rectangle wheels[8] = {};
+for (int i = 0; i < 8; i++) {
+    wheels[i] = *metaloader_get_fmt(
+        &mt, "wheel-chassis", "some_table.nested_table.wheel%d", i
+    );
 }
 
 // Составляющие части - имя текстуры, имя метафайла, имя объекта метафайла
@@ -168,10 +176,8 @@ void metaloader_objects_shutdown(struct MetaLoaderObjects *object);
 
 
 struct MetaLoaderObjects2 {
-    int         num;
-    Rectangle   rects[METALOADER_MAX_OBJECTS];
-    char        *names[METALOADER_MAX_OBJECTS];
-
+    int                     num;
+    char                    *names[METALOADER_MAX_OBJECTS];
     struct MetaLoaderReturn *objs[METALOADER_MAX_OBJECTS];
     //int                     num;
 };
@@ -180,3 +186,13 @@ struct MetaLoaderObjects2 metaloader_objects_get2(
     struct MetaLoader *ml, const char *fname_noext
 );
 void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *object);
+
+struct MetaLoaderObject2Str {
+    const char  *s;
+    bool        is_allocated;
+};
+
+struct MetaLoaderObject2Str metaloader_object2str(
+    struct MetaLoaderReturn *obj
+);
+

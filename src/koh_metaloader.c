@@ -3,6 +3,7 @@
 #include "koh_common.h"
 #include "koh_logger.h"
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include "koh_lua_tools.h"
 #include "lauxlib.h"
@@ -720,6 +721,7 @@ enum ReadObjectResult {
     ROR_SKIP,
 };
 
+/*
 static enum ReadObjectResult read_object_untyped(
     lua_State *l, struct MetaLoaderObjects2 *object
 ) {
@@ -755,7 +757,7 @@ static enum ReadObjectResult read_object_untyped(
         return ROR_CONTINUE;
 
     const char *field_name = lua_tostring(l, -2);
-    /*trace("metaloader_objects_get: field_name %s\n", field_name);*/
+    //trace("metaloader_objects_get: field_name %s\n", field_name);
     if (!field_name) {
         trace(
             "metaloader_objects_get: no field_name [%s]\n",
@@ -776,70 +778,59 @@ static enum ReadObjectResult read_object_untyped(
 
     return ROR_SKIP;
 }
+// */
 
 static Rectangle *_read_object_rect(lua_State *l) {
     //read_object_untyped(l, object);
     assert(l);
 
     static Rectangle rect = {};
-    trace("_read_object_untyped:\n");
+    trace("_read_object_rect: [%s]\n", stack_dump(l));
     
     lua_pushstring(l, "rect");
     int type = lua_gettable(l, -2);
     if (type != LUA_TTABLE) {
         trace("_read_object_rect: has not table on key 'rect'\n");
+        lua_pop(l, 1);
         return NULL;
     }
 
     int i = 0;
-    // Таблица со значениями для Rectangle
-    if (lua_istable(l, -1)) {
-        lua_pushnil(l);
 
-        float values[4] = {};
-        // Чтение полей значений Rectangle
-        while (lua_next(l, lua_gettop(l) - 1)) {
-            if (lua_isnumber(l, -1)) 
-                values[i++] = lua_tonumber(l, -1);
-            else {
-                lua_pop(l, 2);
-                //return ROR_SKIP;
-                return NULL;
-            }
+    lua_pushnil(l);
+    float values[4] = {};
+    // Чтение полей значений Rectangle
+    int maxiters = 10;
+    while (lua_next(l, lua_gettop(l) - 1)) {
+        if (lua_isnumber(l, -1)) 
+            values[i++] = lua_tonumber(l, -1);
+        else {
             lua_pop(l, 1);
-
-            if (i == 4)
-                break;
+            continue;
+            //lua_pop(l, 2);
+            ////return ROR_SKIP;
+            //return NULL;
         }
-
-        if (i > 0) 
-            lua_pop(l, 1);
-        rect = rect_from_arr(values);
-    } else 
-        //return ROR_CONTINUE;
-        return NULL;
-
-    const char *field_name = lua_tostring(l, -2);
-    /*trace("metaloader_objects_get: field_name %s\n", field_name);*/
-    if (!field_name) {
-        trace(
-            "_read_object_rect: no field_name [%s]\n", stack_dump(l)
-        );
         lua_pop(l, 1);
-        //return ROR_CONTINUE;
-        return NULL;
+
+        if (i == 4)
+            break;
+
+        maxiters--;
+        if (maxiters < 0) {
+            trace("_read_object_rect: iterations limit reached\n");
+            break;
+        }
     }
 
-    // Добавляем объект только если все значения для массива прямоугольника
-    // заполнены
-    /*
-    if (i == 4) {
-        object->names[object->num] = strdup(field_name);
-        object->num++;
-    }
-    */
+    trace("_read_object_rect: i = %d [%s]\n", i, stack_dump(l));
+    if (i > 0) 
+        lua_pop(l, 1);
+    lua_pop(l, 1);
+    trace("_read_object_rect: end [%s]\n", stack_dump(l));
 
-    //return ROR_SKIP;
+    rect = rect_from_arr(values);
+
     return &rect;
 }
 
@@ -869,7 +860,7 @@ static struct MetaLoaderReturn *read_object_rect(lua_State *l) {
     assert(l);
     struct MetaLoaderRectangle *ret = calloc(1, sizeof(*ret));
     assert(ret);
-    Rectangle *rect = _read_object_rect(l);
+    const Rectangle *rect = _read_object_rect(l);
     if (rect)
         ret->rect = *rect;
     ret->ret.type = MLT_RECTANGLE;
@@ -915,6 +906,8 @@ static struct MetaLoaderReturn *read_object_sector(lua_State *l) {
 }
 
 static struct MetaLoaderReturn *read_object_polyline(lua_State *l) {
+    trace("read_object_polyline: [%s]\n", stack_dump(l));
+
     lua_pushstring(l, "points");
     int type = lua_gettable(l, -2);
     if (type != LUA_TTABLE) {
@@ -978,54 +971,62 @@ static struct MetaLoaderReturn *read_object_polyline(lua_State *l) {
 
         pl->points[pl->num++] = point;
     }
+    
+    // */
+
+    trace("read_object_polyline: pl->num %d, [%s]\n", pl->num, stack_dump(l));
+    lua_pop(l, 1);
 
     return (struct MetaLoaderReturn*)pl;
 }
 
-static enum ReadObjectResult read_object(
-    lua_State *l, struct MetaLoaderObjects2 *object
-) {
+static void read_object(lua_State *l, struct MetaLoaderObjects2 *object) {
     assert(l);
     assert(object);
 
-    if (lua_istable(l, -1)) {
-        //printf("read_object: [%s]\n", stack_dump(l));
-        lua_pushstring(l, "type");
-        //printf("read_object: [%s]\n", stack_dump(l));
-        int type = lua_gettable(l, -2);
-        //printf("read_object: [%s]\n", stack_dump(l));
-        //printf("type %s\n", lua_typename(l, type));
-        //printf("read_object: has type %s\n", lua_typename(l, type));
-
-        if (type == LUA_TSTRING) {
-            printf("read_object_typed:\n");
-            const char *type_str = lua_tostring(l, -1);
-            lua_pop(l, 1);
-
-            struct MetaLoaderReturn *ret = NULL;
-
-            if (!strcmp(type_str, "rect_oriented")) {
-                ret = read_object_rect_oriented(l);
-            } else if (!strcmp(type_str, "rect")) {
-                ret = read_object_rect(l);
-            } else if (!strcmp(type_str, "sector")) {
-                ret = read_object_sector(l);
-            } else if (!strcmp(type_str, "polyline")) {
-                ret = read_object_polyline(l);
-            }
-
-            object->objs[object->num++] = ret;
-
-        } else {
-            lua_pop(l, 1);
-            return read_object_untyped(l, object);
-        }
-    } else {
+    if (!lua_istable(l, -1)) {
         trace("read_object: object is not a table, skipping\n");
-        return ROR_CONTINUE;
+        return;
     }
 
-    return ROR_NONE;
+    // indices      [-4  -3  -2     -1      ]
+    // Lua stack:   [.., .., table, "type"  ]
+    
+    //printf("read_object: [%s]\n", stack_dump(l));
+    lua_pushstring(l, "type");
+    //printf("read_object: [%s]\n", stack_dump(l));
+    int type = lua_gettable(l, -2);
+    //printf("read_object: [%s]\n", stack_dump(l));
+    //printf("type %s\n", lua_typename(l, type));
+    //printf("read_object: has type %s\n", lua_typename(l, type));
+
+    if (type != LUA_TSTRING) {
+        trace("read_object: 'type' key is not a string\n");
+        lua_pop(l, 1);
+        return;
+    }
+
+    const char *type_str = lua_tostring(l, -1);
+    trace("read_object: type_str '%s'\n", type_str);
+    lua_pop(l, 1);
+
+    struct MetaLoaderReturn *ret = NULL;
+
+    if (!strcmp(type_str, "rect_oriented")) {
+        ret = read_object_rect_oriented(l);
+    } else if (!strcmp(type_str, "rect")) {
+        ret = read_object_rect(l);
+    } else if (!strcmp(type_str, "sector")) {
+        ret = read_object_sector(l);
+    } else if (!strcmp(type_str, "polyline")) {
+        ret = read_object_polyline(l);
+    }
+    // */
+
+    if (ret)
+        object->objs[object->num] = ret;
+
+    return;
 }
 
 struct MetaLoaderObjects2 metaloader_objects_get2(
@@ -1068,25 +1069,20 @@ struct MetaLoaderObjects2 metaloader_objects_get2(
             return object;
         }
 
-        switch (read_object(l, &object)) {
-            case ROR_SKIP:
-            case ROR_NONE:
-                lua_pop(l, 1);
-                break;
-            case ROR_CONTINUE:
-                break;
-        }
-
         const char *field_name = lua_tostring(l, -2);
-        /*trace("metaloader_objects_get: field_name %s\n", field_name);*/
+        trace("metaloader_objects_get2: field_name %s\n", field_name);
         if (!field_name) {
             trace(
-                "metaloader_objects_get2: no field_name [%s]\n",
-                stack_dump(l)
+                "metaloader_objects_get2: no field_name [%s]\n", stack_dump(l)
             );
-            lua_pop(l, 1);
-            continue;
+        } else {
+            object.names[object.num] = strdup(field_name);
         }
+
+        read_object(l, &object);
+        object.num++;
+
+        lua_pop(l, 1);
     }
     lua_settop(l, 0);
 
@@ -1108,26 +1104,13 @@ void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *objects) {
 
         if (!obj) continue;
 
-        switch (obj->type) {
-            case MLT_POLYLINE: {
-                struct MetaLoaderPolyline *pl = (struct MetaLoaderPolyline*)obj;
-                if (pl->points) {
-                    free(pl->points);
-                    pl->points = NULL;
-                }
-                break;
-            }
-            case MLT_RECTANGLE:
-                break;
-            case MLT_RECTANGLE_ORIENTED:
-                break;
-            case MLT_SECTOR:
-                break;
-        }
+        metaloader_return_shutdown(obj);
 
         free(obj);
         objects->objs[j] = NULL;
     }
+
+    memset(objects, 0, sizeof(*objects));
 }
 
 void metaloader_return_shutdown(struct MetaLoaderReturn *ret) {
@@ -1149,3 +1132,106 @@ void metaloader_return_shutdown(struct MetaLoaderReturn *ret) {
             break;
     }
 }
+
+// XXX: Что делать, если строка вывода не влезает в буфер и требуется
+// динамическое выделение памяти?
+// Как потом понять, что буфер надо освобождать?
+struct MetaLoaderObject2Str metaloader_object2str(
+    struct MetaLoaderReturn *obj
+) {
+    assert(obj);
+    static char buf[256] = {};
+    memset(buf, 0, sizeof(buf));
+    switch (obj->type) {
+        case MLT_POLYLINE: {
+            struct MetaLoaderPolyline *pl;
+            pl = (struct MetaLoaderPolyline*)obj;
+            const char *fmt_beg = 
+                "{\n"
+                "   type = \"polyline\",\n"
+                "   num = %d,\n"
+                "   points = {\n"
+                "   ";
+            const char *fmt_end = 
+                "\n"
+                "   }\n"
+                "}\n";
+            int pos = snprintf(buf, sizeof(buf) - 1,  fmt_beg, pl->num);
+            char *ptr = buf + pos;
+            for (int i = 0; i < pl->num; i++) {
+                ptr += sprintf(
+                    ptr, "%f, %f, ", 
+                    pl->points[i].x,
+                    pl->points[i].y
+                );
+            }
+            sprintf(ptr, "%s", fmt_end);
+            break;
+        }
+        case MLT_RECTANGLE: {
+            struct MetaLoaderRectangle *rect;
+            rect = (struct MetaLoaderRectangle*)obj;
+            const char *fmt = 
+                "{\n"
+                "   type = \"rect\",\n"
+                "   rect = {%f, %f, %f, %f},\n"
+                "}\n";
+            snprintf(
+                buf, sizeof(buf) - 1,  fmt, 
+                rect->rect.x, rect->rect.y,
+                rect->rect.width, rect->rect.height
+            );
+            break;
+        }
+        case MLT_RECTANGLE_ORIENTED: {
+            struct MetaLoaderRectangleOriented *recto;
+            recto = (struct MetaLoaderRectangleOriented*)obj;
+            const char *fmt = 
+                "{\n"
+                "   type = \"rect_oriented\",\n"
+                "   angle = %f,\n"
+                "   rect = {%f, %f, %f, %f},\n"
+                "}\n";
+            snprintf(
+                buf, sizeof(buf) - 1,  fmt, 
+                recto->a,
+                recto->rect.x, recto->rect.y,
+                recto->rect.width, recto->rect.height
+            );
+            break;
+        }
+        case MLT_SECTOR: {
+            struct MetaLoaderSector *sector;
+            sector = (struct MetaLoaderSector*)obj;
+            const char *fmt = 
+                "{\n"
+                "   type = \"sector\",\n"
+                "   a1 = %f,\n"
+                "   a2 = %f,\n"
+                "   radius = %f,\n"
+                "}\n";
+            snprintf(
+                buf, sizeof(buf) - 1,  fmt, 
+                sector->a1, sector->a2,
+                sector->radius
+            );
+            break;
+        }
+        default:
+            return (struct MetaLoaderObject2Str) {
+                .is_allocated = false,
+                .s = NULL,
+            };
+    }
+    return (struct MetaLoaderObject2Str) {
+        .is_allocated = false,
+        .s = buf,
+    };
+}
+
+struct MetaLoaderReturn *metaloader_get2(
+    MetaLoader *ml, const char *fname_noext, const char *objname
+) {
+    return NULL;
+}
+
