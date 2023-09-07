@@ -1838,7 +1838,7 @@ local function sub_publish(_args, cfg)
    local build_dir = "wasm_build"
    local attrs = lfs.attributes(build_dir)
    if not attrs then
-      print(format("There is not '%s' directory", build_dir))
+      print(format("There is no '%s' directory", build_dir))
       return
    end
 
@@ -2978,8 +2978,6 @@ local function sub_make(_args, cfg, push_num)
       "-DGRAPHICS_API_OPENGL_43",
       "-DPLATFORM=PLATFORM_DESKTOP",
       "-DPLATFORM_DESKTOP",
-      "-DDEBUG",
-      "-g3",
    }, " ")
 
    local _includes = table.concat({},
@@ -3000,8 +2998,12 @@ local function sub_make(_args, cfg, push_num)
 
    if not _args.release then
       table.insert(flags, "-ggdb3")
+      _defines = _defines .. " " .. table.concat({
+         "-DDEBUG",
+         "-g3",
+      }, " ")
    else
-      table.insert(flags, "-O2")
+      table.insert(flags, "-O3")
    end
    if not _args.noasan then
       table.insert(flags, "-fsanitize=address")
