@@ -258,5 +258,9 @@ void traceg(const char *format, ...) {
         printf("%s", buf);
 }
 
+void trace_enable(bool state) {
+    is_trace_enabled = state;
+}
+
 #undef MAX_TRACE_LEN
 #undef MAX_TRACE_GROUPS
