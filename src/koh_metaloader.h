@@ -111,6 +111,10 @@ Rectangle *metaloader_get(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
 
+__attribute__((__format__ (__printf__, 3, 4)))
+struct MetaLoaderReturn *metaloader_get2_fmt(
+    MetaLoader *ml, const char *fname_noext, const char *objname_fmt, ...
+);
 struct MetaLoaderReturn *metaloader_get2(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
@@ -173,7 +177,6 @@ struct MetaLoaderObjects metaloader_objects_get(
     struct MetaLoader *ml, const char *fname_noext
 );
 void metaloader_objects_shutdown(struct MetaLoaderObjects *object);
-
 
 struct MetaLoaderObjects2 {
     int                     num;

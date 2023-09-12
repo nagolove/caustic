@@ -27,6 +27,7 @@ static bool _metaloader_load(
 ) {
     assert(ml);
     lua_State *l = ml->lua;
+    assert(l);
     char *str;
 
     trace(
@@ -87,10 +88,21 @@ static bool _metaloader_load(
 
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
     
-    //lua_pop(l, 1);
+    trace("_metaloader_load: done [%s]\n", stack_dump(l));
+
+    trace("_metaloader_load: ref_tbl_fnames %d\n", ml->ref_tbl_fnames);
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_fnames);
+    if (type != LUA_TTABLE) {
+        trace("_metaloader_load: [%s]\n", stack_dump(l));
+        trace("_metaloader_load: could not get ml->ref_tbl_fnames\n");
+        exit(EXIT_FAILURE);
+    }
+    lua_pushstring(l, fname_noext);
+    lua_pushstring(l, fname);
+    lua_settable(l, -3);
+
     lua_settop(l, 0);
 
-    trace("_metaloader_load: done [%s]\n", stack_dump(l));
     return true;
 }
 
@@ -104,8 +116,10 @@ MetaLoader *metaloader_new() {
     lua_createtable(ml->lua, 0, 0);
     ml->ref_tbl_root = luaL_ref(ml->lua, LUA_REGISTRYINDEX);
 
+    trace("metaloader_new: [%s]\n", stack_dump(ml->lua));
     lua_createtable(ml->lua, 0, 0);
     ml->ref_tbl_fnames = luaL_ref(ml->lua, LUA_REGISTRYINDEX);
+    trace("metaloader_new: [%s]\n", stack_dump(ml->lua));
 
     return ml;
 }
@@ -204,9 +218,91 @@ void metaloader_write(MetaLoader *ml) {
     assert(ml);
     trace("metaloader_write:\n");
 
+    lua_State *l = ml->lua;
+
+    /*
+    lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_fnames);
+    trace("metaloader_write: [%s]\n", stack_dump(l));
+    char *dump = table_dump2allocated_str(l);
+    if (dump) {
+        printf("metaloader_write: dump %s\n", dump);
+        free(dump);
+    }
+    lua_settop(l, 0);
+    // */
+    
     // Цикл по таблице ml->ref_tbl_fnames
     // Запрос значения
     // Сохранение значения
+
+    /*
+    lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_fnames);
+    trace("metaloader_write: [%s]\n", stack_dump(l));
+    lua_pushnil(l);
+    while (lua_next(l, -2)) {
+        trace(
+            "metaloader_write: %s - %s\n",
+            lua_tostring(l, -1),
+            lua_tostring(l, -2)
+        );
+        lua_pop(l, 1);
+    }
+    */
+
+    trace("metaloader_write:\n");
+
+    struct MetaLoaderFilesList fl = metaloader_fileslist(ml);
+    for (int i = 0; i < fl.num; i++) {
+        const char *fname = fl.fnames[i];
+
+        trace("metaloader_write: [%s]\n", stack_dump(l));
+
+        lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_fnames);
+        lua_pushstring(l, fname);
+        lua_rawget(l, -2);
+        const char *path = lua_tostring(l, -1);
+        lua_pop(l, 2);
+        if (!path) {
+            trace("metaloader_write: object without path, could not write\n");
+            continue;
+        }
+
+        trace("metaloader_write: [%s]\n", stack_dump(l));
+        trace("metaloader_write: fname %s\n", fname);
+        trace("metaloader_write: path %s\n", path);
+
+        char new_path[256] = {};
+        strcat(new_path, path);
+        strcat(new_path, "_");
+        FILE *out = fopen(new_path, "w");
+        if (!out) {
+            continue;
+        }
+
+        fprintf(out, "return {\n");
+
+        struct MetaLoaderObjects2 objs = metaloader_objects_get2(
+            ml, extract_filename(fname, ".lua")
+        );
+        for (int j = 0; j < objs.num; j++) {
+            if (objs.objs[j]) {
+                struct MetaLoaderObject2Str str_repr;
+                str_repr = metaloader_object2str(objs.objs[j]);
+                trace("metaloader_write: %s - %s\n", objs.names[j], str_repr.s);
+                fprintf(out, "%s = %s,\n", objs.names[j], str_repr.s);
+                if (str_repr.is_allocated)
+                    free((char*)str_repr.s);
+            }
+        }
+        metaloader_objects_shutdown2(&objs);
+        //trace("metaloader_write:\n");
+        trace("\n");
+
+        fprintf(out, "}\n");
+        fclose(out);
+    }
+    metaloader_fileslist_shutdown(&fl);
+
 }
 
 void metaloader_print_all(MetaLoader *ml) {
@@ -721,65 +817,6 @@ enum ReadObjectResult {
     ROR_SKIP,
 };
 
-/*
-static enum ReadObjectResult read_object_untyped(
-    lua_State *l, struct MetaLoaderObjects2 *object
-) {
-    assert(l);
-    assert(object);
-
-    printf("read_object_untyped:\n");
-
-    int i = 0;
-    // Таблица со значениями для Rectangle
-    if (lua_istable(l, -1)) {
-        lua_pushnil(l);
-
-        float values[4] = {};
-        // Чтение полей значений Rectangle
-        while (lua_next(l, lua_gettop(l) - 1)) {
-            if (lua_isnumber(l, -1)) 
-                values[i++] = lua_tonumber(l, -1);
-            else {
-                lua_pop(l, 2);
-                return ROR_SKIP;
-            }
-            lua_pop(l, 1);
-
-            if (i == 4)
-                break;
-        }
-
-        if (i > 0) 
-            lua_pop(l, 1);
-        object->rects[object->num] = rect_from_arr(values);
-    } else 
-        return ROR_CONTINUE;
-
-    const char *field_name = lua_tostring(l, -2);
-    //trace("metaloader_objects_get: field_name %s\n", field_name);
-    if (!field_name) {
-        trace(
-            "metaloader_objects_get: no field_name [%s]\n",
-            stack_dump(l)
-        );
-        lua_pop(l, 1);
-        return ROR_CONTINUE;
-    }
-
-    //trace("metaloader_objects_get: field_name '%s'\n", field_name);
-
-    // Добавляем объект только если все значения для массива прямоугольника
-    // заполнены
-    if (i == 4) {
-        object->names[object->num] = strdup(field_name);
-        object->num++;
-    }
-
-    return ROR_SKIP;
-}
-// */
-
 static Rectangle *_read_object_rect(lua_State *l) {
     //read_object_untyped(l, object);
     assert(l);
@@ -980,13 +1017,12 @@ static struct MetaLoaderReturn *read_object_polyline(lua_State *l) {
     return (struct MetaLoaderReturn*)pl;
 }
 
-static void read_object(lua_State *l, struct MetaLoaderObjects2 *object) {
+static struct MetaLoaderReturn *read_object(lua_State *l) {
     assert(l);
-    assert(object);
 
     if (!lua_istable(l, -1)) {
         trace("read_object: object is not a table, skipping\n");
-        return;
+        return NULL;
     }
 
     // indices      [-4  -3  -2     -1      ]
@@ -1003,7 +1039,7 @@ static void read_object(lua_State *l, struct MetaLoaderObjects2 *object) {
     if (type != LUA_TSTRING) {
         trace("read_object: 'type' key is not a string\n");
         lua_pop(l, 1);
-        return;
+        return NULL;
     }
 
     const char *type_str = lua_tostring(l, -1);
@@ -1021,12 +1057,8 @@ static void read_object(lua_State *l, struct MetaLoaderObjects2 *object) {
     } else if (!strcmp(type_str, "polyline")) {
         ret = read_object_polyline(l);
     }
-    // */
 
-    if (ret)
-        object->objs[object->num] = ret;
-
-    return;
+    return ret;
 }
 
 struct MetaLoaderObjects2 metaloader_objects_get2(
@@ -1079,7 +1111,9 @@ struct MetaLoaderObjects2 metaloader_objects_get2(
             object.names[object.num] = strdup(field_name);
         }
 
-        read_object(l, &object);
+        struct MetaLoaderReturn *ret = read_object(l);
+        if (ret)
+            object.objs[object.num] = ret;
         object.num++;
 
         lua_pop(l, 1);
@@ -1232,6 +1266,60 @@ struct MetaLoaderObject2Str metaloader_object2str(
 struct MetaLoaderReturn *metaloader_get2(
     MetaLoader *ml, const char *fname_noext, const char *objname
 ) {
-    return NULL;
+    trace("metaloader_get2:\n");
+    return metaloader_get2_fmt(ml, fname_noext, "%s", objname);
+}
+
+struct MetaLoaderReturn *metaloader_get2_fmt(
+    MetaLoader *ml, const char *fname_noext, const char *objname_fmt, ...
+) {
+    trace("metaloader_get2_fmt:\n");
+
+    assert(ml);
+    assert(fname_noext);
+    assert(objname_fmt);
+
+    lua_State *l = ml->lua;
+    lua_settop(l, 0);
+
+    int type;
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    assert(type == LUA_TTABLE);
+    
+    char obj_name[64] = {};
+    va_list args;
+    va_start(args, objname_fmt);
+    vsnprintf(obj_name, sizeof(obj_name) - 1, objname_fmt, args);
+    va_end(args);
+
+    lua_pushstring(l, fname_noext);
+    type = lua_gettable(l, -2);
+    //assert(type == LUA_TTABLE);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get2_fmt: no such fname name '%s' in table, "
+            "instead type is %s\n",
+            fname_noext,
+            lua_typename(l, lua_type(l, -1))
+        );
+        lua_settop(l, 0);
+        return NULL;
+    }
+
+    lua_pushstring(l, obj_name);
+    type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get2_fmt: no such object '%s' in table %s",
+            obj_name, fname_noext
+        );
+        lua_settop(l, 0);
+        return NULL;
+    }
+
+    struct MetaLoaderReturn *obj = read_object(l);
+
+    lua_settop(l, 0);
+    return obj;
 }
 
