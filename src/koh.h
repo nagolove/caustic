@@ -40,7 +40,6 @@ do {                                                            \
 #include "koh_reasings.h"
 #include "koh_render.h"
 #include "koh_resource.h"
-#include "koh_ribbonframe.h"
 #include "koh_routine.h"
 #include "koh_script.h"
 #include "koh_set.h"
@@ -51,4 +50,5 @@ do {                                                            \
 #include "koh_table.h"
 #include "koh_team.h"
 #include "koh_timer.h"
+#include "koh_visual_tools.h"
 #include "koh_wfc.h"
