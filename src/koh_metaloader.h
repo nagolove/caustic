@@ -44,7 +44,7 @@ struct MetaLoaderRectangleOriented {
 
 struct MetaLoaderSector {
     struct MetaLoaderReturn ret;;
-    float                   radius, a1, a2;
+    float                   radius, angle1, angle2;
     Vector2                 position;
 };
 
@@ -112,9 +112,13 @@ Rectangle *metaloader_get(
 );
 
 __attribute__((__format__ (__printf__, 3, 4)))
+// Возвращает объект который необходимо освобождать через
+// metaloader_return_shutdown, а зачем через free()
 struct MetaLoaderReturn *metaloader_get2_fmt(
     MetaLoader *ml, const char *fname_noext, const char *objname_fmt, ...
 );
+// Возвращает объект который необходимо освобождать через
+// metaloader_return_shutdown, а зачем через free()
 struct MetaLoaderReturn *metaloader_get2(
     MetaLoader *ml, const char *fname_noext, const char *objname
 );
@@ -126,6 +130,39 @@ Rectangle *metaloader_get_fmt(
 );
 
 void metaloader_file_new(MetaLoader *ml, const char *new_fname_noext);
+
+
+__attribute__((__format__ (__printf__, 4, 5)))
+void metaloader_set_fmt2_rect(
+    MetaLoader *ml,
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *objname, ...
+);
+__attribute__((__format__ (__printf__, 7, 8)))
+void metaloader_set_fmt2_sector(
+    MetaLoader *ml,
+    float radius, float angle1, float angle2, Vector2 pos,
+    const char *fname_noext, 
+    const char *objname, ...
+);
+__attribute__((__format__ (__printf__, 5, 6)))
+void metaloader_set_fmt2_polyline(
+    MetaLoader *ml,
+    Vector2 *points, int num,
+    const char *fname_noext, 
+    const char *objname, ...
+);
+
+__attribute__((__format__ (__printf__, 4, 5)))
+void metaloader_set_fmt2_rect(
+    MetaLoader *ml,
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *objname, ...
+);
+
+
 void metaloader_set(
     MetaLoader *ml, 
     Rectangle rect,

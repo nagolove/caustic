@@ -916,27 +916,44 @@ static struct MetaLoaderReturn *read_object_sector(lua_State *l) {
     float radius = lua_tonumber(l, -1);
     lua_pop(l, 1);
 
+    int pop_num = 1;
+
     lua_pushstring(l, "a1");
     type = lua_gettable(l, -2);
     if (type != LUA_TNUMBER) {
-        trace("read_object_sector: 'a1' key is not a number\n");
+        lua_pushstring(l, "angle1");
+        type = lua_gettable(l, -2);
+        pop_num += 1;
+
+        if (type != LUA_TNUMBER)
+            trace(
+                "read_object_sector: 'a1' or 'angle1' key is not a number\n"
+            );
     }
     float a1 = lua_tonumber(l, -1);
-    lua_pop(l, 1);
+    lua_pop(l, pop_num);
 
+    pop_num = 1;
     lua_pushstring(l, "a2");
     type = lua_gettable(l, -2);
     if (type != LUA_TNUMBER) {
-        trace("read_object_sector: 'a2' key is not a number\n");
+        lua_pushstring(l, "angle2");
+        type = lua_gettable(l, -2);
+        pop_num += 1;
+
+        if (type != LUA_TNUMBER)
+            trace(
+                "read_object_sector: 'a1' or 'angle1' key is not a number\n"
+            );
     }
     float a2 = lua_tonumber(l, -1);
-    lua_pop(l, 1);
+    lua_pop(l, pop_num);
 
     struct MetaLoaderSector *sector = calloc(1, sizeof(*sector));
     assert(sector);
     sector->ret.type = MLT_SECTOR;
-    sector->a1 = a1;
-    sector->a2 = a2;
+    sector->angle1 = a1;
+    sector->angle2 = a2;
     sector->radius = radius;
 
     return (struct MetaLoaderReturn*)sector;
@@ -1246,7 +1263,7 @@ struct MetaLoaderObject2Str metaloader_object2str(
                 "}\n";
             snprintf(
                 buf, sizeof(buf) - 1,  fmt, 
-                sector->a1, sector->a2,
+                sector->angle1, sector->angle2,
                 sector->radius
             );
             break;
@@ -1321,5 +1338,32 @@ struct MetaLoaderReturn *metaloader_get2_fmt(
 
     lua_settop(l, 0);
     return obj;
+}
+
+void metaloader_set_fmt2_rect(
+    MetaLoader *ml,
+    Rectangle rect,
+    const char *fname_noext, 
+    const char *objname, ...
+) {
+    trace("metaloader_set_fmt2_rect:\n");
+}
+
+void metaloader_set_fmt2_sector(
+    MetaLoader *ml,
+    float radius, float angle1, float angle2, Vector2 pos,
+    const char *fname_noext, 
+    const char *objname, ...
+) {
+    trace("metaloader_set_fmt2_sector:\n");
+}
+
+void metaloader_set_fmt2_polyline(
+    MetaLoader *ml,
+    Vector2 *points, int num,
+    const char *fname_noext, 
+    const char *objname, ...
+) {
+    trace("metaloader_set_fmt2_polyline:\n");
 }
 
