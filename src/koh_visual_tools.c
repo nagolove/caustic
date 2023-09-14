@@ -29,33 +29,37 @@ static const char *state2str(enum State s) {
 }
 // */
 
-struct ToolPolylineInternal {
-    Vector2 *points;
-    int     points_cap, points_num;
+struct ToolCommonInternal {
     int     mouse_button_bind;
     Color   line_color, handle_color, handle_selected_color;
     float   line_thick;
     float   handle_circle_radius;
-    int     selected_point_index;
-    bool    drag;
+    bool    snap;
+    int     snap_size;
 };
 
-struct RibbonFrameInternal {
-    int         mouse_button_bind, 
-                corner_index,
-                points_num,
-                snap_size;
-    bool        snap;
-    enum State  state;
-    float       line_thick;
-    Color       line_color,
-                handle_color;
-    float       handle_circle_radius;
-    Vector2     corner_point, last_points[4];
+struct ToolPolylineInternal {
+    struct ToolCommonInternal   cmn;
+    Vector2                     *points;
+    int                         points_cap, points_num;
+    int                         selected_point_index;
+    bool                        drag;
+};
+
+struct ToolRectangleInternal {
+    struct ToolCommonInternal   cmn;
+    int                         corner_index,
+                                points_num;
+    enum State                  state;
+    Vector2                     corner_point, last_points[4];
+};
+
+struct ToolSectorInternal {
+    struct ToolCommonInternal   cmn;
 };
 
 void ribbonframe_init(
-    struct RibbonFrame *rf, const struct RibbonFrameOpts *opts
+    struct ToolRectangle *rf, const struct ToolRectangleOpts *opts
 ) {
     assert(rf);
     trace("ribbonframe_init:\n");
@@ -64,23 +68,23 @@ void ribbonframe_init(
     rf->internal = malloc(sizeof(*rf->internal));
     assert(rf->internal);
 
-    struct RibbonFrameInternal *internal = rf->internal;
+    struct ToolRectangleInternal *internal = rf->internal;
 
-    internal->handle_circle_radius = 30.;
+    internal->cmn.handle_circle_radius = 30.;
     internal->state = S_NONE;
-    internal->line_thick = 3.;
-    internal->line_color = YELLOW;
-    internal->handle_color = BLUE;
+    internal->cmn.line_thick = 3.;
+    internal->cmn.line_color = YELLOW;
+    internal->cmn.handle_color = BLUE;
     internal->corner_index = -1;
     internal->points_num = sizeof(internal->last_points) / 
                            sizeof(internal->last_points[0]);
-    internal->snap_size = 1;
-    internal->mouse_button_bind = MOUSE_BUTTON_LEFT;
-    internal->snap = false;
+    internal->cmn.snap_size = 1;
+    internal->cmn.mouse_button_bind = MOUSE_BUTTON_LEFT;
+    internal->cmn.snap = false;
     ribbonframe_update_opts(rf, opts);
 }
 
-void ribbonframe_shutdown(struct RibbonFrame *rf) {
+void ribbonframe_shutdown(struct ToolRectangle *rf) {
     assert(rf);
     if (rf->internal) {
         free(rf->internal);
@@ -89,19 +93,34 @@ void ribbonframe_shutdown(struct RibbonFrame *rf) {
 }
 
 static Vector2 mouse_with_cam(const Camera2D *cam) {
+    assert(cam);
     Vector2 cam_offset = cam ? cam->offset : Vector2Zero();
     float scale = cam ? cam->zoom : 1.;
     Vector2 mp = Vector2Subtract(GetMousePosition(), cam_offset);
     return Vector2Scale(mp, 1. / scale);
 }
 
-static void selection_start(struct RibbonFrame *rf, const Camera2D *cam) {
+/*
+static Rectangle screen_with_cam(const Camera2D *cam) {
+    Rectangle r = {0., 0., GetScreenWidth(), GetScreenHeight()};
+    if (cam) {
+        Vector2 offset = Vector2Scale(cam->offset, 1. / cam->zoom);
+        r.x -= offset.x;
+        r.y -= offset.y;
+        r.width /= cam->zoom;
+        r.height /= cam->zoom;
+    }
+    return r;
+}
+*/
+
+static void selection_start(struct ToolRectangle *rf, const Camera2D *cam) {
     assert(rf);
     assert(rf->internal);
 
     /*trace("selection_start:\n");*/
 
-    struct RibbonFrameInternal *internal = rf->internal;
+    struct ToolRectangleInternal *internal = rf->internal;
     Vector2 mp = mouse_with_cam(cam);
 
     if (internal->state == S_NONE) {
@@ -126,7 +145,7 @@ static void selection_start(struct RibbonFrame *rf, const Camera2D *cam) {
 }
 
 static void last_points_copy(
-    struct RibbonFrameInternal *internal, const Vector2 *points, int points_num
+    struct ToolRectangleInternal *internal, const Vector2 *points, int points_num
 ) {
     assert(internal);
     assert(points);
@@ -140,11 +159,11 @@ static void last_points_copy(
 }
 
 static void handles_check(
-    struct RibbonFrameInternal *internal, const Vector2 *points, 
+    struct ToolRectangleInternal *internal, const Vector2 *points, 
     int points_num, Vector2 mp
 ) {
     assert(internal);
-    float radius = internal->handle_circle_radius;
+    float radius = internal->cmn.handle_circle_radius;
     //internal->corner_index = -1;
     for (int i = 0; i < internal->points_num; ++i) {
         if (CheckCollisionPointCircle(mp, points[i], radius)) {
@@ -157,7 +176,7 @@ static void handles_check(
 
 //__attribute__((unused))
 static void handle_resize(
-    struct RibbonFrame *rf, Vector2 handle_diff
+    struct ToolRectangle *rf, Vector2 handle_diff
 ) {
     assert(rf);
     assert(rf->internal);
@@ -170,8 +189,8 @@ static void handle_resize(
             rf->rect.width -= handle_diff.x;
             rf->rect.height -= handle_diff.y;
 
-            if (rf->internal->snap) {
-                int snap_size = rf->internal->snap_size;
+            if (rf->internal->cmn.snap) {
+                int snap_size = rf->internal->cmn.snap_size;
                 int dx = (int)rf->rect.x % snap_size;
                 int dy = (int)rf->rect.y % snap_size;
                 rf->rect.x = rf->rect.x - dx;
@@ -189,8 +208,8 @@ static void handle_resize(
             rf->rect.width += handle_diff.x;
             rf->rect.height += handle_diff.y;
 
-            if (rf->internal->snap) {
-                int snap_size = rf->internal->snap_size;
+            if (rf->internal->cmn.snap) {
+                int snap_size = rf->internal->cmn.snap_size;
                 int dx = (int)rf->rect.width % snap_size;
                 int dy = (int)rf->rect.height % snap_size;
                 rf->rect.width = rf->rect.width - dx;
@@ -208,9 +227,9 @@ static void handle_resize(
     if (rf->rect.height < 0.) rf->rect.height = 0.;
 }
 
-void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
+void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam) {
     assert(rf);
-    struct RibbonFrameInternal *internal = rf->internal;
+    struct ToolRectangleInternal *internal = rf->internal;
     Vector2 mp = mouse_with_cam(cam);
 
     // Обход по часовой стрелке
@@ -228,7 +247,7 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
     // Проверка радиуса попадания в ручку управления
     handles_check(internal, points, points_num, mp);
     
-    if (IsMouseButtonDown(internal->mouse_button_bind)) {
+    if (IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
 
         if (internal->state == S_NONE)
             if (internal->corner_index != -1) {
@@ -263,15 +282,15 @@ void ribbonframe_update(struct RibbonFrame *rf, const Camera2D *cam) {
 }
 
 void ribbonframe_draw(
-    struct RibbonFrame *rf, struct RibbonFrameDrawOpts *opts
+    struct ToolRectangle *rf, struct ToolRectangleDrawOpts *opts
 ) {
     //trace("ribbonframe_draw:\n");
     assert(rf);
     assert(rf->internal);
-    struct RibbonFrameInternal *internal = rf->internal;
+    struct ToolRectangleInternal *internal = rf->internal;
 
     DrawRectangleLinesEx(
-        rf->rect, rf->internal->line_thick, rf->internal->line_color
+        rf->rect, rf->internal->cmn.line_thick, rf->internal->cmn.line_color
     );
 
     if (opts && opts->draw_axises) {
@@ -284,7 +303,7 @@ void ribbonframe_draw(
                 .x = rf->rect.x + rf->rect.width / 2.,
                 .y = rf->rect.y + rf->rect.height,
             },
-            rf->internal->line_thick, rf->internal->line_color
+            rf->internal->cmn.line_thick, rf->internal->cmn.line_color
         );
         DrawLineEx(
             (Vector2) {
@@ -295,46 +314,46 @@ void ribbonframe_draw(
                 .x = rf->rect.x + rf->rect.width,
                 .y = rf->rect.y + rf->rect.height / 2.,
             },
-            rf->internal->line_thick, rf->internal->line_color
+            rf->internal->cmn.line_thick, rf->internal->cmn.line_color
         );
     }
 
     if (internal->corner_index == 0 || internal->corner_index == 2) {
         DrawCircleV(
             rf->internal->corner_point,
-            rf->internal->handle_circle_radius,
-            rf->internal->handle_color
+            rf->internal->cmn.handle_circle_radius,
+            rf->internal->cmn.handle_color
         );
     }
 
 }
 
 void ribbonframe_update_opts(
-    struct RibbonFrame *rf, const struct RibbonFrameOpts *new_opts
+    struct ToolRectangle *rf, const struct ToolRectangleOpts *new_opts
 ) {
     assert(rf);
 
     if (!new_opts)
         return;
 
-    struct RibbonFrameInternal *internal = rf->internal;
+    struct ToolRectangleInternal *internal = rf->internal;
     assert(internal);
 
-    if (new_opts->mouse_button_bind != -1)
-        internal->mouse_button_bind = new_opts->mouse_button_bind;
-    internal->snap_size = new_opts->snap_size;
-    internal->snap = new_opts->snap;
+    if (new_opts->common.mouse_button_bind != -1)
+        internal->cmn.mouse_button_bind = new_opts->common.mouse_button_bind;
+    internal->cmn.snap_size = new_opts->snap_size;
+    internal->cmn.snap = new_opts->snap;
 
     /*if (!color_eq(new_opts->line_color, internal->line_color))*/
-        internal->line_color = new_opts->line_color;
+        internal->cmn.line_color = new_opts->common.line_color;
     /*if (!color_eq(new_opts->handle_color, internal->handle_color))*/
-        internal->handle_color = new_opts->handle_color;
+        internal->cmn.handle_color = new_opts->common.handle_color;
     /*if (new_opts->line_thick != internal->line_thick)*/
-        internal->line_thick = new_opts->line_thick;
+        internal->cmn.line_thick = new_opts->common.line_thick;
 }
 
 void polyline_init(
-    struct PolylineTool *plt, const struct PolylineToolOpts *opts
+    struct ToolPolyline *plt, const struct ToolPolylineOpts *opts
 ) {
     assert(plt);
     trace("polyline_init:\n");
@@ -343,7 +362,7 @@ void polyline_init(
     assert(plt->internal);
     polyline_update_opts(plt, opts);
     struct ToolPolylineInternal *internal = plt->internal;
-    internal->handle_circle_radius = 30.;
+    internal->cmn.handle_circle_radius = 30.;
 
     internal->points_cap = 100;
     internal->points = calloc(
@@ -356,23 +375,29 @@ void polyline_init(
 }
 
 void polyline_update_opts(
-    struct PolylineTool *plt, const struct PolylineToolOpts *new_opts
+    struct ToolPolyline *plt, const struct ToolPolylineOpts *new_opts
 ) {
     assert(plt);
     assert(new_opts);
     struct ToolPolylineInternal *internal = plt->internal;
 
-    if (!internal)
+    if (!internal) {
+        trace("polyline_update_opts: internal == NULL\n");
         return;
+    }
 
-    internal->line_color = new_opts->line_color;
-    internal->handle_color = new_opts->handle_color;
-    internal->handle_selected_color = new_opts->handle_selected_color;
-    internal->line_thick = new_opts->line_thick;
-    internal->mouse_button_bind = new_opts->mouse_button_bind;
+    internal->cmn.line_color = new_opts->common.line_color;
+    trace(
+        "polyline_update_opts: line_color %s\n",
+        color2str(new_opts->common.line_color)
+    );
+    internal->cmn.handle_color = new_opts->common.handle_color;
+    internal->cmn.handle_selected_color = new_opts->common.handle_color_selected;
+    internal->cmn.line_thick = new_opts->common.line_thick;
+    internal->cmn.mouse_button_bind = new_opts->common.mouse_button_bind;
 }
 
-void polyline_shutdown(struct PolylineTool *plt) {
+void polyline_shutdown(struct ToolPolyline *plt) {
     assert(plt);
     trace("polyline_shutdown:\n");
     if (plt->internal && plt->internal->points) {
@@ -386,7 +411,7 @@ void polyline_shutdown(struct PolylineTool *plt) {
 }
 
 static void point_add(
-    struct PolylineTool *plt, Vector2 point, bool close_line
+    struct ToolPolyline *plt, Vector2 point, bool close_line
 ) {
     assert(plt);
     struct ToolPolylineInternal *internal = plt->internal;
@@ -413,7 +438,7 @@ static void point_add(
         internal->points[internal->points_num++] = point;
 }
 
-static void polyline_remove(struct PolylineTool *plt, int index) {
+static void polyline_remove(struct ToolPolyline *plt, int index) {
     trace("polyline_remove: index %d\n", index);
     assert(plt);
     assert(index >= 0);
@@ -440,7 +465,7 @@ static void polyline_remove(struct PolylineTool *plt, int index) {
     );
 }
 
-void polyline_update(struct PolylineTool *plt, const Camera2D *cam) {
+void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
     //trace("polyline_update\n");
     assert(plt);
     struct ToolPolylineInternal *internal = plt->internal;
@@ -451,18 +476,18 @@ void polyline_update(struct PolylineTool *plt, const Camera2D *cam) {
     bool removed = false;
     for (int j = 0; j < internal->points_num; j++) {
         Vector2 point = internal->points[j];
-        float radius = internal->handle_circle_radius;
+        float radius = internal->cmn.handle_circle_radius;
         if (CheckCollisionPointCircle(mp, point, radius)) {
             //trace("polyline_update: j = %d\n", j);
             internal->selected_point_index = j;
             if (IsKeyDown(KEY_LEFT_SHIFT) && 
-                IsMouseButtonPressed(internal->mouse_button_bind)
+                IsMouseButtonPressed(internal->cmn.mouse_button_bind)
             ) {
                 polyline_remove(plt, j);
                 removed = true;
                 break;
             } else {
-                if (IsMouseButtonDown(internal->mouse_button_bind)) {
+                if (IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
                     internal->drag = true;
                     internal->points[j] = mp;
                     break;
@@ -472,48 +497,50 @@ void polyline_update(struct PolylineTool *plt, const Camera2D *cam) {
     }
 
     if (!internal->drag && !removed && 
-        IsMouseButtonPressed(internal->mouse_button_bind)) {
+        IsMouseButtonPressed(internal->cmn.mouse_button_bind)) {
         point_add(plt, mp, IsMouseButtonDown(KEY_LEFT_CONTROL));
     }
 }
 
 void polyline_draw(
-    struct PolylineTool *plt, struct PolylineToolDrawOpts *opts
+    struct ToolPolyline *plt, struct ToolPolylineDrawOpts *opts, 
+    const Camera2D *cam
 ) {
     assert(plt);
     struct ToolPolylineInternal *internal = plt->internal;
     assert(internal);
-    //trace(
-        //"polyline_draw: internal->selected_point_index %d\n",
-        //internal->selected_point_index
-    //);
+
+    // Получить видимые координаты экрана после преобразования камеры
+    //const Rectangle screen = screen_with_cam(cam);
 
     for (int j = 0; j < internal->points_num; j++) {
         Color color = internal->selected_point_index == j ?
-            internal->handle_selected_color : internal->handle_color;
+            internal->cmn.handle_selected_color : internal->cmn.handle_color;
         DrawCircleV(
-            internal->points[j], internal->handle_circle_radius, color
+            internal->points[j], internal->cmn.handle_circle_radius, color
         );
     }
 
+    // TODO: Проверить линию на вхождение в камеру и выполнить отсечение
     Vector2 prev_point = internal->points[0];
     for (int j = 0; j < internal->points_num; j++) {
         Vector2 point = internal->points[j];
         DrawLineEx(
-            prev_point, point, internal->line_thick, internal->line_color
+            prev_point, point, internal->cmn.line_thick, 
+            internal->cmn.line_color
         );
         prev_point = point;
     }
 }
 
-
-Vector2 *polyline_points_get(struct PolylineTool *plt, int *points_num) {
+// XXX: Кто ответственнен за возвращенную память?
+Vector2 *polyline_points_get(struct ToolPolyline *plt, int *points_num) {
     assert(plt);
     return NULL;
 }
 
 void polyline_points_set(
-    struct PolylineTool *plt, Vector2 *points, int points_num
+    struct ToolPolyline *plt, Vector2 *points, int points_num
 ) {
     assert(plt);
     assert(points);
@@ -546,3 +573,45 @@ void polyline_points_set(
     memmove(internal->points, points, points_arr_sz);
     internal->points_num = points_num;
 }
+
+void sector_init(
+    struct ToolSector *sec, const struct ToolSectorOpts *opts
+) {
+    assert(sec);
+    memset(sec, 0, sizeof(*sec));
+    sec->internal = malloc(sizeof(*sec->internal));
+    assert(sec->internal);
+    sector_update_opts(sec, opts);
+}
+
+void sector_update_opts(
+    struct ToolSector *sec, const struct ToolSectorOpts *new_opts
+) {
+}
+
+void sector_shutdown(struct ToolSector *sec) {
+    assert(sec);
+    if (sec->internal) {
+        free(sec->internal);
+        sec->internal = NULL;
+    }
+}
+
+void sector_update(struct ToolSector *sec, const Camera2D *cam) {
+}
+
+void sector_draw(
+    struct ToolSector *sec, struct ToolSectorDrawOpts *opts,
+    const Camera2D *cam
+) {
+    assert(sec);
+    assert(opts);
+    int segments_num = sec->radius * 2;
+    DrawCircleSector(
+        sec->position, sec->radius,
+        sec->angle1, sec->angle2,
+        segments_num, sec->internal->cmn.line_color
+    );
+}
+
+
