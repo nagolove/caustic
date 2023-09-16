@@ -186,12 +186,13 @@ local function filter_sources_c(
     filter_sources(".*%.c$", path, cb, exclude)
 end
 
+--[[
 local function filter_sources_cpp(
     path: string, cb: function(string), exclude: {string}
 )
     filter_sources(".*%.cpp$", path, cb, exclude)
 end
-
+--]]
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
@@ -200,9 +201,10 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     -- C какой позиции в дереве каталогов начинать сборку?
 
     local push_num = 0
+    local push_num_max = 20
     while true do
         local file = io.open(fname, "r")
-        print('file', file)
+        --print('file', file)
         if not file then
             push_num = push_num + 1
             push_current_dir()
@@ -210,8 +212,8 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         else
             break
         end
-        print('curdir', lfs.currentdir())
-        if push_num > 10 then
+        --print('curdir', lfs.currentdir())
+        if push_num > push_num_max or lfs.currentdir() == "/" then
             push_num = 0
             break
         end
@@ -349,9 +351,8 @@ local function cmd_do(_cmd: string|{string})
             print('cmd_do:', _cmd)
         end
         if not os.execute(_cmd as string) then
-            print('cmd was failed')
-            print(_cmd)
-            os.exit(1)
+            print(format('cmd was failed "%s"', _cmd))
+            --os.exit(1)
         end
     elseif (type(_cmd) == 'table') then
         for _, v in ipairs(_cmd as {string}) do
@@ -359,9 +360,8 @@ local function cmd_do(_cmd: string|{string})
                 print('cmd_do', v)
             end
             if not os.execute(v) then
-                print('cmd was failed')
-                print(_cmd)
-                os.exit(1)
+                print(format('cmd was failed "%s"', _cmd))
+                --os.exit(1)
             end
         end
     else
@@ -2707,6 +2707,7 @@ local function cache_remove()
 end
 
 local function koh_link(objfiles_str: string, _args: Args)
+    cmd_do("rm libcaustic.a")
     local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
     print(cmd)
     cmd_do(cmd)
@@ -3052,6 +3053,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     local queue = {}
     local cwd = lfs.currentdir() .. "/"
 
+    -- Список файлов для перекомпиляции выводимый пользователю
+    local repr_queu = {}
+
     filter_sources_c(".", function(file: string)
         --print('file', file)
         local _output = output_dir .. "/" .. 
@@ -3069,6 +3073,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
             _output, _input, _libs
         )
         if cache:should_recompile(file, cmd) then
+            table.insert(repr_queu, file)
             table.insert(queue, cmd)
         end
 
@@ -3076,6 +3081,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     end, exclude)
 
     if _args.cpp then
+        print("cpp flags is not implemented")
+        os.exit(1)
+        --[[
         filter_sources_cpp(".", function(file: string)
             --print('file', file)
             local _output = output_dir .. "/" .. 
@@ -3098,7 +3106,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
             table.insert(objfiles, _output)
         end, exclude)
+        --]]
     end
+
+    --print("queue", inspect(queue))
+    print(tabular(repr_queu))
 
     if not _args.j then
         serial_run(queue)
@@ -3120,7 +3132,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if not cfg.artifact then
         koh_link(objfiles_str, _args)
         --cp("libcaustic.a", "../libcaustic.a")
-        cmd_do("cp libcaustic.a ../libcaustic.a")
+        cmd_do("mv libcaustic.a ../libcaustic.a")
     else
         push_current_dir()
         print('caustic_path', path_caustic)
@@ -3163,12 +3175,12 @@ function actions.make(_args: Args)
         print(tabular(_args))
     end
 
-    print("make: pwd 0", lfs.currentdir())
+    --print("make: pwd 0", lfs.currentdir())
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     for _, cfg in ipairs(cfgs) do
-        print("make: pwd 1", lfs.currentdir())
+        --print("make: pwd 1", lfs.currentdir())
         sub_make(_args, cfg, push_num)
-        print("make: pwd 2", lfs.currentdir())
+        --print("make: pwd 2", lfs.currentdir())
     end
 end
 
