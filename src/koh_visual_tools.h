@@ -33,6 +33,7 @@ struct ToolCommonOpts {
     float   line_thick;
     bool    snap;
     int     snap_size;
+    float   handle_circle_radius;
 };
 
 struct ToolPolylineOpts {
@@ -62,6 +63,46 @@ struct ToolRectangleOpts {
 struct ToolSectorOpts {
     struct ToolCommonOpts   common;
 };
+
+enum VisualToolMode {
+    VIS_TOOL_RECTANGLE,
+    VIS_TOOL_RECTANGLE_ORIENTED,
+    VIS_TOOL_POLYLINE,
+    VIS_TOOL_SECTOR,
+};
+
+struct VisualTool {
+    enum VisualToolMode             mode;
+
+    struct ToolRectangle            t_rect;
+    struct ToolRectangleOpts        t_rect_opts;
+    struct ToolRectangleDrawOpts    t_rect_draw_opts;
+
+    struct ToolRectangle            t_rect_oriented;
+    struct ToolRectangleOpts        t_rect_oriented_opts;
+    struct ToolRectangleDrawOpts    t_rect_oriented_draw_opts;
+
+    struct ToolSector               t_sector;
+    struct ToolSectorOpts           t_sector_opts;
+    struct ToolSectorDrawOpts       t_sector_draw_opts;
+
+    struct ToolPolyline             t_pl;
+    struct ToolPolylineDrawOpts     t_pl_draw_opts;
+    struct ToolPolylineOpts         t_pl_opts;
+};
+
+/*
+void visual_tool_init(
+    struct VisualTool *vt,
+    struct ToolRectangleOpts *t_rect_opts,
+    struct ToolRectangleOpts *t_rect_oriented_opts,
+    struct ToolSectorOpts *t_sector_opts,
+    struct ToolPolylineDrawOpts *t_pl_draw_opts
+);
+*/
+void visual_tool_shutdown(struct VisualTool *vt);
+void visual_tool_update(struct VisualTool *vt, const Camera2D *cam);
+void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam);
 
 void polyline_init(
     struct ToolPolyline *plt, const struct ToolPolylineOpts *opts
@@ -93,7 +134,7 @@ void ribbonframe_shutdown(struct ToolRectangle *rf);
 void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam);
 
 void ribbonframe_draw(
-    struct ToolRectangle *rf, struct ToolRectangleDrawOpts *opts
+    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
 );
 
 void sector_init(

@@ -17,6 +17,8 @@ enum State {
     S_HANDLE_CAN_RESIZE,
 };
 
+static bool visual_tool_verbose = true;
+
 /*
 static const char *state2str(enum State s) {
     switch (s) {
@@ -29,17 +31,8 @@ static const char *state2str(enum State s) {
 }
 // */
 
-struct ToolCommonInternal {
-    int     mouse_button_bind;
-    Color   line_color, handle_color, handle_selected_color;
-    float   line_thick;
-    float   handle_circle_radius;
-    bool    snap;
-    int     snap_size;
-};
-
 struct ToolPolylineInternal {
-    struct ToolCommonInternal   cmn;
+    struct ToolCommonOpts       cmn;
     Vector2                     *points;
     int                         points_cap, points_num;
     int                         selected_point_index;
@@ -47,7 +40,7 @@ struct ToolPolylineInternal {
 };
 
 struct ToolRectangleInternal {
-    struct ToolCommonInternal   cmn;
+    struct ToolCommonOpts       cmn;
     int                         corner_index,
                                 points_num;
     enum State                  state;
@@ -55,8 +48,10 @@ struct ToolRectangleInternal {
 };
 
 struct ToolSectorInternal {
-    struct ToolCommonInternal   cmn;
+    struct ToolCommonOpts   cmn;
 };
+
+static void common_trace(const char *prefix, struct ToolCommonOpts *cmn);
 
 void ribbonframe_init(
     struct ToolRectangle *rf, const struct ToolRectangleOpts *opts
@@ -282,12 +277,12 @@ void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam) {
 }
 
 void ribbonframe_draw(
-    struct ToolRectangle *rf, struct ToolRectangleDrawOpts *opts
+    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
 ) {
     //trace("ribbonframe_draw:\n");
     assert(rf);
     assert(rf->internal);
-    struct ToolRectangleInternal *internal = rf->internal;
+    const struct ToolRectangleInternal *internal = rf->internal;
 
     DrawRectangleLinesEx(
         rf->rect, rf->internal->cmn.line_thick, rf->internal->cmn.line_color
@@ -337,19 +332,18 @@ void ribbonframe_update_opts(
         return;
 
     struct ToolRectangleInternal *internal = rf->internal;
+    struct ToolCommonOpts *cmn = &internal->cmn;
     assert(internal);
 
     if (new_opts->common.mouse_button_bind != -1)
-        internal->cmn.mouse_button_bind = new_opts->common.mouse_button_bind;
-    internal->cmn.snap_size = new_opts->snap_size;
-    internal->cmn.snap = new_opts->snap;
+        cmn->mouse_button_bind = new_opts->common.mouse_button_bind;
+    cmn->snap_size = new_opts->snap_size;
+    cmn->snap = new_opts->snap;
+    cmn->line_color = new_opts->common.line_color;
+    cmn->handle_color = new_opts->common.handle_color;
+    cmn->line_thick = new_opts->common.line_thick;
 
-    /*if (!color_eq(new_opts->line_color, internal->line_color))*/
-        internal->cmn.line_color = new_opts->common.line_color;
-    /*if (!color_eq(new_opts->handle_color, internal->handle_color))*/
-        internal->cmn.handle_color = new_opts->common.handle_color;
-    /*if (new_opts->line_thick != internal->line_thick)*/
-        internal->cmn.line_thick = new_opts->common.line_thick;
+    common_trace("ribbonframe_update_opts:", cmn);
 }
 
 void polyline_init(
@@ -374,6 +368,25 @@ void polyline_init(
     internal->drag = false;
 }
 
+static void common_trace(const char *prefix, struct ToolCommonOpts *cmn) {
+    assert(cmn);
+
+    if (!visual_tool_verbose) return;
+
+    const char *_prefix = prefix ? prefix : " ";
+    trace("%s mouse_button_bind %d\n", _prefix, cmn->mouse_button_bind);
+    trace("%s line_color %s\n", _prefix, color2str(cmn->line_color));
+    trace("%s handle_color %s\n", _prefix, color2str(cmn->handle_color));
+    trace(
+        "%s handle_selected_color %s\n", _prefix,
+        color2str(cmn->handle_color_selected)
+    );
+    trace("%s line_thick %f\n", _prefix, cmn->line_thick);
+    trace("%s snap %s\n", _prefix, cmn->snap ? "true" : "false");
+    trace("%s snap_size %d\n", _prefix, cmn->snap_size);
+    trace("%s handle_circle_radius %f\n", _prefix, cmn->handle_circle_radius);
+}
+
 void polyline_update_opts(
     struct ToolPolyline *plt, const struct ToolPolylineOpts *new_opts
 ) {
@@ -391,10 +404,13 @@ void polyline_update_opts(
         "polyline_update_opts: line_color %s\n",
         color2str(new_opts->common.line_color)
     );
-    internal->cmn.handle_color = new_opts->common.handle_color;
-    internal->cmn.handle_selected_color = new_opts->common.handle_color_selected;
-    internal->cmn.line_thick = new_opts->common.line_thick;
-    internal->cmn.mouse_button_bind = new_opts->common.mouse_button_bind;
+    struct ToolCommonOpts *cmn = &internal->cmn;
+    cmn->handle_color = new_opts->common.handle_color;
+    cmn->handle_color_selected = new_opts->common.handle_color_selected;
+    cmn->line_thick = new_opts->common.line_thick;
+    cmn->mouse_button_bind = new_opts->common.mouse_button_bind;
+
+    common_trace("polyline_update_opts:", cmn);
 }
 
 void polyline_shutdown(struct ToolPolyline *plt) {
@@ -515,7 +531,7 @@ void polyline_draw(
 
     for (int j = 0; j < internal->points_num; j++) {
         Color color = internal->selected_point_index == j ?
-            internal->cmn.handle_selected_color : internal->cmn.handle_color;
+            internal->cmn.handle_color_selected : internal->cmn.handle_color;
         DrawCircleV(
             internal->points[j], internal->cmn.handle_circle_radius, color
         );
@@ -587,6 +603,7 @@ void sector_init(
 void sector_update_opts(
     struct ToolSector *sec, const struct ToolSectorOpts *new_opts
 ) {
+    common_trace("sector_update_opts:", &sec->internal->cmn);
 }
 
 void sector_shutdown(struct ToolSector *sec) {
@@ -614,4 +631,100 @@ void sector_draw(
     );
 }
 
+/*
+void visual_tool_init(
+    struct VisualTool *vt,
+    struct ToolRectangleOpts *t_rect_opts,
+    struct ToolRectangleOpts *t_rect_oriented_opts,
+    struct ToolSectorOpts *t_sector_opts,
+    struct ToolPolylineDrawOpts *t_pl_draw_opts
+) {
+    assert(vt);
+}
+*/
 
+void visual_tool_shutdown(struct VisualTool *vt) {
+    assert(vt);
+    ribbonframe_shutdown(&vt->t_rect);
+    ribbonframe_shutdown(&vt->t_rect_oriented);
+    polyline_shutdown(&vt->t_pl);
+    sector_shutdown(&vt->t_sector);
+}
+
+static const char *mode2str(enum VisualToolMode mode) {
+    static char buf[64] = {};
+
+    switch (mode) {
+        case VIS_TOOL_RECTANGLE:
+			sprintf(buf, "%s", "RECTANGLE");  
+            break;
+        case VIS_TOOL_RECTANGLE_ORIENTED:
+			sprintf(buf, "%s", "RECTANGLE_ORIENTED"); 
+            break;
+        case VIS_TOOL_POLYLINE:
+			sprintf(buf, "%s", "POLYLINE"); 
+            break;
+        case VIS_TOOL_SECTOR:
+			sprintf(buf, "%s", "SECTOR"); 
+            break;
+    }
+    return buf;
+}
+
+void visual_tool_update(struct VisualTool *vt, const Camera2D *cam) {
+    assert(vt);
+    trace("visual_tool_update: mode %s\n", mode2str(vt->mode));
+    switch (vt->mode) {
+        case VIS_TOOL_POLYLINE:
+            //if (vt->t_pl.exist)
+                polyline_update(&vt->t_pl, cam);
+            break;
+        case VIS_TOOL_RECTANGLE:
+            //if (vt->t_rect.exist)
+                ribbonframe_update(&vt->t_rect, cam);
+            break;
+        case VIS_TOOL_RECTANGLE_ORIENTED:
+            //if (vt->t_rect_oriented.exist)
+                ribbonframe_update(&vt->t_rect_oriented, cam);
+            break;
+        case VIS_TOOL_SECTOR:
+            //if (vt->t_sector.exist)
+                sector_update(&vt->t_sector, cam);
+            break;
+    }
+}
+
+void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam) {
+    assert(vt);
+    //bool trace_nonexist = true;
+    switch (vt->mode) {
+        case MLT_POLYLINE:
+            //if (vt->t_pl.exist)
+                polyline_draw(&vt->t_pl, &vt->t_pl_draw_opts, cam);
+            //else if (trace_nonexist)
+                //trace("visual_tool_draw: polyline is not exists\n");
+            break;
+        case MLT_RECTANGLE:
+            //if (vt->t_rect.exist)
+                ribbonframe_draw(&vt->t_rect, &vt->t_rect_draw_opts);
+            //else if (trace_nonexist)
+                //trace("visual_tool_draw: rectangle is not exists\n");
+            break;
+        case MLT_RECTANGLE_ORIENTED:
+            //if (vt->t_rect_oriented.exist)
+                ribbonframe_draw(
+                    &vt->t_rect_oriented, &vt->t_rect_oriented_draw_opts
+                );
+            //else if (trace_nonexist)
+                //trace("visual_tool_draw: rectangle oriented is not exists\n");
+            break;
+        case MLT_SECTOR:
+            //if (vt->t_sector.exist)
+                sector_draw(&vt->t_sector, &vt->t_sector_draw_opts, cam);
+            //else if (trace_nonexist)
+                //trace("visual_tool_draw: sector is not exists\n");
+            break;
+        default:
+            trace("visual_tool_draw: unknown value in switch\n");
+    }
+}
