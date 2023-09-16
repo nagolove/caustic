@@ -8,6 +8,7 @@
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
 #include "koh.h"
+#include "koh_visual_tools.h"
 #include "lauxlib.h"
 #include "libsmallregex.h"
 #include "lua.h"
@@ -37,7 +38,7 @@ struct FilesSearchResultInternal {
 
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 
-Common cmn;
+static struct Common cmn;
 
 void add_chars_range(int first, int last);
 
@@ -71,7 +72,7 @@ uint32_t seedfromstr(const char *s) {
 }
 
 void koh_common_init(void) {
-    memset(&cmn, 0, sizeof(Common));
+    memset(&cmn, 0, sizeof(struct Common));
 
     /*SetTraceLogLevel(LOG_ERROR);*/
     SetTraceLogLevel(LOG_ALL);
@@ -124,7 +125,7 @@ void koh_common_shutdown(void) {
     if (cmn.font_chars)
         free(cmn.font_chars);
 
-    memset(&cmn, 0, sizeof(Common));
+    memset(&cmn, 0, sizeof(cmn));
 }
 
 const char *color2str(Color c) {
@@ -1254,3 +1255,71 @@ bool color_eq(Color c1, Color c2) {
     return  c1.a == c2.a || c1.r == c2.r ||
             c1.g == c2.g || c1.b == c2.b;
 }
+
+enum VisualToolMode visual_tool_mode2metaloader_type(
+    const enum MetaLoaderType type
+) {
+    switch (type) {
+        case MLT_RECTANGLE: return VIS_TOOL_RECTANGLE;
+        case MLT_RECTANGLE_ORIENTED: return VIS_TOOL_RECTANGLE_ORIENTED;
+        case MLT_POLYLINE: return VIS_TOOL_POLYLINE;
+        case MLT_SECTOR: return VIS_TOOL_SECTOR;
+    }
+    trace("visual_tool_mode2metaloader_type: bad type value\n");
+    abort();
+}
+
+struct Common *koh_cmn() {
+    return &cmn;
+}
+
+void koh_try_ray_cursor() {
+    //trace("try_cursor\n");
+
+    if (IsKeyPressed(KEY_ONE)) {
+        SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+        trace("try_cursor: MOUSE_CURSOR_DEFAULT\n");
+    }
+    if (IsKeyPressed(KEY_TWO)) {
+        SetMouseCursor(MOUSE_CURSOR_ARROW);
+        trace("try_cursor: MOUSE_CURSOR_ARROW\n");
+    }
+    if (IsKeyPressed(KEY_THREE)) {
+        SetMouseCursor(MOUSE_CURSOR_IBEAM);
+        trace("try_cursor: MOUSE_CURSOR_IBEAM\n");
+    }
+    if (IsKeyPressed(KEY_FOUR)) {
+        SetMouseCursor(MOUSE_CURSOR_CROSSHAIR);
+        trace("try_cursor: MOUSE_CURSOR_CROSSHAIR\n");
+    }
+    if (IsKeyPressed(KEY_FIVE)) {
+        SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+        trace("try_cursor: MOUSE_CURSOR_POINTING_HAND\n");
+    }
+    if (IsKeyPressed(KEY_SIX)) {
+        SetMouseCursor(MOUSE_CURSOR_RESIZE_EW);
+        trace("try_cursor: MOUSE_CURSOR_RESIZE_EW\n");
+    }
+    if (IsKeyPressed(KEY_SEVEN)) {
+        SetMouseCursor(MOUSE_CURSOR_RESIZE_NS);
+        trace("try_cursor: MOUSE_CURSOR_RESIZE_NS\n");
+    }
+    if (IsKeyPressed(KEY_EIGHT)) {
+        SetMouseCursor(MOUSE_CURSOR_RESIZE_NWSE);
+        trace("try_cursor: MOUSE_CURSOR_RESIZE_NWSE\n");
+    }
+    if (IsKeyPressed(KEY_NINE)) {
+        SetMouseCursor(MOUSE_CURSOR_RESIZE_NESW);
+        trace("try_cursor: MOUSE_CURSOR_RESIZE_NESW\n");
+    }
+    if (IsKeyDown(KEY_LEFT_SHIFT) && IsKeyPressed(KEY_ONE)) {
+        SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
+        trace("try_cursor: MOUSE_CURSOR_RESIZE_ALL\n");
+    }
+    if (IsKeyDown(KEY_LEFT_SHIFT) && IsKeyPressed(KEY_TWO)) {
+        SetMouseCursor(MOUSE_CURSOR_NOT_ALLOWED);
+        trace("try_cursor: MOUSE_CURSOR_NOT_ALLOWED\n");
+    }
+
+}
+

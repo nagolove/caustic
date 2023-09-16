@@ -3,6 +3,8 @@
 
 #include "koh_paragraph.h"
 #include "koh_rand.h"
+#include "koh_metaloader.h"
+#include "koh_visual_tools.h"
 
 #include <string.h>
 #include <assert.h>
@@ -23,7 +25,7 @@
 // специфичное
 typedef struct Object Object;
 
-typedef struct {
+struct Common {
     bool quit;
 
     int *font_chars;
@@ -34,9 +36,9 @@ typedef struct {
             "func_name" = "description",
         }
     */
-} Common;
+};
 
-extern Common cmn;
+struct Common *koh_cmn();
 
 void koh_common_init(void);
 void koh_common_shutdown(void);
@@ -189,3 +191,8 @@ struct FilesSearchResult koh_search_files(
 );
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 void koh_search_files_print(struct FilesSearchResult *fsr);
+
+enum VisualToolMode visual_tool_mode2metaloader_type(
+    const enum MetaLoaderType type
+);
+void koh_try_ray_cursor();
