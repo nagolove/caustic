@@ -5,19 +5,10 @@
 
 typedef struct MetaLoader MetaLoader;
 
-/*
-enum SelectionToolMode {
-    STM_POLYLINE,
-    STM_RECTANGLE,
-    STM_RECTANGLE_ORIENTED,
-    STM_SECTOR,
-};
-*/
-
 enum MetaLoaderType {
-    MLT_POLYLINE,
     MLT_RECTANGLE,
     MLT_RECTANGLE_ORIENTED,
+    MLT_POLYLINE,
     MLT_SECTOR,
 };
 
