@@ -1,5 +1,6 @@
 #include "koh_visual_tools.h"
 
+#include "chipmunk/chipmunk_types.h"
 #include "koh.h"
 #include "koh_common.h"
 #include "koh_logger.h"
@@ -7,25 +8,27 @@
 #include "raylib.h"
 #include "raymath.h"
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
 enum State {
     S_NONE,
     S_RESIZE,
-    S_HANDLE_RESIZE,
-    S_HANDLE_CAN_RESIZE,
+    S_CAN_RESIZE,
+    S_ROTATE,
+    S_CAN_ROTATE,
 };
 
-static bool visual_tool_verbose = true;
+static bool visual_tool_verbose = false;
 
-/*
 static const char *state2str(enum State s) {
     switch (s) {
         case S_NONE: return "S_NONE";
         case S_RESIZE: return "S_RESIZE";
-        case S_HANDLE_RESIZE: return "S_HANDLE_RESIZE";
-        case S_HANDLE_CAN_RESIZE: return "S_HANDLE_CAN_RESIZE";
+        case S_CAN_RESIZE: return "S_HANDLE_CAN_RESIZE";
+        case S_ROTATE: return "S_ROTATE";
+        case S_CAN_ROTATE: return "S_CAN_ROTATE";
     }
     return NULL;
 }
@@ -37,6 +40,14 @@ struct ToolPolylineInternal {
     int                         points_cap, points_num;
     int                         selected_point_index;
     bool                        drag;
+};
+
+struct ToolRectangleAlignedInternal {
+    struct ToolCommonOpts       cmn;
+    int                         corner_index,
+                                points_num;
+    enum State                  state;
+    Vector2                     corner_point, last_points[4];
 };
 
 struct ToolRectangleInternal {
@@ -53,14 +64,15 @@ struct ToolSectorInternal {
 
 static void common_trace(const char *prefix, struct ToolCommonOpts *cmn);
 
-void ribbonframe_init(
-    struct ToolRectangle *rf, const struct ToolRectangleOpts *opts
+void rectanglea_init(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedOpts *opts
 ) {
     assert(rf);
-    trace("ribbonframe_init:\n");
+    trace("rectanglea_init:\n");
 
     memset(rf, 0, sizeof(*rf));
-    rf->internal = malloc(sizeof(*rf->internal));
+    rf->internal = malloc(sizeof(struct ToolRectangleAlignedInternal));
     assert(rf->internal);
 
     struct ToolRectangleInternal *internal = rf->internal;
@@ -76,10 +88,10 @@ void ribbonframe_init(
     internal->cmn.snap_size = 1;
     internal->cmn.mouse_button_bind = MOUSE_BUTTON_LEFT;
     internal->cmn.snap = false;
-    ribbonframe_update_opts(rf, opts);
+    rectanglea_update_opts(rf, opts);
 }
 
-void ribbonframe_shutdown(struct ToolRectangle *rf) {
+void rectanglea_shutdown(struct ToolRectangleAligned *rf) {
     assert(rf);
     if (rf->internal) {
         free(rf->internal);
@@ -109,7 +121,41 @@ static Rectangle screen_with_cam(const Camera2D *cam) {
 }
 */
 
-static void selection_start(struct ToolRectangle *rf, const Camera2D *cam) {
+static void rotation_start(struct ToolRectangle *rf, const Camera2D *cam) {
+    assert(rf);
+    assert(rf->internal);
+
+    /*
+    struct ToolRectangleInternal *internal = rf->internal;
+    Vector2 mp = mouse_with_cam(cam);
+
+    if (internal->state == S_NONE) {
+        rf->rect.x = mp.x;
+        rf->rect.y = mp.y;
+    }
+
+    internal->state = S_RESIZE;
+
+    rf->rect.width = mp.x - rf->rect.x;
+    rf->rect.height = mp.y - rf->rect.y;
+
+    if (rf->rect.width < 0.) {
+        rf->rect.width = -rf->rect.width;
+        rf->rect.x -= rf->rect.width;
+    }
+    if (rf->rect.height < 0.) {
+        rf->rect.height = -rf->rect.height;
+        rf->rect.y -= rf->rect.height;
+    }
+    rf->exist = true;
+    */
+    struct ToolRectangleInternal *internal = rf->internal;
+    internal->state = S_ROTATE;
+}
+
+static void selection_start(
+    struct ToolRectangleAligned *rf, const Camera2D *cam
+) {
     assert(rf);
     assert(rf->internal);
 
@@ -169,23 +215,21 @@ static void handles_check(
     }
 }
 
-//__attribute__((unused))
 static void handle_resize(
-    struct ToolRectangle *rf, Vector2 handle_diff
+    struct ToolRectangleAligned *rf, Vector2 handle_diff
 ) {
     assert(rf);
     assert(rf->internal);
-    //assert(rf->internal->corner_index != -1);
-    //trace("handle_resize: corner_index %d\n", rf->internal->corner_index);
-    switch (rf->internal->corner_index) {
+    struct ToolRectangleAlignedInternal *internal = rf->internal;
+    switch (internal->corner_index) {
         case 0:
             rf->rect.x += handle_diff.x;
             rf->rect.y += handle_diff.y;
             rf->rect.width -= handle_diff.x;
             rf->rect.height -= handle_diff.y;
 
-            if (rf->internal->cmn.snap) {
-                int snap_size = rf->internal->cmn.snap_size;
+            if (internal->cmn.snap) {
+                int snap_size = internal->cmn.snap_size;
                 int dx = (int)rf->rect.x % snap_size;
                 int dy = (int)rf->rect.y % snap_size;
                 rf->rect.x = rf->rect.x - dx;
@@ -195,6 +239,7 @@ static void handle_resize(
             }
             break;
         case 1:
+            // XXX: Тут я не придумал, что написать..
             //rf->rect.y -= handle_diff.y;
             //rf->rect.width += handle_diff.x;
             //rf->rect.height -= handle_diff.y;
@@ -203,8 +248,8 @@ static void handle_resize(
             rf->rect.width += handle_diff.x;
             rf->rect.height += handle_diff.y;
 
-            if (rf->internal->cmn.snap) {
-                int snap_size = rf->internal->cmn.snap_size;
+            if (internal->cmn.snap) {
+                int snap_size = internal->cmn.snap_size;
                 int dx = (int)rf->rect.width % snap_size;
                 int dy = (int)rf->rect.height % snap_size;
                 rf->rect.width = rf->rect.width - dx;
@@ -212,20 +257,131 @@ static void handle_resize(
             }
             break;
         case 3:
+            // XXX: Тут я не придумал, что написать..
             //rf->rect.x -= handle_diff.x;
             //rf->rect.width -= handle_diff.x;
             //rf->rect.height += handle_diff.y;
             break;
     }
 
+    // Ограничение схлопывания и деления на ноль
     if (rf->rect.width < 0.) rf->rect.width = 0.;
     if (rf->rect.height < 0.) rf->rect.height = 0.;
 }
 
-void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam) {
+static void rectangle_update_verts(struct ToolRectangle *rf) {
+    if (IsKeyDown(KEY_LEFT)) {
+        rf->angle += 0.01;
+    }
+    if (IsKeyDown(KEY_RIGHT)) {
+        rf->angle -= 0.01;
+    }
+
+    /*
+    rf->radius = sqrt(
+        rf->rect.width * rf->rect.width +
+        rf->rect.height * rf->rect.height
+    ) / 2.;
+    rf->center =  (Vector2) {
+        .x = rf->rect.x + rf->rect.width / 2.,
+        .y = rf->rect.y + rf->rect.height / 2.,
+    };
+    */
+
+    cpTransform t = cpTransformIdentity;
+    //t = cpTransformMult(cpTransformTranslate(from_Vector2(rf->center)), t);
+    //t = cpTransformMult(t, cpTransformTranslate(from_Vector2(rf->center)));
+    cpTransform rot = cpTransformRotate(rf->angle);
+
+    cpTransform result = cpTransformMult(t, rot);
+
+    /*
+    cpTransform result = cpTransformMult(
+        t, cpTransformMult(
+            //rot, cpTransformTranslate(from_Vector2(Vector2Negate(rf->center)))
+            //cpTransformTranslate(from_Vector2(Vector2Negate(rf->center))), rot
+            cpTransformTranslate(from_Vector2(Vector2Negate(rf->center))), rot
+        )
+    );
+    */
+
+    Vector2 *points = rf->points;
+
+
+    points[0] = from_Vect(cpTransformVect(result, from_Vector2(points[0])));
+    points[1] = from_Vect(cpTransformVect(result, from_Vector2(points[1])));
+    points[2] = from_Vect(cpTransformVect(result, from_Vector2(points[2])));
+    points[3] = from_Vect(cpTransformVect(result, from_Vector2(points[3])));
+    points[4] = points[0];
+
+    /*
+    trace("ribbonframe_update_verts: point[0] %s\n", Vector2_tostr(points[0]));
+    trace("ribbonframe_update_verts: point[1] %s\n", Vector2_tostr(points[1]));
+    trace("ribbonframe_update_verts: point[2] %s\n", Vector2_tostr(points[2]));
+    trace("ribbonframe_update_verts: point[3] %s\n", Vector2_tostr(points[3]));
+    */
+}
+
+static void set_state_by_corner_index(struct ToolRectangleInternal *internal) {
+    int corner_index = internal->corner_index;
+    if (corner_index != -1) {
+        if (corner_index == 0 || corner_index == 2) {
+            internal->state = S_CAN_RESIZE;
+            SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
+        } else if (corner_index == 1 || corner_index == 3) {
+            internal->state = S_CAN_ROTATE;
+            SetMouseCursor(MOUSE_CURSOR_RESIZE_NESW);
+        }
+    }
+}
+
+static void rectanglea_parse_state(
+    struct ToolRectangleAligned *rf, const Camera2D *cam, Vector2 mp
+) {
+    assert(rf);
+    assert(cam);
+    struct ToolRectangleInternal *internal = rf->internal;
+    switch(internal->state) {
+        case S_NONE: 
+            selection_start(rf, cam);
+            break;
+        case S_RESIZE:
+            selection_start(rf, cam);
+            break;
+        case S_CAN_RESIZE: {
+            Vector2 handle_diff = Vector2Subtract(
+                mp, internal->last_points[internal->corner_index]
+            );
+            handle_resize(rf, handle_diff);
+            break;
+        }
+        /*
+        case S_CAN_ROTATE:
+            rotation_start(rf, cam);
+            break;
+        case S_ROTATE: {
+            Vector2 point = Vector2Subtract(rf->center, mp);
+            trace("parse_state: point %s\n", Vector2_tostr(point));
+            float angle = atan2(point.y, point.y);
+            trace("parse_state: angle %f\n", angle);
+            rf->angle = angle;
+            break;
+        }
+        */
+        default:
+            trace(
+                "rectanglea_parse_state: bad value '%s' in switch\n",
+                state2str(internal->state)
+            );
+    };
+}
+
+void rectanglea_update(struct ToolRectangleAligned *rf, const Camera2D *cam) {
     assert(rf);
     struct ToolRectangleInternal *internal = rf->internal;
     Vector2 mp = mouse_with_cam(cam);
+
+    //rectanglea_update_verts(rf);
 
     // Обход по часовой стрелке
     const Vector2 points[] = {
@@ -241,32 +397,19 @@ void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam) {
 
     // Проверка радиуса попадания в ручку управления
     handles_check(internal, points, points_num, mp);
-    
+   
+    /*
+    if ((internal->corner_index == 1 || internal->corner_index == 3) &&
+        IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
+    }
+    */
+
     if (IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
 
-        if (internal->state == S_NONE)
-            if (internal->corner_index != -1) {
-                internal->state = S_HANDLE_CAN_RESIZE;
-                SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
-            }
-
-        switch(internal->state) {
-            case S_NONE: 
-                selection_start(rf, cam);
-                break;
-            case S_RESIZE:
-                selection_start(rf, cam);
-                break;
-            case S_HANDLE_RESIZE:
-                break;
-            case S_HANDLE_CAN_RESIZE: {
-                Vector2 handle_diff = Vector2Subtract(
-                    mp, internal->last_points[internal->corner_index]
-                );
-                handle_resize(rf, handle_diff);
-                break;
-            }
-        };
+        if (internal->state == S_NONE) {
+            set_state_by_corner_index(internal);
+        }
+        rectanglea_parse_state(rf, cam, mp);
 
     } else {
         internal->state = S_NONE;
@@ -274,20 +417,17 @@ void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam) {
         SetMouseCursor(MOUSE_CURSOR_DEFAULT);
     }
 
+    trace("rectanglea_update: state %s\n", state2str(internal->state));
+    //trace("rectanglea_update: angle %f\n", rf->angle);
 }
 
-void ribbonframe_draw(
-    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
+static void rectanglea_draw_axises(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedDrawOpts *opts
 ) {
-    //trace("ribbonframe_draw:\n");
     assert(rf);
-    assert(rf->internal);
-    const struct ToolRectangleInternal *internal = rf->internal;
-
-    DrawRectangleLinesEx(
-        rf->rect, rf->internal->cmn.line_thick, rf->internal->cmn.line_color
-    );
-
+    struct ToolRectangleAlignedInternal *internal = rf->internal;
+    struct ToolCommonOpts *cmn = &internal->cmn;
     if (opts && opts->draw_axises) {
         DrawLineEx(
             (Vector2) {
@@ -298,7 +438,7 @@ void ribbonframe_draw(
                 .x = rf->rect.x + rf->rect.width / 2.,
                 .y = rf->rect.y + rf->rect.height,
             },
-            rf->internal->cmn.line_thick, rf->internal->cmn.line_color
+            cmn->line_thick, cmn->line_color
         );
         DrawLineEx(
             (Vector2) {
@@ -309,22 +449,57 @@ void ribbonframe_draw(
                 .x = rf->rect.x + rf->rect.width,
                 .y = rf->rect.y + rf->rect.height / 2.,
             },
-            rf->internal->cmn.line_thick, rf->internal->cmn.line_color
+            cmn->line_thick, cmn->line_color
         );
     }
+}
 
+void rectanglea_draw(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedDrawOpts *opts
+) {
+    //trace("rectanglea_draw:\n");
+    assert(rf);
+    assert(rf->internal);
+    struct ToolRectangleAlignedInternal *internal = rf->internal;
+    //struct ToolCommonOpts *cmn = &internal->cmn;
+
+    /*
+    if (rf->is_oriented) {
+        //trace("rectanglea_draw: is_oriented == true\n");
+        Vector2 center = rf->center;
+        //Color color = cmn->line_color;
+        Color color = YELLOW;
+        DrawCircleLines(center.x, center.y, rf->radius, color);
+        DrawLineStrip(rf->points, 5, color);
+        DrawCircleV(rf->center, 15, BLACK);
+    } else {
+        DrawRectangleLinesEx(rf->rect, cmn->line_thick, cmn->line_color);
+    }
+    */
+
+    rectanglea_draw_axises(rf, opts);
+
+    // TODO: Кружки вращения, как добавить?
     if (internal->corner_index == 0 || internal->corner_index == 2) {
         DrawCircleV(
-            rf->internal->corner_point,
-            rf->internal->cmn.handle_circle_radius,
-            rf->internal->cmn.handle_color
+            internal->corner_point,
+            internal->cmn.handle_circle_radius,
+            internal->cmn.handle_color
+        );
+    } else if (internal->corner_index == 1 || internal->corner_index == 3) {
+        DrawCircleV(
+            internal->corner_point,
+            internal->cmn.handle_circle_radius,
+            internal->cmn.handle_color_alternative
         );
     }
 
 }
 
-void ribbonframe_update_opts(
-    struct ToolRectangle *rf, const struct ToolRectangleOpts *new_opts
+void rectanglea_update_opts(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedOpts *new_opts
 ) {
     assert(rf);
 
@@ -337,13 +512,28 @@ void ribbonframe_update_opts(
 
     if (new_opts->common.mouse_button_bind != -1)
         cmn->mouse_button_bind = new_opts->common.mouse_button_bind;
-    cmn->snap_size = new_opts->snap_size;
-    cmn->snap = new_opts->snap;
+    //cmn->snap_size = new_opts->snap_size;
+    //cmn->snap = new_opts->snap;
     cmn->line_color = new_opts->common.line_color;
     cmn->handle_color = new_opts->common.handle_color;
     cmn->line_thick = new_opts->common.line_thick;
+    /*
+    if (!rf->is_oriented && new_opts->is_oriented) {
+        rf->angle = 0.;
+        Vector2 *points = rf->points;
 
-    common_trace("ribbonframe_update_opts:", cmn);
+        points[0].x = rf->rect.x;
+        points[0].y = rf->rect.y;
+        points[1].x = rf->rect.x + rf->rect.width;
+        points[1].y = rf->rect.y;
+        points[2].x = rf->rect.x + rf->rect.width;
+        points[2].y = rf->rect.y + rf->rect.height;
+        points[3].x = rf->rect.x;
+        points[3].y = rf->rect.y + rf->rect.height;
+    }
+    rf->is_oriented = new_opts->is_oriented;
+    */
+    common_trace("rectanglea_update_opts:", cmn);
 }
 
 void polyline_init(
@@ -352,7 +542,7 @@ void polyline_init(
     assert(plt);
     trace("polyline_init:\n");
     memset(plt, 0, sizeof(*plt));
-    plt->internal = calloc(1, sizeof(*plt->internal));
+    plt->internal = calloc(1, sizeof(struct ToolPolylineInternal));
     assert(plt->internal);
     polyline_update_opts(plt, opts);
     struct ToolPolylineInternal *internal = plt->internal;
@@ -360,7 +550,7 @@ void polyline_init(
 
     internal->points_cap = 100;
     internal->points = calloc(
-        internal->points_cap, sizeof(plt->internal->points[0])
+        internal->points_cap, sizeof(internal->points[0])
     );
     assert(internal->points);
 
@@ -416,9 +606,10 @@ void polyline_update_opts(
 void polyline_shutdown(struct ToolPolyline *plt) {
     assert(plt);
     trace("polyline_shutdown:\n");
-    if (plt->internal && plt->internal->points) {
-        free(plt->internal->points);
-        plt->internal->points = NULL;
+    struct ToolPolylineInternal *internal = plt->internal;
+    if (plt->internal && internal->points) {
+        free(internal->points);
+        internal->points = NULL;
     }
     if (plt->internal) {
         free(plt->internal);
@@ -456,12 +647,11 @@ static void point_add(
 
 static void polyline_remove(struct ToolPolyline *plt, int index) {
     trace("polyline_remove: index %d\n", index);
-    assert(plt);
-    assert(index >= 0);
-    assert(index < plt->internal->points_num);
-
     struct ToolPolylineInternal *internal = plt->internal;
+    assert(plt);
     assert(internal);
+    assert(index >= 0);
+    assert(index < internal->points_num);
 
     if (!internal->points_num)
         return;
@@ -595,7 +785,7 @@ void sector_init(
 ) {
     assert(sec);
     memset(sec, 0, sizeof(*sec));
-    sec->internal = malloc(sizeof(*sec->internal));
+    sec->internal = malloc(sizeof(struct ToolSectorInternal));
     assert(sec->internal);
     sector_update_opts(sec, opts);
 }
@@ -603,7 +793,8 @@ void sector_init(
 void sector_update_opts(
     struct ToolSector *sec, const struct ToolSectorOpts *new_opts
 ) {
-    common_trace("sector_update_opts:", &sec->internal->cmn);
+    struct ToolSectorInternal *internal = sec->internal;
+    common_trace("sector_update_opts:", &internal->cmn);
 }
 
 void sector_shutdown(struct ToolSector *sec) {
@@ -615,6 +806,9 @@ void sector_shutdown(struct ToolSector *sec) {
 }
 
 void sector_update(struct ToolSector *sec, const Camera2D *cam) {
+    assert(sec);
+    //struct ToolSectorInternal *internal = sec->internal;
+    //Vector2 mp = mouse_with_cam(cam);
 }
 
 void sector_draw(
@@ -624,10 +818,11 @@ void sector_draw(
     assert(sec);
     assert(opts);
     int segments_num = sec->radius * 2;
+    struct ToolSectorInternal *internal = sec->internal;
     DrawCircleSector(
         sec->position, sec->radius,
         sec->angle1, sec->angle2,
-        segments_num, sec->internal->cmn.line_color
+        segments_num, internal->cmn.line_color
     );
 }
 
@@ -645,35 +840,27 @@ void visual_tool_init(
 
 void visual_tool_shutdown(struct VisualTool *vt) {
     assert(vt);
-    ribbonframe_shutdown(&vt->t_rect);
-    ribbonframe_shutdown(&vt->t_rect_oriented);
+    rectanglea_shutdown(&vt->t_recta);
+    rectangle_shutdown(&vt->t_rect);
     polyline_shutdown(&vt->t_pl);
     sector_shutdown(&vt->t_sector);
 }
 
+/*
 static const char *mode2str(enum VisualToolMode mode) {
-    static char buf[64] = {};
-
     switch (mode) {
-        case VIS_TOOL_RECTANGLE:
-			sprintf(buf, "%s", "RECTANGLE");  
-            break;
-        case VIS_TOOL_RECTANGLE_ORIENTED:
-			sprintf(buf, "%s", "RECTANGLE_ORIENTED"); 
-            break;
-        case VIS_TOOL_POLYLINE:
-			sprintf(buf, "%s", "POLYLINE"); 
-            break;
-        case VIS_TOOL_SECTOR:
-			sprintf(buf, "%s", "SECTOR"); 
-            break;
+        case VIS_TOOL_RECTANGLE: return "RECTANGLE";  
+        case VIS_TOOL_RECTANGLE_ORIENTED: return "RECTANGLE_ORIENTED"; 
+        case VIS_TOOL_POLYLINE: return "POLYLINE"; 
+        case VIS_TOOL_SECTOR: return "SECTOR"; 
     }
-    return buf;
+    return NULL;
 }
+// */
 
 void visual_tool_update(struct VisualTool *vt, const Camera2D *cam) {
     assert(vt);
-    trace("visual_tool_update: mode %s\n", mode2str(vt->mode));
+    //trace("visual_tool_update: mode %s\n", mode2str(vt->mode));
     switch (vt->mode) {
         case VIS_TOOL_POLYLINE:
             //if (vt->t_pl.exist)
@@ -681,11 +868,11 @@ void visual_tool_update(struct VisualTool *vt, const Camera2D *cam) {
             break;
         case VIS_TOOL_RECTANGLE:
             //if (vt->t_rect.exist)
-                ribbonframe_update(&vt->t_rect, cam);
+                rectanglea_update(&vt->t_recta, cam);
             break;
         case VIS_TOOL_RECTANGLE_ORIENTED:
             //if (vt->t_rect_oriented.exist)
-                ribbonframe_update(&vt->t_rect_oriented, cam);
+                rectangle_update(&vt->t_rect, cam);
             break;
         case VIS_TOOL_SECTOR:
             //if (vt->t_sector.exist)
@@ -706,15 +893,13 @@ void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam) {
             break;
         case MLT_RECTANGLE:
             //if (vt->t_rect.exist)
-                ribbonframe_draw(&vt->t_rect, &vt->t_rect_draw_opts);
+                rectanglea_draw(&vt->t_recta, &vt->t_recta_draw_opts);
             //else if (trace_nonexist)
                 //trace("visual_tool_draw: rectangle is not exists\n");
             break;
         case MLT_RECTANGLE_ORIENTED:
             //if (vt->t_rect_oriented.exist)
-                ribbonframe_draw(
-                    &vt->t_rect_oriented, &vt->t_rect_oriented_draw_opts
-                );
+                rectangle_draw(&vt->t_rect, &vt->t_rect_draw_opts);
             //else if (trace_nonexist)
                 //trace("visual_tool_draw: rectangle oriented is not exists\n");
             break;
@@ -728,3 +913,50 @@ void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam) {
             trace("visual_tool_draw: unknown value in switch\n");
     }
 }
+
+void visual_tool_reset_all(struct VisualTool *vt) {
+    assert(vt);
+
+    if (vt->t_pl.internal) {
+        polyline_shutdown(&vt->t_pl);
+        polyline_init(&vt->t_pl, &vt->t_pl_opts);
+    }
+
+    if (vt->t_recta.internal) {
+        rectanglea_shutdown(&vt->t_recta);
+        rectanglea_init(&vt->t_recta, &vt->t_recta_opts);
+    }
+
+    if (vt->t_rect.internal) {
+        rectangle_shutdown(&vt->t_rect);
+        rectangle_init(&vt->t_rect, &vt->t_rect_opts);
+    }
+
+    if (vt->t_sector.internal) {
+        sector_shutdown(&vt->t_sector);
+        sector_init(&vt->t_sector, &vt->t_sector_opts);
+    }
+
+}
+
+void rectangle_init(
+    struct ToolRectangle *rf, const struct ToolRectangleOpts *opts
+) {
+}
+
+void rectangle_update_opts(
+    struct ToolRectangle *rf, const struct ToolRectangleOpts *new_opts
+) {
+}
+
+void rectangle_shutdown(struct ToolRectangle *rf) {
+}
+
+void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam) {
+}
+
+void rectangle_draw(
+    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
+) {
+}
+

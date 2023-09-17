@@ -2,34 +2,40 @@
 
 #include "raylib.h"
 
-typedef struct ToolPolylineInternal ToolPolylineInternal;
-typedef struct ToolRectangleInternal ToolRectangleInternal;
-typedef struct ToolSectorInternal ToolSectorInternal;
-
 struct ToolPolyline {
-    struct ToolPolylineInternal *internal;
-    bool                        exist;
+    void    *internal;
+    bool    exist;
 };
 
-// TODO: Переименовать в selectiontool | seltool
+struct ToolRectangleAligned {
+    void        *internal;
+    bool        exist;
+    Rectangle   rect;
+};
+
 struct ToolRectangle {
-    struct ToolRectangleInternal  *internal;
-    bool                        exist;
-    Rectangle                   rect;
+    void        *internal;
+    bool        exist;
+    float       angle, radius;
+    Vector2     center,
+                // Вершины для режима VIS_TOOL_RECTANGLE_ORIENTED, по часовой стрелке
+                // Последняя вершина дублирует первую.
+                points[5];
 };
 
 struct ToolSector {
-    struct ToolSectorInternal   *internal;
-    bool                        exist;
-    float                       radius, angle1, angle2;
-    Vector2                     position;
+    void    *internal;
+    bool    exist;
+    float   radius, angle1, angle2;
+    Vector2 position;
 };
 
 struct ToolCommonOpts {
     // Номер кнопки мыши из Raylib для работы с рамкой выделения
     // При -1 сохряняется текущее значение в Tool****
     int     mouse_button_bind;
-    Color   line_color, handle_color, handle_color_selected;
+    Color   line_color, handle_color, handle_color_alternative,
+            handle_color_selected;
     float   line_thick;
     bool    snap;
     int     snap_size;
@@ -53,11 +59,18 @@ struct ToolRectangleDrawOpts {
     bool draw_axises;
 };
 
+struct ToolRectangleAlignedDrawOpts {
+    bool draw_axises;
+};
+
+struct ToolRectangleAlignedOpts {
+    struct ToolCommonOpts   common;
+};
+
 struct ToolRectangleOpts {
     struct ToolCommonOpts   common;
     int                     snap_size;  // Размер сетки для прилипания, >= 1
     bool                    snap;       // Включить прилипание сетки
-    bool                    is_oriented;// Включить поворот прямоугольника
 };
 
 struct ToolSectorOpts {
@@ -78,9 +91,9 @@ struct VisualTool {
     struct ToolRectangleOpts        t_rect_opts;
     struct ToolRectangleDrawOpts    t_rect_draw_opts;
 
-    struct ToolRectangle            t_rect_oriented;
-    struct ToolRectangleOpts        t_rect_oriented_opts;
-    struct ToolRectangleDrawOpts    t_rect_oriented_draw_opts;
+    struct ToolRectangleAligned            t_recta;
+    struct ToolRectangleAlignedOpts        t_recta_opts;
+    struct ToolRectangleAlignedDrawOpts    t_recta_draw_opts;
 
     struct ToolSector               t_sector;
     struct ToolSectorOpts           t_sector_opts;
@@ -102,6 +115,7 @@ void visual_tool_init(
 */
 void visual_tool_shutdown(struct VisualTool *vt);
 void visual_tool_update(struct VisualTool *vt, const Camera2D *cam);
+void visual_tool_reset_all(struct VisualTool *vt);
 void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam);
 
 void polyline_init(
@@ -124,16 +138,30 @@ void polyline_points_set(
     struct ToolPolyline *plt, Vector2 *points, int points_num
 );
 
-void ribbonframe_init(
+void rectanglea_init(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedOpts *opts
+);
+void rectanglea_update_opts(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedOpts *new_opts
+);
+void rectanglea_shutdown(struct ToolRectangleAligned *rf);
+void rectanglea_update(struct ToolRectangleAligned *rf, const Camera2D *cam);
+void rectanglea_draw(
+    struct ToolRectangleAligned *rf,
+    const struct ToolRectangleAlignedDrawOpts *opts
+);
+
+void rectangle_init(
     struct ToolRectangle *rf, const struct ToolRectangleOpts *opts
 );
-void ribbonframe_update_opts(
+void rectangle_update_opts(
     struct ToolRectangle *rf, const struct ToolRectangleOpts *new_opts
 );
-void ribbonframe_shutdown(struct ToolRectangle *rf);
-void ribbonframe_update(struct ToolRectangle *rf, const Camera2D *cam);
-
-void ribbonframe_draw(
+void rectangle_shutdown(struct ToolRectangle *rf);
+void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam);
+void rectangle_draw(
     struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
 );
 
