@@ -65,12 +65,12 @@ struct ToolRectangleAlignedDrawOpts {
 
 struct ToolRectangleAlignedOpts {
     struct ToolCommonOpts   common;
+    int                     snap_size;  // Размер сетки для прилипания, >= 1
+    bool                    snap;       // Включить прилипание сетки
 };
 
 struct ToolRectangleOpts {
     struct ToolCommonOpts   common;
-    int                     snap_size;  // Размер сетки для прилипания, >= 1
-    bool                    snap;       // Включить прилипание сетки
 };
 
 struct ToolSectorOpts {
