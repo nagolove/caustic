@@ -48,19 +48,19 @@ static inline struct Polar to_polar(float x, float y) {
 
 static inline const char *cpVect_tostr(cpVect v) {
     static char buf[100] = {0};
-    sprintf(buf, "(%11.5f, %11.5f)", v.x, v.y);
+    sprintf(buf, "{%11.5f, %11.5f}", v.x, v.y);
     return buf;
 }
 
 static inline const char *Rectangle_tostr(Rectangle r) {
     static char buf[100] = {0};
-    sprintf(buf, "(%6.5f, %6.5f, %6.5f, %6.5f)", r.x, r.y, r.width, r.height);
+    sprintf(buf, "{%6.5f, %6.5f, %6.5f, %6.5f}", r.x, r.y, r.width, r.height);
     return buf;
 }
 
 static inline const char *Vector2_tostr(Vector2 v) {
     static char buf[100] = {0};
-    sprintf(buf, "(%6.5f, %6.5f)", v.x, v.y);
+    sprintf(buf, "{%6.5f, %6.5f}", v.x, v.y);
     return buf;
 }
 
@@ -76,7 +76,7 @@ static inline Rectangle from_bb(cpBB bb) {
 
 static inline const char *bb_tostr(cpBB bb) {
     static char buf[100] = {0};
-    sprintf(buf, "lbrt (%6.5f, %6.5f, %6.5f, %6.5f)\n", bb.l, bb.b, bb.r, bb.t);
+    sprintf(buf, "lbrt = {%6.5f, %6.5f, %6.5f, %6.5f}\n", bb.l, bb.b, bb.r, bb.t);
     return buf;
 }
 
