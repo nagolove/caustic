@@ -105,6 +105,12 @@ void rectanglea_shutdown(struct ToolRectangleAligned *rf) {
     }
 }
 
+static Vector2 mouse_delta_with_cam(const Camera2D *cam) {
+    assert(cam);
+    float scale = cam ? cam->zoom : 1.;
+    return Vector2Scale(GetMouseDelta(), 1. / scale);
+}
+
 static Vector2 mouse_with_cam(const Camera2D *cam) {
     assert(cam);
     Vector2 cam_offset = cam ? cam->offset : Vector2Zero();
@@ -1123,6 +1129,7 @@ static void rectangle_selection_start(
 
     struct ToolRectangleInternal *internal = rf->internal;
     Vector2 mp = mouse_with_cam(cam);
+    Vector2 md = mouse_delta_with_cam(cam);
 
     if (internal->state == S_NONE) {
         //rf->rect.x = mp.x;
@@ -1142,12 +1149,12 @@ static void rectangle_selection_start(
 
     internal->state = S_RESIZE;
 
-    // XXX: приращение слишком большое
-    Vector2 handle_diff = Vector2Subtract(mp, rf->points[0]);
+    Vector2 handle_diff = md;
     trace(
         "rectangle_selection_start: handle_diff %s\n",
         Vector2_tostr(handle_diff)
     );
+    // TODO: Раздвигать фигуру по диагоналям
     rf->points[1] = Vector2Add(rf->points[1], handle_diff);
     rf->points[2] = Vector2Add(rf->points[2], handle_diff);
     rf->points[3] = Vector2Add(rf->points[3], handle_diff);
