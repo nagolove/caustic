@@ -7,6 +7,12 @@ do {                                                            \
     exit(errcode);                                              \
 } while (0);                                                    \
 
+
+#include "koh_lua_tools.h"
+#include "koh_dotool.h"
+#include "koh_script.h"
+#include "koh_stage_ecs.h"
+#include "koh_stages.h"
 #include "koh_adsr.h"
 #include "koh_array.h"
 #include "koh_cammode.h"
