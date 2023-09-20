@@ -1,18 +1,15 @@
 #pragma once
 
-#include <unistd.h>
 #include <pthread.h>
 
-struct dotool_ctx {
-    pthread_cond_t      *condition;
-    pthread_mutex_t     *mutex;
-    const char          *shm_name_mutex, *shm_name_cond;
-    pthread_condattr_t  cond_attr;
-    pthread_mutexattr_t mutex_attr;
-};
+typedef struct dotool_ctx dotool_ctx_t;
 
-void dotool_init(struct dotool_ctx *ctx);
-void dotool_shutdown(struct dotool_ctx *ctx);
-void dotool_send_signal(struct dotool_ctx *ctx);
-void dotool_exec_script(struct dotool_ctx *ctx);
-
+dotool_ctx_t *dotool_new();
+void dotool_free(dotool_ctx_t *ctx_t);
+void dotool_send_signal(dotool_ctx_t *ctx_t);
+void dotool_exec_script(dotool_ctx_t *ctx_t, const char *script_fname);
+void dotool_gui(dotool_ctx_t *ctx_t);
+void dotool_setup_display(dotool_ctx_t *ctx);
+void dotool_update(dotool_ctx_t *ctx);
+void dotool_record_start(dotool_ctx_t *ctx);
+void dotool_record_stop(dotool_ctx_t *ctx);
