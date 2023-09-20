@@ -37,7 +37,7 @@ struct FilesSearchResultInternal {
 };
 
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
-
+static bool verbose_search_files_rec = false;
 static struct Common cmn;
 
 void add_chars_range(int first, int last);
@@ -1107,10 +1107,11 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
         fsr->names = calloc(fsr->capacity, sizeof(fsr->names[0]));
     }
 
-    trace(
-        "search_files_rec: path %s, regex_pattern %s\n",
-        path, fsr->regex_pattern
-    );
+    if (verbose_search_files_rec)
+        trace(
+            "search_files_rec: path %s, regex_pattern %s\n",
+            path, fsr->regex_pattern
+        );
 
     assert(path);
     DIR *dir = opendir(path);
@@ -1128,7 +1129,10 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
                 if (!strcmp(entry->d_name, ".") || 
                     !strcmp(entry->d_name, ".."))
                     break;
-                trace("search_files_rec: directory %s\n", entry->d_name);
+
+                if (verbose_search_files_rec)
+                    trace("search_files_rec: directory %s\n", entry->d_name);
+
                 char new_path[1024] = {};
 
                 strcat(new_path, path);
@@ -1139,7 +1143,8 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
                 break;
             }
             case DT_REG: {
-                trace("search_files_rec: regular %s\n", entry->d_name);
+                if (verbose_search_files_rec)
+                    trace("search_files_rec: regular %s\n", entry->d_name);
 
                 int found = regex_matchp(regex, entry->d_name);
                 if (found == -1)
@@ -1153,10 +1158,11 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
                 /*trace("search_files_rec: fname %s\n", fname);*/
 
                 if (fsr->num + 1 == fsr->capacity) {
-                    trace(
-                        "search_files_rec: realloc num %d, capacity %d\n",
-                        fsr->num, fsr->capacity
-                    );
+                    if (verbose_search_files_rec)
+                        trace(
+                            "search_files_rec: realloc num %d, capacity %d\n",
+                            fsr->num, fsr->capacity
+                        );
                     fsr->capacity *= 2;
                     fsr->capacity += 2;
                     size_t size = fsr->capacity * sizeof(fsr->names[0]);
