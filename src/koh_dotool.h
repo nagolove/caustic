@@ -13,3 +13,4 @@ void dotool_setup_display(dotool_ctx_t *ctx);
 void dotool_update(dotool_ctx_t *ctx);
 void dotool_record_start(dotool_ctx_t *ctx);
 void dotool_record_stop(dotool_ctx_t *ctx);
+void dotool_record_save(dotool_ctx_t *ctx, const char *fname);

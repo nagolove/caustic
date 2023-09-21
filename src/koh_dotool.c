@@ -13,17 +13,9 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 
-// XXX: Сложная система записи
-enum ActionType {
-    AT_MOUSE_MOVE       = 0,
-    AT_MOUSE_CLICK      = 1,
-    AT_MOUSE_DOWN       = 1,
-    AT_MOUSE_UP         = 2,
-    AT_KEYBOARD_PRESS
-};
-
-struct Action {
-
+struct MouseState {
+    Vector2 pos;
+    bool    lb_down, rb_down, mb_down;
 };
 
 struct dotool_ctx {
@@ -34,22 +26,23 @@ struct dotool_ctx {
     pthread_mutexattr_t mutex_attr;
     Vector2             dispacement;
     bool                is_recording;
+
+    struct MouseState   *rec;
+    int                 rec_num, rec_cap;
+    struct MouseState   rec_prev;
 };
 
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
                     *default_shm_name_cond = "caustic_xdt_cond";
 
-struct dotool_ctx *dotool_new() {
-    struct dotool_ctx *ctx = calloc(1, sizeof(*ctx));
-    assert(ctx);
-
+static void ipc_init(struct dotool_ctx *ctx) {
     ctx->shm_name_cond = default_shm_name_cond;
     ctx->shm_name_mutex = default_shm_name_mutex;
     int mode = S_IRWXU | S_IRWXG;
 
     int des_mutex = shm_open(
-        ctx->shm_name_mutex, O_CREAT | O_RDWR | O_TRUNC, mode
-    );
+            ctx->shm_name_mutex, O_CREAT | O_RDWR | O_TRUNC, mode
+            );
 
     if (des_mutex < 0) {
         trace("dotool_new: shm_open() failed on des_mutex\n");
@@ -62,9 +55,9 @@ struct dotool_ctx *dotool_new() {
     }
 
     ctx->mutex = (pthread_mutex_t*)mmap(
-        NULL, sizeof(pthread_mutex_t), PROT_READ | PROT_WRITE, MAP_SHARED,
-        des_mutex, 0
-    );
+            NULL, sizeof(pthread_mutex_t), PROT_READ | PROT_WRITE, MAP_SHARED,
+            des_mutex, 0
+            );
 
     if (ctx->mutex == MAP_FAILED ) {
         trace("dotool_new: error on mmap on mutex\n");
@@ -72,8 +65,8 @@ struct dotool_ctx *dotool_new() {
     }
 
     int des_cond = shm_open(
-        ctx->shm_name_cond, O_CREAT | O_RDWR | O_TRUNC, mode
-    );
+            ctx->shm_name_cond, O_CREAT | O_RDWR | O_TRUNC, mode
+            );
 
     if (des_cond < 0) {
         trace("dotool_new: shm_open() failed on des_cond\n");
@@ -86,9 +79,9 @@ struct dotool_ctx *dotool_new() {
     }
 
     ctx->condition = (pthread_cond_t*)mmap(
-        NULL, sizeof(pthread_cond_t), PROT_READ | PROT_WRITE, MAP_SHARED,
-        des_cond, 0
-    );
+            NULL, sizeof(pthread_cond_t), PROT_READ | PROT_WRITE, MAP_SHARED,
+            des_cond, 0
+            );
 
     if (ctx->condition == MAP_FAILED ) {
         trace("dotool_new: error on mmap on condition\n");
@@ -102,14 +95,23 @@ struct dotool_ctx *dotool_new() {
     /* set condition shared between processes */
     pthread_condattr_setpshared(&ctx->cond_attr, PTHREAD_PROCESS_SHARED);
     pthread_cond_init(ctx->condition, &ctx->cond_attr);
+}
+
+
+struct dotool_ctx *dotool_new() {
+    struct dotool_ctx *ctx = calloc(1, sizeof(*ctx));
+    assert(ctx);
+    ipc_init(ctx);
+
+    // 10min = 600 * 60 = 3600
+    ctx->rec_cap = 600 * 60;
+    ctx->rec = calloc(ctx->rec_cap, sizeof(ctx->rec[0]));
+    assert(ctx->rec);
 
     return ctx;
 }
 
-void dotool_free(struct dotool_ctx *ctx) {
-    if (!ctx)
-        return;
-
+static void ipc_shutdown(struct dotool_ctx *ctx) {
     pthread_condattr_destroy(&ctx->cond_attr);
     pthread_mutexattr_destroy(&ctx->mutex_attr);
     pthread_mutex_destroy(ctx->mutex);
@@ -119,7 +121,18 @@ void dotool_free(struct dotool_ctx *ctx) {
     munmap(ctx->condition, sizeof(*ctx->condition));
     shm_unlink(ctx->shm_name_cond);
     shm_unlink(ctx->shm_name_mutex);
+}
 
+void dotool_free(struct dotool_ctx *ctx) {
+    if (!ctx)
+        return;
+
+    ipc_shutdown(ctx);
+    if (ctx->rec) {
+        ctx->rec_cap = ctx->rec_num = 0;
+        free(ctx->rec);
+        ctx->rec = NULL;
+    }
     free(ctx);
 }
 
@@ -167,12 +180,14 @@ void dotool_gui(struct dotool_ctx *ctx) {
     static bool open = true;
     igBegin("xdotool scripts recorder", &open, wnd_flags);
 
-    if (igButton("⏺", (ImVec2){})) {
+    /*if (igButton("⏺", (ImVec2){})) {*/
+    if (igButton("rec", (ImVec2){})) {
         open = false;
         dotool_record_start(ctx);
     }
     igSameLine(0., 5.);
-    if (igButton("⏹", (ImVec2){})) {
+    /*if (igButton("⏹", (ImVec2){})) {*/
+    if (igButton("stop", (ImVec2){})) {
         open = true;
         dotool_record_stop(ctx);
     }
@@ -224,4 +239,9 @@ void dotool_record_start(dotool_ctx_t *ctx) {
 
 void dotool_record_stop(dotool_ctx_t *ctx) {
     trace("dotool_record_stop:\n");
+}
+
+void dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
+    assert(ctx);
+    assert(fname);
 }
