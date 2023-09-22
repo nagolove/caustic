@@ -35,6 +35,30 @@ struct dotool_ctx {
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
                     *default_shm_name_cond = "caustic_xdt_cond";
 
+static void dotool_record_tick(dotool_ctx_t *ctx) {
+    assert(ctx);
+    trace("dotool_record_tick:\n");
+    if (ctx->rec_num + 1 == ctx->rec_cap) {
+        ctx->rec_cap += 1;
+        ctx->rec_cap *= 1.5;
+        size_t sz = sizeof(ctx->rec[0]) * ctx->rec_cap;
+        void *new_ptr = realloc(ctx->rec, sz);
+        assert(new_ptr);
+        ctx->rec = new_ptr;
+    }
+    struct MouseState *ms = &ctx->rec[ctx->rec_num];
+    ms->lb_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    ms->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+    ms->mb_down = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+    ms->pos = Vector2Add(GetMousePosition(), ctx->dispacement);
+    if (ctx->rec_num) {
+        ctx->rec_prev = ctx->rec[ctx->rec_num - 1];
+    } else {
+        ctx->rec_prev = ctx->rec[ctx->rec_num];
+    }
+    ctx->rec_num++;
+}
+
 static void ipc_init(struct dotool_ctx *ctx) {
     ctx->shm_name_cond = default_shm_name_cond;
     ctx->shm_name_mutex = default_shm_name_mutex;
@@ -175,6 +199,22 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
     }
 }
 
+static const char *incremental_name(const char *fname, const char *ext) {
+    trace("incremental_name: fname %s, ext %s\n", fname, ext);
+    static char _fname[512] = {};
+    const int max_increment = 200;
+    for (int j = 0; j < max_increment; ++j) {
+        sprintf(_fname, "%s%d.%s", fname, j, ext);
+        FILE *checker = fopen(_fname, "r");
+        if (!checker) {
+            trace("incremental_name: _fname %s\n", _fname);
+            return _fname;
+        }
+        fclose(checker);
+    }
+    return NULL;
+}
+
 void dotool_gui(struct dotool_ctx *ctx) {
     ImGuiWindowFlags wnd_flags = 0;
     static bool open = true;
@@ -190,6 +230,14 @@ void dotool_gui(struct dotool_ctx *ctx) {
     if (igButton("stop", (ImVec2){})) {
         open = true;
         dotool_record_stop(ctx);
+    }
+    igSameLine(0., 5.);
+    // TODO: Сохранение в файл с инкрементальным именем
+    if (igButton("save", (ImVec2){})) {
+        dotool_record_save(ctx, incremental_name("dotool", "txt"));
+    }
+    if (ctx->is_recording) {
+        igText("recoring .. %d ticks", ctx->rec_num);
     }
 
     igEnd();
@@ -211,9 +259,15 @@ void dotool_setup_display(dotool_ctx_t *ctx) {
         trace(
             "dotool_setup_display: width %d\n", GetMonitorWidth(monitor)
         );
+
+        // XXX: Странное предупреждение от gcc
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
         trace(
             "dotool_setup_display: height %d\n", GetMonitorHeight(monitor)
         );
+#pragma GCC diagnostic push
+
         trace(
             "dotool_setup_display: phys width %d\n",
             GetMonitorPhysicalWidth(monitor)
@@ -230,18 +284,35 @@ void dotool_setup_display(dotool_ctx_t *ctx) {
 void dotool_update(dotool_ctx_t *ctx) {
     assert(ctx);
     if (ctx->is_recording) {
+        dotool_record_tick(ctx);
     }
 }
 
 void dotool_record_start(dotool_ctx_t *ctx) {
     trace("dotool_record_start:\n");
+    ctx->rec_num = 0;
+    ctx->is_recording = true;
 }
 
 void dotool_record_stop(dotool_ctx_t *ctx) {
     trace("dotool_record_stop:\n");
+    assert(ctx);
+    ctx->is_recording = false;
 }
 
 void dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     assert(ctx);
     assert(fname);
+    FILE *fdest = fopen(fname, "w");
+    if (!fdest) {
+        trace("dotool_record_save: could not open file '%s'\n", fname);
+    }
+    Vector2 prev_pos = ctx->rec[0].pos;
+    for (int i = 0; i < ctx->rec_num; ++i) {
+        //Vector2 d = Vector2Subtract(ctx->rec[i].pos, prev_pos);
+        Vector2 d = Vector2Subtract(prev_pos, ctx->rec[i].pos);
+        fprintf(fdest, "mousemove_relative %d %d\n", (int)d.x, (int)d.y);
+        prev_pos = d;
+    }
+    fclose(fdest);
 }
