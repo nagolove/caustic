@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 
+// Добавить запись клавиатуры
 struct MouseState {
     Vector2 pos;
     bool    lb_down, rb_down, mb_down;
@@ -36,9 +37,22 @@ struct dotool_ctx {
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
                     *default_shm_name_cond = "caustic_xdt_cond";
 
-static void dotool_record_tick(dotool_ctx_t *ctx) {
+static void dotool_record_first_tick(dotool_ctx_t *ctx) {
     assert(ctx);
-    trace("dotool_record_tick:\n");
+
+    /*
+    struct MouseState *ms = &ctx->rec[ctx->rec_num];
+    ms->lb_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    ms->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+    ms->mb_down = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+    ms->pos = Vector2Add(GetMousePosition(), ctx->dispacement);
+    ms->timestamp = GetTime();
+    ctx->rec_prev = ctx->rec[0];
+    ctx->rec_num++;
+    */
+}
+
+static void check_realloc(dotool_ctx_t *ctx) {
     if (ctx->rec_num + 1 == ctx->rec_cap) {
         ctx->rec_cap += 1;
         ctx->rec_cap *= 1.5;
@@ -47,6 +61,14 @@ static void dotool_record_tick(dotool_ctx_t *ctx) {
         assert(new_ptr);
         ctx->rec = new_ptr;
     }
+}
+
+static void dotool_record_tick(dotool_ctx_t *ctx) {
+    assert(ctx);
+    trace("dotool_record_tick:\n");
+
+    check_realloc(ctx);
+
     struct MouseState *ms = &ctx->rec[ctx->rec_num];
     ms->lb_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     ms->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
@@ -169,7 +191,7 @@ void dotool_send_signal(struct dotool_ctx *ctx) {
     pthread_cond_signal(ctx->condition);
     pthread_mutex_unlock(ctx->mutex);
 
-    trace("dotool_send_signal: wake up, \n");
+    trace("dotool_send_signal: wake up\n");
 }
 
 void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
@@ -190,10 +212,14 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
         pthread_mutex_unlock(ctx->mutex);
 
         trace("dotool_exec_script: before execve\n");
+        const char *abs_path = realpath(script_fname, NULL);
+        trace("dotool_exec_script: abs_path %s\n", abs_path);
+        const char *xdotool_path = "/usr/bin/xdotool";
         execve(
-            "/usr/bin/xdotool",
+            xdotool_path,
             (char *const []){ 
-                (char*)script_fname,
+                (char*)xdotool_path,
+                (char*)abs_path,
                 NULL 
             },
             __environ
@@ -217,6 +243,7 @@ static const char *incremental_name(const char *fname, const char *ext) {
     return NULL;
 }
 
+// TODO: Исключить запись при нахождении мыши в окне dotool_gui()
 void dotool_gui(struct dotool_ctx *ctx) {
     ImGuiWindowFlags wnd_flags = 0;
     static bool open = true;
@@ -300,8 +327,13 @@ void dotool_update(dotool_ctx_t *ctx) {
 
 void dotool_record_start(dotool_ctx_t *ctx) {
     trace("dotool_record_start:\n");
+    if (ctx->is_recording) {
+        trace("dotool_record_start: already recording\n");
+        return;
+    }
     ctx->rec_num = 0;
     ctx->is_recording = true;
+    dotool_record_first_tick(ctx);
 }
 
 void dotool_record_stop(dotool_ctx_t *ctx) {
@@ -320,19 +352,40 @@ bool dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     }
     Vector2 prev_pos = ctx->rec[0].pos;
     double prev_time = ctx->rec[0].timestamp;
+    
+    fprintf(
+        fdest, "mousemove -- %d %d\n", (int)prev_pos.x, (int)prev_pos.y
+    );
+
     for (int i = 0; i < ctx->rec_num; ++i) {
-        //Vector2 d = Vector2Subtract(ctx->rec[i].pos, prev_pos);
+        struct MouseState *cur = &ctx->rec[i];
         trace("dotool_record_save: prev_pos %s\n", Vector2_tostr(prev_pos));
         trace(
             "dotool_record_save: ctx->rec[i].pos %s\n",
-            Vector2_tostr(ctx->rec[i].pos)
+            Vector2_tostr(cur->pos)
         );
-        Vector2 d = Vector2Subtract(prev_pos, ctx->rec[i].pos);
-        double time_d = ctx->rec[i].timestamp - prev_time;
-        fprintf(fdest, "mousemove_relative -- %d %d\n", (int)d.x, (int)d.y);
+        Vector2 mouse_pos_d = Vector2Subtract(prev_pos, cur->pos);
+        double time_d = cur->timestamp - prev_time;
+        fprintf(
+            fdest, "mousemove_relative -- %d %d\n",
+            -(int)mouse_pos_d.x, -(int)mouse_pos_d.y
+        );
         fprintf(fdest, "sleep %.2f\n", time_d);
-        prev_pos = ctx->rec[i].pos;
-        prev_time = ctx->rec[i].timestamp;
+
+        if (cur->lb_down)
+            fprintf(fdest, "mousedown 1\n");
+        else
+            fprintf(fdest, "mouseup 1\n");
+        if (cur->rb_down)
+            fprintf(fdest, "mousedown 3\n");
+        else
+            fprintf(fdest, "mouseup 3\n");
+        if (cur->mb_down)
+            fprintf(fdest, "mousedown 2\n");
+        else
+            fprintf(fdest, "mouseup 2\n");
+        prev_pos = cur->pos;
+        prev_time = cur->timestamp;
     }
     fclose(fdest);
     return true;
