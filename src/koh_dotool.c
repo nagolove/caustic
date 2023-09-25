@@ -1,4 +1,5 @@
 #include "koh_dotool.h"
+#include "koh_routine.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
@@ -16,6 +17,7 @@
 struct MouseState {
     Vector2 pos;
     bool    lb_down, rb_down, mb_down;
+    double  timestamp;
 };
 
 struct dotool_ctx {
@@ -26,10 +28,9 @@ struct dotool_ctx {
     pthread_mutexattr_t mutex_attr;
     Vector2             dispacement;
     bool                is_recording;
-
-    struct MouseState   *rec;
+    char                status_msg[256];
+    struct MouseState   *rec, rec_prev;
     int                 rec_num, rec_cap;
-    struct MouseState   rec_prev;
 };
 
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
@@ -51,6 +52,7 @@ static void dotool_record_tick(dotool_ctx_t *ctx) {
     ms->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
     ms->mb_down = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
     ms->pos = Vector2Add(GetMousePosition(), ctx->dispacement);
+    ms->timestamp = GetTime();
     if (ctx->rec_num) {
         ctx->rec_prev = ctx->rec[ctx->rec_num - 1];
     } else {
@@ -234,11 +236,19 @@ void dotool_gui(struct dotool_ctx *ctx) {
     igSameLine(0., 5.);
     // TODO: Сохранение в файл с инкрементальным именем
     if (igButton("save", (ImVec2){})) {
-        dotool_record_save(ctx, incremental_name("dotool", "txt"));
+        const char *fname = incremental_name("dotool", "txt");
+        if (dotool_record_save(ctx, fname)) {
+            snprintf(
+                ctx->status_msg, sizeof(ctx->status_msg),
+                "saved to '%s'", fname
+            );
+        }
     }
     if (ctx->is_recording) {
         igText("recoring .. %d ticks", ctx->rec_num);
     }
+    if (strlen(ctx->status_msg))
+        igText("%s", ctx->status_msg);
 
     igEnd();
 }
@@ -300,19 +310,30 @@ void dotool_record_stop(dotool_ctx_t *ctx) {
     ctx->is_recording = false;
 }
 
-void dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
+bool dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     assert(ctx);
     assert(fname);
     FILE *fdest = fopen(fname, "w");
     if (!fdest) {
         trace("dotool_record_save: could not open file '%s'\n", fname);
+        return false;
     }
     Vector2 prev_pos = ctx->rec[0].pos;
+    double prev_time = ctx->rec[0].timestamp;
     for (int i = 0; i < ctx->rec_num; ++i) {
         //Vector2 d = Vector2Subtract(ctx->rec[i].pos, prev_pos);
+        trace("dotool_record_save: prev_pos %s\n", Vector2_tostr(prev_pos));
+        trace(
+            "dotool_record_save: ctx->rec[i].pos %s\n",
+            Vector2_tostr(ctx->rec[i].pos)
+        );
         Vector2 d = Vector2Subtract(prev_pos, ctx->rec[i].pos);
-        fprintf(fdest, "mousemove_relative %d %d\n", (int)d.x, (int)d.y);
-        prev_pos = d;
+        double time_d = ctx->rec[i].timestamp - prev_time;
+        fprintf(fdest, "mousemove_relative -- %d %d\n", (int)d.x, (int)d.y);
+        fprintf(fdest, "sleep %.2f\n", time_d);
+        prev_pos = ctx->rec[i].pos;
+        prev_time = ctx->rec[i].timestamp;
     }
     fclose(fdest);
+    return true;
 }
