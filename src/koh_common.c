@@ -1329,3 +1329,19 @@ void koh_try_ray_cursor() {
 
 }
 
+const char *koh_incremental_fname(const char *fname, const char *ext) {
+    trace("koh_incremental_fname: fname %s, ext %s\n", fname, ext);
+    static char _fname[512] = {};
+    const int max_increment = 200;
+    for (int j = 0; j < max_increment; ++j) {
+        sprintf(_fname, "%s%d.%s", fname, j, ext);
+        FILE *checker = fopen(_fname, "r");
+        if (!checker) {
+            trace("koh_incremental_fname: _fname %s\n", _fname);
+            return _fname;
+        }
+        fclose(checker);
+    }
+    return NULL;
+}
+
