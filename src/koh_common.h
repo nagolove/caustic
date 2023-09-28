@@ -186,9 +186,12 @@ struct FilesSearchResult {
     int                                 num, capacity;
 };
 
-struct FilesSearchResult koh_search_files(
-    const char *path, const char *regex_pattern
-);
+struct FilesSearchSetup {
+    const char *path, *regex_pattern;
+    int deep; // глубина поиска, -1 - неограниченная
+};
+
+struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup);
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 void koh_search_files_print(struct FilesSearchResult *fsr);
 

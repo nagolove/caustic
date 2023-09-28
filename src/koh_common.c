@@ -1100,7 +1100,9 @@ void parse_bracketed_string(
     }
 }
 
-static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
+static void search_files_rec(
+    struct FilesSearchResult *fsr, const char *path, int deep_counter
+) {
 
     if (!fsr->names) {
         fsr->capacity = 100;
@@ -1130,6 +1132,9 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
                     !strcmp(entry->d_name, ".."))
                     break;
 
+                if (deep_counter == 0)
+                    break;
+
                 if (verbose_search_files_rec)
                     trace("search_files_rec: directory %s\n", entry->d_name);
 
@@ -1139,7 +1144,7 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
                 strcat(new_path, "/");
                 strcat(new_path, entry->d_name);
 
-                search_files_rec(fsr, new_path);
+                search_files_rec(fsr, new_path, deep_counter - 1);
                 break;
             }
             case DT_REG: {
@@ -1181,21 +1186,20 @@ static void search_files_rec(struct FilesSearchResult *fsr, const char *path) {
     closedir(dir);
 }
 
-struct FilesSearchResult koh_search_files(
-    const char *path, const char *regex_pattern
-) {
+struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
+    assert(setup);
     struct FilesSearchResult fsr = {};
 
-    if (!path || !regex_pattern)
+    if (!setup->path || !setup->regex_pattern)
         return fsr;
 
-    fsr.path = strdup(path);
+    fsr.path = strdup(setup->path);
     assert(fsr.path);
     size_t path_len = strlen(fsr.path);
     if (fsr.path[path_len - 1] == '/') {
         fsr.path[path_len - 1] = 0;
     }
-    fsr.regex_pattern = strdup(regex_pattern);
+    fsr.regex_pattern = strdup(setup->regex_pattern);
 
     fsr.internal = malloc(sizeof(*fsr.internal));
     assert(fsr.internal);
@@ -1213,7 +1217,10 @@ struct FilesSearchResult koh_search_files(
         return fsr;
     }
 
-    search_files_rec(&fsr, fsr.path);
+    int deep_counter = setup->deep;
+    if (setup->deep < 0)
+        deep_counter = 9999;
+    search_files_rec(&fsr, fsr.path, deep_counter);
 
     return fsr;
 }
