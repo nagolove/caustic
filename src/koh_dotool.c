@@ -25,7 +25,7 @@ struct KeyboardKeyRec {
     char    *keyname;
 };
 
-struct KeyboardKeyRec keys[] = {
+static struct KeyboardKeyRec keys[] = {
     // {{{
     { KEY_NULL, "" },
     { KEY_SPACE, "space" },
@@ -136,6 +136,121 @@ struct KeyboardKeyRec keys[] = {
     // }}}
 };
 
+static int keys_enum[] = {
+    // {{{
+    KEY_NULL,
+    KEY_APOSTROPHE,
+    KEY_COMMA,
+    KEY_MINUS,
+    KEY_PERIOD,
+    KEY_SLASH,
+    KEY_ZERO,
+    KEY_ONE,
+    KEY_TWO,
+    KEY_THREE,
+    KEY_FOUR,
+    KEY_FIVE,
+    KEY_SIX,
+    KEY_SEVEN,
+    KEY_EIGHT,
+    KEY_NINE,
+    KEY_SEMICOLON,
+    KEY_EQUAL,
+    KEY_A,
+    KEY_B,
+    KEY_C,
+    KEY_D,
+    KEY_E,
+    KEY_F,
+    KEY_G,
+    KEY_H,
+    KEY_I,
+    KEY_J,
+    KEY_K,
+    KEY_L,
+    KEY_M,
+    KEY_N,
+    KEY_O,
+    KEY_P,
+    KEY_Q,
+    KEY_R,
+    KEY_S,
+    KEY_T,
+    KEY_U,
+    KEY_V,
+    KEY_W,
+    KEY_X,
+    KEY_Y,
+    KEY_Z,
+    KEY_LEFT_BRACKET,
+    KEY_BACKSLASH,
+    KEY_RIGHT_BRACKET,
+    KEY_GRAVE,
+    KEY_SPACE,
+    KEY_ESCAPE,
+    KEY_ENTER,
+    KEY_TAB,
+    KEY_BACKSPACE,
+    KEY_INSERT,
+    KEY_DELETE,
+    KEY_RIGHT,
+    KEY_LEFT,
+    KEY_DOWN,
+    KEY_UP,
+    KEY_PAGE_UP,
+    KEY_PAGE_DOWN,
+    KEY_HOME,
+    KEY_END,
+    KEY_CAPS_LOCK,
+    KEY_SCROLL_LOCK,
+    KEY_NUM_LOCK,
+    KEY_PRINT_SCREEN,
+    KEY_PAUSE,
+    KEY_F1,
+    KEY_F2,
+    KEY_F3,
+    KEY_F4,
+    KEY_F5,
+    KEY_F6,
+    KEY_F7,
+    KEY_F8,
+    KEY_F9,
+    KEY_F10,
+    KEY_F11,
+    KEY_F12,
+    KEY_LEFT_SHIFT,
+    KEY_LEFT_CONTROL,
+    KEY_LEFT_ALT,
+    KEY_LEFT_SUPER,
+    KEY_RIGHT_SHIFT,
+    KEY_RIGHT_CONTROL,
+    KEY_RIGHT_ALT,
+    KEY_RIGHT_SUPER,
+    KEY_KB_MENU,
+    KEY_KP_0,
+    KEY_KP_1,
+    KEY_KP_2,
+    KEY_KP_3,
+    KEY_KP_4,
+    KEY_KP_5,
+    KEY_KP_6,
+    KEY_KP_7,
+    KEY_KP_8,
+    KEY_KP_9,
+    KEY_KP_DECIMAL,
+    KEY_KP_DIVIDE,
+    KEY_KP_MULTIPLY,
+    KEY_KP_SUBTRACT,
+    KEY_KP_ADD,
+    KEY_KP_ENTER,
+    KEY_KP_EQUAL,
+    KEY_BACK,
+    KEY_MENU,
+    KEY_VOLUME_UP,
+    KEY_VOLUME_DOWN,
+    // }}}
+};
+
 // Добавить запись клавиатуры
 struct InputState {
     Vector2 pos;
@@ -168,7 +283,12 @@ static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
 static void update_scripts_list(dotool_ctx_t *ctx) {
     assert(ctx);
     koh_search_files_shutdown(&ctx->fsr_scripts);
-    ctx->fsr_scripts = koh_search_files(".", "^dotool.*\\.txt$");
+    ctx->fsr_scripts = koh_search_files(&(struct FilesSearchSetup) {
+        .path =".",
+        .regex_pattern = "^dotool.*\\.txt$",
+        .deep = 0
+    });
+    koh_search_files_print(&ctx->fsr_scripts);
 }
 
 static const char *get_key(int key) {
@@ -258,6 +378,12 @@ static void dotool_record_tick(dotool_ctx_t *ctx) {
         ms->lb_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
         ms->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
         ms->mb_down = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+
+        int keys_enum_len = sizeof(keys_enum) / sizeof(keys_enum[0]);
+        for (int i = 0; i < keys_enum_len; ++i) {
+            IsKeyDown(keys_enum[i]);
+        }
+
         //ms->pos = Vector2Add(mp, ctx->dispacement);
         ms->pos = mp;
         ms->timestamp = GetTime();
