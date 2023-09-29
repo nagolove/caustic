@@ -4,6 +4,7 @@
 #include "koh_dotool.h"
 #include "koh_common.h"
 #include "raymath.h"
+#include <stdio.h>
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
@@ -251,11 +252,11 @@ static int keys_enum[] = {
     // }}}
 };
 
-// Добавить запись клавиатуры
 struct InputState {
     Vector2 pos;
     bool    lb_down, rb_down, mb_down;
-    bool    keys[128];
+    int     wheel;
+    bool    keys[340];
     double  timestamp;
 };
 
@@ -274,11 +275,23 @@ struct dotool_ctx {
     struct InputState           *rec, rec_prev;
     int                         rec_num, rec_cap;
     char                        *ini_data;
+
     struct FilesSearchResult    fsr_scripts;
+    bool                        *selected_scripts;
+    bool                        save_only_mouse;
 };
 
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
                     *default_shm_name_cond = "caustic_xdt_cond";
+
+static void shutdown_scripts_list(dotool_ctx_t *ctx) {
+    assert(ctx);
+    koh_search_files_shutdown(&ctx->fsr_scripts);
+    if (ctx->selected_scripts) {
+        free(ctx->selected_scripts);
+        ctx->selected_scripts = NULL;
+    }
+}
 
 static void update_scripts_list(dotool_ctx_t *ctx) {
     assert(ctx);
@@ -288,6 +301,14 @@ static void update_scripts_list(dotool_ctx_t *ctx) {
         .regex_pattern = "^dotool.*\\.txt$",
         .deep = 0
     });
+    if (ctx->selected_scripts) {
+        free(ctx->selected_scripts);
+        ctx->selected_scripts = NULL;
+    }
+    ctx->selected_scripts = calloc(
+        ctx->fsr_scripts.num, sizeof(ctx->selected_scripts[0])
+    );
+    ctx->selected_scripts[0] = true;
     koh_search_files_print(&ctx->fsr_scripts);
 }
 
@@ -370,40 +391,40 @@ static void dotool_record_tick(dotool_ctx_t *ctx) {
     assert(ctx);
     trace("dotool_record_tick:\n");
 
+    Vector2 mp = Vector2Add(GetMousePosition(), ctx->dispacement);
+    if (is_in_excluded_area(ctx, mp)) 
+        return;
+
     check_realloc(ctx);
 
-    Vector2 mp = Vector2Add(GetMousePosition(), ctx->dispacement);
-    if (!is_in_excluded_area(ctx, mp)) {
-        struct InputState *ms = &ctx->rec[ctx->rec_num];
-        ms->lb_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
-        ms->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
-        ms->mb_down = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+    struct InputState *ins = &ctx->rec[ctx->rec_num];
+    ins->lb_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    ins->rb_down = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+    ins->mb_down = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
 
-        int keys_enum_len = sizeof(keys_enum) / sizeof(keys_enum[0]);
-        for (int i = 0; i < keys_enum_len; ++i) {
-            IsKeyDown(keys_enum[i]);
-        }
-
-        //ms->pos = Vector2Add(mp, ctx->dispacement);
-        ms->pos = mp;
-        ms->timestamp = GetTime();
-        if (ctx->rec_num) {
-            ctx->rec_prev = ctx->rec[ctx->rec_num - 1];
-        } else {
-            ctx->rec_prev = ctx->rec[ctx->rec_num];
-        }
-        ctx->rec_num++;
+    int keys_enum_len = sizeof(keys_enum) / sizeof(keys_enum[0]);
+    for (int i = 0; i < keys_enum_len; ++i) {
+        ins->keys[keys_enum[i]] = IsKeyDown(keys_enum[i]);
     }
+
+    ins->wheel = GetMouseWheelMove();
+    //ins->pos = Vector2Add(mp, ctx->dispacement);
+    ins->pos = mp;
+    ins->timestamp = GetTime();
+    if (ctx->rec_num) {
+        ctx->rec_prev = ctx->rec[ctx->rec_num - 1];
+    } else {
+        ctx->rec_prev = ctx->rec[ctx->rec_num];
+    }
+    ctx->rec_num++;
 }
 
 static void ipc_init(struct dotool_ctx *ctx) {
     ctx->shm_name_cond = default_shm_name_cond;
     ctx->shm_name_mutex = default_shm_name_mutex;
-    int mode = S_IRWXU | S_IRWXG;
+    int mode = S_IRWXU | S_IRWXG, oflag = O_CREAT | O_RDWR | O_TRUNC;
 
-    int des_mutex = shm_open(
-            ctx->shm_name_mutex, O_CREAT | O_RDWR | O_TRUNC, mode
-            );
+    int des_mutex = shm_open(ctx->shm_name_mutex, oflag, mode);
 
     if (des_mutex < 0) {
         trace("ipc_init: shm_open() failed on des_mutex\n");
@@ -470,6 +491,8 @@ struct dotool_ctx *dotool_new() {
     ctx->rec = calloc(ctx->rec_cap, sizeof(ctx->rec[0]));
     assert(ctx->rec);
 
+    update_scripts_list(ctx);
+
     return ctx;
 }
 
@@ -494,6 +517,7 @@ void dotool_free(struct dotool_ctx *ctx) {
         ctx->ini_data = NULL;
     }
     ipc_shutdown(ctx);
+    shutdown_scripts_list(ctx);
     if (ctx->rec) {
         ctx->rec_cap = ctx->rec_num = 0;
         free(ctx->rec);
@@ -544,10 +568,12 @@ void dotool_send_signal(struct dotool_ctx *ctx) {
 
 void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
     assert(ctx);
+    assert(script_fname);
     trace("dotool_exec_script: script_fname %s\n", script_fname);
 
     //read_gui_ini(script_fname);
     strncpy(ctx->script_fname, script_fname, sizeof(ctx->script_fname));
+    setenv("CAUSTIC_XDOTOOL_FNAME", script_fname, 1);
 
     pid_t ret = fork();
     if (ret == -1) {
@@ -556,6 +582,7 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
     }
 
     if (!ret) {
+        trace("dotool_exec_script: hello from fork!\n");
         // Ждать пока приложение не будет готово к взаимодействию с 
         // устройствами ввода
         pthread_mutex_lock(ctx->mutex);
@@ -567,6 +594,7 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
         trace("dotool_exec_script: abs_path %s\n", abs_path);
         const char *xdotool_path = "/usr/bin/xdotool";
 
+        setenv("CAUSTIC_XDOTOOL_FNAME", "", 1);
         execve(
             xdotool_path,
             (char *const []){ 
@@ -579,13 +607,7 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
     }
 }
 
-// TODO: Исключить запись при нахождении мыши в окне dotool_gui()
-void dotool_gui(struct dotool_ctx *ctx) {
-    static const char *fname = NULL;
-    ImGuiWindowFlags wnd_flags = 0;
-    static bool open = true;
-    igBegin("xdotool scripts recorder", &open, wnd_flags);
-
+void exclude_window_area(struct dotool_ctx *ctx) {
     ImVec2 wnd_pos, wnd_size;
     igGetWindowPos(&wnd_pos);
     igGetWindowSize(&wnd_size);
@@ -596,6 +618,55 @@ void dotool_gui(struct dotool_ctx *ctx) {
         .height = wnd_size.y,
     };
     ctx->excluded_areas_num = 1;
+}
+
+static void dotool_record_pause(dotool_ctx_t *ctx) {
+}
+
+static const char *get_selected_script(dotool_ctx_t *ctx) {
+    for (int j = 0; j < ctx->fsr_scripts.num; ++j) {
+        if (ctx->selected_scripts[j]) {
+            return ctx->fsr_scripts.names[j];
+        }
+    }
+    return NULL;
+}
+
+void dotool_gui(struct dotool_ctx *ctx) {
+    static const char *fname = NULL;
+    ImGuiWindowFlags wnd_flags = 0;
+    static bool open = true;
+    igBegin("xdotool scripts recorder", &open, wnd_flags);
+
+    exclude_window_area(ctx);
+
+    ImGuiComboFlags combo_flags = 0;
+    if (igBeginCombo("scripts", get_selected_script(ctx), combo_flags)) {
+        for (int i = 0; i < ctx->fsr_scripts.num; ++i) {
+            ImGuiSelectableFlags selectable_flags = 0;
+            if (igSelectable_BoolPtr(
+                    ctx->fsr_scripts.names[i], &ctx->selected_scripts[i],
+                    selectable_flags, (ImVec2){}
+                )) {
+                //trace("dotool_gui:\n");
+                for (int j = 0; j < ctx->fsr_scripts.num; ++j) {
+                    if (i != j)
+                        ctx->selected_scripts[j] = false;
+                }
+            }
+        }
+        igEndCombo();
+    }
+    igSameLine(0., 5.);
+  
+    // XXX: Запуск скрипта происходит только после второго нажатия
+    if (igButton("play", (ImVec2){})) {
+        const char *script_fname = get_selected_script(ctx);
+        trace("dotool_gui: script_fname %s\n", script_fname);
+        dotool_send_signal(ctx);
+        dotool_exec_script(ctx, script_fname);
+    }
+    igSeparator();
 
     /*if (igButton("⏺", (ImVec2){})) {*/
     if (igButton("rec", (ImVec2){})) {
@@ -604,30 +675,31 @@ void dotool_gui(struct dotool_ctx *ctx) {
     }
     igSameLine(0., 5.);
     /*if (igButton("⏹", (ImVec2){})) {*/
+    if (igButton("pause", (ImVec2){})) {
+        dotool_record_pause(ctx);
+    }
     if (igButton("stop", (ImVec2){})) {
         open = true;
         dotool_record_stop(ctx);
     }
-    igSameLine(0., 5.);
+
+    igSeparator();
     // TODO: Сохранение в файл с инкрементальным именем
     if (igButton("save", (ImVec2){})) {
         if (!dotool_is_saving(ctx)) {
+            dotool_record_stop(ctx);
             fname = koh_incremental_fname("dotool", "txt");
             dotool_record_save(ctx, fname);
         }
     }
+    igCheckbox("only mouse movements", &ctx->save_only_mouse);
+
     if (ctx->is_recording) {
         igText("recoring .. %d ticks", ctx->rec_num);
     }
     if (dotool_is_saving(ctx)) {
         igText("saving to '%s'", fname);
     }
-
-    /*
-    if (igButton("save ini", (ImVec2){})) {
-        igSaveIniSettingsToMemory(
-    }
-    */
 
     igEnd();
 }
@@ -713,6 +785,52 @@ static void write_gui_ini(const dotool_ctx_t *ctx, const char *fname) {
     fclose(file);
 }
 
+static void write_keyboard(
+    const dotool_ctx_t *ctx, 
+    const struct InputState *cur, const struct InputState *prev,
+    FILE *fdest
+) {
+    if (ctx->save_only_mouse)
+        return;
+
+    int keys_enum_len = sizeof(keys_enum) / sizeof(keys_enum[0]);
+    for (int j = 0; j < keys_enum_len; ++j) {
+        int key = keys_enum[j];
+        if (cur->keys[key] != prev->keys[key]) {
+            if (cur->keys[key])
+                fprintf(fdest, "keydown %s\n", get_key(key));
+            else 
+                fprintf(fdest, "keyup %s\n", get_key(key));
+        }
+    }
+}
+
+static void write_mouse(
+    const dotool_ctx_t *ctx, 
+    const struct InputState *cur, const struct InputState *prev,
+    FILE *fdest
+) {
+    fprintf(fdest, "mousemove -- %d %d\n", (int)cur->pos.x, (int)cur->pos.y);
+
+    if (cur->lb_down)
+        fprintf(fdest, "mousedown 1\n");
+    else
+        fprintf(fdest, "mouseup 1\n");
+    if (cur->rb_down)
+        fprintf(fdest, "mousedown 3\n");
+    else
+        fprintf(fdest, "mouseup 3\n");
+    if (cur->mb_down)
+        fprintf(fdest, "mousedown 2\n");
+    else
+        fprintf(fdest, "mouseup 2\n");
+
+    if (cur->wheel == -1)
+        fprintf(fdest, "mouseclick 5\n");
+    if (cur->wheel == 1)
+        fprintf(fdest, "mouseclick 6\n");
+}
+
 void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     trace("_dotool_record_save:\n");
     assert(ctx);
@@ -722,46 +840,43 @@ void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
         trace("_dotool_record_save: could not open file '%s'\n", fname);
         return;
     }
-    Vector2 prev_pos = ctx->rec[0].pos;
-    double prev_time = ctx->rec[0].timestamp;
+
+    struct InputState prev = ctx->rec[0];
+    //Vector2 prev_pos = ctx->rec[0].pos;
+    //double prev_time = ctx->rec[0].timestamp;
     
     fprintf(
-        fdest, "mousemove -- %d %d\n", (int)prev_pos.x, (int)prev_pos.y
+        fdest, "mousemove -- %d %d\n", (int)prev.pos.x, (int)prev.pos.y
     );
 
     for (int i = 0; i < ctx->rec_num; ++i) {
-        struct InputState *cur = &ctx->rec[i];
-        trace("_dotool_record_save: prev_pos %s\n", Vector2_tostr(prev_pos));
-        trace(
-            "_dotool_record_save: ctx->rec[i].pos %s\n",
+        const struct InputState *cur = &ctx->rec[i];
+        trace("_dotool_record_save: prev_pos %s\n", Vector2_tostr(prev.pos));
+        /*
+        trace( "_dotool_record_save: ctx->rec[i].pos %s\n",
             Vector2_tostr(cur->pos)
         );
-        Vector2 mouse_pos_d = Vector2Subtract(prev_pos, cur->pos);
-        double time_d = cur->timestamp - prev_time;
+        */
+        //Vector2 mouse_pos_d = Vector2Subtract(prev.pos, cur->pos);
+        double time_d = cur->timestamp - prev.timestamp;
+
+        /*
         fprintf(
             fdest, "mousemove_relative -- %d %d\n",
             -(int)mouse_pos_d.x, -(int)mouse_pos_d.y
         );
+        */
+
+        write_mouse(ctx, cur, &prev, fdest);
+        write_keyboard(ctx, cur, &prev, fdest);
         fprintf(fdest, "sleep %.2f\n", time_d);
 
-        if (cur->lb_down)
-            fprintf(fdest, "mousedown 1\n");
-        else
-            fprintf(fdest, "mouseup 1\n");
-        if (cur->rb_down)
-            fprintf(fdest, "mousedown 3\n");
-        else
-            fprintf(fdest, "mouseup 3\n");
-        if (cur->mb_down)
-            fprintf(fdest, "mousedown 2\n");
-        else
-            fprintf(fdest, "mouseup 2\n");
-        prev_pos = cur->pos;
-        prev_time = cur->timestamp;
+        prev = *cur;
     }
 
     fclose(fdest);
     write_gui_ini(ctx, fname);
+    update_scripts_list(ctx);
 }
 
 struct ThreadCtx {
