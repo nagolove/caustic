@@ -557,7 +557,7 @@ void rectanglea_update(struct ToolRectangleAligned *rf, const Camera2D *cam) {
         SetMouseCursor(MOUSE_CURSOR_DEFAULT);
     }
 
-    trace("rectanglea_update: state %s\n", state2str(internal->state));
+    //trace("rectanglea_update: state %s\n", state2str(internal->state));
     //trace("rectanglea_update: angle %f\n", rf->angle);
 }
 
