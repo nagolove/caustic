@@ -814,23 +814,38 @@ static void write_mouse(
 ) {
     fprintf(fdest, "mousemove -- %d %d\n", (int)cur->pos.x, (int)cur->pos.y);
 
-    if (cur->lb_down)
-        fprintf(fdest, "mousedown 1\n");
-    else
-        fprintf(fdest, "mouseup 1\n");
-    if (cur->rb_down)
-        fprintf(fdest, "mousedown 3\n");
-    else
-        fprintf(fdest, "mouseup 3\n");
-    if (cur->mb_down)
-        fprintf(fdest, "mousedown 2\n");
-    else
-        fprintf(fdest, "mouseup 2\n");
-
-    if (cur->wheel == -1)
-        fprintf(fdest, "click 5\n");
-    if (cur->wheel == 1)
-        fprintf(fdest, "click 6\n");
+    if (prev->lb_down != cur->lb_down) {
+        if (cur->lb_down)
+            fprintf(fdest, "mousedown 1\n");
+        else
+            fprintf(fdest, "mouseup 1\n");
+    }
+    if (prev->rb_down != cur->rb_down) {
+        if (cur->rb_down)
+            fprintf(fdest, "mousedown 3\n");
+        else
+            fprintf(fdest, "mouseup 3\n");
+    }
+    if (prev->rb_down != cur->mb_down) {
+        if (cur->mb_down)
+            fprintf(fdest, "mousedown 2\n");
+        else
+            fprintf(fdest, "mouseup 2\n");
+    }
+    if (prev->wheel != cur->wheel) {
+        if (cur->wheel == -1) {
+            //fprintf(fdest, "click 5\n");
+            //fprintf(fdest, "click 5\n");
+            fprintf(fdest, "mousedown 5\n");
+            fprintf(fdest, "mouseup 5\n");
+        }
+        if (cur->wheel == 1) {
+            //fprintf(fdest, "click 6\n");
+            //fprintf(fdest, "click 6\n");
+            fprintf(fdest, "mousedown 6\n");
+            fprintf(fdest, "mouseup 6\n");
+        }
+    }
 }
 
 void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
