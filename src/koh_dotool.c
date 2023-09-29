@@ -279,6 +279,7 @@ struct dotool_ctx {
     struct FilesSearchResult    fsr_scripts;
     bool                        *selected_scripts;
     bool                        save_only_mouse;
+    char                        last_saved_fname[256];
 };
 
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
@@ -699,7 +700,8 @@ void dotool_gui(struct dotool_ctx *ctx) {
     }
     if (dotool_is_saving(ctx)) {
         igText("saving to '%s'", fname);
-    }
+    } else if (strlen(ctx->last_saved_fname))
+        igText("last saved '%s'", ctx->last_saved_fname);
 
     igEnd();
 }
@@ -826,9 +828,9 @@ static void write_mouse(
         fprintf(fdest, "mouseup 2\n");
 
     if (cur->wheel == -1)
-        fprintf(fdest, "mouseclick 5\n");
+        fprintf(fdest, "click 5\n");
     if (cur->wheel == 1)
-        fprintf(fdest, "mouseclick 6\n");
+        fprintf(fdest, "click 6\n");
 }
 
 void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
@@ -838,6 +840,7 @@ void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     FILE *fdest = fopen(fname, "w");
     if (!fdest) {
         trace("_dotool_record_save: could not open file '%s'\n", fname);
+        ctx->last_saved_fname[0] = 0;
         return;
     }
 
@@ -877,6 +880,7 @@ void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     fclose(fdest);
     write_gui_ini(ctx, fname);
     update_scripts_list(ctx);
+    strncpy(ctx->last_saved_fname, fname, sizeof(ctx->last_saved_fname));
 }
 
 struct ThreadCtx {
