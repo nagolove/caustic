@@ -1316,6 +1316,8 @@ end
 
 
 
+
+
 local parser_setup = {
 
    build = {
@@ -1390,6 +1392,9 @@ local parser_setup = {
    build_smart = {
       summary = "build dependendies for native platform",
       options = { "n --name" },
+   },
+   updates = {
+      summary = "check git repositories for updates",
    },
 }
 
@@ -2784,6 +2789,29 @@ local json = require("json")
 
 
 
+
+function actions.updates(_args)
+   print("updates")
+   for _, dep in ipairs(dependencies) do
+      if dep.url and string.match(dep.url, "%.git$") then
+         if dep.dir then
+            print('dep.dir', dep.dir)
+            push_current_dir()
+            lfs.chdir(path_third_party .. "/" .. dep.dir)
+            cmd_do({
+               "git fetch",
+               "git status",
+            })
+            pop_dir()
+         end
+
+
+
+
+         print("--------")
+      end
+   end
+end
 
 
 
