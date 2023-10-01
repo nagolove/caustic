@@ -1288,25 +1288,27 @@ local record Actions
     verbose: function(Args)
     wbuild: function(Args)
     build_smart: function(Args)
+    updates: function(Args)
 end
 
 local enum ActionsEnum
-    "selftest"
     "build"
+    "build_smart"
     "compile_flags"
     "deps"
     "init"
+    "init_add"
+    "init_smart"
     "make"
     "publish"
     "remove"
     "rocks"
     "run"
+    "selftest"
     "test"
+    "updates"
     "verbose"
     "wbuild"
-    "init_add"
-    "init_smart"
-    "build_smart"
 end
 
 local record ParserSetup
@@ -1390,6 +1392,9 @@ local parser_setup: {string:ParserSetup} = {
     build_smart = {
         summary = "build dependendies for native platform",
         options = { "n --name" },
+    },
+    updates = {
+        summary = "check git repositories for updates",
     },
 }
 -- }}}
@@ -2783,6 +2788,24 @@ local record Aseprite
     end
     frames: {Frame}
     meta: Meta
+end
+
+function actions.updates(_args: Args)
+    print("updates")
+    for _, dep in ipairs(dependencies) do
+        if dep.url and string.match(dep.url, "%.git$") then
+            if dep.dir then
+                print('dep.dir', dep.dir)
+                push_current_dir()
+                lfs.chdir(path_third_party .. "/" .. dep.dir)
+                cmd_do({ 
+                    "git fetch",
+                    "git status",
+                })
+                pop_dir()
+            end
+        end
+    end
 end
 
 -- json->lua конвертация из aseprite
