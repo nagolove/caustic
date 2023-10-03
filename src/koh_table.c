@@ -250,7 +250,6 @@ HTable *htable_new(struct HTableSetup *setup) {
 }
 
 static void rec_shift(HTable *ht, int index, int hashi) {
-    //printf("rec_shift: index %d, hashi %d\n", index, hashi);
     int initial_index = index;
     index = (index + 1) % ht->cap;
     for (int i = 0; i < ht->cap; i++) {
@@ -282,21 +281,12 @@ void _htable_remove(HTable *ht, int remove_index) {
     assert(ht);
     assert(remove_index >= 0 && remove_index < ht->cap);
 
-    //printf("before_remove\n");
-    //htable_print(ht);
-
     int hashi = ht->arr[remove_index]->hash % ht->cap;
-    //printf("hashi %d\n", hashi);
     bucket_free(ht, remove_index);
 
     rec_shift(ht, remove_index, hashi);
 
-    //ht->arr[remove_index] = NULL;
     ht->taken--;
-
-    //printf("after_remove\n");
-    //htable_print(ht);
-
 }
 
 void htable_remove(HTable *ht, const void *key, int key_len) {
