@@ -17,6 +17,7 @@
 // Максимальное количество методов в таблице. Простая защита от 
 // переполнения
 static const int max_fields_num = 100;
+static bool verbose = false;
 
 TypeEntry *typelist = NULL;
 
@@ -408,7 +409,10 @@ void sc_register_methods_and_doc(
     const char *mtname,
     const Reg_ext *methods
 ) {
-    trace("register_methods_and_doc: '%s' [%s]\n", mtname, stack_dump(lua));
+    if (verbose)
+        trace(
+            "register_methods_and_doc: '%s' [%s]\n", mtname, stack_dump(lua)
+        );
 
     /*
     // {{{
@@ -504,7 +508,8 @@ void types_shutdown() {
         curr = next;
         i++;
     }
-    trace("types_shutdown: %d type freed\n", i);
+    if (verbose)
+        trace("types_shutdown: %d type freed\n", i);
     typelist = NULL;
 }
 
