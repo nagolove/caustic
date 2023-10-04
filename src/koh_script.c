@@ -29,6 +29,7 @@ static int ref_functions_desc = -1;
 static int ref_require = 0;
 static int ref_print = 0;
 static int ref_types_table = 0;
+static bool verbose = false;
 
 int l_script(lua_State *lua);
 static void hook(lua_State *lua, lua_Debug *ar);
@@ -68,13 +69,15 @@ void sc_register_function(lua_CFunction f, const char *fname, const char *desc) 
     script_funcs = sfunc;
 
     assert(ref_types_table);
-    trace("register_function: '%s' [%s]\n", fname, stack_dump(lua));
+    if (verbose)
+        trace("register_function: '%s' [%s]\n", fname, stack_dump(lua));
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
     lua_pushstring(lua, fname);
     lua_pushcclosure(lua, f, 0);
     lua_settable(lua, -3);
     lua_pop(lua, 1);
-    trace("register_function: [%s]\n", stack_dump(lua));
+    if (verbose)
+        trace("register_function: [%s]\n", stack_dump(lua));
 
     /*lua_register(lua, fname, f);*/
     sc_register_func_desc(fname, desc);
@@ -288,21 +291,20 @@ void register_internal() {
 // Попытка переопределить функцию загрузки модулей для последующей "горячей"
 // перезагрузки через inotifier()
 static int require_reload(lua_State *lua) {
-    trace("require_reload:\n");
-    /*trace("require_reload: 1 [%s]\n", sc_stack_dump());*/
+    if (verbose)
+        trace("require_reload:\n");
     int stack_pos1 = lua_gettop(lua);
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_require);
     lua_pushvalue(lua, -2);
     lua_call(lua, 1, LUA_MULTRET);
     int stack_pos2 = lua_gettop(lua);
     int stack_diff = stack_pos2 - stack_pos1;
-    //trace("stack pos diff %d\n", stack_diff);
-    //trace("require_reload: 2 [%s]\n", sc_stack_dump());
     return stack_diff;
 }
 
 static void require_redefine() {
-    trace("require_redefine: [%s]\n", sc_stack_dump());
+    if (verbose)
+        trace("require_redefine: [%s]\n", sc_stack_dump());
     int type = lua_getglobal(lua, "require");
     if (type != LUA_TFUNCTION) {
         trace("require_redefine: bad require type\n");
@@ -311,8 +313,10 @@ static void require_redefine() {
     ref_require = luaL_ref(lua, LUA_REGISTRYINDEX);
     lua_pushcclosure(lua, require_reload, 0);
     lua_setglobal(lua, "require");
-    trace("ref_require %d\n", ref_require);
-    trace("require_redefine: [%s]\n", sc_stack_dump());
+    if (verbose) {
+        trace("ref_require %d\n", ref_require);
+        trace("require_redefine: [%s]\n", sc_stack_dump());
+    }
 }
 
 static int print_with_filter(lua_State *lua) {
@@ -336,7 +340,7 @@ static int print_with_filter(lua_State *lua) {
             lua_pop(lua, 1);  /* pop result */
         }
     }
-    strcat(out_buf, "\n");
+    strncat(out_buf, "\n", sizeof(out_buf) - 2);
     trace("%s", out_buf);
     return 0;
 }
@@ -471,19 +475,28 @@ void sc_register_func_desc(const char *funcname, const char *description) {
         return;
     }
 
+    if (verbose)
+        trace(
+            "sc_register_func_desc: func '%s', desc %s\n", 
+            funcname, description
+        );
+
     int top = lua_gettop(lua);
 
     //printf("common_register_function_desc [%s]\n", stack_dump(cmn.lua));
-    if (lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_functions_desc) == LUA_TTABLE) {
-        trace("sc_register_func_desc: 1 [%s]\n", stack_dump(lua));
+    int type = lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_functions_desc);
+    if (type == LUA_TTABLE) {
+        //trace("sc_register_func_desc: 1 [%s]\n", stack_dump(lua));
         lua_pushstring(lua, funcname);
         lua_pushstring(lua, description);
         lua_settable(lua, -3);
 
+        /*
         trace(
             "sc_register_func_desc: 2 [%s]\n",
             stack_dump(lua)
         );
+        */
 
         // TODO: Аккуратно очистить стек, не весь
         /*lua_pop(lua, 1);*/
@@ -496,7 +509,7 @@ void sc_register_func_desc(const char *funcname, const char *description) {
         }
         lua_settop(lua, 0);
     } else {
-        printf("sc_register_func_desc: there is no cmn.ref_functions_desc\n");
+        trace("sc_register_func_desc: there is no cmn.ref_functions_desc\n");
     }
     //printf("[%s]\n", stack_dump(cmn.lua));
 }
@@ -635,7 +648,8 @@ int new_fullud_ref(Stage *st, Object *obj, const char *tname) {
     luaL_getmetatable(lua, tname);
     lua_setmetatable(lua, -2);
     lua_settop(lua, 0);
-    trace("new_fullud_ref: [%s]\n", stack_dump(lua));
+    if (verbose)
+        trace("new_fullud_ref: [%s]\n", stack_dump(lua));
 
     return ref;
 }
@@ -644,12 +658,12 @@ int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
     assert(obj);
     assert(tname);
 
-    printf("new_fullud_get_ref: [%s]", stack_dump(lua));
+    trace("new_fullud_get_ref: [%s]\n", stack_dump(lua));
 
     lua_settop(lua, 0);
     Object_ud *oud = lua_newuserdata(lua, sizeof(Object_ud));
     if (!oud) {
-        printf("lua_newuserdata() returned NULL in new_fullud_get_ref()\n");
+        trace("lua_newuserdata() returned NULL in new_fullud_get_ref()\n");
         exit(EXIT_FAILURE);
     }
     oud->obj = obj;
@@ -660,10 +674,10 @@ int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
     if (luaL_getmetatable(lua, tname) == LUA_TTABLE) {
         lua_setmetatable(lua, -2);
     } else {
-        printf("new_fullud_get_ref: there is no such metatable '%s'\n", tname);
+        trace("new_fullud_get_ref: there is no such metatable '%s'\n", tname);
     }
 
-    printf("new_fullud_get_ref: [%s]", stack_dump(lua));
+    trace("new_fullud_get_ref: [%s]\n", stack_dump(lua));
 
     return ref;
 }
