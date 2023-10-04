@@ -3,16 +3,18 @@
 
 #include "koh_common.h"
 
+#define PCRE2_CODE_UNIT_WIDTH   8
+
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_private.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
 #include "koh.h"
-#include "koh_visual_tools.h"
 #include "lauxlib.h"
 #include "libsmallregex.h"
 #include "lua.h"
 #include "lualib.h"
+#include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
 #include <assert.h>
@@ -1351,4 +1353,77 @@ const char *koh_incremental_fname(const char *fname, const char *ext) {
     }
     return NULL;
 }
+
+static char *pcre_code_str(int errnumber) {
+    static char buffer[256] = {};
+    pcre2_get_error_message(
+        errnumber, (unsigned char*)buffer, sizeof(buffer)
+    );
+    return buffer;
+}
+
+void koh_search_files_exclude_pcre(
+    struct FilesSearchResult *fsr, const char *exclude_pattern
+) {
+    assert(fsr);
+    assert(exclude_pattern);
+
+    if (!fsr->num || strlen(exclude_pattern) == 0)
+        return;
+
+    int errnumner;
+    size_t erroffset;
+    pcre2_code *regex = pcre2_compile(
+        (unsigned char*)exclude_pattern, 
+        PCRE2_ZERO_TERMINATED,
+        0,
+        &errnumner,
+        &erroffset,
+        NULL
+    );
+
+    if (!regex) {
+        trace(
+            "search_files_exclude_pcre: could not compile regex pattern"
+            "'%s' with '%s'\n",
+            exclude_pattern, pcre_code_str(errnumner)
+        );
+        return;
+    }
+
+    pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(
+        regex, NULL
+    );
+    assert(match_data);
+
+    char **alive_names = calloc(fsr->num, sizeof(char*));
+    int alive_num = 0;
+    assert(alive_names);
+
+    for (int i = 0; i < fsr->num; i++) {
+        //if (regex_matchp(regex, fsr->names[i]) == -1) {
+        int rc = pcre2_match(
+            regex, (unsigned char*)fsr->names[i], strlen(fsr->names[i]), 
+            0, 0, match_data, NULL
+        );
+
+        if (rc < 0) {
+            alive_names[alive_num] = fsr->names[i];
+            alive_num++;
+        } else {
+            free(fsr->names[i]);
+            fsr->names[i] = NULL;
+        }
+    }
+
+    fsr->capacity = fsr->num;
+    fsr->num = alive_num;
+
+    free(fsr->names);
+    fsr->names = alive_names;
+
+    pcre2_code_free(regex);
+    pcre2_match_data_free(match_data);
+}
+
 

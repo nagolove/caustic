@@ -194,6 +194,9 @@ struct FilesSearchSetup {
 struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup);
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 void koh_search_files_print(struct FilesSearchResult *fsr);
+void koh_search_files_exclude_pcre(
+    struct FilesSearchResult *fsr, const char *exclude_pattern
+);
 
 enum VisualToolMode visual_tool_mode2metaloader_type(
     const enum MetaLoaderType type
