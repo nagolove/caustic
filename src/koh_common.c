@@ -1428,3 +1428,30 @@ void koh_search_files_exclude_pcre(
 }
 
 
+const char *koh_extract_path(const char *fname) {
+    assert(fname);
+    static char buf[1024] = {};
+    memset(buf, 0, sizeof(buf));
+    const char *start = fname;
+    //while (*fname++);
+    //fname--;
+    //trace("koh_extract_path: fname '%s'\n", fname);
+    while (*fname)
+        fname++;
+    //while (*fname-- != '/' && fname != start);
+    while (*fname != '/' && fname != start)
+        fname--;
+    //if (start == fname)
+        //fname += 2;
+    //trace("koh_extract_path: fname '%s'\n", fname);
+    char *pbuf = buf;
+    while (fname != start) {
+        ////trace("pbuf '%c', start '%c'\n", *pbuf, *start);
+        //trace("start '%c'\n", *start);
+        *pbuf++ = *start++;
+    }
+    //trace("pbuf '%s'\n", pbuf);
+    //trace("\n");
+    //strncpy(buf, fname, sizeof(buf) - 1);
+    return buf;
+}
