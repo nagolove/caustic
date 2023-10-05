@@ -419,13 +419,13 @@ lua_State *sc_get_state() {
     return lua;
 }
 
-void load_init_script() {
+static void load_init_script() {
     if (luaL_dofile(lua, init_fname) != LUA_OK) {
-        printf(
-                "Could not do lua init file '%s' with [%s].\n",
-                init_fname,
-                lua_tostring(lua, -1)
-              );
+        trace(
+            "load_init_script: could not do lua init file '%s' with [%s].\n",
+            init_fname,
+            lua_tostring(lua, -1)
+        );
         lua_settop(lua, 0);
     } else
         trace(
@@ -481,7 +481,7 @@ void sc_register_func_desc(const char *funcname, const char *description) {
             funcname, description
         );
 
-    int top = lua_gettop(lua);
+    //int top = lua_gettop(lua);
 
     //printf("common_register_function_desc [%s]\n", stack_dump(cmn.lua));
     int type = lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_functions_desc);
@@ -501,12 +501,15 @@ void sc_register_func_desc(const char *funcname, const char *description) {
         // TODO: Аккуратно очистить стек, не весь
         /*lua_pop(lua, 1);*/
         /*lua_settop(lua, 0);*/
+        /*
         int new_top = lua_gettop(lua);
         int diff_top = new_top - top;
         if (diff_top > 0) {
             trace("sc_register_func_desc: pop %d elements\n", diff_top);
             //lua_pop(lua, diff_top);
         }
+        */
+        
         lua_settop(lua, 0);
     } else {
         trace("sc_register_func_desc: there is no cmn.ref_functions_desc\n");
