@@ -67,9 +67,10 @@ void custom_log(int msgType, const char *text, va_list args)
 }
 
 uint32_t seedfromstr(const char *s) {
+    assert(s);
     uint32_t seed = 0;
     sscanf(s, "%u", &seed);
-    printf("seedfromstr %u\n", seed);
+    trace("seedfromstr: seed %u\n", seed);
     return seed;
 }
 
