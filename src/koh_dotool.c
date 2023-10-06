@@ -282,6 +282,7 @@ struct dotool_ctx {
     char                        last_saved_fname[256];
 };
 
+static bool verbose = false;
 static const char   *default_shm_name_mutex = "caustic_xdt_mutex",
                     *default_shm_name_cond = "caustic_xdt_cond";
 
@@ -376,12 +377,6 @@ static void check_realloc(dotool_ctx_t *ctx) {
 static bool is_in_excluded_area(dotool_ctx_t *ctx, Vector2 mouse_pos) {
     assert(ctx);
     for (int i = 0; i < ctx->excluded_areas_num; i++) {
-        /*
-        trace(
-            "is_in_excluded_area: i %d, rect %s\n",
-            i, rect2str(ctx->excluded_areas[i])
-        );
-        // */
         if (CheckCollisionPointRec(mouse_pos, ctx->excluded_areas[i]))
             return true;
     }
@@ -390,7 +385,8 @@ static bool is_in_excluded_area(dotool_ctx_t *ctx, Vector2 mouse_pos) {
 
 static void dotool_record_tick(dotool_ctx_t *ctx) {
     assert(ctx);
-    trace("dotool_record_tick:\n");
+    if (verbose)
+        trace("dotool_record_tick:\n");
 
     Vector2 mp = Vector2Add(GetMousePosition(), ctx->dispacement);
     if (is_in_excluded_area(ctx, mp)) 
@@ -531,26 +527,6 @@ static void read_gui_ini(const char *script_fname) {
     char ini_fname[512] = {};
     strcat(ini_fname, script_fname);
     strcat(ini_fname, ".imgui");
-    /*
-    trace("read_gui_ini: ini_fname %s\n", ini_fname);
-    FILE *file = fopen(ini_fname, "r");
-    if (!file) 
-        return;
-    trace("read_gui_ini: reading from '%s'\n", ini_fname);
-    fseek(file, 0, SEEK_END);
-    int fsize = ftell(file);
-    trace("read_gui_ini: fsize %d\n", fsize);
-    char *ini_data = calloc(1, fsize + 1);
-    assert(ini_data);
-    rewind(file);
-    int items_num = fread(ini_data, 1, fsize, file);
-    printf("read_gui_ini: ini_data '%s'\n", ini_data);
-    trace("read_gui_ini: fsize %d, items_num %d\n", fsize, items_num);
-    assert(items_num == fsize);
-    igLoadIniSettingsFromMemory(ini_data, fsize);
-    fclose(file);
-    free(ini_data);
-    //*/
     igLoadIniSettingsFromDisk(ini_fname);
 }
 
@@ -649,7 +625,7 @@ void dotool_gui(struct dotool_ctx *ctx) {
                     ctx->fsr_scripts.names[i], &ctx->selected_scripts[i],
                     selectable_flags, (ImVec2){}
                 )) {
-                //trace("dotool_gui:\n");
+                
                 for (int j = 0; j < ctx->fsr_scripts.num; ++j) {
                     if (i != j)
                         ctx->selected_scripts[j] = false;
@@ -752,7 +728,8 @@ void dotool_update(dotool_ctx_t *ctx) {
 }
 
 void dotool_record_start(dotool_ctx_t *ctx) {
-    trace("dotool_record_start:\n");
+    if (verbose)
+        trace("dotool_record_start:\n");
     if (ctx->is_recording) {
         trace("dotool_record_start: already recording\n");
         return;
@@ -768,7 +745,8 @@ void dotool_record_start(dotool_ctx_t *ctx) {
 }
 
 void dotool_record_stop(dotool_ctx_t *ctx) {
-    trace("dotool_record_stop:\n");
+    if (verbose)
+        trace("dotool_record_stop:\n");
     assert(ctx);
     ctx->is_recording = false;
 }
@@ -860,30 +838,17 @@ void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     }
 
     struct InputState prev = ctx->rec[0];
-    //Vector2 prev_pos = ctx->rec[0].pos;
-    //double prev_time = ctx->rec[0].timestamp;
     
     fprintf(
-        fdest, "mousemove -- %d %d\n", (int)prev.pos.x, (int)prev.pos.y
+        fdest, "mousemove -- %d %d\n",
+        (int)prev.pos.x, (int)prev.pos.y
     );
 
     for (int i = 0; i < ctx->rec_num; ++i) {
         const struct InputState *cur = &ctx->rec[i];
-        trace("_dotool_record_save: prev_pos %s\n", Vector2_tostr(prev.pos));
-        /*
-        trace( "_dotool_record_save: ctx->rec[i].pos %s\n",
-            Vector2_tostr(cur->pos)
-        );
-        */
-        //Vector2 mouse_pos_d = Vector2Subtract(prev.pos, cur->pos);
+        if (verbose)
+            trace("_dotool_record_save: prev_pos %s\n", Vector2_tostr(prev.pos));
         double time_d = cur->timestamp - prev.timestamp;
-
-        /*
-        fprintf(
-            fdest, "mousemove_relative -- %d %d\n",
-            -(int)mouse_pos_d.x, -(int)mouse_pos_d.y
-        );
-        */
 
         write_mouse(ctx, cur, &prev, fdest);
         write_keyboard(ctx, cur, &prev, fdest);
