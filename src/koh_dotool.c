@@ -486,6 +486,7 @@ struct dotool_ctx *dotool_new() {
     // 10min = 600 * 60 = 3600
     ctx->rec_cap = 600 * 60;
     ctx->rec = calloc(ctx->rec_cap, sizeof(ctx->rec[0]));
+    ctx->save_only_mouse = true;
     assert(ctx->rec);
 
     update_scripts_list(ctx);
@@ -598,6 +599,9 @@ void exclude_window_area(struct dotool_ctx *ctx) {
 }
 
 static void dotool_record_pause(dotool_ctx_t *ctx) {
+    // TODO: Как высчитывать время между предыдущим записанным кликом и новым,
+    // если разница большая? Стои-ли ждать или быстрее записывать более 
+    // быстрый в проигрывании макрос?
 }
 
 static const char *get_selected_script(dotool_ctx_t *ctx) {
