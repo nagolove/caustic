@@ -136,7 +136,7 @@ static void reset(DAS_Context_mt *ctx) {
     }
 }
 
-void dasmt_init(DAS_Context_mt *ctx, int mapn, xorshift32_state *rnd) {
+static void dasmt_init(DAS_Context_mt *ctx, int mapn, xorshift32_state *rnd) {
     assert(ctx);
 
     ctx->mapSize = pow(2, mapn) + 1;
@@ -201,7 +201,7 @@ inline static double max_value(double a, double b) {
 static void normalize_implace(DAS_Context_mt *ctx) {
     for(int i = 0; i < ctx->mapSize - 1; ++i) {
         for(int j = 0; j < ctx->mapSize - 1; ++j) {
-            double *v = value(ctx, i, j);
+            const double *v = value(ctx, i, j);
             if (v) {
                 if (*v > 1.) {
                     map_set(ctx, i, j, 1.);
@@ -242,7 +242,7 @@ static void square_value(DAS_Context_mt *ctx, int i, int j, double *min, double 
     };
 
     for(int corner_idx = 0; corner_idx < 4; ++corner_idx) {
-        double *v = value(ctx, corners[corner_idx].i, corners[corner_idx].j);
+        const double *v = value(ctx, corners[corner_idx].i, corners[corner_idx].j);
         if (v) {
             *min = min_value(*min, *v);
             *max = max_value(*max, *v);
@@ -283,7 +283,7 @@ static void diamond_value(
     };
 
     for(int corner_idx = 0; corner_idx < 4; ++corner_idx) {
-        double *v = value(ctx, corners[corner_idx].i, corners[corner_idx].j);
+        const double *v = value(ctx, corners[corner_idx].i, corners[corner_idx].j);
         if (v) {
             *min = min_value(*min, *v);
             *max = max_value(*max, *v);
@@ -375,7 +375,7 @@ exit:
     //printf("wait_for_spin\n");
 }
 
-bool dasmt_flat(DAS_Context_mt *ctx, double flat) {
+static bool dasmt_flat(DAS_Context_mt *ctx, double flat) {
     for (int i = 0; i < ctx->mapSize; i++) 
         for (int j = 0; j < ctx->mapSize; j++)
             map_set(ctx, i, j, flat);
@@ -383,7 +383,7 @@ bool dasmt_flat(DAS_Context_mt *ctx, double flat) {
     return true;
 }
 
-bool dasmt_eval(DAS_Context_mt *ctx, double flat) {
+static bool dasmt_eval(DAS_Context_mt *ctx, double flat) {
     assert(ctx);
     assert(ctx->map);
     printf("eval\n");
