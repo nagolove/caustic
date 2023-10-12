@@ -44,6 +44,12 @@ Texture2D res_tex_load(Resource *res_list, const char *fname) {
     return tex;
 }
 
+RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h) {
+    RenderTexture2D tex_rt = LoadRenderTexture(w, h);
+    res_add(res_list, RT_TEXTURE, &tex_rt, sizeof(RenderTexture2D), NULL, 0);
+    return tex_rt;
+}
+
 #define MAX_FNAME   256
 
 struct FontSource {
@@ -100,23 +106,36 @@ void res_unload_all(Resource *res_list) {
                 case RT_SHADER: {
                     trace("res_unload_all: RT_SHADER\n");
                     UnloadShader(*(Shader*)cur->data);
+                    break;
+                }
+                case RT_TEXTURE_RT: {
+                    trace("res_unload_all: RT_TEXTURE_RT\n");
+                    break;
                 }
             }
             free(cur->data);
         }
-        if (cur->source_data)
+        if (cur->source_data) {
             free(cur->source_data);
+            cur->source_data = NULL;
+        }
         free(cur);
     }
     res_list->next = NULL;
 }
 
-void res_tex_load2(Resource *res_list, Texture2D **dest, const char *fname) {
+void res_tex_load2(
+    Resource *res_list, Texture2D **dest, const char *fname
+) {
 }
 
-void res_font_load2(Resource *res_list, Font **dest, const char *fname, int font_size) {
+void res_font_load2(
+    Resource *res_list, Font **dest, const char *fname, int font_size
+) {
 }
 
-void res_shader_load2(Resource *res_list, Shader **dest, const char *vertex_fname) {
+void res_shader_load2(
+    Resource *res_list, Shader **dest, const char *vertex_fname
+) {
 }
 
