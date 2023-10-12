@@ -871,6 +871,9 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
 bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
     assert(cam);
     if (cam && IsMouseButtonDown(mouse_btn)) {
+        // XXX: При большом удалении камера сдвигается слишком резко,
+        // сделать по логарифму(параболе)?
+        //Vector2 delta = Vector2Scale(GetMouseDelta(), log(-1. / cam->zoom);
         Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
         //cam->target = Vector2Add(cam->target, delta);
         cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
