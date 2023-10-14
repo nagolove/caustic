@@ -14,11 +14,28 @@ caustic.
 
 --print "Hello from script"
 local inspect = require "inspect"
+local format = string.format
 
 --print("_G", inspect(_G))
 
 local logfile = io.open("/tmp/aseprite", "w")
 --logfile:write(inspect(_G))
+
+-- Dialog
+function MsgDialog(title, msg)
+   local dlg = Dialog(title)
+   dlg:label{
+      id = "msg",
+      text = msg
+   }
+   dlg:newrow()
+   dlg:button{
+       id = "close",
+       text = "Close",
+       onclick = function() dlg:close() end 
+    }
+   return dlg
+end
 
 local function dprint(...)
     local args = {...}
@@ -49,7 +66,7 @@ local function export(filename)
         shapePadding=0,
         innerPadding=0,
         trim=false,
-        layerIndex = i,
+        --layerIndex = i,
         ----mergeDuplicates=data.mergeDuplicates,
         mergeDuplicates=false,
         extrude=false,
@@ -154,20 +171,60 @@ function export_layers(output_path)
         layer.isVisible = false
     end
 
+    local desc_code = 
+[[return {
+    -- версия формата экспорта
+    caustic_aseprite_export_ver = 2, 
+    layers = {
+]]
+
+    local title = app.fs.fileTitle(app.activeSprite.filename) 
+
     -- Цикл по слоям
     for i, layer in ipairs(layers) do
         -- Получить имя файла
         --filename = "layer_example_" .. layer.name .. ".png"
         dprint("layer.name", layer.name)
 
-        local filename =    output_path .. 
-                            app.fs.fileTitle(app.activeSprite.filename) .. 
-                            "_" ..
-                            layer.name .. 
-                            ".png"
-        layer.isVisible = true
-        export(filename)
-        layer.isVisible = false
+        if not string.match(layer.name, "tmp%.*") then
+            local name =        title .. "_layer_" .. layer.name .. ".png"
+            local filename =    output_path .. name
+            dprint("output_path", output_path)
+            dprint("filename", filename)
+            --desc_code = desc_code .. format("\t\t\t'%s',\n", name)
+            local visibility_str = layers_visibility[i] and "true" or "false"
+            desc_code = desc_code .. format(
+[[        {
+            name = '%s',
+            file = '%s',
+            visible = %s,
+        },
+]],
+            layer.name, name, visibility_str)
+
+            layer.isVisible = true
+            export(filename)
+            layer.isVisible = false
+        end
+    end
+
+    desc_code = desc_code .. [[
+    }
+}
+]]
+
+    local desc_code_fname = output_path .. title .. ".aseprite.lua"
+    dprint("desc_code_fname", desc_code_fname)
+    local ok, errmsg = pcall(function()
+        local file = io.open(desc_code_fname, "w")
+        file:write(desc_code)
+        file:close()
+    end)
+
+    dprint("desc_code", desc_code)
+
+    if not ok then
+        print("Error", errmsg)
     end
 
     -- Восстановление видимости
@@ -218,10 +275,16 @@ function dirname(str)
    return str:match("(.*" .. separator .. ")")
 end
 
---local filename = dlg.data.filename .. "." .. dlg.data.format
-local output_path = dirname(dlg.data.directory)
-dprint('output_path', output_path)
-export_layers(output_path)
+if dlg.data and dlg.data.directory and dlg.data.directory ~= '' then
+    dprint(format("dlg.data.directory '%s'", dlg.data.directory))
+    local output_path = dirname(dlg.data.directory)
+    dprint('output_path', output_path)
+    export_layers(output_path)
+else
+   local dlg = MsgDialog("Error", "No directory selected.")
+   dlg:show()
+   return 1
+end
 
 logfile:close()
 
