@@ -116,6 +116,7 @@ local format = string.format
 
 
 local serpent = require('serpent')
+local inspect = require('inspect')
 
 
 
@@ -235,6 +236,7 @@ local function search_and_load_cfgs_up(fname)
 
 
    local has_stuff = 0
+   local stuff = {}
 
 
 
@@ -244,18 +246,22 @@ local function search_and_load_cfgs_up(fname)
          if cfg.artifact then
             assert(type(cfg.artifact) == 'string')
             has_stuff = has_stuff + 1
+            table.insert(stuff, "artifact")
          end
          if cfg.main then
             assert(type(cfg.main) == 'string')
             has_stuff = has_stuff + 1
+            table.insert(stuff, "main")
          end
          if cfg.src then
             assert(type(cfg.src) == 'string')
             has_stuff = has_stuff + 1
+            table.insert(stuff, "src")
          end
       end
       if has_stuff < 2 then
          print("search_and_load_cfgs_up: has_stuff < 2", has_stuff)
+         print("stuff", inspect(stuff))
          print(debug.traceback())
          print("exit(1)")
          os.exit(1)
@@ -271,7 +277,6 @@ local function search_and_load_cfgs_up(fname)
 end
 
 local signal = require("posix").signal.signal
-local inspect = require('inspect')
 
 
 
@@ -2804,11 +2809,6 @@ function actions.updates(_args)
             })
             pop_dir()
          end
-
-
-
-
-         print("--------")
       end
    end
 end
