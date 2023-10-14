@@ -1,6 +1,7 @@
 #include "koh_strset.h"
 
 #include "koh_hashers.h"
+#include "koh_logger.h"
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -37,7 +38,7 @@ StrSet *strset_new() {
     return set;
 }
 
-static int _strset_get(StrSet *set, const char *key) {
+static int _strset_get(const StrSet *set, const char *key) {
     assert(set);
 
     if (!key)
@@ -58,11 +59,12 @@ static int _strset_get(StrSet *set, const char *key) {
     return -1;
 }
 
-bool strset_exist(StrSet *set, const char *key) {
+bool strset_exist(const StrSet *set, const char *key) {
     return _strset_get(set, key) != -1;
 }
 
 void strset_extend(StrSet *set) {
+    /*trace("strset_extend:\n");*/
     assert(set);
     struct Bucket *old_arr = set->arr;
     int old_cap = set->cap;
