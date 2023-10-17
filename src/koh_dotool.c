@@ -550,7 +550,7 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
     trace("dotool_exec_script: script_fname %s\n", script_fname);
 
     //read_gui_ini(script_fname);
-    strncpy(ctx->script_fname, script_fname, sizeof(ctx->script_fname));
+    strncpy(ctx->script_fname, script_fname, sizeof(ctx->script_fname) - 1);
     setenv("CAUSTIC_XDOTOOL_FNAME", script_fname, 1);
 
     pid_t ret = fork();
@@ -864,7 +864,7 @@ void _dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     fclose(fdest);
     write_gui_ini(ctx, fname);
     update_scripts_list(ctx);
-    strncpy(ctx->last_saved_fname, fname, sizeof(ctx->last_saved_fname));
+    strncpy(ctx->last_saved_fname, fname, sizeof(ctx->last_saved_fname) - 1);
 }
 
 struct ThreadCtx {
@@ -896,7 +896,7 @@ void dotool_record_save(dotool_ctx_t *ctx, const char *fname) {
     thrd_t thread_saver;
     static struct ThreadCtx thread_ctx;
     thread_ctx.ctx = ctx;
-    strncpy(thread_ctx.fname, fname, sizeof(thread_ctx.fname));
+    strncpy(thread_ctx.fname, fname, sizeof(thread_ctx.fname) - 1);
     thrd_create(&thread_saver, thread_save, &thread_ctx);
 }
 
