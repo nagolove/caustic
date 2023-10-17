@@ -41,6 +41,7 @@ struct FilesSearchResultInternal {
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 static bool verbose_search_files_rec = false;
 static struct Common cmn;
+static int cpu_count = 0;
 
 void add_chars_range(int first, int last);
 
@@ -1446,3 +1447,10 @@ const char *koh_extract_path(const char *fname) {
     }
     return buf;
 }
+
+int koh_cpu_count() {
+    if (!cpu_count)
+        cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    return cpu_count;
+}
+

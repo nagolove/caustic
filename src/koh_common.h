@@ -206,3 +206,5 @@ const char *koh_incremental_fname(const char *fname, const char *ext);
 
 // Возвращает указатель на статический буффер.
 const char *koh_extract_path(const char *fname);
+
+int koh_cpu_count();
