@@ -208,3 +208,4 @@ const char *koh_incremental_fname(const char *fname, const char *ext);
 const char *koh_extract_path(const char *fname);
 
 int koh_cpu_count();
+bool koh_is_pow2(int n);

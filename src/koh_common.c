@@ -1454,3 +1454,22 @@ int koh_cpu_count() {
     return cpu_count;
 }
 
+bool koh_is_pow2(int n) {
+    if (n == 0 || n == 1) 
+        return false;
+    //trace("koh_is_pow2: %d\n", n);
+    do {
+        int remainder = n % 2;
+        //trace("koh_is_pow2: loop n %d\n", n);
+        //trace("koh_is_pow2: remainder %d\n", remainder);
+        if (remainder && n == 1) {
+            //trace("koh_is_pow2: return n %d\n", n);
+            return true;
+        } else if (remainder) {
+            return false;
+        }
+        n /= 2;
+    } while (n);
+    //trace("koh_is_pow2: after loop n %d\n", n);
+    return false;
+}
