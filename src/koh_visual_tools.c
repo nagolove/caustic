@@ -29,8 +29,8 @@ static const char *state2str(enum State s) {
         case S_CAN_RESIZE: return "S_HANDLE_CAN_RESIZE";
         case S_ROTATE: return "S_ROTATE";
         case S_CAN_ROTATE: return "S_CAN_ROTATE";
+        default: return "unknown";
     }
-    return NULL;
 }
 // */
 
