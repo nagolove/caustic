@@ -33,10 +33,13 @@ void console_shutdown(void);
 void console_immediate_buffer_enable(bool state);
 bool console_immediate_buffer_get(void);
 // Непосредственный вывод на экран
+__attribute__((__format__ (__printf__, 1, 2)))
 void console_write(const char *fmt, ...);
 
 // Вывод в буфер консоли
+__attribute__((__format__ (__printf__, 1, 2)))
 void console_buf_write(const char *fmt, ...);
+__attribute__((__format__ (__printf__, 2, 3)))
 void console_buf_write_c(Color color, const char *fmt, ...);
 
 // Распечатать содержимое буфера консоли на стандартный вывод
