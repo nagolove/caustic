@@ -82,11 +82,12 @@ void stage_shutdown_all(void) {
     }
 }
 
-// TODO: Разделить обновление и рисование в разные функции
 void stage_update_active(void) {
     Stage *st = stages.cur;
-    if (st && st->update) st->update(st);
-    if (st && st->draw) st->draw(st);
+    if (!st)
+        return;
+    if (st->update) st->update(st);
+    if (st->draw) st->draw(st);
 }
 
 Stage *stage_find(const char *name) {
