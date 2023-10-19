@@ -13,7 +13,7 @@
 struct Stage;
 
 typedef void (*Stage_callback)(struct Stage *s);
-typedef void (*Stage_data_callback)(struct Stage *s, void *data);
+typedef void (*Stage_data_callback)(struct Stage *s, const char *str);
 
 typedef struct Stage {
     Stage_data_callback init;
