@@ -135,7 +135,8 @@ static int l_cprint(lua_State *lua) {
     int type = lua_type(lua, top);
     switch (type) {
         case LUA_TBOOLEAN: {
-            console_buf_write("%f", lua_toboolean(lua, top));
+            bool value = lua_toboolean(lua, top);
+            console_buf_write("%s", value ? "true" : "false");
             break;
         }
         case LUA_TNUMBER: {
