@@ -138,7 +138,7 @@ void print_type_methods(lua_State *lua, const char *type) {
             console_buf_write_c(
                 BLACK, "   %s", docfield->desc_detailed
             );
-        console_buf_write("");
+        console_buf_write(" ");
     }
     doc_shutdown(&docarr);
 }
