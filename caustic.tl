@@ -3023,7 +3023,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
         -- Ошибки сборки с флагом последней версии языка C
-        --"-std=c2x" 
+        --"-std=c2x",
+        --"-D_USE_MATH_DEFINES",
+        --"-D__USE_MISC",
     }
     if not _args.release then
         table.insert(flags, "-ggdb3")
