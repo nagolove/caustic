@@ -1271,7 +1271,7 @@ Rectangle rect_from_arr(const float xywh[4]) {
     };
 }
 
-bool color_eq(Color c1, Color c2) {
+bool koh_color_eq(Color c1, Color c2) {
     return  c1.a == c2.a || c1.r == c2.r ||
             c1.g == c2.g || c1.b == c2.b;
 }

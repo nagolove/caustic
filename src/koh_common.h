@@ -44,7 +44,7 @@ void koh_common_init(void);
 void koh_common_shutdown(void);
 
 Color interp_color(Color a, Color b, float t);
-Color height_color(float value);
+//Color height_color(float value);
 
 const char *color2str(Color color);
 Font load_font_unicode(const char *fname, int size);
@@ -139,7 +139,7 @@ struct CameraProcessScale {
 
 bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps);
 //bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value);
-bool color_eq(Color c1, Color c2);
+bool koh_color_eq(Color c1, Color c2);
 
 struct CameraAxisDrawCtx {
     Color color_offset, color_target;
