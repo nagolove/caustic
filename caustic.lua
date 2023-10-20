@@ -3025,6 +3025,8 @@ local function sub_make(_args, cfg, push_num)
 
 
 
+
+
    if not _args.release then
       table.insert(flags, "-ggdb3")
       _defines = _defines .. " " .. table.concat({
