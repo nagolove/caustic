@@ -27,7 +27,7 @@ do {                                                            \
 #include "koh_fpsmeter.h"
 #include "koh_genann_view.h"
 #include "koh_hashers.h"
-#include "koh_height_color.h"
+//#include "koh_height_color.h"
 #include "koh_hotkey.h"
 #include "koh_iface.h"
 #include "koh_inotifier.h"
