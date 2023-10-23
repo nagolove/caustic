@@ -24,6 +24,7 @@
 // XXX: Как-то избавится от типа Object или переименовать его во что-то
 // специфичное
 typedef struct Object Object;
+#define KOH_FORCE_INLINE inline __attribute__((always_inline))
 
 struct Common {
     bool quit;
@@ -43,7 +44,7 @@ struct Common *koh_cmn();
 void koh_common_init(void);
 void koh_common_shutdown(void);
 
-Color interp_color(Color a, Color b, float t);
+//Color interp_color(Color a, Color b, float t);
 //Color height_color(float value);
 
 const char *color2str(Color color);
