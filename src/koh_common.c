@@ -380,6 +380,40 @@ float axis2zerorange(float value) {
     return (1. + value) / 2.;
 }
 
+const char *to_bitstr_uint64_t(uint64_t value) {
+    //char *buf = calloc(1, sizeof(uint64_t) * 8 + 1);
+    static char buf[sizeof(uint64_t) * 8 + 1] = {0};
+    char *last = buf;
+
+    union {
+        uint64_t u;
+        struct {
+            unsigned char _0: 1;
+            unsigned char _1: 1;
+            unsigned char _2: 1;
+            unsigned char _3: 1;
+            unsigned char _4: 1;
+            unsigned char _5: 1;
+            unsigned char _6: 1;
+            unsigned char _7: 1;
+        } b[8];
+    } bp = { .u = value, };
+
+    for(int i = sizeof(value) - 1; i >= 0; i--) {
+        last += sprintf(last, "%d", (int)bp.b[i]._7);
+        last += sprintf(last, "%d", (int)bp.b[i]._6);
+        last += sprintf(last, "%d", (int)bp.b[i]._5);
+        last += sprintf(last, "%d", (int)bp.b[i]._4);
+        last += sprintf(last, "%d", (int)bp.b[i]._3);
+        last += sprintf(last, "%d", (int)bp.b[i]._2);
+        last += sprintf(last, "%d", (int)bp.b[i]._1);
+        last += sprintf(last, "%d", (int)bp.b[i]._0);
+        /*last += sprintf(last, " ");*/
+    }
+
+    return buf;
+}
+
 const char *to_bitstr_uint32_t(uint32_t value) {
     //char *buf = calloc(1, sizeof(uint64_t) * 8 + 1);
     static char buf[sizeof(uint32_t) * 8 + 1] = {0};
