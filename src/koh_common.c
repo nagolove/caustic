@@ -134,7 +134,7 @@ void koh_common_shutdown(void) {
 
 const char *color2str(Color c) {
     static char buf[48] = {0, };
-    sprintf(buf, "(%d, %d, %d, %d)", (int)c.r, (int)c.g, (int)c.b, (int)c.a);
+    sprintf(buf, "{%d, %d, %d, %d}", (int)c.r, (int)c.g, (int)c.b, (int)c.a);
     return buf;
 }
 
