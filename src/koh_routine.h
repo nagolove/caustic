@@ -1,5 +1,7 @@
 #pragma once
 
+#include "koh_common.h"
+#include "koh_logger.h"
 #include "chipmunk/cpBB.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -7,6 +9,7 @@
 #include <assert.h>
 #include <float.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static inline void vec4_from_color(float vec[4], Color c) {
     assert(vec);
@@ -145,3 +148,32 @@ static inline bool rect_cmp(const Rectangle r1, const Rectangle r2) {
             r1.width - r2.width <= FLT_EPSILON &&
             r1.height - r2.height <= FLT_EPSILON;
 }
+
+static KOH_FORCE_INLINE Color get_image_color(Image image, int x, int y) {
+    Color color = { 0 };
+
+    if ((x >=0) && (x < image.width) && (y >= 0) && (y < image.height)) {
+        switch (image.format)
+        {
+            case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8:
+            {
+                color.r = ((unsigned char *)image.data)[(y*image.width + x)*4];
+                color.g = ((unsigned char *)image.data)[(y*image.width + x)*4 + 1];
+                color.b = ((unsigned char *)image.data)[(y*image.width + x)*4 + 2];
+                color.a = ((unsigned char *)image.data)[(y*image.width + x)*4 + 3];
+
+            } break;
+            default: 
+                trace("get_image_color: supported only "
+                       "PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 format\n");
+                exit(EXIT_FAILURE);
+        }
+    } else 
+        trace(
+            "get_image_color: requested image pixel (%i, %i) out of bounds",
+            x, y
+        );
+
+    return color;
+}
+
