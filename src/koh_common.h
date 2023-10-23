@@ -21,9 +21,6 @@
 #include "raylib.h"
 #include "raymath.h"
 
-// XXX: Как-то избавится от типа Object или переименовать его во что-то
-// специфичное
-typedef struct Object Object;
 #define KOH_FORCE_INLINE inline __attribute__((always_inline))
 
 struct Common {
