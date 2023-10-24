@@ -66,6 +66,8 @@ local record Cfg
     artifact: string
     main: string
     codegen: {Codegen}
+    -- Дефайны препроцессора, применяемые только к релизной сборке
+    release_define: {string: string}
     record Codegen
         file_in: string
         file_out: string
@@ -3035,6 +3037,14 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         }, " ")
     else
         table.insert(flags, "-O3")
+        if cfg.release_define then
+            print("sub_make: appling release defines")
+            for define, value in pairs(cfg.release_define) do
+                assert(type(define) == 'string');
+                assert(type(value) == 'string');
+                table.insert(flags, format("-D%s=%s", define, value));
+            end
+        end
     end
     if not _args.noasan then
         table.insert(flags, "-fsanitize=address")
