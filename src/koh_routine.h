@@ -152,16 +152,18 @@ static inline bool rect_cmp(const Rectangle r1, const Rectangle r2) {
 static KOH_FORCE_INLINE Color get_image_color(Image image, int x, int y) {
     Color color = { 0 };
 
+#ifdef KOH_NO_ERROR_HANDLING
     if ((x >=0) && (x < image.width) && (y >= 0) && (y < image.height)) {
         switch (image.format)
         {
             case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8:
             {
+#endif
                 color.r = ((unsigned char *)image.data)[(y*image.width + x)*4];
                 color.g = ((unsigned char *)image.data)[(y*image.width + x)*4 + 1];
                 color.b = ((unsigned char *)image.data)[(y*image.width + x)*4 + 2];
                 color.a = ((unsigned char *)image.data)[(y*image.width + x)*4 + 3];
-
+#ifdef KOH_NO_ERROR_HANDLING
             } break;
             default: 
                 trace("get_image_color: supported only "
@@ -173,6 +175,7 @@ static KOH_FORCE_INLINE Color get_image_color(Image image, int x, int y) {
             "get_image_color: requested image pixel (%i, %i) out of bounds",
             x, y
         );
+#endif
 
     return color;
 }
