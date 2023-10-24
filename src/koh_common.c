@@ -1507,3 +1507,11 @@ bool koh_is_pow2(int n) {
     //trace("koh_is_pow2: after loop n %d\n", n);
     return false;
 }
+
+int koh_less_or_eq_pow2(int n) {
+    assert(n >= 2);
+    while (!koh_is_pow2(n)) {
+        n -= 2;
+    }
+    return n;
+}
