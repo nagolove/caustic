@@ -201,6 +201,7 @@ enum VisualToolMode visual_tool_mode2metaloader_type(
     const enum MetaLoaderType type
 );
 void koh_try_ray_cursor();
+// Возвращает указатель на статический внутренний буфер
 const char *koh_incremental_fname(const char *fname, const char *ext);
 
 // Возвращает указатель на статический буффер.
