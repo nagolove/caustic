@@ -75,6 +75,8 @@ local verbose = false
 
 
 
+
+
 local format = string.format
 
 
@@ -3035,6 +3037,14 @@ local function sub_make(_args, cfg, push_num)
       }, " ")
    else
       table.insert(flags, "-O3")
+      if cfg.release_define then
+         print("sub_make: appling release defines")
+         for define, value in pairs(cfg.release_define) do
+            assert(type(define) == 'string');
+            assert(type(value) == 'string');
+            table.insert(flags, format("-D%s=%s", define, value));
+         end
+      end
    end
    if not _args.noasan then
       table.insert(flags, "-fsanitize=address")
