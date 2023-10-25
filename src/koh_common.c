@@ -2,6 +2,7 @@
 // vim: fdm=marker
 
 #include "koh_common.h"
+#include "koh_routine.h"
 
 #define PCRE2_CODE_UNIT_WIDTH   8
 
@@ -38,12 +39,13 @@ struct FilesSearchResultInternal {
     struct small_regex *regex;
 };
 
-static inline Color DebugColor2Color(cpSpaceDebugColor dc);
+static struct IgWindowState wnd_state = {};
 static bool verbose_search_files_rec = false;
 static struct Common cmn;
 static int cpu_count = 0;
 
-void add_chars_range(int first, int last);
+static inline Color DebugColor2Color(cpSpaceDebugColor dc);
+static void add_chars_range(int first, int last);
 
 void custom_log(int msgType, const char *text, va_list args)
 {
@@ -138,7 +140,7 @@ const char *color2str(Color c) {
     return buf;
 }
 
-void add_chars_range(int first, int last) {
+static void add_chars_range(int first, int last) {
     assert(first < last);
     int range = last - first;
     printf("add_chars_range: [%x, %x] with %d chars\n", first, last, range);
@@ -878,8 +880,8 @@ void koh_qsort_soa(
     _koh_qsort_soa(&ctx);
 }
 
+// XXX: Плавная прокрутка масштаба
 bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
-/*bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value) {*/
     assert(cps);
     assert(cps->cam);
     float mouse_wheel = GetMouseWheelMove();
@@ -903,15 +905,18 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
     return false;
 }
 
-bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam) {
-    assert(cam);
-    if (cam && IsMouseButtonDown(mouse_btn)) {
-        // XXX: При большом удалении камера сдвигается слишком резко,
-        // сделать по логарифму(параболе)?
-        //Vector2 delta = Vector2Scale(GetMouseDelta(), log(-1. / cam->zoom);
-        Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
-        //cam->target = Vector2Add(cam->target, delta);
-        cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
+bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd) {
+    assert(cpd);
+    assert(cpd->cam);
+    /*trace("koh_camera_process_mouse_drag:\n");*/
+    if (cpd->cam && IsMouseButtonDown(cpd->mouse_btn)) {
+        float inv_zoom = cpd->cam->zoom;
+        float dzoom = inv_zoom == 1. ? 
+            -(1. / cpd->cam->zoom) : 
+            -log(1. / cpd->cam->zoom);
+        /*trace("koh_camera_process_mouse_drag: dzoom %f\n", dzoom);*/
+        Vector2 delta = Vector2Scale(GetMouseDelta(), dzoom);
+        cpd->cam->offset = Vector2Add(cpd->cam->offset, Vector2Negate(delta));
         return true;
     }
     return false;
@@ -1305,11 +1310,6 @@ Rectangle rect_from_arr(const float xywh[4]) {
     };
 }
 
-bool koh_color_eq(Color c1, Color c2) {
-    return  c1.a == c2.a || c1.r == c2.r ||
-            c1.g == c2.g || c1.b == c2.b;
-}
-
 enum VisualToolMode visual_tool_mode2metaloader_type(
     const enum MetaLoaderType type
 ) {
@@ -1514,4 +1514,38 @@ int koh_less_or_eq_pow2(int n) {
         n -= 2;
     }
     return n;
+}
+
+void koh_window_post() {
+    ImVec2 wnd_pos, wnd_size;
+    igGetWindowPos(&wnd_pos);
+    igGetWindowSize(&wnd_size);
+    wnd_state.wnd_pos = ImVec2_to_Vector2(wnd_pos);
+    wnd_state.wnd_size = ImVec2_to_Vector2(wnd_size);
+}
+
+const struct IgWindowState *koh_window_state() {
+    return &wnd_state;
+}
+
+bool koh_window_is_point_in(Vector2 point, Camera2D *cam) {
+    //Camera2D _cam = cam ? *cam : (Camera2D) { .zoom = 1., };
+    Rectangle wnd_rect = {
+        .x = wnd_state.wnd_pos.x,
+        .y = wnd_state.wnd_pos.y,
+        .width = wnd_state.wnd_size.x,
+        .height = wnd_state.wnd_size.y,
+    };
+    return CheckCollisionPointRec(point, wnd_rect);
+}
+
+void koh_window_state_print() {
+    trace(
+        "koh_window_state_print: wnd_pos %s\n",
+        Vector2_tostr(wnd_state.wnd_pos)
+    );
+    trace(
+        "koh_window_state_print: wnd_size %s\n",
+        Vector2_tostr(wnd_state.wnd_size)
+    );
 }

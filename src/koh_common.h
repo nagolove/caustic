@@ -1,6 +1,11 @@
 // vim: fdm=marker
 #pragma once
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
+#include "cimgui.h"
+#include "cimgui_impl.h"
+
 #include "koh_paragraph.h"
 #include "koh_rand.h"
 #include "koh_metaloader.h"
@@ -128,17 +133,22 @@ void koh_qsort_soa(
 );
 
 cpSpaceDebugColor from_Color(Color c);
-bool koh_camera_process_mouse_drag(int mouse_btn, Camera2D *cam);
 
 struct CameraProcessScale {
     Camera2D    *cam;
-    float       dscale_value;
+    float       dscale_value;       // XXX: За что отвечает dscale_value?
     KeyboardKey modifier_key_down;
 };
 
+struct CameraProcessDrag {
+    int         mouse_btn;
+    Camera2D    *cam;
+};
+
+bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd);
 bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps);
 //bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value);
-bool koh_color_eq(Color c1, Color c2);
+//bool koh_color_eq(Color c1, Color c2);
 
 struct CameraAxisDrawCtx {
     Color color_offset, color_target;
@@ -210,3 +220,12 @@ const char *koh_extract_path(const char *fname);
 int koh_cpu_count();
 bool koh_is_pow2(int n);
 int koh_less_or_eq_pow2(int n);
+
+struct IgWindowState {
+    Vector2 wnd_pos, wnd_size;
+};
+
+void koh_window_post();
+const struct IgWindowState *koh_window_state();
+void koh_window_state_print();
+bool koh_window_is_point_in(Vector2 point, Camera2D *cam);
