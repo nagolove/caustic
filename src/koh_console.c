@@ -24,7 +24,8 @@
 #include "koh_tabe.h"
 #include "koh_timer.h"
 
-/// {{{ Declarations
+// {{{ Declarations
+// TODO: Поиск по текстовому выводу консоли(как в vim)
 static void scroll_down(int linesnum);
 static void scroll_up(int linesnum);
 
