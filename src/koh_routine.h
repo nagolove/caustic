@@ -1,5 +1,10 @@
 #pragma once
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
+#include "cimgui.h"
+#include "cimgui_impl.h"
+
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "chipmunk/cpBB.h"
@@ -179,4 +184,20 @@ static KOH_FORCE_INLINE Color get_image_color(Image image, int x, int y) {
 
     return color;
 }
+
+static KOH_FORCE_INLINE Vector2 ImVec2_to_Vector2(ImVec2 v) {
+    return (Vector2) {
+        .x = v.x,
+        .y = v.y,
+    };
+}
+
+static KOH_FORCE_INLINE const char *ImVec2_tostr(ImVec2 v) {
+    return Vector2_tostr(ImVec2_to_Vector2(v));
+}
+
+static KOH_FORCE_INLINE bool koh_color_eq(Color c1, Color c2) {
+    return  c1.a == c2.a && c1.r == c2.r && c1.g == c2.g && c1.b == c2.b;
+}
+
 
