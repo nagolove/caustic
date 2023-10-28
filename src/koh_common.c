@@ -33,6 +33,7 @@
 
 #ifdef PLATFORM_DESKTOP
 #include <signal.h>
+#include <execinfo.h>
 #endif
 
 struct FilesSearchResultInternal {
@@ -1550,7 +1551,7 @@ void koh_window_state_print() {
     );
 }
 
-void backtrace_print() {
+void koh_backtrace_print() {
     int num = 100;
     void *trace[num];
     int size = backtrace(trace, num);
