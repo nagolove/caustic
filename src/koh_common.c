@@ -1549,3 +1549,10 @@ void koh_window_state_print() {
         Vector2_tostr(wnd_state.wnd_size)
     );
 }
+
+void backtrace_print() {
+    int num = 100;
+    void *trace[num];
+    int size = backtrace(trace, num);
+    backtrace_symbols_fd(trace, size, STDOUT_FILENO);
+}

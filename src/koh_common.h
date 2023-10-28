@@ -229,3 +229,5 @@ void koh_window_post();
 const struct IgWindowState *koh_window_state();
 void koh_window_state_print();
 bool koh_window_is_point_in(Vector2 point, Camera2D *cam);
+
+void backtrace_print();
