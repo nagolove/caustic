@@ -34,28 +34,32 @@ else
     print("CAUSTIC_PATH", path_caustic)
 end
 
+local home = os.getenv("HOME")
+assert(home)
+
+local lua_ver = "5.1"
+--local lua_ver = "5.4"
+
+package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
+	       		home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
+			   -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
+			   --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
+			   path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..  package.path
+package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
+	    home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
+		package.cpath
+
+
 local tabular = require "tabular".show
 local lfs = require 'lfs'
 local ansicolors = require 'ansicolors'
-local home = os.getenv("HOME")
 
-assert(home)
 assert(path_caustic)
 assert(path_third_party)
 assert(path_wasm_third_party)
 
-package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
-	       home .. "/.luarocks/share/lua/5.4/?/init.lua;" .. 
-           -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
-		   --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
-           path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" .. 
-	       package.path
-package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
-	    home .. "/.luarocks/lib/lua/5.4/?/init.so;" .. -- XXX: init.so?
-		package.cpath
-
 local site_repo = "~/nagolove.github.io"
-local site_repo_index = site_repo .. "/index.html"
+--local site_repo_index = site_repo .. "/index.html"
 
 local dir_stack: {string} = {}
 local verbose = false
@@ -148,17 +152,47 @@ end
 
 local cache_name = "cache.lua"
 
+-- TODO: {exclude} may be a map, not a array
 local function filter_sources(
     pattern: string, path: string, cb: function(string), exclude: {string}
 )
-    --if path == "" then path = "." end
+	assert(cb)
+
+	local files: {string} = {}
+	for file in lfs.dir(path) do
+		table.insert(files, file)
+	end
+
+	local files_processed = {}
+	if exclude then
+		for _, file in ipairs(files) do
+			local found = false
+			for _, pat in ipairs(exclude) do
+				if string.match(file, pat) then
+					found = true
+					break
+				end
+			end
+			if not found then
+				table.insert(files_processed, file)
+			end
+		end
+	end
+
+	files = files_processed
+
+	for _, file in ipairs(files_processed) do
+		if string.match(file, pattern) then
+			cb(file)
+		end
+	end
+	
+	--[[
     for file in lfs.dir(path) do
         if string.match(file, pattern) then
-            --print('filter_sources:', file)
             if exclude then
                 for _, pat in ipairs(exclude) do
                     if string.match(file, pat) then
-                        --print('filter_sources: excluded', file)
                         goto continie
                     end
                 end
@@ -167,6 +201,9 @@ local function filter_sources(
             :: continie ::
         end
     end
+	--]]
+
+
 end
 
 local function push_current_dir(): string
@@ -1015,6 +1052,7 @@ local function get_dirs()
 end
 --]]
 
+--[[
 local function check_luarocks(): string
     local fd = io.popen("luarocks --version")
     local version: string
@@ -1028,6 +1066,7 @@ if not check_luarocks() then
     print("LuaRocks not found")
     os.exit(1)
 end
+--]]
 
 local lanes = require "lanes".configure()
 local sleep = require "socket".sleep
@@ -1141,6 +1180,7 @@ end
 -- FIXME: Зачем делать проверку действия по строке, если действие можно задать 
 -- флагом или функцией?
 local function _dependecy_init(dep: Dependency)
+	print('_dependecy_init')
     local url = dep.url
     if string.match(url, "%.git$") then
         --print("git url")
@@ -1285,7 +1325,7 @@ local function filter<G>(collection: {G}, cb: function(G): boolean): {G}
 end
 
 local record Actions
-    anim_convert: function(Args)
+    --anim_convert: function(Args)
     build: function(Args)
     compile_flags: function(Args)
     deps: function(Args)
@@ -1421,7 +1461,7 @@ local parser_setup: {string:ParserSetup} = {
 local actions: Actions = {}
 
 local function _init_smart(path: string, deps: {Dependency})
-    print("_init", path, inspect(deps))
+    print("_init_smart", path, inspect(deps))
     push_current_dir()
 
     if not lfs.chdir(path) then
@@ -1437,6 +1477,7 @@ local function _init_smart(path: string, deps: {Dependency})
     local func = lanes.gen("*", opt_tbl, dependency_init)
 
     local sorter = Toposorter.new()
+	local single_thread = true
 
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
@@ -1447,10 +1488,14 @@ local function _init_smart(path: string, deps: {Dependency})
             end
         else
             --sorter:add(dep.name, "null")
-            local type Dependency_init = function(Dependency, string): any
-            local lane_thread = (func as Dependency_init)(dep, path) 
-                as lanes.Thread
-            table.insert(threads, lane_thread)
+			if single_thread then
+				dependency_init(dep, path)
+			else
+				local type Dependency_init = function(Dependency, string): any
+				local lane_thread = (func as Dependency_init)(dep, path) 
+					as lanes.Thread
+				table.insert(threads, lane_thread)
+			end
         end
     end
 
@@ -1479,7 +1524,8 @@ local function _init_smart(path: string, deps: {Dependency})
 end
 
 local function _init(path: string, deps: {Dependency})
-    print("_init", path, inspect(deps))
+    print("_init", path)
+	--print(tabular(deps))
     push_current_dir()
 
     if not lfs.chdir(path) then
@@ -1490,42 +1536,60 @@ local function _init(path: string, deps: {Dependency})
         lfs.chdir(path)
     end
 
+	require 'compat53'
+
     local threads: {lanes.Thread} = {}
-    local opt_tbl = { required = { "lfs", }, }
+    local opt_tbl = { required = {"lfs", "compat53" }, }
     local func = lanes.gen("*", opt_tbl, dependency_init)
+	--local func = lanes.gen("package base", opt_tbl, dependency_init)
 
     local sorter = Toposorter.new()
+	local single_thread = true
 
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
         assert(dep.name)
+
+		print('processing', dep.name)
+
+
         if dep.depends then
             for _, dep_name in ipairs(dep.depends) do
+				print('sorter:addd', dep.name, dep_name)
                 sorter:add(dep.name, dep_name)
             end
         else
+			print('without dependency')
             --sorter:add(dep.name, "null")
-            local type Dependency_init = function(Dependency, string): any
-            local lane_thread = (func as Dependency_init)(dep, path) 
-                as lanes.Thread
-            table.insert(threads, lane_thread)
+			if single_thread then
+				dependency_init(dep, path)
+			else
+				local type Dependency_init = function(Dependency, string): any
+				local lane_thread = (func as Dependency_init)(dep, path) 
+					as lanes.Thread
+				table.insert(threads, lane_thread)
+			end
         end
     end
 
     local sorted = sorter:sort()
+	print('sorted')
 
     -- XXX: На всякий случай удаляются имена null
     -- Но они могут и никогда не присутствовать :))
     sorted = filter(sorted, function(node: Node): boolean
         return node.value ~= "null"
     end)
+	print('sorted', inspect(sorted))
 
-    print(tabular(threads))
-    wait_threads(threads)
-    for _, thread in ipairs(threads) do
-        local result, errcode = thread:join()
-        print(result, errcode)
-    end
+	if #threads ~= 0 then
+		print(tabular(threads))
+		wait_threads(threads)
+		for _, thread in ipairs(threads) do
+			local result, errcode = thread:join()
+			print(result, errcode)
+		end
+	end
 
     for _, node in ripairs(sorted) do
         local dep = dependencies_name_map[(node as Node).value as string]
@@ -1609,7 +1673,7 @@ function actions.init_smart(_args: Args)
         --end
     end
 
-    print('deps', inspect(deps))
+    --print('deps', inspect(deps))
     --check_for_unstaged(deps)
     _init_smart(path_third_party, deps)
     _init_smart(path_wasm_third_party, deps)
@@ -1634,10 +1698,10 @@ function actions.init(_args: Args)
         end
     end
 
-    print('deps', inspect(deps))
+    --print('deps', inspect(deps))
     --check_for_unstaged(deps)
     _init(path_third_party, deps)
-    _init(path_wasm_third_party, deps)
+    --_init(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
 
@@ -1737,6 +1801,7 @@ function actions.test(_args: Args)
     end
 end
 
+--[[
 local function update_links_table(_links: {string}, artifact: string)
     local found = false
     for _, line in ipairs(_links) do
@@ -1750,7 +1815,10 @@ local function update_links_table(_links: {string}, artifact: string)
         table.insert(_links, format(ptrn, artifact, artifact))
     end
 end
+--]]
 
+
+--[[
 local function update_links(artifact: string)
     local site_repo_tmp = string.gsub(site_repo_index, "~", os.getenv("HOME"))
     local file = io.open(site_repo_tmp, "r")
@@ -1831,6 +1899,7 @@ local function update_links(artifact: string)
     --cmd_do(cmd1)
     --cmd_do(cmd2)
 end
+--]]
 
 local function check_files_in_dir(dirname: string, filelist: {string}): boolean
     print('check_files_in_dir', dirname, inspect(filelist))
@@ -1881,7 +1950,8 @@ local function sub_publish(_args: Args, cfg: Cfg)
     --print( "os.exit(1)" )
     --os.exit(1)
     if cfg.artifact then
-        update_links(cfg.artifact)
+		print("not implemented. please rewrite code without 'goto' operator")
+        --update_links(cfg.artifact)
     else
         print("Bad directory, no artifact value in bld.lua")
     end
@@ -2546,7 +2616,8 @@ function actions.build_smart(_args: Args)
             _build_smart(dependencies_name_map[_args.name])
         else
             print("bad dependency name", _args.name)
-            goto exit
+	    pop_dir()
+	    return
         end
     else
         for _, dep in ipairs(dependencies) do
@@ -2554,7 +2625,6 @@ function actions.build_smart(_args: Args)
         end
     end
 
-    ::exit::
     pop_dir()
 end
 
@@ -2570,7 +2640,8 @@ function actions.build(_args: Args)
             _build(get_dir(dependencies_name_map[_args.name]))
         else
             print("bad dependency name", _args.name)
-            goto exit
+	    pop_dir()
+			return
         end
     else
         for _, dirname in ipairs(get_dirs(dependencies)) do
@@ -2578,7 +2649,6 @@ function actions.build(_args: Args)
         end
     end
 
-    ::exit::
     pop_dir()
 end
 
@@ -2775,8 +2845,9 @@ local function set_executable_bit(fname: string)
 end
 --]]
 
-local json = require "json"
+--local json = require "json"
 
+--[[
 local record Aseprite 
     record Meta
         record Size
@@ -2807,6 +2878,7 @@ local record Aseprite
     frames: {Frame}
     meta: Meta
 end
+--]]
 
 function actions.updates(_args: Args)
     print("updates")
@@ -2831,6 +2903,7 @@ end
     Для этого создать специальную секцию в bld.lua, со списком файлов для
     обработки. Эта секция обрабатывается при запуске команды caustic make
 --]]
+--[[
 function actions.anim_convert(_args: Args)
     print('anim_convert', inspect(_args))
     if not _args.name then
@@ -2884,6 +2957,7 @@ function actions.anim_convert(_args: Args)
     --print('new_fname', new_fname)
     io.open(new_fname, "w"):write(serpent.dump(res))
 end
+--]]
 
 local function codegen(cg: Cfg.Codegen)
     print('codegen', inspect(cg))
