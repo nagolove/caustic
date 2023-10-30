@@ -37,14 +37,16 @@ end
 local home = os.getenv("HOME")
 assert(home)
 
-package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
-	       home .. "/.luarocks/share/lua/5.4/?/init.lua;" .. 
-	   -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
-		   --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
-	   path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" .. 
-	       package.path
-package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
-	    home .. "/.luarocks/lib/lua/5.4/?/init.so;" .. -- XXX: init.so?
+local lua_ver = "5.1"
+--local lua_ver = "5.4"
+
+package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
+	       		home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
+			   -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
+			   --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
+			   path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..  package.path
+package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
+	    home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
 		package.cpath
 
 
@@ -1167,6 +1169,7 @@ end
 -- FIXME: Зачем делать проверку действия по строке, если действие можно задать 
 -- флагом или функцией?
 local function _dependecy_init(dep: Dependency)
+	print('_dependecy_init')
     local url = dep.url
     if string.match(url, "%.git$") then
         --print("git url")
@@ -1447,7 +1450,7 @@ local parser_setup: {string:ParserSetup} = {
 local actions: Actions = {}
 
 local function _init_smart(path: string, deps: {Dependency})
-    print("_init", path, inspect(deps))
+    print("_init_smart", path, inspect(deps))
     push_current_dir()
 
     if not lfs.chdir(path) then
@@ -1463,6 +1466,7 @@ local function _init_smart(path: string, deps: {Dependency})
     local func = lanes.gen("*", opt_tbl, dependency_init)
 
     local sorter = Toposorter.new()
+	local single_thread = true
 
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
@@ -1473,10 +1477,14 @@ local function _init_smart(path: string, deps: {Dependency})
             end
         else
             --sorter:add(dep.name, "null")
-            local type Dependency_init = function(Dependency, string): any
-            local lane_thread = (func as Dependency_init)(dep, path) 
-                as lanes.Thread
-            table.insert(threads, lane_thread)
+			if single_thread then
+				dependency_init(dep, path)
+			else
+				local type Dependency_init = function(Dependency, string): any
+				local lane_thread = (func as Dependency_init)(dep, path) 
+					as lanes.Thread
+				table.insert(threads, lane_thread)
+			end
         end
     end
 
@@ -1505,7 +1513,8 @@ local function _init_smart(path: string, deps: {Dependency})
 end
 
 local function _init(path: string, deps: {Dependency})
-    print("_init", path, inspect(deps))
+    print("_init", path)
+	--print(tabular(deps))
     push_current_dir()
 
     if not lfs.chdir(path) then
@@ -1516,42 +1525,60 @@ local function _init(path: string, deps: {Dependency})
         lfs.chdir(path)
     end
 
+	require 'compat53'
+
     local threads: {lanes.Thread} = {}
-    local opt_tbl = { required = { "lfs", }, }
+    local opt_tbl = { required = {"lfs", "compat53" }, }
     local func = lanes.gen("*", opt_tbl, dependency_init)
+	--local func = lanes.gen("package base", opt_tbl, dependency_init)
 
     local sorter = Toposorter.new()
+	local single_thread = true
 
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
         assert(dep.name)
+
+		print('processing', dep.name)
+
+
         if dep.depends then
             for _, dep_name in ipairs(dep.depends) do
+				print('sorter:addd', dep.name, dep_name)
                 sorter:add(dep.name, dep_name)
             end
         else
+			print('without dependency')
             --sorter:add(dep.name, "null")
-            local type Dependency_init = function(Dependency, string): any
-            local lane_thread = (func as Dependency_init)(dep, path) 
-                as lanes.Thread
-            table.insert(threads, lane_thread)
+			if single_thread then
+				dependency_init(dep, path)
+			else
+				local type Dependency_init = function(Dependency, string): any
+				local lane_thread = (func as Dependency_init)(dep, path) 
+					as lanes.Thread
+				table.insert(threads, lane_thread)
+			end
         end
     end
 
     local sorted = sorter:sort()
+	print('sorted')
 
     -- XXX: На всякий случай удаляются имена null
     -- Но они могут и никогда не присутствовать :))
     sorted = filter(sorted, function(node: Node): boolean
         return node.value ~= "null"
     end)
+	print('sorted', inspect(sorted))
 
-    print(tabular(threads))
-    wait_threads(threads)
-    for _, thread in ipairs(threads) do
-        local result, errcode = thread:join()
-        print(result, errcode)
-    end
+	if #threads ~= 0 then
+		print(tabular(threads))
+		wait_threads(threads)
+		for _, thread in ipairs(threads) do
+			local result, errcode = thread:join()
+			print(result, errcode)
+		end
+	end
 
     for _, node in ripairs(sorted) do
         local dep = dependencies_name_map[(node as Node).value as string]
@@ -1635,7 +1662,7 @@ function actions.init_smart(_args: Args)
         --end
     end
 
-    print('deps', inspect(deps))
+    --print('deps', inspect(deps))
     --check_for_unstaged(deps)
     _init_smart(path_third_party, deps)
     _init_smart(path_wasm_third_party, deps)
@@ -1660,10 +1687,10 @@ function actions.init(_args: Args)
         end
     end
 
-    print('deps', inspect(deps))
+    --print('deps', inspect(deps))
     --check_for_unstaged(deps)
     _init(path_third_party, deps)
-    _init(path_wasm_third_party, deps)
+    --_init(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
 
