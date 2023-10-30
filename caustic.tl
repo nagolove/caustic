@@ -644,6 +644,17 @@ local dependencies: {Dependency} = {
     {
         --build_method = 'other',
         copy_for_wasm = true,
+        description = "box2c - плоский игровой физический движок",
+        includes = { "Chipmunk2D/include", },
+        libdirs = { "Chipmunk2D/src" },
+        links = { "chipmunk:static" },
+        links_internal = { "box2c:static" },
+        name = 'box2c',
+        url = "https://github.com/erincatto/box2c.git",
+    },
+    {
+        --build_method = 'other',
+        copy_for_wasm = true,
         description = "плоский игровой физический движок",
         includes = { "Chipmunk2D/include", },
         libdirs = { "Chipmunk2D/src" },
