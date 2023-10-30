@@ -16,10 +16,8 @@ typedef void (*Stage_callback)(struct Stage *s);
 typedef void (*Stage_data_callback)(struct Stage *s, const char *str);
 
 typedef struct Stage {
-    Stage_data_callback init;
-    Stage_callback      shutdown;
-    Stage_callback      draw, update, gui;
-    Stage_data_callback enter, leave;
+    Stage_data_callback init, enter, leave;
+    Stage_callback      shutdown, draw, update, gui;
 
     void *data;
     char name[MAX_STAGE_NAME];
@@ -27,7 +25,7 @@ typedef struct Stage {
 
 // Инициализация подсистемы
 void stage_init(void);
-// Добавить сцену
+// Добавить сцену. Внутри - st освобождается через free()
 Stage *stage_add(Stage *st, const char *name);
 // Инициализация добавленных сцен
 void stage_subinit(void);
