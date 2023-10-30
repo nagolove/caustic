@@ -34,28 +34,32 @@ else
    print("CAUSTIC_PATH", path_caustic)
 end
 
+local home = os.getenv("HOME")
+assert(home)
+
+local lua_ver = "5.1"
+
+
+package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
+home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" ..
+
+
+path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" .. package.path
+package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
+home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
+package.cpath
+
+
 local tabular = require("tabular").show
 local lfs = require('lfs')
 local ansicolors = require('ansicolors')
-local home = os.getenv("HOME")
 
-assert(home)
 assert(path_caustic)
 assert(path_third_party)
 assert(path_wasm_third_party)
 
-package.path = home .. "/.luarocks/share/lua/5.4/?.lua;" ..
-home .. "/.luarocks/share/lua/5.4/?/init.lua;" ..
-
-
-path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..
-package.path
-package.cpath = home .. "/.luarocks/lib/lua/5.4/?.so;" ..
-home .. "/.luarocks/lib/lua/5.4/?/init.so;" ..
-package.cpath
-
 local site_repo = "~/nagolove.github.io"
-local site_repo_index = site_repo .. "/index.html"
+
 
 local dir_stack = {}
 local verbose = false
@@ -148,25 +152,58 @@ local Cache = {Data = {}, }
 
 local cache_name = "cache.lua"
 
+
 local function filter_sources(
    pattern, path, cb, exclude)
 
+   assert(cb)
 
+   local files = {}
    for file in lfs.dir(path) do
-      if string.match(file, pattern) then
+      table.insert(files, file)
+   end
 
-         if exclude then
-            for _, pat in ipairs(exclude) do
-               if string.match(file, pat) then
-
-                  goto continie
-               end
+   local files_processed = {}
+   if exclude then
+      for _, file in ipairs(files) do
+         local found = false
+         for _, pat in ipairs(exclude) do
+            if string.match(file, pat) then
+               found = true
+               break
             end
          end
-         cb(file)
-         ::continie::
+         if not found then
+            table.insert(files_processed, file)
+         end
       end
    end
+
+   files = files_processed
+
+   for _, file in ipairs(files_processed) do
+      if string.match(file, pattern) then
+         cb(file)
+      end
+   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end
 
 local function push_current_dir()
@@ -644,6 +681,17 @@ local dependencies = {
    {
 
       copy_for_wasm = true,
+      description = "box2c - плоский игровой физический движок",
+      includes = { "Chipmunk2D/include" },
+      libdirs = { "Chipmunk2D/src" },
+      links = { "chipmunk:static" },
+      links_internal = { "box2c:static" },
+      name = 'box2c',
+      url = "https://github.com/erincatto/box2c.git",
+   },
+   {
+
+      copy_for_wasm = true,
       description = "плоский игровой физический движок",
       includes = { "Chipmunk2D/include" },
       libdirs = { "Chipmunk2D/src" },
@@ -1004,19 +1052,21 @@ get_deps_name_map(dependencies)
 
 
 
-local function check_luarocks()
-   local fd = io.popen("luarocks --version")
-   local version
-   local _, _ = pcall(function()
-      version = fd:read("*a")
-   end)
-   return version and string.match(version, "LuaRocks")
-end
 
-if not check_luarocks() then
-   print("LuaRocks not found")
-   os.exit(1)
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local lanes = require("lanes").configure()
 local sleep = require("socket").sleep
@@ -1130,6 +1180,7 @@ end
 
 
 local function _dependecy_init(dep)
+   print('_dependecy_init')
    local url = dep.url
    if string.match(url, "%.git$") then
 
@@ -1410,7 +1461,7 @@ local parser_setup = {
 local actions = {}
 
 local function _init_smart(path, deps)
-   print("_init", path, inspect(deps))
+   print("_init_smart", path, inspect(deps))
    push_current_dir()
 
    if not lfs.chdir(path) then
@@ -1426,6 +1477,7 @@ local function _init_smart(path, deps)
    local func = lanes.gen("*", opt_tbl, dependency_init)
 
    local sorter = Toposorter.new()
+   local single_thread = true
 
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
@@ -1436,10 +1488,14 @@ local function _init_smart(path, deps)
          end
       else
 
+         if single_thread then
+            dependency_init(dep, path)
+         else
 
-         local lane_thread = (func)(dep, path)
+            local lane_thread = (func)(dep, path)
 
-         table.insert(threads, lane_thread)
+            table.insert(threads, lane_thread)
+         end
       end
    end
 
@@ -1468,7 +1524,8 @@ local function _init_smart(path, deps)
 end
 
 local function _init(path, deps)
-   print("_init", path, inspect(deps))
+   print("_init", path)
+
    push_current_dir()
 
    if not lfs.chdir(path) then
@@ -1479,41 +1536,59 @@ local function _init(path, deps)
       lfs.chdir(path)
    end
 
+   require('compat53')
+
    local threads = {}
-   local opt_tbl = { required = { "lfs" } }
+   local opt_tbl = { required = { "lfs", "compat53" } }
    local func = lanes.gen("*", opt_tbl, dependency_init)
 
+
    local sorter = Toposorter.new()
+   local single_thread = true
 
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
       assert(dep.name)
+
+      print('processing', dep.name)
+
+
       if dep.depends then
          for _, dep_name in ipairs(dep.depends) do
+            print('sorter:addd', dep.name, dep_name)
             sorter:add(dep.name, dep_name)
          end
       else
+         print('without dependency')
 
+         if single_thread then
+            dependency_init(dep, path)
+         else
 
-         local lane_thread = (func)(dep, path)
+            local lane_thread = (func)(dep, path)
 
-         table.insert(threads, lane_thread)
+            table.insert(threads, lane_thread)
+         end
       end
    end
 
    local sorted = sorter:sort()
+   print('sorted')
 
 
 
    sorted = filter(sorted, function(node)
       return node.value ~= "null"
    end)
+   print('sorted', inspect(sorted))
 
-   print(tabular(threads))
-   wait_threads(threads)
-   for _, thread in ipairs(threads) do
-      local result, errcode = thread:join()
-      print(result, errcode)
+   if #threads ~= 0 then
+      print(tabular(threads))
+      wait_threads(threads)
+      for _, thread in ipairs(threads) do
+         local result, errcode = thread:join()
+         print(result, errcode)
+      end
    end
 
    for _, node in ripairs(sorted) do
@@ -1598,7 +1673,7 @@ function actions.init_smart(_args)
 
    end
 
-   print('deps', inspect(deps))
+
 
    _init_smart(path_third_party, deps)
    _init_smart(path_wasm_third_party, deps)
@@ -1623,10 +1698,10 @@ function actions.init(_args)
       end
    end
 
-   print('deps', inspect(deps))
+
 
    _init(path_third_party, deps)
-   _init(path_wasm_third_party, deps)
+
 
 end
 
@@ -1726,100 +1801,105 @@ function actions.test(_args)
    end
 end
 
-local function update_links_table(_links, artifact)
-   local found = false
-   for _, line in ipairs(_links) do
-      if string.match(line, artifact) then
-         found = true
-         break
-      end
-   end
-   if not found then
-      local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
-      table.insert(_links, format(ptrn, artifact, artifact))
-   end
-end
-
-local function update_links(artifact)
-   local site_repo_tmp = string.gsub(site_repo_index, "~", os.getenv("HOME"))
-   local file = io.open(site_repo_tmp, "r")
-   if not file then
-      print(format("Could not load '%s' file", site_repo_tmp));
-      os.exit(1)
-   end
-
-   local begin_section = "begin_links_section"
-   local end_section = "end_links_section"
-
-   local links_lines = {}
-   local put = false
-   local line_counter = 0
-   local other_lines = {}
-   for line in file:lines() do
-      local begin = false
-      if string.match(line, begin_section) then
-         put = true
-         begin = true
-         goto continue
-      end
-      if string.match(line, end_section) then
-         put = false
-         goto continue
-      end
-      line_counter = line_counter + 1
-      if put then
-         table.insert(links_lines, line)
-      end
-      ::continue::
-      if (not put) or begin then
-         table.insert(other_lines, line)
-      end
-   end
-
-   if verbose then
-      print('link_lines before update')
-      print(tabular(links_lines))
-   end
-
-   update_links_table(links_lines, artifact)
-
-   if verbose then
-      print('link_lines after update')
-      print(tabular(links_lines))
-   end
-
-   local new_lines = {}
-   for _, line in ipairs(other_lines) do
-      if string.match(line, begin_section) then
-         table.insert(new_lines, line)
-         for _, link_line in ipairs(links_lines) do
-            table.insert(new_lines, link_line)
-         end
-         goto continue
-      end
-      table.insert(new_lines, line)
-      ::continue::
-   end
-
-   print('new_lines')
-   print(tabular(new_lines))
-
-   file = io.open(site_repo_tmp .. ".tmp", "w")
-   for _, line in ipairs(new_lines) do
-      file:write(line .. "\n")
-   end
-   file:close()
-
-
-   local cmd1 = "mv " .. site_repo_tmp .. " " .. site_repo_tmp .. ".bak"
-   local cmd2 = "mv " .. site_repo_tmp .. ".tmp " .. site_repo_tmp
-
-   print(cmd1)
-   print(cmd2)
 
 
 
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function check_files_in_dir(dirname, filelist)
    print('check_files_in_dir', dirname, inspect(filelist))
@@ -1870,7 +1950,8 @@ local function sub_publish(_args, cfg)
 
 
    if cfg.artifact then
-      update_links(cfg.artifact)
+      print("not implemented. please rewrite code without 'goto' operator")
+
    else
       print("Bad directory, no artifact value in bld.lua")
    end
@@ -2535,7 +2616,8 @@ function actions.build_smart(_args)
          _build_smart(dependencies_name_map[_args.name])
       else
          print("bad dependency name", _args.name)
-         goto exit
+         pop_dir()
+         return
       end
    else
       for _, dep in ipairs(dependencies) do
@@ -2543,7 +2625,6 @@ function actions.build_smart(_args)
       end
    end
 
-   ::exit::
    pop_dir()
 end
 
@@ -2559,7 +2640,8 @@ function actions.build(_args)
          _build(get_dir(dependencies_name_map[_args.name]))
       else
          print("bad dependency name", _args.name)
-         goto exit
+         pop_dir()
+         return
       end
    else
       for _, dirname in ipairs(get_dirs(dependencies)) do
@@ -2567,7 +2649,6 @@ function actions.build(_args)
       end
    end
 
-   ::exit::
    pop_dir()
 end
 
@@ -2764,7 +2845,9 @@ end
 
 
 
-local json = require("json")
+
+
+
 
 
 
@@ -2820,59 +2903,61 @@ end
 
 
 
-function actions.anim_convert(_args)
-   print('anim_convert', inspect(_args))
-   if not _args.name then
-      print("There is no json file path in argument")
-      os.exit(1)
-   end
-
-   local data = io.open(_args.name, "r"):read("*a")
 
 
-   local js = json.decode(data)
-   if not js then
-      print("parsing error")
-      os.exit(1)
-   end
-
-   local frames = {}
-
-   for k, v in pairs(js.frames) do
-
-      local frame = v
-      frame.num = tonumber(string.match(k, "(%d*)%.aseprite"))
-      table.insert(frames, frame)
-   end
-
-   table.sort(frames, function(a, b)
-      return a.num < b.num
-   end)
 
 
-   local res = {}
-   res.meta = js.meta
-   res.meta.app = nil
-   res.meta.frameTags = nil
-   res.meta.layers = nil
-   res.meta.slices = nil
-   res.meta.version = nil
-   res.meta.scale = nil
-   res.meta.format = nil
-   res.frames = {}
-   for _, frame in ipairs(frames) do
-      table.insert(res.frames, {
-         x = frame.frame.x,
-         y = frame.frame.y,
-         w = frame.frame.w,
-         h = frame.frame.h,
-      })
-   end
 
-   local new_fname = string.gsub(_args.name, "%.json$", ".lua")
 
-   io.open(new_fname, "w"):write(serpent.dump(res))
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function codegen(cg)
    print('codegen', inspect(cg))
