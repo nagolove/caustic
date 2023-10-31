@@ -3,7 +3,7 @@
 
 return {
     --skip_compat53 = true,
-    --gen_target = "5.1",
+    gen_target = "5.1",
     --global_env_def = "love",
     --source_dir = "src",
     --build_dir = "app",

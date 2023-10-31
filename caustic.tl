@@ -324,7 +324,9 @@ local cache: Cache
 local enum BuildMethod
     "cmake"             -- вызывается cmake . && make
     "make"              -- вызвается make
-    "other"             -- явно указывается команда сборки
+    "auto"             	-- call cmake or make by CMakeLists.txt or Makefile
+	"custom"			-- build by calling special function
+	"none"				-- no any build needed for package
 end
 
 -- TODO: Фиксировать версии библиотек? 
@@ -366,6 +368,8 @@ local record Dependency
     -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
     -- build_cmake, etc
     custom_build: function(dep: Dependency)
+	-- for WebAssembly
+    wcustom_build: function(dep: Dependency) 
     after_build: function(dep: Dependency)
 
     build_method: BuildMethod
@@ -533,9 +537,10 @@ local function rlimgui_after_init(_: Dependency)
     print("rlimgui_after_init:", lfs.currentdir())
 
     -- TODO: Распаковывать в другой каталог, в cimgui
-    cmd_do("wget https://github.com/raysan5/raylib/archive/refs/heads/master.zip")
-    cmd_do("mv master.zip raylib-master.zip")
-    cmd_do("aunpack raylib-master.zip")
+
+    --cmd_do("wget https://github.com/raysan5/raylib/archive/refs/heads/master.zip")
+    --cmd_do("mv master.zip raylib-master.zip")
+    --cmd_do("aunpack raylib-master.zip")
 
     --cmd_do("wget https://github.com/ocornut/imgui/archive/refs/heads/master.zip")
     --cmd_do("mv master.zip imgui-master.zip")
@@ -591,7 +596,7 @@ end
 -- каталогов библиотек и т.д.
 local dependencies: {Dependency} = {
     {
-        build_method = "other",
+        build_method = "custom",
         custom_build = pcre2_custom_build,
         description = "регулярные выражения с обработкой ошибок и группами захвата",
         dir = "pcre2",
@@ -610,7 +615,7 @@ local dependencies: {Dependency} = {
     },
     {
         after_init = lfs_after_init,
-        build_method = "other",
+        build_method = "make",
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
         includes = { "luafilesystem/src" },
@@ -620,6 +625,8 @@ local dependencies: {Dependency} = {
         url = "https://github.com/lunarmodules/luafilesystem.git",
     },
     {
+		-- XXX: That issue with freetype compiling?
+		-- XXX: Does freetype library used by cimgui?
         after_init = freetype_after_init,
         build_method = 'other',
         description = "загрузчик ttf шрифтов. используется в imgui",
@@ -629,6 +636,7 @@ local dependencies: {Dependency} = {
         name = 'freetype',
         url = "https://github.com/freetype/freetype.git",
     },
+
     {
         --custom_build = rlimgui_custom_build,
         after_init = rlimgui_after_init,
@@ -653,8 +661,9 @@ local dependencies: {Dependency} = {
         name = 'cimgui',
         url = 'git@github.com:cimgui/cimgui.git',
     },
+
     {
-        --build_method = 'other',
+        build_method = 'none'
         after_init = sunvox_after_init,
         copy_for_wasm = true,
         description = "модульный звуковой синтезатор",
@@ -2119,6 +2128,14 @@ local function build_with_make()
     cmd_do("make -j")
 end
 
+local function auto_build()
+	if file_exist("CMakeLists.txt") then
+		build_with_cmake()
+	elseif file_exist("Makefile") or file_exist("makefile") then
+		build_with_make()
+	end
+end
+
 -- TODO: Оставить только явный запуск сборки зависимости, указанный в виде
 -- константы в таблице данной зависимости.
 local function common_build(dep: Dependency)
@@ -2127,13 +2144,13 @@ local function common_build(dep: Dependency)
             build_with_make()
         elseif dep.build_method == 'cmake' then
             build_with_cmake()
+        elseif dep.build_method == 'auto' then
+			auto_build()
         end
     else
-        if file_exist("CMakeLists.txt") then
-            build_with_cmake()
-        elseif file_exist("Makefile") or file_exist("makefile") then
-            build_with_make()
-        end
+		print("dependency", inspect(dep))
+		print("thereis no build method")
+		os.exit(1)
     end
 end
 
