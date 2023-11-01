@@ -62,7 +62,7 @@ local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
 
 local dir_stack: {string} = {}
-local verbose = false
+local verbose = true
 
 -- TODO: Добавить возможность нескольких артефактов в проекте
 local record Cfg
@@ -329,6 +329,11 @@ local enum BuildMethod
 	"none"				-- no any build needed for package
 end
 
+local enum UrlAction
+	"git"
+	"zip"
+end
+
 -- TODO: Фиксировать версии библиотек? 
 -- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
 -- значением хэша коммита
@@ -340,6 +345,7 @@ local record Dependency
     name: string        -- имя зависимости
     depends: {string}   -- список имен зависомостей от которых зависит данная
 
+	url_action: UrlAction
     url: string         -- git ссылка или ссылка на zip для wget
 
     -- имя каталога в который производится копирование и сборка
@@ -547,6 +553,11 @@ local function rlimgui_after_init(_: Dependency)
     --cmd_do("aunpack imgui-master.zip")
 
     --cmd_do("premake5 gmake")
+
+	local cimgui_path = path_third_party .. "/cimgui"
+    for file in lfs.dir(cimgui_path) do
+		print(file)
+	end
 end
 
 --[[
@@ -560,6 +571,7 @@ local function cimgui_after_build(_: Dependency)
     cmd_do("mv cimgui.a libcimgua.a")
 end
 
+--[[
 local function freetype_after_init(_: Dependency)
     cmd_do({
         "git submodule update --init --force --recursive --depth 1",
@@ -569,19 +581,18 @@ local function freetype_after_init(_: Dependency)
         "cmake -E chdir build cmake ..",
     })
 
-    --[[
     -- Отключение модулей 
-#     cmake -B build -D FT_REQUIRE_ZLIB=TRUE  -D FT_REQUIRE_BZIP2=TRUE  -D FT_REQUIRE_PNG=TRUE  -D FT_REQUIRE_HARFBUZZ=TRUE  -D FT_REQUIRE_BROTLI=TRUE [...]
---]]
+	--     cmake -B build -D FT_REQUIRE_ZLIB=TRUE  -D FT_REQUIRE_BZIP2=TRUE  -D FT_REQUIRE_PNG=TRUE  -D FT_REQUIRE_HARFBUZZ=TRUE  -D FT_REQUIRE_BROTLI=TRUE
 
     push_current_dir()
     lfs.chdir("build")
     cmd_do("make -j")
     pop_dir()
 end
+--]]
 
-local function lfs_after_init(_: Dependency)
-    print('lfs_after_init')
+local function lfs_custom_build(_: Dependency)
+    print('lfs_after_init', lfs.currentdir())
     push_current_dir()
     lfs.chdir('src')
     cmd_do("gcc -c src/lfs.c")
@@ -607,14 +618,19 @@ local dependencies: {Dependency} = {
         name = "pcre2",
         url = "https://github.com/PhilipHazel/pcre2.git",
     },
+
+	--[[
     {
         description = "загрузчик json данных в lua",
+		build_method = "none",
         dir = "json.lua",
         name = "json.lua",
         url = "https://github.com/rxi/json.lua.git",
     },
+	--]]
+
     {
-        after_init = lfs_after_init,
+        after_init = lfs_custom_build,
         build_method = "make",
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
@@ -624,11 +640,13 @@ local dependencies: {Dependency} = {
         name = "lfs",
         url = "https://github.com/lunarmodules/luafilesystem.git",
     },
+
+--[[
     {
 		-- XXX: That issue with freetype compiling?
 		-- XXX: Does freetype library used by cimgui?
         after_init = freetype_after_init,
-        build_method = 'other',
+        build_method = 'none',
         description = "загрузчик ttf шрифтов. используется в imgui",
         dir = 'freetype',
         disabled = true,
@@ -636,11 +654,12 @@ local dependencies: {Dependency} = {
         name = 'freetype',
         url = "https://github.com/freetype/freetype.git",
     },
+--]]
 
     {
         --custom_build = rlimgui_custom_build,
         after_init = rlimgui_after_init,
-        build_method = 'other',
+        build_method = 'none',
         description = "raylib обвязка над imgui",
         dir = "rlImGui",
         disabled = true,
@@ -650,7 +669,7 @@ local dependencies: {Dependency} = {
     {
         after_build = cimgui_after_build,
         after_init = cimgui_after_init,
-        build_method = 'other',
+        build_method = 'none',
         depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
@@ -663,7 +682,7 @@ local dependencies: {Dependency} = {
     },
 
     {
-        build_method = 'none'
+        build_method = 'none',
         after_init = sunvox_after_init,
         copy_for_wasm = true,
         description = "модульный звуковой синтезатор",
@@ -918,40 +937,6 @@ local links_linix_only = {
     "lfs:static",
 }
 
---[[
-local libdirs_internal = { 
-    "./3rd_party/genann",
-    "./3rd_party/utf8proc",
-    "./3rd_party/Chipmunk2d/src",
-    "./3rd_party/raylib/raylib",
-    "./3rd_party/lua",
-    "./3rd_party/small-regex/libsmallregex",
-    "./3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
-    "./3rd_party/cimgui",
-    --"./3rd_party/freetype/build",
-    "./3rd_party/luafilesystem/",
-    --"./3rd_party/rlImGui/_bin/Release",
-}
---]]
-
--- TODO: Расширить имена до полных путей
---[[
-local libdirs = { 
-    "../caustic",
-    "../caustic/3rd_party/Chipmunk2D/src",
-    "../caustic/3rd_party/cimgui",
-    --"../caustic/3rd_party/freetype/build",
-    "../caustic/3rd_party/genann",
-    "../caustic/3rd_party/lua",
-    "../caustic/3rd_party/raylib/raylib",
-    --"../caustic/3rd_party/rlImGui/_bin/Release",
-    "../caustic/3rd_party/small-regex/libsmallregex",
-    "../caustic/3rd_party/sunvox/sunvox_lib/linux/lib_x86_64",
-    "../caustic/3rd_party/utf8proc",
-    "../caustic/3rd_party/luafilesystem",
-}
---]]
-
 local function gather_libdirs(deps: {Dependency}): {string}
     local libdirs_tbl = {}
     for _, dep in ipairs(deps) do
@@ -1102,7 +1087,7 @@ local function after_init(dep: Dependency)
 end
 
 local function git_clone(dep: Dependency)
-    print('git_clone')
+    print('git_clone', lfs.currentdir())
     print(tabular(dep))
     local url = dep.url
     if not dep.commit then
@@ -1127,12 +1112,20 @@ local function download_and_unpack_zip(dep: Dependency)
     --print('download_zip', inspect(url))
     --local path = libs_path .. "/" .. dep.dir
     local path = dep.dir
-    local ok, err = lfs.mkdir(dep.dir)
-    if not ok then
-        print('download_and_unpack_zip: lfs.mkdir error', err)
-        print('dep', inspect(dep))
-        os.exit(1)
-    end
+
+	local attributes = lfs.attributes(dep.dir)
+	if not attributes then
+		print('download_and_unpack_zip: directory is not exists')
+		local ok, err = lfs.mkdir(dep.dir)
+		if not ok then
+			print('download_and_unpack_zip: lfs.mkdir error', err)
+			print('dep', inspect(dep))
+			os.exit(1)
+		end
+	else
+		print('download_and_unpack_zip: directory exists')
+	end
+
     local fname = path .. '/' .. dep.fname
     print('fname', fname)
     local cfile = io.open(fname, 'w')
@@ -1612,7 +1605,7 @@ local record Args
     minshell: string
     c: string
     j: string
-    name: string
+    name: string				-- dependency name
     make_type: MakeAction
     full: string
     flags: {string}
@@ -2138,7 +2131,7 @@ local function common_build(dep: Dependency)
         end
     else
 		print("dependency", inspect(dep))
-		print("thereis no build method")
+		print("there is no build method")
 		os.exit(1)
     end
 end
