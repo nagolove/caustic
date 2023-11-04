@@ -1,8 +1,7 @@
 #export CAUSTIC_PATH=$HOME/caustic
 #export PATH=/home/testuser/.luarocks/lib/luarocks/rocks-5.4/tl/0.15.2-1/bin/:$PATH
 
-#sudo apt install git build-essential lua5.4 luarocks cmake curl
-#luarocks install lua-curl CURL_INCDIR=/usr/include/x86_64-linux-gnu --local
+#sudo apt install git build-essential lua5.1 luarocks cmake curl
 
 
 #sudo apt install liblua5.4-dev
@@ -20,7 +19,8 @@
 luarocsk install luazip --local
 
 #sudo apt install libcurl4-nss-dev 
-luarocks install lua-curl --local
+#luarocks install lua-curl --local
+#luarocks install lua-curl CURL_INCDIR=/usr/include/x86_64-linux-gnu --local
 
 luarocks install serpent --local
 luarocks install tl --local

@@ -315,7 +315,17 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     return cfgs, push_num
 end
 
-local signal = require "posix".signal.signal
+--[[
+local signal
+
+local ok, errmsg = pcall(function()
+	signal  = require "posix".signal.signal
+end)
+if not ok then
+	print("Could not require 'posix' module")
+end
+--]]
+
 --local tabular = require "tabular"
 --package.path = "./?.lua;" .. package.path
 --print('package.path', package.path)
@@ -592,7 +602,7 @@ end
 --]]
 
 local function lfs_custom_build(_: Dependency)
-    print('lfs_after_init', lfs.currentdir())
+    print('lfs_custom_build', lfs.currentdir())
     push_current_dir()
     lfs.chdir('src')
     cmd_do("gcc -c src/lfs.c")
@@ -630,8 +640,9 @@ local dependencies: {Dependency} = {
 	--]]
 
     {
-        after_init = lfs_custom_build,
-        build_method = "make",
+        --after_init = lfs_custom_build,
+        custom_build = lfs_custom_build,
+        build_method = "custom",
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
         includes = { "luafilesystem/src" },
@@ -1171,7 +1182,8 @@ end
 -- FIXME: Зачем делать проверку действия по строке, если действие можно задать 
 -- флагом или функцией?
 local function _dependecy_init(dep: Dependency)
-	print('_dependecy_init')
+	print('_dependecy_init', dep)
+	assert(dep)
     local url = dep.url
     if string.match(url, "%.git$") then
         --print("git url")
@@ -1184,6 +1196,7 @@ local function _dependecy_init(dep: Dependency)
 end
 
 local function dependency_init(dep: Dependency, destdir: string): any
+	assert(destdir)
     -- Копирую в wasm каталог только если установлени специальный флажок
     if string.match(destdir, "wasm_") then 
         if dep.copy_for_wasm then
@@ -1584,7 +1597,7 @@ local function _init(path: string, deps: {Dependency})
 
     for _, node in ripairs(sorted) do
         local dep = dependencies_name_map[(node as Node).value as string]
-        --print('dep', inspect(dep))
+        print('dep', inspect(dep))
         dependency_init(dep, path)
     end
 
@@ -3308,6 +3321,7 @@ function actions.make(_args: Args)
     end
 end
 
+--[[
 local function handler_int(_: integer)
     if cache then
         cache:save()
@@ -3317,6 +3331,7 @@ local function handler_int(_: integer)
     print(debug.traceback())
     os.exit()
 end
+--]]
 
 local argparse = require 'argparse'
 
@@ -3350,9 +3365,18 @@ local function do_parser_setup(
     end
 end
 
+--[[
+local function setup_signal()
+	if not signal then
+		return
+	end
+	local SIGINT = 2
+	signal(SIGINT, handler_int)
+end
+--]]
+
 local function main()
-    local SIGINT = 2
-    signal(SIGINT, handler_int)
+	--setup_signal()
 
     local parser = argparse()
 
