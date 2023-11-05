@@ -62,7 +62,7 @@ local site_repo = "~/nagolove.github.io"
 
 
 local dir_stack = {}
-local verbose = false
+local verbose = true
 
 
 
@@ -315,11 +315,31 @@ local function search_and_load_cfgs_up(fname)
    return cfgs, push_num
 end
 
-local signal = require("posix").signal.signal
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 local cache
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -386,6 +406,7 @@ local function shallow_copy(a)
 end
 
 local function cmd_do(_cmd)
+
    if verbose then
 
       os.execute("echo `pwd`")
@@ -412,34 +433,34 @@ local function cmd_do(_cmd)
       print('Wrong type in cmd_do', type(_cmd))
       os.exit(1)
    end
-end
-
-local function cp(from, to)
-   print(format("copy '%s' to '%s'", from, to))
-   local ok, errmsg = pcall(function()
-      local _in = io.open(from, 'r')
-      local _out = io.open(to, 'w')
-      local content = _in:read("*a")
-      _out:write(content)
-   end)
-   if not ok then
-      print("cp() failed with", errmsg)
-   end
 
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function copy_headers_to_wfc(_)
    print('copy_headers_to_wfc:', lfs.currentdir())
-   cp("stb/stb_image.h", "wfc/stb_image.h")
-   cp("stb/stb_image_write.h", "wfc/stb_image_write.h")
+   cmd_do("cp ../stb/stb_image.h .")
+   cmd_do("cp ../stb/stb_image_write.h .")
 end
 
 local function sunvox_after_init()
    print('sunvox_after_init:', lfs.currentdir())
-   cp(
-   "sunvox/sunvox_lib/js/lib/sunvox.wasm",
-   "sunvox/sunvox_lib/js/lib/sunvox.o")
-
+   cmd_do("cp sunvox/sunvox_lib/js/lib/sunvox.wasm sunvox/sunvox_lib/js/lib/sunvox.o")
 end
 
 local function gennann_after_build(dep)
@@ -451,12 +472,35 @@ local function gennann_after_build(dep)
    pop_dir()
 end
 
-local function pcre2_custom_build(_)
-   print("pcre2_custom_build", lfs.currentdir())
+local function chipmunk_custom_build(dep)
+   print("chipmunk_custom_build:", lfs.currentdir())
+   push_current_dir()
+   lfs.chdir(dep.dir)
+   local opts = {
+      "BUILD_DEMOS=OFF",
+      "INSTALL_DEMOS=OFF",
+      "BUILD_SHARED=OFF",
+      "BUILD_STATIC=ON",
+      "INSTALL_STATIC=OFF",
+   }
+   for k, opt in ipairs(opts) do
+      opts[k] = "-D " .. opt
+   end
+   cmd_do("cmake . " .. table.concat(opts, " "))
+   cmd_do("make -j")
+   pop_dir()
+end
+
+local function pcre2_custom_build(dep)
+   push_current_dir()
+   print("pcre2_custom_build: dep.dir", dep.dir)
+   lfs.chdir(dep.dir)
+   print("pcre2_custom_build:", lfs.currentdir())
 
    cmd_do("rm CMakeCache.txt")
    cmd_do("cmake .")
    cmd_do("make -j")
+   pop_dir()
 end
 
 local function small_regex_custom_build(dep)
@@ -488,25 +532,46 @@ end
 
 
 
-local function cimgui_after_init(_)
+local function cimgui_after_init(dep)
+   print("cimgui_after_init:", lfs.currentdir())
+   local imgui_files = {
+      "../imgui/imgui.h",
+      "../imgui/imgui.cpp",
+      "../imgui/imconfig.h",
+      "../imgui/imgui_internal.h",
+      "../imgui/imstb_textedit.h",
+   }
+   local imgui_files_str = table.concat(imgui_files, " ")
+   cmd_do("cp " .. imgui_files_str .. " ../cimgui/imgui")
+
+   push_current_dir()
+   lfs.chdir(dep.dir)
+
+   print("cimgui_after_init:", lfs.currentdir())
+
    local use_freetype = false
 
    cmd_do('git submodule update --init --recursive --depth 1')
    push_current_dir()
    lfs.chdir('generator')
    if use_freetype then
-      cmd_do('./generator.sh -t "internal noimstrv freetype"')
+      cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv freetype"')
    else
-      cmd_do('./generator.sh -t "internal noimstrv "')
+
+      cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv"')
    end
    pop_dir()
+
+   print("cimgui_after_init: code was generated");
+
+
 
 
    cmd_do("rm CMakeCache.txt")
 
    if use_freetype then
       cmd_do(table.concat({
-         format("CXXFLAGS=-I%s/3rd_party/freetype/include", path_caustic),
+         format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
          "cmake .",
          "-DIMGUI_STATIC=1",
          "-DIMGUI_FREETYPE=1",
@@ -514,7 +579,7 @@ local function cimgui_after_init(_)
       }, " "))
    else
       cmd_do(table.concat({
-         format("CXXFLAGS=-I%s/3rd_party/freetype/include", path_caustic),
+         format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
          "cmake .",
          "-DIMGUI_STATIC=1",
       }, " "))
@@ -524,24 +589,36 @@ local function cimgui_after_init(_)
    cmd_do("cat rlimgui.inc >> cimgui.cpp")
    cmd_do("cat rlimgui.h.inc >> cimgui.h")
    cmd_do("make -j")
+
    cmd_do("mv cimgui.a libcimgui.a")
 
 
+
+
+
+
+   pop_dir()
 end
 
 local function rlimgui_after_init(_)
    print("rlimgui_after_init:", lfs.currentdir())
 
 
-   cmd_do("wget https://github.com/raysan5/raylib/archive/refs/heads/master.zip")
-   cmd_do("mv master.zip raylib-master.zip")
-   cmd_do("aunpack raylib-master.zip")
 
 
 
 
 
 
+
+
+
+
+
+   local cimgui_path = path_third_party .. "/cimgui"
+   for file in lfs.dir(cimgui_path) do
+      print(file)
+   end
 end
 
 
@@ -555,34 +632,37 @@ local function cimgui_after_build(_)
    cmd_do("mv cimgui.a libcimgua.a")
 end
 
-local function freetype_after_init(_)
-   cmd_do({
-      "git submodule update --init --force --recursive --depth 1",
-      "cmake -E remove CMakeCache.txt",
-      "cmake -E remove_directory CMakeFiles",
-      "cmake -E make_directory build",
-      "cmake -E chdir build cmake ..",
-   })
 
 
 
 
 
 
-   push_current_dir()
-   lfs.chdir("build")
-   cmd_do("make -j")
-   pop_dir()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function lfs_custom_build(_)
+   print('lfs_custom_build', lfs.currentdir())
+
+
+   cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
+
+
+   cmd_do("ar rcs liblfs.a lfs.o")
 end
 
-local function lfs_after_init(_)
-   print('lfs_after_init')
-   push_current_dir()
-   lfs.chdir('src')
-   cmd_do("gcc -c src/lfs.c")
-   pop_dir()
-   cmd_do("ar rcs liblfs.a src/lfs.o")
-end
+
 
 
 
@@ -590,8 +670,10 @@ end
 
 
 local dependencies = {
+
    {
-      build_method = "other",
+      disabled = false,
+      build_method = "custom",
       custom_build = pcre2_custom_build,
       description = "регулярные выражения с обработкой ошибок и группами захвата",
       dir = "pcre2",
@@ -600,49 +682,76 @@ local dependencies = {
       links = { "pcre2-8" },
       links_internal = { "libpcre2-8.a" },
       name = "pcre2",
+      url_action = "git",
       url = "https://github.com/PhilipHazel/pcre2.git",
    },
+
    {
-      description = "загрузчик json данных в lua",
-      dir = "json.lua",
-      name = "json.lua",
-      url = "https://github.com/rxi/json.lua.git",
+      build_method = "none",
+      name = "imgui",
+      url_action = "git",
+      url = "https://github.com/ocornut/imgui.git",
    },
+
+
+
+
+
+
+
+
+
+
+
    {
-      after_init = lfs_after_init,
-      build_method = "other",
+
+      custom_build = lfs_custom_build,
+      build_method = "custom",
       description = "C lua модуль для поиска файлов",
       dir = "luafilesystem",
       includes = { "luafilesystem/src" },
       libdirs = { "luafilesystem" },
       links_internal = { "lfs:static" },
       name = "lfs",
+      url_action = "git",
       url = "https://github.com/lunarmodules/luafilesystem.git",
    },
-   {
-      after_init = freetype_after_init,
-      build_method = 'other',
-      description = "загрузчик ttf шрифтов. используется в imgui",
-      dir = 'freetype',
-      disabled = true,
-      libdirs = { "freetype/bld/build" },
-      name = 'freetype',
-      url = "https://github.com/freetype/freetype.git",
-   },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
    {
 
+
       after_init = rlimgui_after_init,
-      build_method = 'other',
+      build_method = 'none',
       description = "raylib обвязка над imgui",
       dir = "rlImGui",
       disabled = true,
       name = "rlimgui",
+      url_action = "git",
       url = "https://github.com/raylib-extras/rlImGui.git",
    },
+
    {
+
+
       after_build = cimgui_after_build,
-      after_init = cimgui_after_init,
-      build_method = 'other',
+      after_init = nil,
+      custom_build = cimgui_after_init,
+      build_method = 'custom',
       depends = { 'freetype', 'rlimgui' },
       description = "C биндинг для imgui",
       dir = "cimgui",
@@ -651,10 +760,13 @@ local dependencies = {
       links = { "cimgui:static" },
       links_internal = { "cimgui:static" },
       name = 'cimgui',
-      url = 'git@github.com:cimgui/cimgui.git',
+      url_action = "git",
+      url = 'https://github.com/cimgui/cimgui.git',
    },
-   {
 
+   {
+      disabled = true,
+      build_method = 'none',
       after_init = sunvox_after_init,
       copy_for_wasm = true,
       description = "модульный звуковой синтезатор",
@@ -663,55 +775,73 @@ local dependencies = {
       includes = { "sunvox/sunvox_lib/headers" },
       libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" },
       name = 'sunvox',
+      url_action = "zip",
       url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
    },
-   {
 
+   {
+      build_method = 'make',
       after_build = gennann_after_build,
       commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
       copy_for_wasm = true,
       description = "простая библиотека для многослойного персетрона",
+      dir = "genann",
       includes = { "genann" },
       libdirs = { "genann" },
       links = { "genann:static" },
       links_internal = { "genann:static" },
       name = 'genann',
+      url_action = "git",
       url = "https://github.com/codeplea/genann.git",
    },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
    {
 
       copy_for_wasm = true,
-      description = "box2c - плоский игровой физический движок",
-      includes = { "Chipmunk2D/include" },
-      libdirs = { "Chipmunk2D/src" },
-      links = { "chipmunk:static" },
-      links_internal = { "box2c:static" },
-      name = 'box2c',
-      url = "https://github.com/erincatto/box2c.git",
-   },
-   {
-
-      copy_for_wasm = true,
+      custom_build = chipmunk_custom_build,
+      dir = "Chipmunk2D",
+      build_method = 'custom',
       description = "плоский игровой физический движок",
       includes = { "Chipmunk2D/include" },
       libdirs = { "Chipmunk2D/src" },
       links = { "chipmunk:static" },
       links_internal = { "chipmunk:static" },
       name = 'chipmunk',
+      url_action = 'git',
       url = "https://github.com/nagolove/Chipmunk2D.git",
    },
+
    {
 
       copy_for_wasm = true,
       description = "lua интерпритатор",
+      build_method = 'make',
       includes = { "lua" },
       libdirs = { "lua" },
       links = { "lua:static" },
       links_internal = { "lua:static" },
       name = 'lua',
+      url_action = "git",
       url = "https://github.com/lua/lua.git",
    },
+
+
    {
+
 
       copy_for_wasm = true,
       description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
@@ -720,8 +850,12 @@ local dependencies = {
       links = { "raylib" },
       links_internal = { "raylib" },
       name = 'raylib',
+      dir = "raylib",
+      build_method = "cmake",
+      url_action = "git",
       url = "https://github.com/raysan5/raylib.git",
    },
+
    {
 
 
@@ -733,8 +867,10 @@ local dependencies = {
       links = { "smallregex:static" },
       links_internal = { "smallregex:static" },
       name = 'smallregex',
+      url_action = "git",
       url = "https://gitlab.com/relkom/small-regex.git",
    },
+
    {
 
       build_method = 'make',
@@ -745,26 +881,34 @@ local dependencies = {
       links = { "utf8proc:static" },
       links_internal = { "utf8proc:static" },
       name = 'utf8proc',
+      url_action = "git",
       url = "https://github.com/JuliaLang/utf8proc.git",
    },
+
+   {
+
+      copy_for_wasm = true,
+      build_method = 'none',
+      description = "набор библиотека заголовочных файлов для разных нужд",
+      includes = { "stb" },
+      name = 'stb',
+      url_action = "git",
+      url = "https://github.com/nothings/stb.git",
+   },
+
    {
 
 
 
+      dir = "wfc",
+      build_method = 'none',
       after_init = copy_headers_to_wfc,
       copy_for_wasm = true,
       depends = { 'stb' },
       description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
       name = 'wfc',
+      url_action = "git",
       url = "https://github.com/krychu/wfc.git",
-   },
-   {
-
-      copy_for_wasm = true,
-      description = "набор библиотека заголовочных файлов для разных нужд",
-      includes = { "stb" },
-      name = 'stb',
-      url = "https://github.com/nothings/stb.git",
    },
 }
 
@@ -920,40 +1064,6 @@ local links_linix_only = {
    "lfs:static",
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function gather_libdirs(deps)
    local libdirs_tbl = {}
    for _, dep in ipairs(deps) do
@@ -1089,34 +1199,42 @@ local sleep = require("socket").sleep
 
 
 local function after_init(dep)
-   if dep.after_init then
-      local ok, errmsg = pcall(function()
-         print('after_init:', dep.name)
-         push_current_dir()
-         lfs.chdir(dep.dir)
-         dep.after_init(dep)
-         pop_dir()
-      end)
-      if not ok then
-         print('after_init() failed with', errmsg)
-      end
+   assert(dep)
+   if not dep.after_init then
+      return
    end
+
+   push_current_dir()
+   local ok, errmsg = pcall(function()
+      print('after_init:', dep.name)
+      lfs.chdir(dep.dir)
+      dep.after_init(dep)
+   end)
+   if not ok then
+      local msg = 'after_init() failed with ' .. errmsg
+      print(ansicolors("%{red}" .. msg .. "%{reset}"))
+      print(debug.traceback())
+   end
+   pop_dir()
 end
 
 local function git_clone(dep)
-   print('git_clone')
+   print('git_clone:', lfs.currentdir())
    print(tabular(dep))
-   local url = dep.url
-   if not dep.commit then
-
-
-      local git_cmd = "git clone --depth 1"
-      local fd = io.popen(git_cmd .. " " .. url)
-      print(fd:read("*a"))
+   push_current_dir()
+   if dep.commit then
+      cmd_do("git clone " .. dep.url)
+      if dep.dir then
+         lfs.chdir(dep.dir)
+      else
+         print('git_clone: dep.dir == nil', lfs.currentdir())
+      end
+      cmd_do("git checkout " .. dep.commit)
    else
-      cmd_do("git clone " .. url)
-      cmd_do("git checkout " .. url)
+      local git_cmd = "git clone --depth 1 " .. dep.url
+      cmd_do(git_cmd)
    end
+   pop_dir()
 end
 
 
@@ -1129,12 +1247,20 @@ local function download_and_unpack_zip(dep)
 
 
    local path = dep.dir
-   local ok, err = lfs.mkdir(dep.dir)
-   if not ok then
-      print('download_and_unpack_zip: lfs.mkdir error', err)
-      print('dep', inspect(dep))
-      os.exit(1)
+
+   local attributes = lfs.attributes(dep.dir)
+   if not attributes then
+      print('download_and_unpack_zip: directory is not exists')
+      local ok, err = lfs.mkdir(dep.dir)
+      if not ok then
+         print('download_and_unpack_zip: lfs.mkdir error', err)
+         print('dep', inspect(dep))
+         os.exit(1)
+      end
+   else
+      print('download_and_unpack_zip: directory exists')
    end
+
    local fname = path .. '/' .. dep.fname
    print('fname', fname)
    local cfile = io.open(fname, 'w')
@@ -1180,19 +1306,27 @@ end
 
 
 local function _dependecy_init(dep)
-   print('_dependecy_init')
-   local url = dep.url
-   if string.match(url, "%.git$") then
+   print('_dependecy_init', dep)
+   assert(dep)
+   if dep.disabled then
+      return
+   end
+
+   if dep.url_action == "git" then
 
       git_clone(dep)
-   elseif string.match(url, "%.zip$") then
+
+   elseif dep.url_action == "zip" then
 
       download_and_unpack_zip(dep)
+   else
+      print("_dependecy_init: unknown dep.url_action", dep.url_action)
    end
    after_init(dep)
 end
 
 local function dependency_init(dep, destdir)
+   assert(destdir)
 
    if string.match(destdir, "wasm_") then
       if dep.copy_for_wasm then
@@ -1376,6 +1510,7 @@ end
 
 
 
+
 local parser_setup = {
 
    build = {
@@ -1390,6 +1525,9 @@ local parser_setup = {
       flags = {
          { "-f --full", "full nodes info" },
       },
+   },
+   rmdirs = {
+      summary = "remove emty directories in path_third_party",
    },
    init = {
       summary = "download dependencies from network",
@@ -1515,8 +1653,10 @@ local function _init_smart(path, deps)
    end
 
    for _, node in ripairs(sorted) do
+      local value = (node).value
+      print('value', value, inspect(node))
       local dep = dependencies_name_map[(node).value]
-
+      print('dep', inspect(dep))
       dependency_init(dep, path)
    end
 
@@ -1545,6 +1685,7 @@ local function _init(path, deps)
 
    local sorter = Toposorter.new()
    local single_thread = true
+   local use_toposort = false
 
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
@@ -1552,8 +1693,7 @@ local function _init(path, deps)
 
       print('processing', dep.name)
 
-
-      if dep.depends then
+      if use_toposort and dep.depends then
          for _, dep_name in ipairs(dep.depends) do
             print('sorter:addd', dep.name, dep_name)
             sorter:add(dep.name, dep_name)
@@ -1572,15 +1712,18 @@ local function _init(path, deps)
       end
    end
 
-   local sorted = sorter:sort()
-   print('sorted')
+   local sorted
+   if use_toposort then
+      sorted = sorter:sort()
+      print('sorted')
 
 
 
-   sorted = filter(sorted, function(node)
-      return node.value ~= "null"
-   end)
-   print('sorted', inspect(sorted))
+      sorted = filter(sorted, function(node)
+         return node.value ~= "null"
+      end)
+      print('sorted', inspect(sorted))
+   end
 
    if #threads ~= 0 then
       print(tabular(threads))
@@ -1591,10 +1734,21 @@ local function _init(path, deps)
       end
    end
 
-   for _, node in ripairs(sorted) do
-      local dep = dependencies_name_map[(node).value]
 
-      dependency_init(dep, path)
+
+
+
+
+
+
+
+
+   if use_toposort then
+      for _, node in ripairs(sorted) do
+         local dep = dependencies_name_map[(node).value]
+         print('dep', inspect(dep))
+         dependency_init(dep, path)
+      end
    end
 
    pop_dir()
@@ -1631,6 +1785,14 @@ end
 
 
 
+
+function actions.rmdirs(_args)
+   for _, dep in ipairs(dependencies) do
+      if dep.dir then
+         cmd_do("rmdir " .. path_third_party .. "/" .. dep.dir)
+      end
+   end
+end
 
 function actions.run(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
@@ -2119,6 +2281,14 @@ local function build_with_make()
    cmd_do("make -j")
 end
 
+local function auto_build()
+   if file_exist("CMakeLists.txt") then
+      build_with_cmake()
+   elseif file_exist("Makefile") or file_exist("makefile") then
+      build_with_make()
+   end
+end
+
 
 
 local function common_build(dep)
@@ -2127,13 +2297,13 @@ local function common_build(dep)
          build_with_make()
       elseif dep.build_method == 'cmake' then
          build_with_cmake()
+      elseif dep.build_method == 'auto' then
+         auto_build()
       end
    else
-      if file_exist("CMakeLists.txt") then
-         build_with_cmake()
-      elseif file_exist("Makefile") or file_exist("makefile") then
-         build_with_make()
-      end
+      print("dependency", inspect(dep))
+      print("there is no build method")
+      os.exit(1)
    end
 end
 
@@ -2222,7 +2392,7 @@ local function build_raylib()
    print(cmd)
    cmd_do(cmd)
 
-   cp("libraylib.a", "../libraylib.a")
+   cmd_do("cp libraylib.a ../libraylib.a")
 
    pop_dir()
 end
@@ -2577,6 +2747,10 @@ local function _build(dirname)
    lfs.chdir(dirname)
 
    local dep = dependencies_map[dirname]
+   assert(dep)
+   if dep.disabled then
+      return
+   end
 
    if dep.custom_build then
       local ok, errmsg = pcall(function()
@@ -3309,15 +3483,17 @@ function actions.make(_args)
    end
 end
 
-local function handler_int(_)
-   if cache then
-      cache:save()
-   end
 
 
-   print(debug.traceback())
-   os.exit()
-end
+
+
+
+
+
+
+
+
+
 
 local argparse = require('argparse')
 
@@ -3351,9 +3527,18 @@ local function do_parser_setup(
    end
 end
 
+
+
+
+
+
+
+
+
+
+
 local function main()
-   local SIGINT = 2
-   signal(SIGINT, handler_int)
+
 
    local parser = argparse()
 
