@@ -331,6 +331,7 @@ end
 --print('package.path', package.path)
 local cache: Cache
 
+--[[
 local enum BuildMethod
     "cmake"             -- вызывается cmake . && make
     "make"              -- вызвается make
@@ -338,6 +339,7 @@ local enum BuildMethod
 	"custom"			-- build by calling special function
 	"none"				-- no any build needed for package
 end
+--]]
 
 local enum UrlAction
 	"git"
@@ -383,12 +385,10 @@ local record Dependency
 
     -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
     -- build_cmake, etc
-    custom_build: function(dep: Dependency)
+    build: function(dep: Dependency)
 	-- for WebAssembly
-    wcustom_build: function(dep: Dependency) 
+    wbuild: function(dep: Dependency) 
     after_build: function(dep: Dependency)
-
-    build_method: BuildMethod
 end
 
 --local md5 = require "md5"
@@ -491,7 +491,7 @@ local function chipmunk_custom_build(dep: Dependency)
     pop_dir()
 end
 
-local function pcre2_custom_build(dep: Dependency)
+local function build_pcre2(dep: Dependency)
     push_current_dir()
     print("pcre2_custom_build: dep.dir", dep.dir)
     lfs.chdir(dep.dir)
@@ -532,7 +532,7 @@ end
 -- ключей команды caustic
 -- В частности - отключение или включение библиотеки freetype
 -- TODO: убрать сборку из коллбека after_init
-local function cimgui_after_init(dep: Dependency)
+local function build_cimgui(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
     local imgui_files = {
         "../imgui/imgui.h",
@@ -652,7 +652,7 @@ local function freetype_after_init(_: Dependency)
 end
 --]]
 
-local function lfs_custom_build(_: Dependency)
+local function build_lfs(_: Dependency)
     print('lfs_custom_build', lfs.currentdir())
     --push_current_dir()
     --lfs.chdir('./src')
@@ -673,8 +673,7 @@ local dependencies: {Dependency} = {
 
     {
         disabled = false,
-        build_method = "custom",
-        custom_build = pcre2_custom_build,
+        build = build_pcre2,
         description = "регулярные выражения с обработкой ошибок и группами захвата",
         dir = "pcre2",
         includes = { "pcre2/src" },
@@ -687,7 +686,6 @@ local dependencies: {Dependency} = {
     },
 
     {
-        build_method = "none",
         name = "imgui",
         url_action = "git",
         url = "https://github.com/ocornut/imgui.git",
@@ -705,8 +703,7 @@ local dependencies: {Dependency} = {
 
     {
         --after_init = lfs_custom_build,
-        custom_build = lfs_custom_build,
-        build_method = "custom",
+        build = build_lfs,
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
         includes = { "luafilesystem/src" },
@@ -736,7 +733,6 @@ local dependencies: {Dependency} = {
         -- компилировать не нужно
         --custom_build = rlimgui_custom_build,
         after_init = rlimgui_after_init,
-        build_method = 'none',
         description = "raylib обвязка над imgui",
         dir = "rlImGui",
         disabled = true,
@@ -750,7 +746,7 @@ local dependencies: {Dependency} = {
         -- нужно компилировать
         after_build = cimgui_after_build,
         after_init = nil,
-        custom_build = cimgui_after_init,
+        build = cimgui_after_init,
         build_method = 'custom',
         depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
