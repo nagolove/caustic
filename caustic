@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+lua $CAUSTIC_PATH/caustic $1 $2 $3 $4 $5 $6
