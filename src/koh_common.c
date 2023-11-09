@@ -1283,6 +1283,7 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
         if (fsr->internal->regex)
             regex_free(fsr->internal->regex);
         free(fsr->internal);
+        fsr->internal = NULL;
     }
 
     if (fsr->names)

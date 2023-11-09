@@ -295,6 +295,7 @@ void stages_gui_window() {
             stage_set_active(selected->name, NULL);
     }
 
+    koh_window_post();
     igEnd();
 }
 

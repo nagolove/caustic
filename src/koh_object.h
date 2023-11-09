@@ -99,11 +99,11 @@ typedef struct TypeStorage {
 } TypeStorage;
 
 typedef struct ObjectStorage {
-    ComponentsStorage systems[MAX_SYSTEMS];
-    int systemsnum;
-    TypeStorage types[MAX_TYPE_ENUM];
-    int typesnum;
-    uint32_t last_id;
+    ComponentsStorage   systems[MAX_SYSTEMS];
+    int                 systemsnum;
+    TypeStorage         types[MAX_TYPE_ENUM];
+    int                 typesnum;
+    uint32_t            last_id;
 } ObjectStorage;
 
 void object_storage_init(ObjectStorage *s);

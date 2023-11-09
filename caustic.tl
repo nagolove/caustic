@@ -436,6 +436,10 @@ local function cmd_do(_cmd: string|{string})
     --pop_dir()
 end
 
+local function build_with_make(_: Dependency)
+    cmd_do("make -j")
+end
+
 --[[
 local function cp(from: string, to: string)
     print(format("copy '%s' to '%s'", from, to))
@@ -472,7 +476,7 @@ local function gennann_after_build(dep: Dependency)
     pop_dir()
 end
 
-local function chipmunk_custom_build(dep: Dependency)
+local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
     push_current_dir()
     lfs.chdir(dep.dir)
@@ -503,7 +507,7 @@ local function build_pcre2(dep: Dependency)
     pop_dir()
 end
 
-local function small_regex_custom_build(dep: Dependency)
+local function build_small_regex(dep: Dependency)
     print('custom_build', dep.dir)
     print('currentdir', lfs.currentdir())
     local prevdir = lfs.currentdir()
@@ -662,6 +666,11 @@ local function build_lfs(_: Dependency)
     cmd_do("ar rcs liblfs.a lfs.o")
 end
 
+local function build_raylib(_: Dependency)
+    cmd_do("cmake . -DBUILD_EXAMPLES=OFF")
+    cmd_do("make -j")
+end
+
 -- TODO: Тестировать получение и сборку каждой зависимости
 -- TODO: Если поле dir не указано, то попробовать извлечить имя каталога из 
 -- ссылка, если она не указывает на zip архив
@@ -746,8 +755,7 @@ local dependencies: {Dependency} = {
         -- нужно компилировать
         after_build = cimgui_after_build,
         after_init = nil,
-        build = cimgui_after_init,
-        build_method = 'custom',
+        build = build_cimgui,
         depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
@@ -762,7 +770,6 @@ local dependencies: {Dependency} = {
 
     {
         disabled = true,
-        build_method = 'none',
         after_init = sunvox_after_init,
         copy_for_wasm = true,
         description = "модульный звуковой синтезатор",
@@ -776,7 +783,7 @@ local dependencies: {Dependency} = {
     },
 
     {
-        build_method = 'make',
+        build = build_with_make,
         after_build = gennann_after_build,
         commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         copy_for_wasm = true,
@@ -791,12 +798,25 @@ local dependencies: {Dependency} = {
         url = "https://github.com/codeplea/genann.git",
     },
 
+    --[[
     {
         --build_method = 'other',
         copy_for_wasm = true,
-        custom_build = chipmunk_custom_build,
+        description = "box2c - плоский игровой физический движок",
+        includes = { "Chipmunk2D/include", },
+        libdirs = { "Chipmunk2D/src" },
+        links = { "chipmunk:static" },
+        links_internal = { "box2c:static" },
+        name = 'box2c',
+        url = "https://github.com/erincatto/box2c.git",
+    },
+    --]]
+
+    {
+        --build_method = 'other',
+        copy_for_wasm = true,
+        build = build_chipmunk,
         dir = "Chipmunk2D",
-        build_method = 'custom',
         description = "плоский игровой физический движок",
         includes = { "Chipmunk2D/include", },
         libdirs = { "Chipmunk2D/src" },
@@ -811,7 +831,7 @@ local dependencies: {Dependency} = {
         --build_method = 'other',
         copy_for_wasm = true,
         description = "lua интерпритатор",
-        build_method = 'make',
+        build = build_with_make,
         includes = { "lua" },
         libdirs = { "lua" },
         links  = { "lua:static" },
@@ -820,7 +840,6 @@ local dependencies: {Dependency} = {
         url_action = "git",
         url = "https://github.com/lua/lua.git",
     },
-
 
     {
         -- TODO: Отключить сборку примеров
@@ -833,7 +852,7 @@ local dependencies: {Dependency} = {
         links_internal = { "raylib" },
         name = 'raylib',
         dir = "raylib",
-        build_method = "cmake",
+        build = build_raylib,
         url_action = "git",
         url = "https://github.com/raysan5/raylib.git",
     },
@@ -842,7 +861,7 @@ local dependencies: {Dependency} = {
         --build_method = 'other',
         --depends = {'lua'},
         copy_for_wasm = true,
-        custom_build = small_regex_custom_build,
+        build = build_small_regex,
         description = "простая библиотека для регулярных выражений",
         includes = { "small-regex/libsmallregex" },
         libdirs = { "small-regex/libsmallregex" },
@@ -855,7 +874,7 @@ local dependencies: {Dependency} = {
 
     {
         --depends = {'smallregex', "wfc"},
-        build_method = 'make',
+        build = build_with_make,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
         includes = { "utf8proc" },
@@ -870,7 +889,6 @@ local dependencies: {Dependency} = {
     {
         --build_method = 'other',
         copy_for_wasm = true,
-        build_method = 'none',
         description = "набор библиотека заголовочных файлов для разных нужд",
         includes = { "stb" },
         name = 'stb',
@@ -883,7 +901,6 @@ local dependencies: {Dependency} = {
         --before_build = wfc_before_build,
         --build_method = 'other',
         dir = "wfc",
-        build_method = 'none',
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
         depends = {'stb'},
@@ -2234,11 +2251,6 @@ function actions.remove(_args: Args)
     --_remove(win_third_party, dirnames)
 end
 
-local function file_exist(path: string): boolean
-    local fd = io.open(path, "r")
-    return fd and true or false
-end
-
 function actions.rocks(_: Args)
     local rocks = {
         'lanes',
@@ -2249,43 +2261,6 @@ function actions.rocks(_: Args)
     }
     for _, rock in ipairs(rocks) do
         cmd_do(format("luarocks install %s --local", rock))
-    end
-end
-
--- TODO: Сборка в другом каталоге по флагу, что-бы не срабатывал 
--- "prevent in-tree build"
-local function build_with_cmake()
-    cmd_do("cmake .")
-    cmd_do("make -j")
-end
-
-local function build_with_make()
-    cmd_do("make -j")
-end
-
-local function auto_build()
-	if file_exist("CMakeLists.txt") then
-		build_with_cmake()
-	elseif file_exist("Makefile") or file_exist("makefile") then
-		build_with_make()
-	end
-end
-
--- TODO: Оставить только явный запуск сборки зависимости, указанный в виде
--- константы в таблице данной зависимости.
-local function common_build(dep: Dependency)
-    if dep.build_method then
-        if dep.build_method == 'make' then
-            build_with_make()
-        elseif dep.build_method == 'cmake' then
-            build_with_cmake()
-        elseif dep.build_method == 'auto' then
-			auto_build()
-        end
-    else
-		print("dependency", inspect(dep))
-		print("there is no build method")
-		os.exit(1)
     end
 end
 
@@ -2310,7 +2285,7 @@ function actions.compile_flags(_: Args)
     print("-I.")
 end
 
-local function build_chipmunk()
+local function buildw_chipmunk()
     push_current_dir()
     lfs.chdir("wasm_3rd_party/Chipmunk2D/")
 
@@ -2334,7 +2309,7 @@ local function src2obj(filename: string): string
     return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1] as string
 end
 
-local function build_lua()
+local function buildw_lua()
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_3rd_party/lua")
 
@@ -2357,7 +2332,7 @@ local function build_lua()
     lfs.chdir(prevdir)
 end
 
-local function build_raylib()
+local function buildw_raylib()
     push_current_dir()
     lfs.chdir("wasm_3rd_party/raylib")
 
@@ -2379,7 +2354,7 @@ local function build_raylib()
     pop_dir()
 end
 
-local function build_genann()
+local function buildw_genann()
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_3rd_party/genann")
 
@@ -2406,7 +2381,7 @@ local function build_genann()
     lfs.chdir(prevdir)
 end
 
-local function build_smallregex()
+local function buildw_smallregex()
     local prevdir = lfs.currentdir()
     lfs.chdir("wasm_3rd_party/small-regex/libsmallregex")
 
@@ -2433,7 +2408,7 @@ local function build_smallregex()
     lfs.chdir(prevdir)
 end
 
-local function build_utf8proc()
+local function buildw_utf8proc()
     push_current_dir()
     lfs.chdir("wasm_3rd_party/utf8proc/")
 
@@ -2519,7 +2494,7 @@ local function link_koh_lib(objs_dir: string)
     cmd_do(cmd)
 end
 
-local function build_koh()
+local function buildw_koh()
     local dir = "wasm_objects"
     build_project(dir, {
         "koh_input.c"
@@ -2654,13 +2629,13 @@ function actions.wbuild(_args: Args)
     local exist = lfs.attributes("caustic.lua")
     if exist then
         -- TODO: эти функции должны задаваться через таблицу зависимостей.
-        build_chipmunk()
-        build_lua()
-        build_raylib()
-        build_genann()
-        build_smallregex()
-        build_utf8proc()
-        build_koh()
+        buildw_chipmunk()
+        buildw_lua()
+        buildw_raylib()
+        buildw_genann()
+        buildw_smallregex()
+        buildw_utf8proc()
+        buildw_koh()
     else
         local cfg: Cfg
         local ok, errmsg: boolean, string = pcall(function()
@@ -2695,20 +2670,15 @@ local function _build_smart(dep: Dependency)
     local prevdir = lfs.currentdir()
     lfs.chdir(dirname)
 
-    if dep.custom_build then
+    if dep.build then
         local ok, errmsg: boolean, string = pcall(function()
-            dep.custom_build(dep)
+            dep.build(dep)
         end)
         if not ok then
-            print('custom_build error:', errmsg)
+            print('build error:', errmsg)
         end
     else
-        local ok, errmsg: boolean, string = pcall(function()
-            common_build(dep)
-        end)
-        if not ok then
-            print('common_build() failed with', errmsg)
-        end
+        print(format('%s has no build method', dep.name))
     end
 
     if dep and dep.after_build then
@@ -2734,20 +2704,15 @@ local function _build(dirname: string)
         return
     end
 
-    if dep.custom_build then
+    if dep.build then
         local ok, errmsg: boolean, string = pcall(function()
-            dep.custom_build(dep)
+            dep.build(dep)
         end)
         if not ok then
-            print('custom_build error:', errmsg)
+            print('build error:', errmsg)
         end
     else
-        local ok, errmsg: boolean, string = pcall(function()
-            common_build(dep)
-        end)
-        if not ok then
-            print('common_build() failed with', errmsg)
-        end
+        print(format('%s has no build method', dep.name))
     end
 
     if dep and dep.after_build then

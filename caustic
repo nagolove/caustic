@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#echo $CAUSTIC_PATH
-#exit
-
-export LUA_PATH="/home/testuser/.luarocks/share/lua/5.1/?.lua;/home/testuser/.luarocks/share/lua/5.1/?/init.lua;"$LUA_PATH
-export LUA_CPATH="/home/testuser/.luarocks/lib/lua/5.1/?.so;/home/testuser/.luarocks/lib/lua/5.1/?/init.so;"$LUA_CPATH
-lua $CAUSTIC_PATH/caustic.lua $1 $2 $3 $4 $5 $6
