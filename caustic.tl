@@ -10,6 +10,23 @@ local function remove_last_backslash(path: string): string
     return path
 end
 
+local home = os.getenv("HOME")
+assert(home)
+
+local path_caustic = os.getenv("CAUSTIC_PATH")
+if not path_caustic then
+    print("CAUSTIC_PATH is nil")
+    os.exit(1)
+else
+    path_caustic = remove_last_backslash(path_caustic)
+    print("CAUSTIC_PATH", path_caustic)
+end
+
+-- TODO: получение имен каталогов из переменных окружения
+-- CAUSTIC_3RD_PARTY и WASM_3RD_PARTY
+local path_third_party = remove_last_backslash("3rd_party")
+local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
+
 local lua_ver = "5.1"
 --local lua_ver = "5.4"
 package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
@@ -22,15 +39,6 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
 
-local path_caustic = os.getenv("CAUSTIC_PATH")
-if not path_caustic then
-    print("CAUSTIC_PATH is nil")
-    os.exit(1)
-else
-    path_caustic = remove_last_backslash(path_caustic)
-    print("CAUSTIC_PATH", path_caustic)
-end
-
 local tabular    = require "tabular".show
 local lfs        = require 'lfs'
 local ansicolors = require 'ansicolors'
@@ -38,14 +46,6 @@ local serpent    = require 'serpent'
 local inspect    = require 'inspect'
 local argparse   = require 'argparse'
 local ut         = require "utils"
-
--- TODO: получение имен каталогов из переменных окружения
--- CAUSTIC_3RD_PARTY и WASM_3RD_PARTY
-local path_third_party = remove_last_backslash("3rd_party")
-local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
-
-local home = os.getenv("HOME")
-assert(home)
 
 assert(path_caustic)
 assert(path_third_party)
@@ -579,14 +579,14 @@ local dependencies: {Dependency} = {
 
     {
         -- компилировать не нужно
-        --custom_build = rlimgui_custom_build,
         after_init = rlimgui_after_init,
         description = "raylib обвязка над imgui",
         dir = "rlImGui",
         disabled = true,
         name = "rlimgui",
         url_action = "git",
-        url = "https://github.com/raylib-extras/rlImGui.git",
+        git_branch = "caustic",
+        url = "git@github.com:nagolove/rlImGui.git",
     },
 
     {
