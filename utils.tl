@@ -1,4 +1,5 @@
 local lfs = require 'lfs'
+local dir_stack: {string} = {}
 --require "caustic"
 
 -- Удалить последнюю наклонную черту если она есть и путь не указывает в
@@ -133,8 +134,25 @@ local function merge_tables(a: {string}, b: {string}): {string}
     return tmp
 end
 
+local inspect = require 'inspect'
+
 local function caustic_path_substitute(s: {string}|string): {string}|string
-    return s
+    print("caustic_path_substitute:", inspect(s))
+    if type(s) == 'string' then
+        local rs = string.gsub(s as string, "$CAUSTIC_PATH", path_caustic)
+        return rs
+    elseif type(s) == 'table' then
+        local tmp: {string} = {}
+        for _, str in ipairs(s as {string}) do
+            local rs = string.gsub(str, "$CAUSTIC_PATH", path_caustic)
+            table.insert(tmp, rs)
+        end
+        print("caustic_path_substitute:")
+        print(inspect(tmp))
+        return tmp
+    else
+        print(string.format("caustic_path_substitute: bad type %s for 's'", s))
+    end
 end
 
 local function template_dirs(dirs: {string}, pattern: string): {string}
@@ -145,12 +163,28 @@ local function template_dirs(dirs: {string}, pattern: string): {string}
     return tmp
 end
 
+local function push_current_dir(): string
+    local dir = lfs.currentdir()
+    table.insert(dir_stack, dir)
+    return dir
+end
+
+local function pop_dir(num: integer)
+    num = num or 0
+    for _ = 0, num do
+        lfs.chdir(table.remove(dir_stack, #dir_stack))
+    end
+end
+
+
 return {
-    template_dirs           = template_dirs,
     cat_file                = cat_file,
-    filter_sources          = filter_sources,
-    shallow_copy            = shallow_copy,
-    remove_last_backslash   = remove_last_backslash,
     caustic_path_substitute = caustic_path_substitute,
+    filter_sources          = filter_sources,
     merge_tables            = merge_tables,
+    pop_dir                 = pop_dir,
+    push_current_dir        = push_current_dir,
+    remove_last_backslash   = remove_last_backslash,
+    shallow_copy            = shallow_copy,
+    template_dirs           = template_dirs,
 }
