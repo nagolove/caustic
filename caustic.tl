@@ -1,40 +1,51 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
-local tabular               = require "tabular".show
-local lfs                   = require 'lfs'
-local ansicolors            = require 'ansicolors'
-local serpent               = require 'serpent'
-local inspect               = require 'inspect'
-local argparse              = require 'argparse'
-local ut                    = require "utils"
+-- Удалить последнюю наклонную черту если она есть и путь не указывает в
+-- корень файловой системы
+local function remove_last_backslash(path: string): string
+    if #path > 1 and string.sub(path, -1, -1) == "/" then
+        return string.sub(path, 1, -1)
+    end
+    return path
+end
 
-local path_third_party = ut.remove_last_backslash("3rd_party")
-local path_wasm_third_party = ut.remove_last_backslash("wasm_3rd_party")
+local lua_ver = "5.1"
+--local lua_ver = "5.4"
+package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
+package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
+                home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
+               -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
+               --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
+               path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..  package.path
+package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
+        home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
+        package.cpath
 
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")
     os.exit(1)
 else
-    path_caustic = ut.remove_last_backslash(path_caustic)
+    path_caustic = remove_last_backslash(path_caustic)
     print("CAUSTIC_PATH", path_caustic)
 end
 
+local tabular    = require "tabular".show
+local lfs        = require 'lfs'
+local ansicolors = require 'ansicolors'
+local serpent    = require 'serpent'
+local inspect    = require 'inspect'
+local argparse   = require 'argparse'
+local ut         = require "utils"
+
+-- TODO: получение имен каталогов из переменных окружения
+-- CAUSTIC_3RD_PARTY и WASM_3RD_PARTY
+local path_third_party = remove_last_backslash("3rd_party")
+local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
+
 local home = os.getenv("HOME")
 assert(home)
-
-local lua_ver = "5.1"
---local lua_ver = "5.4"
-
-package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
-	       		home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
-			   -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
-			   --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
-			   path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..  package.path
-package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
-	    home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
-		package.cpath
 
 assert(path_caustic)
 assert(path_third_party)
@@ -43,10 +54,10 @@ assert(path_wasm_third_party)
 local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
 
-local dir_stack: {string} = {}
 local format              = string.format
 local cache_name          = "cache.lua"
 local verbose             = true
+local errexit             = false
 
 -- TODO: Добавить возможность нескольких артефактов в проекте
 local record Cfg
@@ -68,6 +79,7 @@ local record Cfg
 end
 
 --[[
+Пример структуры дерева проекта
 -- {{{
 -- Команда init копирует соответствующие файлы из каталога bld в каждый каталог
 -- зависимости
@@ -122,7 +134,6 @@ end
 local function cmd_do(_cmd: string|{string})
     --push_current_dir()
     if verbose then
-        --print("cmd_do: working directory", lfs.currentdir())
         os.execute("echo `pwd`")
     end
     if type(_cmd) == 'string' then
@@ -131,7 +142,9 @@ local function cmd_do(_cmd: string|{string})
         end
         if not os.execute(_cmd as string) then
             print(format('cmd was failed "%s"', _cmd))
-            --os.exit(1)
+            if errexit then
+                os.exit(1)
+            end
         end
     elseif (type(_cmd) == 'table') then
         for _, v in ipairs(_cmd as {string}) do
@@ -140,27 +153,18 @@ local function cmd_do(_cmd: string|{string})
             end
             if not os.execute(v) then
                 print(format('cmd was failed "%s"', _cmd))
-                --os.exit(1)
+                if errexit then
+                    os.exit(1)
+                end
             end
         end
     else
         print('Wrong type in cmd_do', type(_cmd))
-        os.exit(1)
+        if errexit then
+            os.exit(1)
+        end
     end
     --pop_dir()
-end
-
-local function push_current_dir(): string
-    local dir = lfs.currentdir()
-    table.insert(dir_stack, dir)
-    return dir
-end
-
-local function pop_dir(num: integer)
-    num = num or 0
-    for _ = 0, num do
-        lfs.chdir(table.remove(dir_stack, #dir_stack))
-    end
 end
 
 local function filter_sources_c(
@@ -180,7 +184,7 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         local file = io.open(fname, "r")
         if not file then
             push_num = push_num + 1
-            push_current_dir()
+            ut.push_current_dir()
             lfs.chdir("..")
         else
             break
@@ -314,16 +318,16 @@ end
 
 local function gennann_after_build(dep: Dependency)
     print('linking genann to static library', dep.dir)
-    push_current_dir()
+    ut.push_current_dir()
     print("dep.dir", dep.dir)
     lfs.chdir(dep.dir)
     cmd_do("ar rcs libgenann.a genann.o")
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir(dep.dir)
     local opts = {
         "BUILD_DEMOS=OFF",
@@ -337,11 +341,11 @@ local function build_chipmunk(dep: Dependency)
     end
     cmd_do("cmake . " .. table.concat(opts, " "))
     cmd_do("make -j")
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function build_pcre2(dep: Dependency)
-    push_current_dir()
+    ut.push_current_dir()
     print("pcre2_custom_build: dep.dir", dep.dir)
     lfs.chdir(dep.dir)
     print("pcre2_custom_build:", lfs.currentdir())
@@ -349,7 +353,7 @@ local function build_pcre2(dep: Dependency)
     cmd_do("rm CMakeCache.txt")
     cmd_do("cmake .")
     cmd_do("make -j")
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function build_small_regex(dep: Dependency)
@@ -392,7 +396,7 @@ local function build_cimgui(dep: Dependency)
     local imgui_files_str = table.concat(imgui_files, " ")
     cmd_do("cp " .. imgui_files_str .. " ../cimgui/imgui")
 
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir(dep.dir)
 
     print("cimgui_after_init:", lfs.currentdir())
@@ -400,7 +404,7 @@ local function build_cimgui(dep: Dependency)
     local use_freetype = false
 
     cmd_do('git submodule update --init --recursive --depth 1')
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir('generator')
     if use_freetype then
         cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv freetype"')
@@ -408,7 +412,7 @@ local function build_cimgui(dep: Dependency)
         --cmd_do('./generator.sh -t "internal noimstrv "')
         cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv"')
     end
-    pop_dir()
+    ut.pop_dir()
 
     print("cimgui_after_init: code was generated");
 
@@ -434,13 +438,20 @@ local function build_cimgui(dep: Dependency)
     end
 
     -- Как получить rlimgui.inc ?
-    cmd_do("cat rlimgui.inc >> cimgui.cpp")
-    cmd_do("cat rlimgui.h.inc >> cimgui.h")
+    --cmd_do("cat rlimgui.inc >> cimgui.cpp")
+    --cmd_do("cat rlimgui.h.inc >> cimgui.h")
+
+    local path = path_caustic .. "/" .. path_third_party
+    print("path", path)
+
+    print( "os.exit(1)" )
+    os.exit(1)
+
     cmd_do("make -j")
 
     cmd_do("mv cimgui.a libcimgui.a")
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function rlimgui_after_init(_: Dependency)
@@ -602,8 +613,8 @@ local dependencies: {Dependency} = {
         copy_for_wasm = true,
         description = "модульный звуковой синтезатор",
         dir = "sunvox",
-        fname = "sunvox_lib-2.1c.zip",
-        includes = { "sunvox/sunvox_lib/headers" },
+        -- TODO: Извлекать имя архива из поля url
+        fname = "sunvox_lib-2.1c.zip", includes = { "sunvox/sunvox_lib/headers" },
         libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" }, -- XXX: Зачем путь к .so файлу?
         name = 'sunvox',
         url_action = "zip",
@@ -613,6 +624,7 @@ local dependencies: {Dependency} = {
     {
         build = build_with_make,
         after_build = gennann_after_build,
+        -- определенный коммит используется здесь как пример
         git_commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         copy_for_wasm = true,
         description = "простая библиотека для многослойного персетрона",
@@ -627,7 +639,6 @@ local dependencies: {Dependency} = {
     },
 
     {
-        --build_method = 'other',
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         includes = { "Chipmunk2D/include", },
@@ -640,7 +651,6 @@ local dependencies: {Dependency} = {
     },
 
     {
-        --build_method = 'other',
         copy_for_wasm = true,
         build = build_chipmunk,
         dir = "Chipmunk2D",
@@ -655,7 +665,6 @@ local dependencies: {Dependency} = {
     },
 
     {
-        --build_method = 'other',
         copy_for_wasm = true,
         description = "lua интерпритатор",
         build = build_with_make,
@@ -669,8 +678,6 @@ local dependencies: {Dependency} = {
     },
 
     {
-        -- TODO: Отключить сборку примеров
-        --build_method = 'other',
         copy_for_wasm = true,
         description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
         includes = { "raylib/src" },
@@ -714,7 +721,6 @@ local dependencies: {Dependency} = {
     },
 
     {
-        --build_method = 'other',
         copy_for_wasm = true,
         description = "набор библиотека заголовочных файлов для разных нужд",
         includes = { "stb" },
@@ -724,10 +730,8 @@ local dependencies: {Dependency} = {
     },
 
     {
-        --after_build = wfc_after_build,
-        --before_build = wfc_before_build,
-        --build_method = 'other',
         dir = "wfc",
+        build = build_with_make,
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
         depends = {'stb'},
@@ -748,19 +752,21 @@ local function get_urls(deps: {Dependency}): {string}
 end
 
 -- TODO: Окончательно удалить использование данной таблички
+-- XXX: Изменил пути с относительных на абсолютные т.е. 
+-- CAUSTIC_PATH - абсолютный путь к каталогу
 local _includedirs  = ut.caustic_path_substitute({ 
-    "../caustic/%s/Chipmunk2D/include",                 -- ok
-    "../caustic/%s/cimgui",                             -- ok
-    "../caustic/%s/cimgui/generator/output",            -- ok
-    "../caustic/%s/genann",                             -- ok
-    "../caustic/%s/lua/",                               -- ok
-    "../caustic/%s/luafilesystem/src",                  -- ok
-    "../caustic/%s/raylib/src",                         -- ok
-    "../caustic/%s/small-regex/libsmallregex",          -- ok
-    "../caustic/%s/stb",                                -- ok
-    "../caustic/%s/utf8proc",                           -- ok
-    "../caustic/3rd_party/sunvox/sunvox_lib/headers",   -- ok
-    "../caustic/src",                                   --
+    "../$CAUSTIC_PATH/%s/Chipmunk2D/include",                 -- ok
+    "../$CAUSTIC_PATH/%s/cimgui",                             -- ok
+    "../$CAUSTIC_PATH/%s/cimgui/generator/output",            -- ok
+    "../$CAUSTIC_PATH/%s/genann",                             -- ok
+    "../$CAUSTIC_PATH/%s/lua/",                               -- ok
+    "../$CAUSTIC_PATH/%s/luafilesystem/src",                  -- ok
+    "../$CAUSTIC_PATH/%s/raylib/src",                         -- ok
+    "../$CAUSTIC_PATH/%s/small-regex/libsmallregex",          -- ok
+    "../$CAUSTIC_PATH/%s/stb",                                -- ok
+    "../$CAUSTIC_PATH/%s/utf8proc",                           -- ok
+    "../$CAUSTIC_PATH/3rd_party/sunvox/sunvox_lib/headers",   -- ok
+    "../$CAUSTIC_PATH/src",                                   --
 }) as {string}
 
 local _includedirs_internal  = { 
@@ -787,12 +793,12 @@ local _includedirs_internal  = {
 -- TODO: Проверка на дубликаты путей
 local function gather_includedirs(deps: {Dependency}, path_prefix: string): {string}
     assert(deps)
-    path_prefix = ut.remove_last_backslash(path_prefix)
+    path_prefix = remove_last_backslash(path_prefix)
     local tmp_includedirs = {}
     for _, dep in ipairs(deps) do
         if dep.includes then
             for _, include_path in ipairs(dep.includes) do
-                table.insert(tmp_includedirs, ut.remove_last_backslash(include_path))
+                table.insert(tmp_includedirs, remove_last_backslash(include_path))
             end
         end
     end
@@ -1022,7 +1028,7 @@ local function after_init(dep: Dependency)
         return
     end
 
-    push_current_dir()
+    ut.push_current_dir()
     local ok, errmsg: boolean, string = pcall(function()
         print('after_init:', dep.name)
         lfs.chdir(dep.dir)
@@ -1033,7 +1039,7 @@ local function after_init(dep: Dependency)
         print(ansicolors("%{red}" .. msg .. "%{reset}"))
         print(debug.traceback())
     end
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
@@ -1049,7 +1055,7 @@ end
 local function git_clone(dep: Dependency)
     print('git_clone:', lfs.currentdir())
     print(tabular(dep))
-    push_current_dir()
+    ut.push_current_dir()
     if dep.git_commit then
         git_clone_with_checkout(dep, dep.git_commit)
     elseif dep.git_branch then
@@ -1058,7 +1064,7 @@ local function git_clone(dep: Dependency)
         local git_cmd = "git clone --depth 1 " .. dep.url
         cmd_do(git_cmd)
     end
-    pop_dir()
+    ut.pop_dir()
 end
 
 -- Разбить на download() и unpack()
@@ -1100,7 +1106,7 @@ local function download_and_unpack_zip(dep: Dependency)
      })
     cfile:close()
 
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir(dep.dir)
 
     local zip = require 'zip'
@@ -1123,7 +1129,7 @@ local function download_and_unpack_zip(dep: Dependency)
         end
     end
 
-    pop_dir()
+    ut.pop_dir()
     os.remove(fname)
 end
 
@@ -1424,7 +1430,7 @@ local actions: Actions = {}
 
 local function _init_smart(path: string, deps: {Dependency})
     print("_init_smart", path, inspect(deps))
-    push_current_dir()
+    ut.push_current_dir()
 
     if not lfs.chdir(path) then
         if not lfs.mkdir(path) then
@@ -1484,13 +1490,13 @@ local function _init_smart(path: string, deps: {Dependency})
         dependency_init(dep, path)
     end
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function _init(path: string, deps: {Dependency})
     print("_init", path)
 	--print(tabular(deps))
-    push_current_dir()
+    ut.push_current_dir()
 
     if not lfs.chdir(path) then
         if not lfs.mkdir(path) then
@@ -1575,7 +1581,7 @@ local function _init(path: string, deps: {Dependency})
         end
     end
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 local enum MakeAction
@@ -1702,7 +1708,7 @@ TODO:
 --]]
 local function sub_test(_args: Args, cfg: Cfg)
     local src_dir = cfg.src or "src"
-    push_current_dir()
+    ut.push_current_dir()
     if not lfs.chdir(src_dir) then
         print(format("sub_test: could not chdir to '%s'", src_dir))
         os.exit(1)
@@ -1750,7 +1756,7 @@ local function sub_test(_args: Args, cfg: Cfg)
     print("end of gathering sources")
 
     --pop_dir(push_num)
-    pop_dir()
+    ut.pop_dir()
 end
 
 function actions.selftest(_args: Args)
@@ -1765,14 +1771,14 @@ function actions.selftest(_args: Args)
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(selftest_fname)() as {string}
         print('test_dirs', inspect(test_dirs))
-        push_current_dir()
+        ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             assert(type(dir) == "string")
             lfs.chdir(dir)
             cmd_do("caustic make")
             cmd_do("caustic run -c")
         end
-        pop_dir()
+        ut.pop_dir()
     end)
     if not ok then
         print(format("Could not load %s with %s", selftest_fname, errmsg))
@@ -1953,7 +1959,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
     print(cmd)
     cmd_do(cmd)
 
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir(site_repo_tmp)
     print(lfs.currentdir())
 
@@ -1964,7 +1970,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
     cmd_do(format('git commit -am "%s updated"', cfg.artifact))
     cmd_do('git push origin master')
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 
@@ -2111,13 +2117,13 @@ function actions.compile_flags(_: Args)
 end
 
 local function buildw_chipmunk()
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir("wasm_3rd_party/Chipmunk2D/")
 
     cmd_do("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
     cmd_do("emmake make -j")
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function link(objfiles: {string}, libname: string, flags: string)
@@ -2158,7 +2164,7 @@ local function buildw_lua()
 end
 
 local function buildw_raylib()
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir("wasm_3rd_party/raylib")
 
     --[[
@@ -2176,7 +2182,7 @@ local function buildw_raylib()
 
     cmd_do("cp libraylib.a ../libraylib.a")
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function buildw_genann()
@@ -2234,12 +2240,12 @@ local function buildw_smallregex()
 end
 
 local function buildw_utf8proc()
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir("wasm_3rd_party/utf8proc/")
 
     cmd_do("emmake make")
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 local type ObjectFiles = {string}
@@ -2553,7 +2559,7 @@ local function _build(dirname: string)
 end
 
 function actions.build_smart(_args: Args)
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir(path_caustic)
     lfs.chdir(path_third_party)
 
@@ -2562,7 +2568,7 @@ function actions.build_smart(_args: Args)
             _build_smart(dependencies_name_map[_args.name])
         else
             print("bad dependency name", _args.name)
-	    pop_dir()
+	    ut.pop_dir()
 	    return
         end
     else
@@ -2571,13 +2577,13 @@ function actions.build_smart(_args: Args)
         end
     end
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 
 -- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir(path_caustic)
     lfs.chdir(path_third_party)
 
@@ -2586,7 +2592,7 @@ function actions.build(_args: Args)
             _build(get_dir(dependencies_name_map[_args.name]))
         else
             print("bad dependency name", _args.name)
-	    pop_dir()
+	    ut.pop_dir()
 			return
         end
     else
@@ -2595,7 +2601,7 @@ function actions.build(_args: Args)
         end
     end
 
-    pop_dir()
+    ut.pop_dir()
 end
 
 function actions.deps(_args: Args)
@@ -2736,13 +2742,13 @@ local function serial_run(queue: {string})
 end
 
 local function cache_remove()
-    push_current_dir()
+    ut.push_current_dir()
     lfs.chdir('src')
     local err = os.remove(cache_name)
     if not err then
         print('cache removed')
     end
-    pop_dir()
+    ut.pop_dir()
 end
 
 local function koh_link(objfiles_str: string, _args: Args)
@@ -2832,13 +2838,13 @@ function actions.updates(_args: Args)
         if dep.url and string.match(dep.url, "%.git$") then
             if dep.dir then
                 print('dep.dir', dep.dir)
-                push_current_dir()
+                ut.push_current_dir()
                 lfs.chdir(path_third_party .. "/" .. dep.dir)
                 cmd_do({ 
                     "git fetch",
                     "git status",
                 })
-                pop_dir()
+                ut.pop_dir()
             end
         end
     end
@@ -3014,7 +3020,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         cache_remove()
     end
 
-    print(push_current_dir())
+    print(ut.push_current_dir())
     print('sub_make: pwd', lfs.currentdir())
 
     local src_dir = cfg.src or "src"
@@ -3206,7 +3212,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         --cp("libcaustic.a", "../libcaustic.a")
         cmd_do("mv libcaustic.a ../libcaustic.a")
     else
-        push_current_dir()
+        ut.push_current_dir()
         print('caustic_path', path_caustic)
         lfs.chdir(path_caustic)
         --lfs.chdir(os.getenv("HOME") .. "/caustic")
@@ -3217,7 +3223,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
             noasan = _args.noasan,
             release = _args.release
         }, search_and_load_cfgs_up('bld.lua')[1])
-        pop_dir()
+        ut.pop_dir()
 
         print("before project link", lfs.currentdir())
         --print("_args")
@@ -3236,9 +3242,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     end
 
-    pop_dir(push_num)
+    ut.pop_dir(push_num)
 end
-
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
