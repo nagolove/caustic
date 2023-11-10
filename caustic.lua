@@ -1,36 +1,23 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
+local tabular = require("tabular").show
+local lfs = require('lfs')
+local ansicolors = require('ansicolors')
+local serpent = require('serpent')
+local inspect = require('inspect')
+local argparse = require('argparse')
+local ut = require("utils")
 
-
-local function remove_last_backslash(path)
-   if #path > 1 and string.sub(path, -1, -1) == "/" then
-      return string.sub(path, 1, -1)
-   end
-   return path
-end
-
-
-local function merge_tables(a, b)
-   local tmp = {}
-   for _, v in ipairs(a) do
-      table.insert(tmp, v)
-   end
-   for _, v in ipairs(b) do
-      table.insert(tmp, v)
-   end
-   return tmp
-end
-
-local path_third_party = remove_last_backslash("3rd_party")
-local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
+local path_third_party = ut.remove_last_backslash("3rd_party")
+local path_wasm_third_party = ut.remove_last_backslash("wasm_3rd_party")
 
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
    print("CAUSTIC_PATH is nil")
    os.exit(1)
 else
-   path_caustic = remove_last_backslash(path_caustic)
+   path_caustic = ut.remove_last_backslash(path_caustic)
    print("CAUSTIC_PATH", path_caustic)
 end
 
@@ -49,11 +36,6 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
 
-
-local tabular = require("tabular").show
-local lfs = require('lfs')
-local ansicolors = require('ansicolors')
-
 assert(path_caustic)
 assert(path_third_party)
 assert(path_wasm_third_party)
@@ -62,6 +44,8 @@ local site_repo = "~/nagolove.github.io"
 
 
 local dir_stack = {}
+local format = string.format
+local cache_name = "cache.lua"
 local verbose = true
 
 
@@ -81,7 +65,6 @@ local verbose = true
 
 
 
-local format = string.format
 
 
 
@@ -107,22 +90,6 @@ local format = string.format
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local serpent = require('serpent')
-local inspect = require('inspect')
 
 
 
@@ -150,59 +117,36 @@ local Cache = {Data = {}, }
 
 
 
-local cache_name = "cache.lua"
 
 
-local function filter_sources(
-   pattern, path, cb, exclude)
+local function cmd_do(_cmd)
 
-   assert(cb)
+   if verbose then
 
-   local files = {}
-   for file in lfs.dir(path) do
-      table.insert(files, file)
+      os.execute("echo `pwd`")
    end
+   if type(_cmd) == 'string' then
+      if verbose then
+         print('cmd_do:', _cmd)
+      end
+      if not os.execute(_cmd) then
+         print(format('cmd was failed "%s"', _cmd))
 
-   local files_processed = {}
-   if exclude then
-      for _, file in ipairs(files) do
-         local found = false
-         for _, pat in ipairs(exclude) do
-            if string.match(file, pat) then
-               found = true
-               break
-            end
+      end
+   elseif (type(_cmd) == 'table') then
+      for _, v in ipairs(_cmd) do
+         if verbose then
+            print('cmd_do', v)
          end
-         if not found then
-            table.insert(files_processed, file)
+         if not os.execute(v) then
+            print(format('cmd was failed "%s"', _cmd))
+
          end
       end
+   else
+      print('Wrong type in cmd_do', type(_cmd))
+      os.exit(1)
    end
-
-   files = files_processed
-
-   for _, file in ipairs(files_processed) do
-      if string.match(file, pattern) then
-         cb(file)
-      end
-   end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 end
 
@@ -219,32 +163,21 @@ local function pop_dir(num)
    end
 end
 
-
 local function filter_sources_c(
    path, cb, exclude)
 
-   filter_sources(".*%.c$", path, cb, exclude)
+   ut.filter_sources(".*%.c$", path, cb, exclude)
 end
-
-
-
-
-
-
-
-
 
 
 local function search_and_load_cfgs_up(fname)
    print("search_and_load_cfgs_up:", fname, lfs.currentdir())
 
 
-
    local push_num = 0
    local push_num_max = 20
    while true do
       local file = io.open(fname, "r")
-
       if not file then
          push_num = push_num + 1
          push_current_dir()
@@ -252,7 +185,6 @@ local function search_and_load_cfgs_up(fname)
       else
          break
       end
-
       if push_num > push_num_max or lfs.currentdir() == "/" then
          push_num = 0
          break
@@ -266,8 +198,6 @@ local function search_and_load_cfgs_up(fname)
       cfgs = loadfile(fname)()
    end)
 
-
-
    if not ok then
       print("search_and_load_cfgs_up: loadfile() failed with", errmsg)
    end
@@ -276,9 +206,6 @@ local function search_and_load_cfgs_up(fname)
 
    local has_stuff = 0
    local stuff = {}
-
-
-
 
    if lfs.currentdir() ~= path_caustic then
       for _, cfg in ipairs(cfgs) do
@@ -314,20 +241,6 @@ local function search_and_load_cfgs_up(fname)
 
    return cfgs, push_num
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local cache
 
@@ -384,77 +297,9 @@ local cache
 
 
 
-
-
-
-
-
-
-
-
-
-local function shallow_copy(a)
-   if type(a) == 'table' then
-      local ret = {}
-      for k, v in pairs(a) do
-         ret[k] = v
-      end
-      return ret
-   else
-      return a
-   end
-end
-
-local function cmd_do(_cmd)
-
-   if verbose then
-
-      os.execute("echo `pwd`")
-   end
-   if type(_cmd) == 'string' then
-      if verbose then
-         print('cmd_do:', _cmd)
-      end
-      if not os.execute(_cmd) then
-         print(format('cmd was failed "%s"', _cmd))
-
-      end
-   elseif (type(_cmd) == 'table') then
-      for _, v in ipairs(_cmd) do
-         if verbose then
-            print('cmd_do', v)
-         end
-         if not os.execute(v) then
-            print(format('cmd was failed "%s"', _cmd))
-
-         end
-      end
-   else
-      print('Wrong type in cmd_do', type(_cmd))
-      os.exit(1)
-   end
-
-end
-
 local function build_with_make(_)
    cmd_do("make -j")
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function copy_headers_to_wfc(_)
    print('copy_headers_to_wfc:', lfs.currentdir())
@@ -535,7 +380,6 @@ end
 
 
 
-
 local function build_cimgui(dep)
    print("cimgui_after_init:", lfs.currentdir())
    local imgui_files = {
@@ -596,11 +440,6 @@ local function build_cimgui(dep)
 
    cmd_do("mv cimgui.a libcimgui.a")
 
-
-
-
-
-
    pop_dir()
 end
 
@@ -624,12 +463,6 @@ local function rlimgui_after_init(_)
       print(file)
    end
 end
-
-
-
-
-
-
 
 local function cimgui_after_build(_)
    print("cimgui_after_build", lfs.currentdir())
@@ -658,11 +491,7 @@ end
 
 local function build_lfs(_)
    print('lfs_custom_build', lfs.currentdir())
-
-
    cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
-
-
    cmd_do("ar rcs liblfs.a lfs.o")
 end
 
@@ -711,7 +540,6 @@ local dependencies = {
 
 
    {
-
       build = build_lfs,
       description = "C lua модуль для поиска файлов",
       dir = "luafilesystem",
@@ -785,7 +613,7 @@ local dependencies = {
    {
       build = build_with_make,
       after_build = gennann_after_build,
-      commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
+      git_commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
       copy_for_wasm = true,
       description = "простая библиотека для многослойного персетрона",
       dir = "genann",
@@ -798,19 +626,18 @@ local dependencies = {
       url = "https://github.com/codeplea/genann.git",
    },
 
+   {
 
-
-
-
-
-
-
-
-
-
-
-
-
+      copy_for_wasm = true,
+      description = "box2c - плоский игровой физический движок",
+      includes = { "Chipmunk2D/include" },
+      libdirs = { "Chipmunk2D/src" },
+      links = { "chipmunk:static" },
+      links_internal = { "box2c:static" },
+      name = 'box2c',
+      git_branch = "linux-gcc",
+      url = "https://github.com/erincatto/box2c.git",
+   },
 
    {
 
@@ -921,8 +748,7 @@ local function get_urls(deps)
 end
 
 
-local _includedirs = {
-
+local _includedirs = ut.caustic_path_substitute({
    "../caustic/%s/Chipmunk2D/include",
    "../caustic/%s/cimgui",
    "../caustic/%s/cimgui/generator/output",
@@ -935,7 +761,7 @@ local _includedirs = {
    "../caustic/%s/utf8proc",
    "../caustic/3rd_party/sunvox/sunvox_lib/headers",
    "../caustic/src",
-}
+})
 
 local _includedirs_internal = {
    "%s/Chipmunk2D/include",
@@ -955,26 +781,18 @@ local _includedirs_internal = {
    "src",
 }
 
-local function template_dirs(dirs, pattern)
-   local tmp = {}
-   for _, v in ipairs(dirs) do
-      table.insert(tmp, format(v, pattern))
-   end
-   return tmp
-end
-
 
 
 
 
 local function gather_includedirs(deps, path_prefix)
    assert(deps)
-   path_prefix = remove_last_backslash(path_prefix)
+   path_prefix = ut.remove_last_backslash(path_prefix)
    local tmp_includedirs = {}
    for _, dep in ipairs(deps) do
       if dep.includes then
          for _, include_path in ipairs(dep.includes) do
-            table.insert(tmp_includedirs, remove_last_backslash(include_path))
+            table.insert(tmp_includedirs, ut.remove_last_backslash(include_path))
          end
       end
    end
@@ -1032,32 +850,33 @@ end
 
 
 
-local links_internal = merge_tables(gather_links(dependencies, "links_internal"),
+local links_internal = ut.merge_tables(
+gather_links(dependencies, "links_internal"),
+{ "stdc++", "m" })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local links = ut.merge_tables(
+gather_links(dependencies, "links"),
 {
-   "stdc++",
-   "m",
-})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local links = merge_tables(gather_links(dependencies, "links"), {
    "stdc++",
    "m",
    "caustic",
 })
+
 
 local links_linix_only = {
    "lfs:static",
@@ -1217,18 +1036,24 @@ local function after_init(dep)
    pop_dir()
 end
 
+local function git_clone_with_checkout(dep, checkout_arg)
+   cmd_do("git clone " .. dep.url)
+   if dep.dir then
+      lfs.chdir(dep.dir)
+   else
+      print('git_clone: dep.dir == nil', lfs.currentdir())
+   end
+   cmd_do("git checkout " .. checkout_arg)
+end
+
 local function git_clone(dep)
    print('git_clone:', lfs.currentdir())
    print(tabular(dep))
    push_current_dir()
-   if dep.commit then
-      cmd_do("git clone " .. dep.url)
-      if dep.dir then
-         lfs.chdir(dep.dir)
-      else
-         print('git_clone: dep.dir == nil', lfs.currentdir())
-      end
-      cmd_do("git checkout " .. dep.commit)
+   if dep.git_commit then
+      git_clone_with_checkout(dep, dep.git_commit)
+   elseif dep.git_branch then
+      git_clone_with_checkout(dep, dep.git_branch)
    else
       local git_cmd = "git clone --depth 1 " .. dep.url
       cmd_do(git_cmd)
@@ -2423,7 +2248,7 @@ end
 
 local function build_project(output_dir, exclude)
    print('build_project:', output_dir)
-   local tmp_includedirs = template_dirs(_includedirs, path_wasm_third_party)
+   local tmp_includedirs = ut.template_dirs(_includedirs, path_wasm_third_party)
 
 
 
@@ -3255,15 +3080,12 @@ local function sub_make(_args, cfg, push_num)
    if not _args.noasan then
       table.insert(flags, "-fsanitize=address")
    end
-   flags = merge_tables(flags, { "-Wall", "-fPIC" })
+   flags = ut.merge_tables(flags, { "-Wall", "-fPIC" })
    local _flags = table.concat(flags, " ")
-
-
-
 
    print("pwd", lfs.currentdir())
 
-   local _libdirs = make_L(shallow_copy(libdirs), path_third_party)
+   local _libdirs = make_L(ut.shallow_copy(libdirs), path_third_party)
 
 
 
@@ -3329,6 +3151,10 @@ local function sub_make(_args, cfg, push_num)
    if _args.cpp then
       print("cpp flags is not implemented")
       os.exit(1)
+
+
+
+
 
 
 
@@ -3430,20 +3256,6 @@ function actions.make(_args)
    end
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-local argparse = require('argparse')
-
 local function do_parser_setup(
    parser, setup)
 
@@ -3474,19 +3286,7 @@ local function do_parser_setup(
    end
 end
 
-
-
-
-
-
-
-
-
-
-
 local function main()
-
-
    local parser = argparse()
 
    do_parser_setup(parser, parser_setup)
@@ -3501,21 +3301,11 @@ local function main()
 
 
 
-
-
-
-
-
-
    parser:add_complete()
    local _args = parser:parse()
 
-
    print(inspect(_args))
    verbose = _args.verbose == true
-
-
-
 
    for k, v in pairs(_args) do
       if actions[k] and type(v) == 'boolean' and v == true then
