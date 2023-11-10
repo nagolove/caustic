@@ -1,36 +1,23 @@
 #!/usr/bin/env lua
 -- vim: fdm=marker
 
--- Удалить последнюю наклонную черту если она есть и путь не указывает в
--- корень файловой системы
-local function remove_last_backslash(path: string): string
-    if #path > 1 and string.sub(path, -1, -1) == "/" then
-        return string.sub(path, 1, -1)
-    end
-    return path
-end
+local tabular               = require "tabular".show
+local lfs                   = require 'lfs'
+local ansicolors            = require 'ansicolors'
+local serpent               = require 'serpent'
+local inspect               = require 'inspect'
+local argparse              = require 'argparse'
+local ut                    = require "utils"
 
--- Возвращает новую табличку, составленную из элементов таблицы a и таблицы b
-local function merge_tables(a: {string}, b: {string}): {string}
-    local tmp = {}
-    for _, v in ipairs(a) do
-        table.insert(tmp, v)
-    end
-    for _, v in ipairs(b) do
-        table.insert(tmp, v)
-    end
-    return tmp
-end
-
-local path_third_party = remove_last_backslash("3rd_party")
-local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
+local path_third_party = ut.remove_last_backslash("3rd_party")
+local path_wasm_third_party = ut.remove_last_backslash("wasm_3rd_party")
 
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")
     os.exit(1)
 else
-    path_caustic = remove_last_backslash(path_caustic)
+    path_caustic = ut.remove_last_backslash(path_caustic)
     print("CAUSTIC_PATH", path_caustic)
 end
 
@@ -49,11 +36,6 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 	    home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
 		package.cpath
 
-
-local tabular = require "tabular".show
-local lfs = require 'lfs'
-local ansicolors = require 'ansicolors'
-
 assert(path_caustic)
 assert(path_third_party)
 assert(path_wasm_third_party)
@@ -62,10 +44,13 @@ local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
 
 local dir_stack: {string} = {}
-local verbose = true
+local format              = string.format
+local cache_name          = "cache.lua"
+local verbose             = true
 
 -- TODO: Добавить возможность нескольких артефактов в проекте
 local record Cfg
+    -- {{{
     src: string
     artifact: string
     main: string
@@ -79,9 +64,8 @@ local record Cfg
         on_write: function(capture: string): {string}
         on_finish: function() -- XXX: Только для отладки
     end
+    -- }}}
 end
-
-local format = string.format
 
 --[[
 -- {{{
@@ -121,24 +105,8 @@ project dir -> bld.lua
 -- }}}
 --]]
 
-local serpent = require 'serpent'
-local inspect = require 'inspect'
-
---[[
-local function cat_file(fname: string)
-    local ok, errmsg: boolean, string = pcall(function()
-        local file = io.open(fname, "r")
-        for line in file:lines() do
-            print(line)
-        end
-    end)
-    if not ok then
-        print("cat_file: failed with", errmsg)
-    end
-end
---]]
-
 local record Cache
+    -- {{{
     record Data
         modtime: number
         cmd: string
@@ -148,62 +116,38 @@ local record Cache
     new: function(storage: string): Cache
     should_recompile: function(Cache, fname: string, cmd: string): boolean
     save: function(Cache)
+    -- }}}
 end
 
-local cache_name = "cache.lua"
-
--- TODO: {exclude} may be a map, not a array
-local function filter_sources(
-    pattern: string, path: string, cb: function(string), exclude: {string}
-)
-	assert(cb)
-
-	local files: {string} = {}
-	for file in lfs.dir(path) do
-		table.insert(files, file)
-	end
-
-	local files_processed = {}
-	if exclude then
-		for _, file in ipairs(files) do
-			local found = false
-			for _, pat in ipairs(exclude) do
-				if string.match(file, pat) then
-					found = true
-					break
-				end
-			end
-			if not found then
-				table.insert(files_processed, file)
-			end
-		end
-	end
-
-	files = files_processed
-
-	for _, file in ipairs(files_processed) do
-		if string.match(file, pattern) then
-			cb(file)
-		end
-	end
-	
-	--[[
-    for file in lfs.dir(path) do
-        if string.match(file, pattern) then
-            if exclude then
-                for _, pat in ipairs(exclude) do
-                    if string.match(file, pat) then
-                        goto continie
-                    end
-                end
-            end
-            cb(file)
-            :: continie ::
-        end
+local function cmd_do(_cmd: string|{string})
+    --push_current_dir()
+    if verbose then
+        --print("cmd_do: working directory", lfs.currentdir())
+        os.execute("echo `pwd`")
     end
-	--]]
-
-
+    if type(_cmd) == 'string' then
+        if verbose then
+            print('cmd_do:', _cmd)
+        end
+        if not os.execute(_cmd as string) then
+            print(format('cmd was failed "%s"', _cmd))
+            --os.exit(1)
+        end
+    elseif (type(_cmd) == 'table') then
+        for _, v in ipairs(_cmd as {string}) do
+            if verbose then
+                print('cmd_do', v)
+            end
+            if not os.execute(v) then
+                print(format('cmd was failed "%s"', _cmd))
+                --os.exit(1)
+            end
+        end
+    else
+        print('Wrong type in cmd_do', type(_cmd))
+        os.exit(1)
+    end
+    --pop_dir()
 end
 
 local function push_current_dir(): string
@@ -219,32 +163,21 @@ local function pop_dir(num: integer)
     end
 end
 
-
 local function filter_sources_c(
     path: string, cb: function(string), exclude: {string}
 ) 
-    filter_sources(".*%.c$", path, cb, exclude)
+    ut.filter_sources(".*%.c$", path, cb, exclude)
 end
-
---[[
-local function filter_sources_cpp(
-    path: string, cb: function(string), exclude: {string}
-)
-    filter_sources(".*%.cpp$", path, cb, exclude)
-end
---]]
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     print("search_and_load_cfgs_up:", fname, lfs.currentdir())
 
     -- C какой позиции в дереве каталогов начинать сборку?
-
     local push_num = 0
     local push_num_max = 20
     while true do
         local file = io.open(fname, "r")
-        --print('file', file)
         if not file then
             push_num = push_num + 1
             push_current_dir()
@@ -252,7 +185,6 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         else
             break
         end
-        --print('curdir', lfs.currentdir())
         if push_num > push_num_max or lfs.currentdir() == "/" then
             push_num = 0
             break
@@ -266,8 +198,6 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         cfgs = loadfile(fname)() as {Cfg}
     end)
 
-    --cat_file(fname)
-
     if not ok then
         print("search_and_load_cfgs_up: loadfile() failed with", errmsg)
     end
@@ -276,9 +206,6 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     -- корректности
     local has_stuff = 0
     local stuff = {}
-
-    --local inspect = require 'inspect'
-    --print("cfgs", inspect(cfgs))
 
     if lfs.currentdir() ~= path_caustic then
         for _, cfg in ipairs(cfgs) do
@@ -315,31 +242,7 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     return cfgs, push_num
 end
 
---[[
-local signal
-
-local ok, errmsg = pcall(function()
-	signal  = require "posix".signal.signal
-end)
-if not ok then
-	print("Could not require 'posix' module")
-end
---]]
-
---local tabular = require "tabular"
---package.path = "./?.lua;" .. package.path
---print('package.path', package.path)
 local cache: Cache
-
---[[
-local enum BuildMethod
-    "cmake"             -- вызывается cmake . && make
-    "make"              -- вызвается make
-    "auto"             	-- call cmake or make by CMakeLists.txt or Makefile
-	"custom"			-- build by calling special function
-	"none"				-- no any build needed for package
-end
---]]
 
 local enum UrlAction
 	"git"
@@ -358,17 +261,20 @@ local record Dependency
     depends: {string}   -- список имен зависомостей от которых зависит данная
 
 	url_action: UrlAction
+    -- Если указано, то копировать определенную ветку
+    git_branch: string
     url: string         -- git ссылка или ссылка на zip для wget
 
     -- имя каталога в который производится копирование и сборка
     dir: string         
 
-    fname: string       -- ??
+    -- Название файла, в который будет скачан zip архив по ссылке url
+    fname: string       
     copy_for_wasm: boolean
 
     -- если значение поля присутствует, то репозиторий копируется на всю 
     -- глубину и после копирования вызвается git checkout commit
-    commit: string      
+    git_commit: string      
 
     -- TODO: Возможно добавить поддержку шаблонов
     includes: {string}  -- Список каталогов для включаемых файлов.
@@ -391,70 +297,9 @@ local record Dependency
     after_build: function(dep: Dependency)
 end
 
---local md5 = require "md5"
-
-local function shallow_copy<X>(a: X): X
-    if type(a) == 'table' then
-        local ret = {}
-        for k, v in pairs(a as {any:any}) do
-            ret[k] = v
-        end
-        return ret as X
-    else
-        return a
-    end
-end
-
-local function cmd_do(_cmd: string|{string})
-    --push_current_dir()
-    if verbose then
-        --print("cmd_do: working directory", lfs.currentdir())
-        os.execute("echo `pwd`")
-    end
-    if type(_cmd) == 'string' then
-        if verbose then
-            print('cmd_do:', _cmd)
-        end
-        if not os.execute(_cmd as string) then
-            print(format('cmd was failed "%s"', _cmd))
-            --os.exit(1)
-        end
-    elseif (type(_cmd) == 'table') then
-        for _, v in ipairs(_cmd as {string}) do
-            if verbose then
-                print('cmd_do', v)
-            end
-            if not os.execute(v) then
-                print(format('cmd was failed "%s"', _cmd))
-                --os.exit(1)
-            end
-        end
-    else
-        print('Wrong type in cmd_do', type(_cmd))
-        os.exit(1)
-    end
-    --pop_dir()
-end
-
 local function build_with_make(_: Dependency)
     cmd_do("make -j")
 end
-
---[[
-local function cp(from: string, to: string)
-    print(format("copy '%s' to '%s'", from, to))
-    local ok, errmsg: boolean, string = pcall(function()
-        local _in = io.open(from, 'r')
-        local _out = io.open(to, 'w')
-        local content = _in:read("*a")
-        _out:write(content)
-    end)
-    if not ok then
-        print("cp() failed with", errmsg)
-    end
-    --io.popen("cp " .. from .. " " .. to)
-end
---]]
 
 local function copy_headers_to_wfc(_: Dependency)
     print('copy_headers_to_wfc:', lfs.currentdir())
@@ -535,7 +380,6 @@ end
 -- TODO Добавить возможность конфигурирования каждой зависимости при помощи
 -- ключей команды caustic
 -- В частности - отключение или включение библиотеки freetype
--- TODO: убрать сборку из коллбека after_init
 local function build_cimgui(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
     local imgui_files = {
@@ -596,11 +440,6 @@ local function build_cimgui(dep: Dependency)
 
     cmd_do("mv cimgui.a libcimgui.a")
 
-    --print(lfs.currentdir())
-    --print( "os.exit(1)" )
-    --os.exit(1)
-        --&& make -j && mv cimgui.a libcimgui.a                                                   
-    --cmd_do("cmake . -DIMGUI_STATIC=1 ")
     pop_dir()
 end
 
@@ -624,12 +463,6 @@ local function rlimgui_after_init(_: Dependency)
 		print(file)
 	end
 end
-
---[[
-local function rlimgui_custom_build(_: Dependency)
-    cmd_do("make config=release_x64 -j")
-end
---]]
 
 local function cimgui_after_build(_: Dependency)
     print("cimgui_after_build", lfs.currentdir())
@@ -658,11 +491,7 @@ end
 
 local function build_lfs(_: Dependency)
     print('lfs_custom_build', lfs.currentdir())
-    --push_current_dir()
-    --lfs.chdir('./src')
     cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
-    --pop_dir()
-    --cmd_do("ar rcs liblfs.a src/lfs.o")
     cmd_do("ar rcs liblfs.a lfs.o")
 end
 
@@ -711,7 +540,6 @@ local dependencies: {Dependency} = {
 	--]]
 
     {
-        --after_init = lfs_custom_build,
         build = build_lfs,
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
@@ -785,7 +613,7 @@ local dependencies: {Dependency} = {
     {
         build = build_with_make,
         after_build = gennann_after_build,
-        commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
+        git_commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
         copy_for_wasm = true,
         description = "простая библиотека для многослойного персетрона",
         dir = "genann",
@@ -798,7 +626,6 @@ local dependencies: {Dependency} = {
         url = "https://github.com/codeplea/genann.git",
     },
 
-    --[[
     {
         --build_method = 'other',
         copy_for_wasm = true,
@@ -808,9 +635,9 @@ local dependencies: {Dependency} = {
         links = { "chipmunk:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
+        git_branch = "linux-gcc",
         url = "https://github.com/erincatto/box2c.git",
     },
-    --]]
 
     {
         --build_method = 'other',
@@ -921,8 +748,7 @@ local function get_urls(deps: {Dependency}): {string}
 end
 
 -- TODO: Окончательно удалить использование данной таблички
-local _includedirs  = { 
-    --"../caustic/%s/rlImGui",                          
+local _includedirs  = ut.caustic_path_substitute({ 
     "../caustic/%s/Chipmunk2D/include",                 -- ok
     "../caustic/%s/cimgui",                             -- ok
     "../caustic/%s/cimgui/generator/output",            -- ok
@@ -935,7 +761,7 @@ local _includedirs  = {
     "../caustic/%s/utf8proc",                           -- ok
     "../caustic/3rd_party/sunvox/sunvox_lib/headers",   -- ok
     "../caustic/src",                                   --
-}
+}) as {string}
 
 local _includedirs_internal  = { 
     "%s/Chipmunk2D/include",
@@ -955,26 +781,18 @@ local _includedirs_internal  = {
     "src",
 }
 
-local function template_dirs(dirs: {string}, pattern: string): {string}
-    local tmp = {}
-    for _, v in ipairs(dirs) do
-        table.insert(tmp, format(v, pattern))
-    end
-    return tmp
-end
-
 --local includedirs = 
     --template_dirs(_includedirs, path_third_party)
 
 -- TODO: Проверка на дубликаты путей
 local function gather_includedirs(deps: {Dependency}, path_prefix: string): {string}
     assert(deps)
-    path_prefix = remove_last_backslash(path_prefix)
+    path_prefix = ut.remove_last_backslash(path_prefix)
     local tmp_includedirs = {}
     for _, dep in ipairs(deps) do
         if dep.includes then
             for _, include_path in ipairs(dep.includes) do
-                table.insert(tmp_includedirs, remove_last_backslash(include_path))
+                table.insert(tmp_includedirs, ut.remove_last_backslash(include_path))
             end
         end
     end
@@ -1032,11 +850,9 @@ local links_internal = {
 --]]
 
 
-local links_internal = merge_tables(gather_links(dependencies, "links_internal"),
-    {
-        "stdc++",                   
-        "m",                       
-    }
+local links_internal = ut.merge_tables(
+    gather_links(dependencies, "links_internal"),
+    { "stdc++", "m", }
 )
 
 --[[
@@ -1053,11 +869,14 @@ local links = {
 }
 --]]
 
-local links = merge_tables(gather_links(dependencies, "links"), {
-    "stdc++",
-    "m",
-    "caustic",
-})
+local links = ut.merge_tables(
+    gather_links(dependencies, "links"),
+    {
+        "stdc++",
+        "m",
+        "caustic", 
+    }
+)
 
 local links_linix_only = {
     "lfs:static",
@@ -1217,18 +1036,24 @@ local function after_init(dep: Dependency)
     pop_dir()
 end
 
+local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
+    cmd_do("git clone " .. dep.url)
+    if dep.dir then
+        lfs.chdir(dep.dir)
+    else
+        print('git_clone: dep.dir == nil', lfs.currentdir())
+    end
+    cmd_do("git checkout " .. checkout_arg)
+end
+
 local function git_clone(dep: Dependency)
     print('git_clone:', lfs.currentdir())
     print(tabular(dep))
     push_current_dir()
-    if dep.commit then
-        cmd_do("git clone " .. dep.url)
-        if dep.dir then
-            lfs.chdir(dep.dir)
-        else
-            print('git_clone: dep.dir == nil', lfs.currentdir())
-        end
-        cmd_do("git checkout " .. dep.commit)
+    if dep.git_commit then
+        git_clone_with_checkout(dep, dep.git_commit)
+    elseif dep.git_branch then
+        git_clone_with_checkout(dep, dep.git_branch)
     else
         local git_cmd = "git clone --depth 1 " .. dep.url
         cmd_do(git_cmd)
@@ -2423,7 +2248,7 @@ local type ObjectFiles = {string}
 -- по ссылке
 local function build_project(output_dir: string, exclude: {string}): ObjectFiles
     print('build_project:', output_dir)
-    local tmp_includedirs = template_dirs(_includedirs, path_wasm_third_party)
+    local tmp_includedirs = ut.template_dirs(_includedirs, path_wasm_third_party)
     --print('includedirs before')
     --print(tabular(includedirs))
 
@@ -3255,15 +3080,12 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if not _args.noasan then
         table.insert(flags, "-fsanitize=address")
     end
-    flags = merge_tables(flags, { "-Wall", "-fPIC", })
+    flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
     local _flags: string = table.concat(flags, " ")
-
-    --local libspath_prefix = cfg.artifact and "../" or ""
-    --print('libspath_prefix', libspath_prefix)
 
     print("pwd", lfs.currentdir())
 
-    local _libdirs = make_L(shallow_copy(libdirs), path_third_party)
+    local _libdirs = make_L(ut.shallow_copy(libdirs), path_third_party)
 
     --print("_libdirs")
     --print(tabular(_libdirs))
@@ -3329,7 +3151,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if _args.cpp then
         print("cpp flags is not implemented")
         os.exit(1)
+
         --[[
+        -- {{{
         filter_sources_cpp(".", function(file: string)
             --print('file', file)
             local _output = output_dir .. "/" .. 
@@ -3352,7 +3176,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
             table.insert(objfiles, _output)
         end, exclude)
+        -- }}}
         --]]
+
     end
 
     --print("queue", inspect(queue))
@@ -3430,20 +3256,6 @@ function actions.make(_args: Args)
     end
 end
 
---[[
-local function handler_int(_: integer)
-    if cache then
-        cache:save()
-    end
-
-    --print('handler_int', sig)
-    print(debug.traceback())
-    os.exit()
-end
---]]
-
-local argparse = require 'argparse'
-
 local function do_parser_setup(
     parser: argparse.Parser, setup: {string:ParserSetup}
 )
@@ -3474,19 +3286,7 @@ local function do_parser_setup(
     end
 end
 
---[[
-local function setup_signal()
-	if not signal then
-		return
-	end
-	local SIGINT = 2
-	signal(SIGINT, handler_int)
-end
---]]
-
 local function main()
-	--setup_signal()
-
     local parser = argparse()
 
     do_parser_setup(parser, parser_setup)
@@ -3501,21 +3301,11 @@ local function main()
     -- FIXME: команды build и init, оставить только одну из них?
     --]]
 
-    --[[
-    local block = parser:command("block"):summary("block") as argparse.Parser
-    block:command("new"):summary("new")
-    block:command("check"):summary("check")
-    --]]
-
     parser:add_complete()
     local _args = parser:parse()
 
-    --print(tabular(_args))
     print(inspect(_args))
     verbose = _args.verbose == true
-
-    --print("os.exit()")
-    --os.exit()
 
     for k, v in pairs(_args) do
         if actions[k as ActionsEnum] and type(v) == 'boolean' and v == true then
