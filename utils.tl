@@ -2,6 +2,15 @@ local lfs = require 'lfs'
 local dir_stack: {string} = {}
 --require "caustic"
 
+-- Удалить последнюю наклонную черту если она есть и путь не указывает в
+-- корень файловой системы
+local function remove_last_backslash(path: string): string
+    if #path > 1 and string.sub(path, -1, -1) == "/" then
+        return string.sub(path, 1, -1)
+    end
+    return path
+end
+
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")
