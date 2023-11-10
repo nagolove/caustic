@@ -42,10 +42,10 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 local tabular    = require "tabular".show
 local lfs        = require 'lfs'
 local ansicolors = require 'ansicolors'
-local serpent    = require 'serpent'
 local inspect    = require 'inspect'
 local argparse   = require 'argparse'
 local ut         = require "utils"
+local Cache      = require "cache"
 
 assert(path_caustic)
 assert(path_third_party)
@@ -58,6 +58,7 @@ local format              = string.format
 local cache_name          = "cache.lua"
 local verbose             = true
 local errexit             = false
+local cache: Cache
 
 -- TODO: Добавить возможность нескольких артефактов в проекте
 local record Cfg
@@ -116,20 +117,6 @@ project dir -> bld.lua
                     -> assets.zip
 -- }}}
 --]]
-
-local record Cache
-    -- {{{
-    record Data
-        modtime: number
-        cmd: string
-    end
-    abs_storage: string
-    cache: {string: Data}
-    new: function(storage: string): Cache
-    should_recompile: function(Cache, fname: string, cmd: string): boolean
-    save: function(Cache)
-    -- }}}
-end
 
 local function cmd_do(_cmd: string|{string})
     --push_current_dir()
@@ -245,8 +232,6 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
 
     return cfgs, push_num
 end
-
-local cache: Cache
 
 local enum UrlAction
 	"git"
@@ -381,10 +366,7 @@ local function build_small_regex(dep: Dependency)
     lfs.chdir(prevdir)
 end
 
--- TODO Добавить возможность конфигурирования каждой зависимости при помощи
--- ключей команды caustic
--- В частности - отключение или включение библиотеки freetype
-local function build_cimgui(dep: Dependency)
+local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
     local imgui_files = {
         "../imgui/imgui.h",
@@ -413,14 +395,9 @@ local function build_cimgui(dep: Dependency)
         cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv"')
     end
     ut.pop_dir()
-
     print("cimgui_after_init: code was generated");
 
-    --cmd_do("cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1")
-    --cmd_do("cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1 -DIMGUI_ENABLE_FREETYPE=1  -DCMAKE_CXX_FLAGS=-I\\ /home/nagolove/caustic/3rd_party/freetype/include")
-
     cmd_do("rm CMakeCache.txt")
-
     if use_freetype then
         cmd_do(table.concat({
             format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
@@ -436,6 +413,17 @@ local function build_cimgui(dep: Dependency)
             "-DIMGUI_STATIC=1",
         }, " "))
     end
+    ut.pop_dir()
+end
+
+-- TODO Добавить возможность конфигурирования каждой зависимости при помощи
+-- ключей команды caustic
+-- В частности - отключение или включение библиотеки freetype
+local function build_cimgui(dep: Dependency)
+    print('build_cimgui:', inspect(dep))
+
+    --cmd_do("cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1")
+    --cmd_do("cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1 -DIMGUI_ENABLE_FREETYPE=1  -DCMAKE_CXX_FLAGS=-I\\ /home/nagolove/caustic/3rd_party/freetype/include")
 
     -- Как получить rlimgui.inc ?
     --cmd_do("cat rlimgui.inc >> cimgui.cpp")
@@ -444,35 +432,15 @@ local function build_cimgui(dep: Dependency)
     local path = path_caustic .. "/" .. path_third_party
     print("path", path)
 
-    print( "os.exit(1)" )
-    os.exit(1)
+    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
+    cmd_do("make clean")
     cmd_do("make -j")
-
-    cmd_do("mv cimgui.a libcimgui.a")
-
-    ut.pop_dir()
+    --cmd_do("mv cimgui.a libcimgui.a")
 end
 
 local function rlimgui_after_init(_: Dependency)
     print("rlimgui_after_init:", lfs.currentdir())
-
-    -- TODO: Распаковывать в другой каталог, в cimgui
-
-    --cmd_do("wget https://github.com/raysan5/raylib/archive/refs/heads/master.zip")
-    --cmd_do("mv master.zip raylib-master.zip")
-    --cmd_do("aunpack raylib-master.zip")
-
-    --cmd_do("wget https://github.com/ocornut/imgui/archive/refs/heads/master.zip")
-    --cmd_do("mv master.zip imgui-master.zip")
-    --cmd_do("aunpack imgui-master.zip")
-
-    --cmd_do("premake5 gmake")
-
-	local cimgui_path = path_third_party .. "/cimgui"
-    for file in lfs.dir(cimgui_path) do
-		print(file)
-	end
 end
 
 local function cimgui_after_build(_: Dependency)
@@ -582,18 +550,18 @@ local dependencies: {Dependency} = {
         after_init = rlimgui_after_init,
         description = "raylib обвязка над imgui",
         dir = "rlImGui",
-        disabled = true,
-        name = "rlimgui",
-        url_action = "git",
+        disabled = false,
         git_branch = "caustic",
+        name = "rlimgui",
         url = "git@github.com:nagolove/rlImGui.git",
+        url_action = "git",
     },
 
     {
         -- скопировать файлы из rlimgui
         -- нужно компилировать
+        after_init = cimgui_after_init,
         after_build = cimgui_after_build,
-        after_init = nil,
         build = build_cimgui,
         depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
@@ -603,8 +571,8 @@ local dependencies: {Dependency} = {
         links = { "cimgui:static" },
         links_internal = { "cimgui:static" },
         name = 'cimgui',
-        url_action = "git",
         url = 'https://github.com/cimgui/cimgui.git',
+        url_action = "git",
     },
 
     {
@@ -1384,9 +1352,11 @@ local parser_setup: {string:ParserSetup} = {
         summary = "remove all 3rd_party files",
         options = { "-n --name" },
     },
+    --[[
     rocks = {
         summary = "list of lua rocks should be installed for this script",
     },
+    --]]
     run = {
         summary = "run project native executable under gdb",
         arguments = {
@@ -1411,6 +1381,7 @@ local parser_setup: {string:ParserSetup} = {
             { "-m --minshell", "use minimal web shell" },
         }
     },
+    --[[
     init_smart = {
         summary = "install new dependencies",
         options = { "-n --name" },
@@ -1422,6 +1393,7 @@ local parser_setup: {string:ParserSetup} = {
     updates = {
         summary = "check git repositories for updates",
     },
+    --]]
 }
 -- }}}
 --]]
@@ -1529,7 +1501,7 @@ local function _init(path: string, deps: {Dependency})
                 sorter:add(dep.name, dep_name)
             end
         else
-			print('without dependency')
+			print('without dependency', dep.name)
             --sorter:add(dep.name, "null")
 			if single_thread then
 				dependency_init(dep, path)
@@ -2558,6 +2530,7 @@ local function _build(dirname: string)
     lfs.chdir(prevdir)
 end
 
+--[[
 function actions.build_smart(_args: Args)
     ut.push_current_dir()
     lfs.chdir(path_caustic)
@@ -2579,7 +2552,7 @@ function actions.build_smart(_args: Args)
 
     ut.pop_dir()
 end
-
+--]]
 
 -- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
@@ -2614,54 +2587,6 @@ function actions.deps(_args: Args)
         end
         print(tabular(shorts))
     end
-end
-
-local Cache_mt: metatable<Cache> = {
-    __index = Cache,
-}
-
-function Cache.new(storage: string): Cache
-    local self: Cache = {}
-    local ok, _: boolean, string = pcall(function()
-        self.cache = loadfile(storage)() as {string: Cache.Data}
-    end)
-    --print(tabular(self.cache))
-    self.abs_storage = lfs.currentdir() .. "/" .. storage
-    --print('self.abs_storage', self.abs_storage)
-    if not ok then
-        self.cache = {}
-        --print(format('Cache.new("%s") failed with', storage), errmsg)
-    end
-    return setmetatable(self, Cache_mt)
-end
-
--- XXX: Сравнение времени и содержимого работает не всегда корректно
-function Cache:should_recompile(fname: string, cmd: string): boolean
-    local modtime_cur: number = lfs.attributes(fname, 'modification')
-    if not modtime_cur then
-        print(format(
-            'Cache:should_recompile("%s") failed to query attributes', fname
-        ))
-        os.exit()
-    end
-    local data = self.cache[fname]
-    local modtime_cache = data and data.modtime or 0
-    local should = modtime_cur > modtime_cache
-    if should then
-        self.cache[fname] = {
-            modtime = modtime_cur,
-            cmd = cmd,
-        }
-    end
-    return should
-end
-
-function Cache:save()
-    --print(format('Cache:save(\"%s\")', storage))
-    local file = io.open(self.abs_storage, "w")
-    local data = serpent.dump(self.cache)
-    --print(tabular(data))
-    file:write(data)
 end
 
 local function get_cores_num(): integer

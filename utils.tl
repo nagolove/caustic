@@ -11,6 +11,24 @@ local function remove_last_backslash(path: string): string
     return path
 end
 
+local function remove_first_backslash(path: string): string
+    if #path >= 1 and string.sub(path, 1, 1) == "/" then
+        return string.sub(path, 2, -1)
+    end
+    return path
+end
+
+--[[
+local function test_remove_first_backslash(s: string)
+    print(s)
+    print(remove_first_backslash(s))
+    print("--------------")
+end
+
+test_remove_first_backslash("/")
+test_remove_first_backslash("/fefe/efef/")
+--]]
+
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")
@@ -138,13 +156,23 @@ local inspect = require 'inspect'
 
 local function caustic_path_substitute(s: {string}|string): {string}|string
     print("caustic_path_substitute:", inspect(s))
+    local path_caustic_wo_slash = remove_first_backslash(path_caustic)
+    print("path_caustic_wo_slash", path_caustic_wo_slash)
+    print( "os.exit()" )
+
+    os.exit()
+    -- TODO: Удалять двойные слеши из пути
+
+
     if type(s) == 'string' then
-        local rs = string.gsub(s as string, "$CAUSTIC_PATH", path_caustic)
+        local rs =  string.gsub(
+            s as string, "$CAUSTIC_PATH", path_caustic_wo_slash
+        )
         return rs
     elseif type(s) == 'table' then
         local tmp: {string} = {}
         for _, str in ipairs(s as {string}) do
-            local rs = string.gsub(str, "$CAUSTIC_PATH", path_caustic)
+            local rs = string.gsub(str, "$CAUSTIC_PATH", path_caustic_wo_slash)
             table.insert(tmp, rs)
         end
         print("caustic_path_substitute:")
@@ -175,7 +203,6 @@ local function pop_dir(num: integer)
         lfs.chdir(table.remove(dir_stack, #dir_stack))
     end
 end
-
 
 return {
     cat_file                = cat_file,
