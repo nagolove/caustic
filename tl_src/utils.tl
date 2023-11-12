@@ -1,5 +1,5 @@
 local lfs = require 'lfs'
-local inspect = require 'inspect'
+--local inspect = require 'inspect'
 
 local dir_stack: {string} = {}
 --require "caustic"
@@ -221,7 +221,7 @@ local function git_is_repo_clean(dirpath: string): boolean
     lfs.chdir(dirpath)
     local pipe = io.popen("git status --porcelain", "r")
     local i = 0
-    for line in pipe:lines() do
+    for _ in pipe:lines() do
         i = i + 1
         if i > 0 then
             pop_dir()

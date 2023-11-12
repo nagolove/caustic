@@ -342,8 +342,8 @@ local function build_pcre2(dep: Dependency)
 end
 
 local function build_small_regex(dep: Dependency)
-    print('custom_build', dep.dir)
-    print('currentdir', lfs.currentdir())
+    print('custom_build:', dep.dir)
+    print('currentdir:', lfs.currentdir())
     local prevdir = lfs.currentdir()
     local ok, errmsg = lfs.chdir('libsmallregex')
     if not ok then
@@ -581,7 +581,7 @@ local dependencies: {Dependency} = {
     },
 
     {
-        disabled = true,
+        disabled = false,
         after_init = sunvox_after_init,
         copy_for_wasm = true,
         description = "модульный звуковой синтезатор",
@@ -675,7 +675,8 @@ local dependencies: {Dependency} = {
         libdirs = { "small-regex/libsmallregex" },
         links = { "smallregex:static" },
         links_internal = { "smallregex:static" },
-        name = 'smallregex',
+        name = 'small-regex',
+        dir = "small-regex",
         url_action = "git",
         url = "https://gitlab.com/relkom/small-regex.git",
     },
@@ -1486,6 +1487,12 @@ local function _init(path: string, deps: {Dependency})
         lfs.chdir(path)
     end
 
+    if not ut.git_is_repo_clean(".") then
+        local curdir = lfs.currentdir()
+        local msg = format("_init: git index is dirty in '%s'", curdir)
+        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+    end
+
 	require 'compat53'
 
     local threads: {lanes.Thread} = {}
@@ -1970,6 +1977,15 @@ end
 local function rec_remove_dir(dirname: string)
     --print('rec_remove_dir', dirname)
     local ok, errmsg: boolean, any
+
+    if not ut.git_is_repo_clean(".") then
+        local curdir = lfs.currentdir()
+        local msg = format("rec_remove_dir: git index is dirty '%s'", curdir)
+        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        return
+    end
+
+    -- Попытка удалить пустой каталог
     ok, errmsg = lfs.rmdir(dirname)
     --print('rmdir', ok, errcode)
     if ok then
@@ -2026,7 +2042,7 @@ local function rec_remove_dir(dirname: string)
 end
 
 local function _remove(path: string, dirnames: {string})
-    local prev_dir = lfs.currentdir()
+    ut.push_current_dir()
     lfs.chdir(path)
 
     if not string.match(lfs.currentdir(), path) then
@@ -2045,11 +2061,11 @@ local function _remove(path: string, dirnames: {string})
         print("fail if rec_remove_dir", errmsg)
     end
 
-    lfs.chdir(prev_dir)
+    ut.pop_dir()
 end
 
 function actions.remove(_args: Args)
-    local dirnames = {}
+    local dirnames: {string} = {}
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
@@ -2514,7 +2530,19 @@ local function _build(dep: Dependency)
     end
 
     ut.push_current_dir()
-    lfs.chdir(dep.dir)
+
+    local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
+    if not ok_chd then
+        local msg = format(
+            "_build: could not do lfs.chdir() for '%s' dependency with %s",
+            dep.name, errmsg_chd
+        )
+        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        ut.pop_dir()
+        return
+    else
+        print("_build: current directory is", lfs.currentdir())
+    end
 
     if dep.build then
         local ok, errmsg: boolean, string = pcall(function()
