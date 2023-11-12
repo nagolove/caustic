@@ -1,4 +1,6 @@
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local lfs = require('lfs')
+local inspect = require('inspect')
+
 local dir_stack = {}
 
 
@@ -11,12 +13,32 @@ local function remove_last_backslash(path)
    return path
 end
 
-local function remove_first_backslash(path)
-   if #path >= 1 and string.sub(path, 1, 1) == "/" then
-      return string.sub(path, 2, -1)
-   end
-   return path
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function remove_double_slashes(s)
+   local rs = string.gsub(s, "//", "/")
+   return rs
 end
+
+
+
 
 
 
@@ -152,31 +174,21 @@ local function merge_tables(a, b)
    return tmp
 end
 
-local inspect = require('inspect')
-
 local function caustic_path_substitute(s)
-   print("caustic_path_substitute:", inspect(s))
-   local path_caustic_wo_slash = remove_first_backslash(path_caustic)
-   print("path_caustic_wo_slash", path_caustic_wo_slash)
-   print("os.exit()")
-
-   os.exit()
-
 
 
    if type(s) == 'string' then
-      local rs = string.gsub(
-      s, "$CAUSTIC_PATH", path_caustic_wo_slash)
-
-      return rs
+      local rs = string.gsub(s, "$CAUSTIC_PATH", path_caustic)
+      return remove_double_slashes(rs)
    elseif type(s) == 'table' then
       local tmp = {}
       for _, str in ipairs(s) do
-         local rs = string.gsub(str, "$CAUSTIC_PATH", path_caustic_wo_slash)
+         local rs = string.gsub(str, "$CAUSTIC_PATH", path_caustic)
+         rs = remove_double_slashes(rs)
          table.insert(tmp, rs)
       end
-      print("caustic_path_substitute:")
-      print(inspect(tmp))
+
+
       return tmp
    else
       print(string.format("caustic_path_substitute: bad type %s for 's'", s))
@@ -204,7 +216,35 @@ local function pop_dir(num)
    end
 end
 
+local function git_is_repo_clean(dirpath)
+   push_current_dir()
+   lfs.chdir(dirpath)
+   local pipe = io.popen("git status --porcelain", "r")
+   local i = 0
+   for line in pipe:lines() do
+      i = i + 1
+      if i > 0 then
+         pop_dir()
+         return false
+      end
+   end
+
+
+   pop_dir()
+   return true
+end
+
+local function test_git_is_repo_clean(dirpath)
+   print(dirpath)
+   print(tostring(git_is_repo_clean(dirpath)))
+end
+
+test_git_is_repo_clean(".")
+test_git_is_repo_clean("3rd_party/genann/")
+test_git_is_repo_clean("3rd_party/Chipmunk2D/")
+
 return {
+   git_is_repo_clean = git_is_repo_clean,
    cat_file = cat_file,
    caustic_path_substitute = caustic_path_substitute,
    filter_sources = filter_sources,

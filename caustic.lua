@@ -479,6 +479,11 @@ local function build_raylib(_)
    cmd_do("make -j")
 end
 
+local function build_box2c(_)
+   cmd_do("cmake .")
+   cmd_do("make -j")
+end
+
 
 
 
@@ -608,10 +613,11 @@ local dependencies = {
 
    {
       copy_for_wasm = true,
+      build = build_box2c,
       description = "box2c - плоский игровой физический движок",
-      includes = { "Chipmunk2D/include" },
-      libdirs = { "Chipmunk2D/src" },
-      links = { "chipmunk:static" },
+      includes = { "box2c/include" },
+      libdirs = { "box2c/src" },
+      links = { "box2c:static" },
       links_internal = { "box2c:static" },
       name = 'box2c',
       git_branch = "linux-gcc",
@@ -1400,70 +1406,72 @@ local parser_setup = {
 
 local actions = {}
 
-local function _init_smart(path, deps)
-   print("_init_smart", path, inspect(deps))
-   ut.push_current_dir()
-
-   if not lfs.chdir(path) then
-      if not lfs.mkdir(path) then
-         print('could not do lfs.mkdir()')
-         os.exit()
-      end
-      lfs.chdir(path)
-   end
-
-   local threads = {}
-   local opt_tbl = { required = { "lfs" } }
-   local func = lanes.gen("*", opt_tbl, dependency_init)
-
-   local sorter = Toposorter.new()
-   local single_thread = true
-
-   for _, dep in ipairs(deps) do
-      assert(type(dep.url) == 'string')
-      assert(dep.name)
-      if dep.depends then
-         for _, dep_name in ipairs(dep.depends) do
-            sorter:add(dep.name, dep_name)
-         end
-      else
-
-         if single_thread then
-            dependency_init(dep, path)
-         else
-
-            local lane_thread = (func)(dep, path)
-
-            table.insert(threads, lane_thread)
-         end
-      end
-   end
-
-   local sorted = sorter:sort()
 
 
 
-   sorted = filter(sorted, function(node)
-      return node.value ~= "null"
-   end)
 
-   print(tabular(threads))
-   wait_threads(threads)
-   for _, thread in ipairs(threads) do
-      local result, errcode = thread:join()
-      print(result, errcode)
-   end
 
-   for _, node in ripairs(sorted) do
-      local value = (node).value
-      print('value', value, inspect(node))
-      local dep = dependencies_name_map[(node).value]
-      print('dep', inspect(dep))
-      dependency_init(dep, path)
-   end
 
-   ut.pop_dir()
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function _init(path, deps)
    print("_init", path)
@@ -1617,32 +1625,56 @@ end
 
 
 
-function actions.init_smart(_args)
-   print('init_smart', inspect(_args))
 
-   local deps = {}
-   if _args.name then
-      print('partial init for dependency', _args.name)
-      if dependencies_name_map[_args.name] then
-         table.insert(deps, dependencies_name_map[_args.name])
-      else
-         print("bad dependency name", _args.name)
-         return
-      end
-   else
-      print("only one named dependency supported")
-      os.exit()
-
-
-
+local function git_is_repo_clean(dirpath)
+   ut.push_current_dir()
+   lfs.chdir(dirpath)
+   local pipe = io.popen("git status --porcelain", "r")
+   for line in pipe:lines() do
+      print(line)
    end
-
-
-
-   _init_smart(path_third_party, deps)
-   _init_smart(path_wasm_third_party, deps)
-
+   print(#{ pipe:lines() })
+   print(inspect({ pipe:lines() }))
+   ut.pop_dir()
 end
+
+local function test_git_is_repo_clean(dirpath)
+   print(dirpath)
+   print(tostring(git_is_repo_clean(dirpath)))
+end
+
+test_git_is_repo_clean(".")
+test_git_is_repo_clean("3rd_party/genann/")
+test_git_is_repo_clean("3rd_party/Chipmunk2D/")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2455,57 +2487,58 @@ function actions.wbuild(_args)
    end
 end
 
-local function _build_smart(dep)
-   assert(dep)
 
-   print("_build_smart:")
-   print(tabular(dep))
 
-   local dirname = dep.dir
 
-   if not dirname then
-      print(format(
-      "_build_smart: dependency %s has not 'dir' field", dep.name))
 
-      return
-   end
 
-   local prevdir = lfs.currentdir()
-   lfs.chdir(dirname)
 
-   if dep.build then
-      local ok, errmsg = pcall(function()
-         dep.build(dep)
-      end)
-      if not ok then
-         print('build error:', errmsg)
-      end
-   else
-      print(format('%s has no build method', dep.name))
-   end
 
-   if dep and dep.after_build then
-      local ok, errmsg = pcall(function()
-         dep.after_build(dep)
-      end)
-      if not ok then
-         print(inspect(dep), 'failed with', errmsg)
-      end
-   end
 
-   lfs.chdir(prevdir)
-end
 
-local function _build(dirname)
-   print("_build:", dirname)
-   local prevdir = lfs.currentdir()
-   lfs.chdir(dirname)
 
-   local dep = dependencies_map[dirname]
-   assert(dep)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function _build(dep)
+   print("_build:", dep.name)
    if dep.disabled then
+      print(format("%s is disabled", dep.name))
       return
    end
+
+   ut.push_current_dir()
+   lfs.chdir(dep.dir)
 
    if dep.build then
       local ok, errmsg = pcall(function()
@@ -2527,7 +2560,7 @@ local function _build(dirname)
       end
    end
 
-   lfs.chdir(prevdir)
+   ut.pop_dir()
 end
 
 
@@ -2562,15 +2595,19 @@ function actions.build(_args)
 
    if _args.name then
       if dependencies_name_map[_args.name] then
-         _build(get_dir(dependencies_name_map[_args.name]))
+         local dep = dependencies_map[get_dir(dependencies_name_map[_args.name])]
+         _build(dep)
       else
          print("bad dependency name", _args.name)
          ut.pop_dir()
          return
       end
    else
-      for _, dirname in ipairs(get_dirs(dependencies)) do
-         _build(dirname)
+
+
+
+      for _, dep in ipairs(dependencies) do
+         _build(dep)
       end
    end
 
