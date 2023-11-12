@@ -30,6 +30,7 @@ local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 local lua_ver = "5.1"
 --local lua_ver = "5.4"
 package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
+package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
 package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
                -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
@@ -39,6 +40,10 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
 
+assert(path_caustic)
+assert(path_third_party)
+assert(path_wasm_third_party)
+
 local tabular    = require "tabular".show
 local lfs        = require 'lfs'
 local ansicolors = require 'ansicolors'
@@ -47,9 +52,9 @@ local argparse   = require 'argparse'
 local ut         = require "utils"
 local Cache      = require "cache"
 
-assert(path_caustic)
-assert(path_third_party)
-assert(path_wasm_third_party)
+if string.match(lfs.currentdir(), "tl_dst") then
+    lfs.chdir("..")
+end
 
 local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
@@ -2594,8 +2599,12 @@ end
 -- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
     ut.push_current_dir()
+
     lfs.chdir(path_caustic)
     lfs.chdir(path_third_party)
+    print("actions.build: currend directory", lfs.currentdir())
+    print( "os.exit()" )
+    os.exit()
 
     if _args.name then
         if dependencies_name_map[_args.name] then

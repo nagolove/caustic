@@ -40,6 +40,10 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
 
+assert(path_caustic)
+assert(path_third_party)
+assert(path_wasm_third_party)
+
 local tabular = require("tabular").show
 local lfs = require('lfs')
 local ansicolors = require('ansicolors')
@@ -48,9 +52,9 @@ local argparse = require('argparse')
 local ut = require("utils")
 local Cache = require("cache")
 
-assert(path_caustic)
-assert(path_third_party)
-assert(path_wasm_third_party)
+if string.match(lfs.currentdir(), "tl_dst") then
+   lfs.chdir("..")
+end
 
 local site_repo = "~/nagolove.github.io"
 

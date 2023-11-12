@@ -6,11 +6,10 @@ return {
     gen_target = "5.1",
     --global_env_def = "love",
     source_dir = "tl_src",
-    --build_dir = "app",
     include_dir = {
         "tl_src",
     },
-    build_dir = ".",
+    build_dir = "tl_dst",
     --global_env_def = "tl_src",
     --include = include,
     --exclude = { },
