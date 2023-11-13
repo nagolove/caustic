@@ -56,6 +56,9 @@ if string.match(lfs.currentdir(), "tl_dst") then
     lfs.chdir("..")
 end
 
+-- TODO: Как-то предухранить каталог caustic с рабочей средой от затирания
+-- при ошибочно выставленной переменной окружения CAUSTIC_PATH
+
 local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
 
@@ -65,9 +68,9 @@ local verbose             = true
 local errexit             = false
 local cache: Cache
 
--- TODO: Добавить возможность нескольких артефактов в проекте
 local record Cfg
     -- {{{
+    dependencies: {string}
     src: string
     artifact: string
     main: string
@@ -770,18 +773,21 @@ local _includedirs_internal  = {
 --local includedirs = 
     --template_dirs(_includedirs, path_third_party)
 
--- TODO: Проверка на дубликаты путей
+-- TODO: Проверка на дубликаты путей:
+--      как проверка будет функционировать? какой-то флаг?
 local function gather_includedirs(deps: {Dependency}, path_prefix: string): {string}
     assert(deps)
     path_prefix = remove_last_backslash(path_prefix)
     local tmp_includedirs = {}
     for _, dep in ipairs(deps) do
-        if dep.includes then
+        if dep.includes and dep.disabled and not dep.disabled then
             for _, include_path in ipairs(dep.includes) do
                 table.insert(tmp_includedirs, remove_last_backslash(include_path))
             end
         end
     end
+
+    -- Постобработка
     for i, str in ipairs(tmp_includedirs) do
         tmp_includedirs[i] = path_prefix .. "/" .. str
     end
@@ -801,9 +807,11 @@ local includedirs = prefix_add(
 )
 table.insert(includedirs, path_caustic .. "/src")
 
+--[[
 local includedirs_internal = prefix_add(
     path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
 )
+--]]
 
 local enum LinksType
     "links_internal"
@@ -2108,6 +2116,9 @@ function actions.verbose(_: Args)
     }))
 end
 
+-- Функция может как работать в рамках проекта, там и указывать все доступные
+-- каталоги?
+-- Пользовался-ли я этой функцией?
 function actions.compile_flags(_: Args)
     for _, v in ipairs(includedirs) do
         print("-I" .. v)
@@ -2358,6 +2369,7 @@ local function make_l(list: {string}): {string}
 end
 
 --[[
+-- {{{ Специфические опции
 #warning: Link with `-sLLD_REPORT_UNDEFINED` to get more information on undefined symbols
 #warning: To disable errors for undefined symbols use `-sERROR_ON_UNDEFINED_SYMBOLS=0`
 
@@ -2367,6 +2379,7 @@ end
 #set up unrelated data structures in memory, then you could reverse that order.
 #Then the pure computation could run first, and be evalled away, and the GL
 #context creation call to an import would not prevent that. 
+-- }}}
 --]]
 local function link_wasm_project(main_fname: string, _args: Args)
     --local currentdir = lfs.currentdir()
@@ -2990,6 +3003,32 @@ local function codegen(cg: Cfg.Codegen)
     end
 end
 
+local function get_ready_includes(cfg: Cfg): {string}
+    local ready_deps: {Dependency} = {}
+
+    if cfg.dependencies then
+        for _, depname in ipairs(cfg.dependencies) do
+            table.insert(ready_deps, dependencies_name_map[depname])
+        end
+    else
+        ready_deps = dependencies
+    end
+
+    local _includedirs = prefix_add(
+        path_caustic .. "/", gather_includedirs(ready_deps, path_third_party)
+    )
+    if _includedirs then
+        table.insert(includedirs, path_caustic .. "/src")
+    end
+    local _includedirs_internal = prefix_add(
+        path_caustic .. "/", gather_includedirs(ready_deps, path_third_party)
+    )
+    return _includedirs or _includedirs_internal
+end
+
+
+-- TODO: Обработка массива dependencies
+-- Идея - файлы описания зависимостей могут лежать вне каустики.
 local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if _args.c then
         cache_remove()
@@ -3023,9 +3062,10 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         "-DPLATFORM_DESKTOP",
     }, " ")
 
+
     local _includes: string = table.concat({
     }, " ")
-    local dirs = cfg.artifact and includedirs or includedirs_internal
+    local dirs = cfg.artifact and get_ready_includes(cfg)
 
     for _, v in ipairs(dirs) do
         _includes = _includes .. " -I" .. v
