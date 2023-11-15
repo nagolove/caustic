@@ -24,7 +24,8 @@ end
 
 -- TODO: получение имен каталогов из переменных окружения
 -- CAUSTIC_3RD_PARTY и WASM_3RD_PARTY
-local path_third_party = remove_last_backslash("3rd_party")
+local path_rel_third_party = remove_last_backslash("3rd_party")
+local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
 local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 
 local lua_ver = "5.1"
@@ -35,13 +36,14 @@ package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
                -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
                --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
-               path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" ..  package.path
+               path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
 package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
 
 assert(path_caustic)
-assert(path_third_party)
+assert(path_rel_third_party)
+assert(path_abs_third_party)
 assert(path_wasm_third_party)
 
 local tabular    = require "tabular".show
@@ -406,21 +408,20 @@ local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init: code was generated");
 
     cmd_do("rm CMakeCache.txt")
+
+    local cmd_actions = {
+        format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
+        "cmake .",
+        "-DIMGUI_STATIC=1",
+    }
+
     if use_freetype then
-        cmd_do(table.concat({
-            format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
-            "cmake .",
-            "-DIMGUI_STATIC=1",
-            "-DIMGUI_FREETYPE=1",
-            "-DIMGUI_ENABLE_FREETYPE=1",
-        }, " "))
-    else
-        cmd_do(table.concat({
-            format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
-            "cmake .",
-            "-DIMGUI_STATIC=1",
-        }, " "))
+        table.insert(cmd_actions, "-DIMGUI_FREETYPE=1")
+        table.insert(cmd_actions, "-DIMGUI_ENABLE_FREETYPE=1")
     end
+
+    cmd_do(table.concat(cmd_actions, " "))
+
     ut.pop_dir()
 end
 
@@ -437,11 +438,10 @@ local function build_cimgui(dep: Dependency)
     --cmd_do("cat rlimgui.inc >> cimgui.cpp")
     --cmd_do("cat rlimgui.h.inc >> cimgui.h")
 
-    local path = path_caustic .. "/" .. path_third_party
-    print("path", path)
+    --local path = path_caustic .. "/" .. path_third_party
+    --print("path", path)
 
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
-
     cmd_do("make clean")
     cmd_do("make -j")
     --cmd_do("mv cimgui.a libcimgui.a")
@@ -803,7 +803,7 @@ local function prefix_add(prefix: string, t: {string}): {string}
 end
 
 local includedirs = prefix_add(
-    path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
+    path_caustic .. "/", gather_includedirs(dependencies, path_rel_third_party)
 )
 table.insert(includedirs, path_caustic .. "/src")
 
@@ -1619,7 +1619,7 @@ end
 function actions.rmdirs(_args: Args)
     for _, dep in ipairs(dependencies) do
         if dep.dir then
-            cmd_do("rmdir " .. path_third_party .. "/" .. dep.dir)
+            cmd_do("rmdir " .. path_rel_third_party .. "/" .. dep.dir)
         end
     end
 end
@@ -1692,7 +1692,7 @@ function actions.init(_args: Args)
 
     --print('deps', inspect(deps))
     --check_for_unstaged(deps)
-    _init(path_third_party, deps)
+    _init(path_rel_third_party, deps)
     --_init(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
@@ -1991,12 +1991,31 @@ local function rec_remove_dir(dirname: string)
     --print('rec_remove_dir', dirname)
     local ok, errmsg: boolean, any
 
-    if not ut.git_is_repo_clean(".") then
-        local curdir = lfs.currentdir()
-        local msg = format("rec_remove_dir: git index is dirty '%s'", curdir)
+    --[[
+    -- XXX Не работает проверка на незакрепленные изменения в гите.
+    -- Проверять только если каталог является гит хранилищем
+    ut.push_current_dir()
+    ok, errmsg = lfs.chdir(dirname)
+    if ok then
+        if not ut.git_is_repo_clean(dirname) then
+            local curdir = lfs.currentdir()
+            local msg = format(
+                "rec_remove_dir: git index is dirty '%s'", curdir
+            )
+            print(ansicolors("%{red}" .. msg .. "%{reset}"))
+            ut.pop_dir()
+            return
+        end
+        ut.pop_dir()
+    else
+        local msg = format(
+            "rec_remove_dir: could not change directory to '%s'", dirname
+        )
         print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        ut.pop_dir()
         return
     end
+    --]]
 
     -- Попытка удалить пустой каталог
     ok, errmsg = lfs.rmdir(dirname)
@@ -2086,7 +2105,7 @@ function actions.remove(_args: Args)
             table.insert(dirnames, dirname)
         end
     end
-    _remove(path_third_party, dirnames)
+    _remove(path_rel_third_party, dirnames)
     _remove(path_wasm_third_party, dirnames)
     --_remove(win_third_party, dirnames)
 end
@@ -2549,6 +2568,12 @@ local function _build(dep: Dependency)
 
     ut.push_current_dir()
 
+    if not dep.dir then
+        print("dep.dir == nil")
+        print(inspect(dep))
+        os.exit(1)
+    end
+
     local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
     if not ok_chd then
         local msg = format(
@@ -2613,11 +2638,16 @@ end
 function actions.build(_args: Args)
     ut.push_current_dir()
 
-    lfs.chdir(path_caustic)
-    lfs.chdir(path_third_party)
+    --[[
+    lfs.chdir(path_abs_caustic)
+    lfs.chdir(path_rel_third_party)
+    --]]
+    lfs.chdir(path_rel_third_party)
+
     print("actions.build: currend directory", lfs.currentdir())
-    print( "os.exit()" )
-    os.exit()
+
+    --print( "os.exit()" )
+    --os.exit()
 
     if _args.name then
         if dependencies_name_map[_args.name] then
@@ -2827,7 +2857,7 @@ function actions.updates(_args: Args)
             if dep.dir then
                 print('dep.dir', dep.dir)
                 ut.push_current_dir()
-                lfs.chdir(path_third_party .. "/" .. dep.dir)
+                lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
                 cmd_do({ 
                     "git fetch",
                     "git status",
@@ -3003,6 +3033,7 @@ local function codegen(cg: Cfg.Codegen)
     end
 end
 
+-- Возвращет список включаемых каталог соответствующий конфигурации
 local function get_ready_includes(cfg: Cfg): {string}
     local ready_deps: {Dependency} = {}
 
@@ -3015,13 +3046,15 @@ local function get_ready_includes(cfg: Cfg): {string}
     end
 
     local _includedirs = prefix_add(
-        path_caustic .. "/", gather_includedirs(ready_deps, path_third_party)
+        path_caustic .. "/",
+        gather_includedirs(ready_deps, path_rel_third_party)
     )
     if _includedirs then
         table.insert(includedirs, path_caustic .. "/src")
     end
     local _includedirs_internal = prefix_add(
-        path_caustic .. "/", gather_includedirs(ready_deps, path_third_party)
+        path_caustic .. "/", 
+        gather_includedirs(ready_deps, path_rel_third_party)
     )
     return _includedirs or _includedirs_internal
 end
@@ -3106,7 +3139,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     print("pwd", lfs.currentdir())
 
-    local _libdirs = make_L(ut.shallow_copy(libdirs), path_third_party)
+    local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
     --print("_libdirs")
     --print(tabular(_libdirs))
