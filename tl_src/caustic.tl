@@ -64,10 +64,12 @@ end
 local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
 
-local format              = string.format
-local cache_name          = "cache.lua"
-local verbose             = true
-local errexit             = false
+local format        = string.format
+local cache_name    = "cache.lua"
+local verbose       = true
+local errexit       = false
+local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
+local pattern_end   = "{CAUSTIC_PASTE_END}"
 local cache: Cache
 
 local record Cfg
@@ -252,6 +254,7 @@ end
 -- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
 -- значением хэша коммита
 local record Dependency
+    -- {{{
     description: string -- описание компонента зависимости
     disabled: boolean   -- временно исключает запись из обработки
 
@@ -294,6 +297,24 @@ local record Dependency
 	-- for WebAssembly
     wbuild: function(dep: Dependency) 
     after_build: function(dep: Dependency)
+    -- }}}
+
+    get_cc_includes: function(dep: Dependency)
+end
+
+local dependencies: {Dependency}
+
+local function get_deps_name_map(deps: {Dependency}): {string: Dependency}
+    assert(deps)
+    local map = {}
+    for _, dep in ipairs(deps) do
+        if map[dep.name] then
+            print("get_deps_name_map: name dublicated", dep.name)
+            os.exit(1)
+        end
+        map[dep.name] = dep
+    end
+    return map
 end
 
 local function build_with_make(_: Dependency)
@@ -376,6 +397,153 @@ local function build_small_regex(dep: Dependency)
     lfs.chdir(prevdir)
 end
 
+local function guard()
+    local rnd_num = math.random(10000, 20000)
+
+    coroutine.yield(table.concat({
+        format("#ifndef GUARD_%s", rnd_num),
+        format("#define GUARD_%s\n", rnd_num),
+    }, "\n"))
+
+    coroutine.yield("#endif\n")
+end
+
+local function paste_from_one_to_other(
+    src: string, dst: string, guard_coro: thread
+)
+    local file_src = io.open(src, "r")
+    local file_dst = io.open(dst, "a+")
+
+    assert(file_src)
+    assert(file_dst)
+
+    local in_block = false
+    if guard_coro and type(guard_coro) == 'thread' then
+        local _, msg = coroutine.resume(guard_coro) as (boolean, string)
+        file_dst:write(msg)
+    end
+
+    for line in file_src:lines() do
+        if string.match(line, pattern_begin) then
+            in_block = true
+        end
+
+        if in_block then
+            file_dst:write(format("%s\n", line))
+        end
+
+        if in_block and string.match(line, pattern_end) then
+            in_block = false
+        end
+    end
+
+    if guard_coro and type(guard_coro) == 'thread' then
+        local _, msg = coroutine.resume(guard_coro) as (boolean, string)
+        file_dst:write(msg)
+    end
+
+    file_dst:close()
+end
+
+--[[
+local function paste2cimgui_header()
+    local file_src = io.open(path_abs_third_party .. "/rlImGui/rlImGui.h", "r")
+    local file_dst = io.open(path_abs_third_party .. "/cimgui/cimgui.h", "a+")
+
+    assert(file_src)
+    assert(file_dst)
+
+    local in_block = false
+    local guard_coro = coroutine.create(guard)
+    local _, msg = coroutine.resume(guard_coro) as (boolean, string)
+    file_dst:write(msg)
+
+    for line in file_src:lines() do
+        if string.match(line, pattern_begin) then
+            in_block = true
+        end
+
+        if in_block then
+            file_dst:write(format("%s\n", line))
+        end
+
+        if in_block and string.match(line, pattern_end) then
+            in_block = false
+        end
+    end
+
+    _, msg = coroutine.resume(guard_coro) as (boolean, string)
+    file_dst:write(msg)
+    file_dst:close()
+end
+--]]
+
+--[[
+local function paste2cimgui_source()
+    local file_src = io.open(
+        path_abs_third_party .. "/rlImGui/rlImGui.cpp", "r"
+    )
+    local file_dst = io.open(
+        path_abs_third_party .. "/cimgui/cimgui.cpp", "a+"
+    )
+
+    assert(file_src)
+    assert(file_dst)
+
+    for line in file_src:lines() do
+        file_dst:write(format("%s\n", line))
+    end
+
+    file_dst:close()
+end
+--]]
+
+-- TODO Добавить возможность конфигурирования каждой зависимости при помощи
+-- ключей команды caustic
+-- В частности - отключение или включение библиотеки freetype
+local function build_cimgui(dep: Dependency)
+    print('build_cimgui:', inspect(dep))
+
+    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
+
+    print("current dir", lfs.currentdir())
+
+    --#ifndef NO_FONT_AWESOME
+
+    --[[
+    local includes = get_deps_name_map(dependencies)["raylib"].includes
+    local includes_str: string = ""
+    for _, include in ipairs(includes) do
+        includes_str =  includes_str .. 
+                        "-i" .. 
+                        path_abs_third_party .. 
+                        "/" .. 
+                        include
+    end
+    print("include_str", includes_str)
+    --]]
+
+    cmd_do("make clean")
+    --cmd_do(string.format("CXXFLAGS=%s make -j", includes_str))
+    cmd_do("make -j")
+end
+
+local function get_additional_includes(): string
+    local includes_str = ""
+    local includes = get_deps_name_map(dependencies)["raylib"].includes
+    for _, include in ipairs(includes) do
+        includes_str =  includes_str .. 
+                        "-I" .. 
+                        path_abs_third_party .. 
+                        "/" .. 
+                        include
+    end
+    assert(includes_str)
+    print("include_str", includes_str)
+    assert(includes_str)
+    return includes_str
+end
+
 local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
     local imgui_files = {
@@ -409,42 +577,32 @@ local function cimgui_after_init(dep: Dependency)
 
     cmd_do("rm CMakeCache.txt")
 
-    local cmd_actions = {
+    local cmake_cmd = {
         format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
         "cmake .",
+        format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes()),
         "-DIMGUI_STATIC=1",
+        "-DNO_FONT_AWESOME=1",
     }
 
     if use_freetype then
-        table.insert(cmd_actions, "-DIMGUI_FREETYPE=1")
-        table.insert(cmd_actions, "-DIMGUI_ENABLE_FREETYPE=1")
+        table.insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
+        table.insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
     end
+    cmd_do(table.concat(cmake_cmd, " "))
 
-    cmd_do(table.concat(cmd_actions, " "))
+    paste_from_one_to_other(
+        path_abs_third_party .. "/rlImGui/rlImGui.h",
+        path_abs_third_party .. "/cimgui/cimgui.h",
+        coroutine.create(guard)
+    )
+
+    paste_from_one_to_other(
+        path_abs_third_party .. "/rlImGui/rlImGui.cpp",
+        path_abs_third_party .. "/cimgui/cimgui.cpp"
+    )
 
     ut.pop_dir()
-end
-
--- TODO Добавить возможность конфигурирования каждой зависимости при помощи
--- ключей команды caustic
--- В частности - отключение или включение библиотеки freetype
-local function build_cimgui(dep: Dependency)
-    print('build_cimgui:', inspect(dep))
-
-    --cmd_do("cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1")
-    --cmd_do("cmake . -DIMGUI_STATIC=1 -DIMGUI_FREETYPE=1 -DIMGUI_ENABLE_FREETYPE=1  -DCMAKE_CXX_FLAGS=-I\\ /home/nagolove/caustic/3rd_party/freetype/include")
-
-    -- Как получить rlimgui.inc ?
-    --cmd_do("cat rlimgui.inc >> cimgui.cpp")
-    --cmd_do("cat rlimgui.h.inc >> cimgui.h")
-
-    --local path = path_caustic .. "/" .. path_third_party
-    --print("path", path)
-
-    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
-    cmd_do("make clean")
-    cmd_do("make -j")
-    --cmd_do("mv cimgui.a libcimgui.a")
 end
 
 local function rlimgui_after_init(_: Dependency)
@@ -498,8 +656,7 @@ end
 -- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
 -- каталогов библиотек и т.д.
 
--- XXX: Обработка сверху вниз, топологическая сортировка отключена
-local dependencies: {Dependency} = {
+dependencies = {
 
     {
         disabled = false,
@@ -517,6 +674,7 @@ local dependencies: {Dependency} = {
 
     {
         name = "imgui",
+        dir = "imgui",
         url_action = "git",
         url = "https://github.com/ocornut/imgui.git",
     },
@@ -620,16 +778,18 @@ local dependencies: {Dependency} = {
     },
 
     {
-        copy_for_wasm = true,
         build = build_box2c,
+        copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
+        dir = "box2c",
+        git_branch = "linux-gcc",
         includes = { "box2c/include", },
         libdirs = { "box2c/src" },
         links = { "box2c:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
-        git_branch = "linux-gcc",
-        url = "https://github.com/erincatto/box2c.git",
+        url = "https://github.com/nagolove/box2c.git",
+        url_action = 'git',
     },
 
     {
@@ -647,16 +807,17 @@ local dependencies: {Dependency} = {
     },
 
     {
+        build = build_with_make,
         copy_for_wasm = true,
         description = "lua интерпритатор",
-        build = build_with_make,
+        dir = "lua",
         includes = { "lua" },
         libdirs = { "lua" },
         links  = { "lua:static" },
         links_internal = { "lua:static" },
         name = 'lua',
-        url_action = "git",
         url = "https://github.com/lua/lua.git",
+        url_action = "git",
     },
 
     {
@@ -694,22 +855,24 @@ local dependencies: {Dependency} = {
         build = build_with_make,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
+        dir = "utf8proc",
         includes = { "utf8proc" },
         libdirs = { "utf8proc" },
         links = { "utf8proc:static" },
         links_internal = { "utf8proc:static" },
         name = 'utf8proc',
-        url_action = "git",
         url = "https://github.com/JuliaLang/utf8proc.git",
+        url_action = "git",
     },
 
     {
         copy_for_wasm = true,
         description = "набор библиотека заголовочных файлов для разных нужд",
+        dir = "stb",
         includes = { "stb" },
         name = 'stb',
-        url_action = "git",
         url = "https://github.com/nothings/stb.git",
+        url_action = "git",
     },
 
     {
@@ -724,6 +887,18 @@ local dependencies: {Dependency} = {
         url = "https://github.com/krychu/wfc.git",
     },
 }
+
+--[[
+local dependencies_mt: Dependency = {
+    get_cc_includes = function(self: Dependency)
+        print(inspect(self))
+    end,
+}
+
+for _, v in ipairs(dependencies) do
+    setmetatable(v, dependencies_mt as metatable<Dependency>)
+end
+--]]
 
 local function get_urls(deps: {Dependency}): {string}
     local urls = {}
@@ -939,18 +1114,6 @@ local function get_deps_map(deps: {Dependency}): {string: Dependency}
     return res
 end
 
-local function get_deps_name_map(deps: {Dependency}): {string: Dependency}
-    local map = {}
-    for _, dep in ipairs(deps) do
-        if map[dep.name] then
-            print("get_deps_name_map: name dublicated", dep.name)
-            os.exit(1)
-        end
-        map[dep.name] = dep
-    end
-    return map
-end
-
 -- ??
 local dependencies_map: {string: Dependency} = 
     get_deps_map(dependencies)
@@ -1124,21 +1287,18 @@ end
 -- FIXME: Зачем делать проверку действия по строке, если действие можно задать 
 -- флагом или функцией?
 local function _dependecy_init(dep: Dependency)
-	print('_dependecy_init', dep)
 	assert(dep)
     if dep.disabled then
         return
     end
-    --if string.match(url, "%.git$") then
     if dep.url_action == "git" then
-        --print("git url")
         git_clone(dep)
-    --elseif string.match(url, "%.zip$") then
     elseif dep.url_action == "zip" then
-        --print("zip url")
         download_and_unpack_zip(dep)
     else
+        print('_dependecy_init', inspect(dep))
         print("_dependecy_init: unknown dep.url_action", dep.url_action)
+        os.exit(1)
     end
     after_init(dep)
 end
@@ -2576,9 +2736,10 @@ local function _build(dep: Dependency)
 
     local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
     if not ok_chd then
+        print("currend directory", lfs.currentdir())
         local msg = format(
-            "_build: could not do lfs.chdir() for '%s' dependency with %s",
-            dep.name, errmsg_chd
+            "_build: could not do lfs.chdir('%s') dependency with %s",
+            dep.dir, errmsg_chd
         )
         print(ansicolors("%{red}" .. msg .. "%{reset}"))
         ut.pop_dir()
@@ -2646,12 +2807,11 @@ function actions.build(_args: Args)
 
     print("actions.build: currend directory", lfs.currentdir())
 
-    --print( "os.exit()" )
-    --os.exit()
-
     if _args.name then
         if dependencies_name_map[_args.name] then
-            local dep = dependencies_map[get_dir(dependencies_name_map[_args.name])]
+            -- FIXME: Исправить на более короткое получение dep
+            local dir = get_dir(dependencies_name_map[_args.name])
+            local dep = dependencies_map[dir]
             _build(dep)
         else
             print("bad dependency name", _args.name)
@@ -2659,9 +2819,6 @@ function actions.build(_args: Args)
 			return
         end
     else
-        --for _, dirname in ipairs(get_dirs(dependencies)) do
-            --_build(dirname)
-        --end
         for _, dep in ipairs(dependencies) do
             _build(dep)
         end
