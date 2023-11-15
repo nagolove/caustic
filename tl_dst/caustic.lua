@@ -53,6 +53,8 @@ local inspect = require('inspect')
 local argparse = require('argparse')
 local ut = require("utils")
 local Cache = require("cache")
+local lanes = require("lanes").configure()
+local sleep = require("socket").sleep
 
 if string.match(lfs.currentdir(), "tl_dst") then
    lfs.chdir("..")
@@ -507,24 +509,7 @@ local function build_cimgui(dep)
    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
    print("current dir", lfs.currentdir())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    cmd_do("make clean")
-
    cmd_do("make -j")
 end
 
@@ -566,11 +551,11 @@ local function cimgui_after_init(dep)
    cmd_do('git submodule update --init --recursive --depth 1')
    ut.push_current_dir()
    lfs.chdir('generator')
+   local lua_path = 'LUA_PATH="./?.lua;"$LUA_PATH'
    if use_freetype then
-      cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv freetype"')
+      cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv freetype"')
    else
-
-      cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv"')
+      cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv"')
    end
    ut.pop_dir()
    print("cimgui_after_init: code was generated");
@@ -590,9 +575,6 @@ local function cimgui_after_init(dep)
       table.insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
    end
    cmd_do(table.concat(cmake_cmd, " "))
-
-
-
 
    paste_from_one_to_other(
    path_abs_third_party .. "/rlImGui/rlImGui.h",
@@ -652,9 +634,6 @@ local function build_box2c(_)
    cmd_do("cmake .")
    cmd_do("make -j")
 end
-
-
-
 
 
 
@@ -890,6 +869,8 @@ dependencies = {
       url = "https://github.com/krychu/wfc.git",
    },
 }
+
+
 
 
 
@@ -1156,9 +1137,6 @@ get_deps_name_map(dependencies)
 
 
 
-local lanes = require("lanes").configure()
-local sleep = require("socket").sleep
-
 
 
 
@@ -1414,29 +1392,6 @@ function Toposorter:sort()
       end
    end
    return sorted
-end
-
-
-
-
-local function ripairs(t)
-   local i = #t + 1
-   return function()
-      while i - 1 > 0 do
-         i = i - 1
-         return i, t[i]
-      end
-   end
-end
-
-local function filter(collection, cb)
-   local tmp = {}
-   for _, v in ipairs(collection) do
-      if cb(v) then
-         table.insert(tmp, v)
-      end
-   end
-   return tmp
 end
 
 
@@ -1712,7 +1667,7 @@ local function _init(path, deps)
 
 
 
-      sorted = filter(sorted, function(node)
+      sorted = ut.filter(sorted, function(node)
          return node.value ~= "null"
       end)
       print('sorted', inspect(sorted))
@@ -1737,7 +1692,7 @@ local function _init(path, deps)
 
 
    if use_toposort then
-      for _, node in ripairs(sorted) do
+      for _, node in ut.ripairs(sorted) do
          local dep = dependencies_name_map[(node).value]
          print('dep', inspect(dep))
          dependency_init(dep, path)
@@ -1746,18 +1701,6 @@ local function _init(path, deps)
 
    ut.pop_dir()
 end
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -254,7 +254,32 @@ test_git_is_repo_clean(".")
 test_git_is_repo_clean("3rd_party/genann/")
 test_git_is_repo_clean("3rd_party/Chipmunk2D/")
 
+
+
+
+local function ripairs(t)
+   local i = #t + 1
+   return function()
+      while i - 1 > 0 do
+         i = i - 1
+         return i, t[i]
+      end
+   end
+end
+
+local function filter(collection, cb)
+   local tmp = {}
+   for _, v in ipairs(collection) do
+      if cb(v) then
+         table.insert(tmp, v)
+      end
+   end
+   return tmp
+end
+
 return {
+   ripairs = ripairs,
+   filter = filter,
    git_is_repo_clean = git_is_repo_clean,
    cat_file = cat_file,
    caustic_path_substitute = caustic_path_substitute,
