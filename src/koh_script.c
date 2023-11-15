@@ -12,9 +12,11 @@
 #include "koh_lua_tools.h"
 #include "raylib.h"
 
-#ifdef __linux__
+/*
+#if __linux__ && KOH_DEP_NO_LFS
 #include "lfs.h"
 #endif
+*/
 
 typedef struct Script {
     char fname[300];
@@ -368,9 +370,12 @@ void sc_init(void) {
     lua = luaL_newstate();
     trace("sc_init: lua version %f\n", lua_version(lua));
     luaL_openlibs(lua);
-#ifdef __linux__
+
+/*
+#if __linux__ && KOH_DEP_NO_LFS
     luaopen_lfs(lua);
 #endif
+*/
 
     printf("[%s]\n", stack_dump(lua));
     lua_createtable(lua, 0, 0);
