@@ -53,6 +53,8 @@ local inspect    = require 'inspect'
 local argparse   = require 'argparse'
 local ut         = require "utils"
 local Cache      = require "cache"
+local lanes      = require "lanes".configure()
+local sleep      = require "socket".sleep
 
 if string.match(lfs.currentdir(), "tl_dst") then
     lfs.chdir("..")
@@ -298,8 +300,8 @@ local record Dependency
     wbuild: function(dep: Dependency) 
     after_build: function(dep: Dependency)
     -- }}}
-
-    get_cc_includes: function(dep: Dependency)
+    -- XXX: Добавить методы к зависимостям
+    --get_cc_includes: function(dep: Dependency)
 end
 
 local dependencies: {Dependency}
@@ -507,24 +509,7 @@ local function build_cimgui(dep: Dependency)
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
     print("current dir", lfs.currentdir())
-
-    --#ifndef NO_FONT_AWESOME
-
-    --[[
-    local includes = get_deps_name_map(dependencies)["raylib"].includes
-    local includes_str: string = ""
-    for _, include in ipairs(includes) do
-        includes_str =  includes_str .. 
-                        "-i" .. 
-                        path_abs_third_party .. 
-                        "/" .. 
-                        include
-    end
-    print("include_str", includes_str)
-    --]]
-
     cmd_do("make clean")
-    --cmd_do(string.format("CXXFLAGS=%s make -j", includes_str))
     cmd_do("make -j")
 end
 
@@ -566,11 +551,11 @@ local function cimgui_after_init(dep: Dependency)
     cmd_do('git submodule update --init --recursive --depth 1')
     ut.push_current_dir()
     lfs.chdir('generator')
+    local lua_path = 'LUA_PATH="./?.lua;"$LUA_PATH'
     if use_freetype then
-        cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv freetype"')
+        cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv freetype"')
     else
-        --cmd_do('./generator.sh -t "internal noimstrv "')
-        cmd_do('LUA_PATH="./?.lua;"$LUA_PATH ./generator.sh -t "internal noimstrv"')
+        cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv"')
     end
     ut.pop_dir()
     print("cimgui_after_init: code was generated");
@@ -651,11 +636,8 @@ local function build_box2c(_: Dependency)
 end
 
 -- TODO: Тестировать получение и сборку каждой зависимости
--- TODO: Если поле dir не указано, то попробовать извлечить имя каталога из 
--- ссылка, если она не указывает на zip архив
 -- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
 -- каталогов библиотек и т.д.
-
 dependencies = {
 
     {
@@ -889,6 +871,7 @@ dependencies = {
 }
 
 --[[
+-- {{{
 local dependencies_mt: Dependency = {
     get_cc_includes = function(self: Dependency)
         print(inspect(self))
@@ -898,6 +881,7 @@ local dependencies_mt: Dependency = {
 for _, v in ipairs(dependencies) do
     setmetatable(v, dependencies_mt as metatable<Dependency>)
 end
+-- }}}
 --]]
 
 local function get_urls(deps: {Dependency}): {string}
@@ -1152,9 +1136,6 @@ if not check_luarocks() then
     os.exit(1)
 end
 --]]
-
-local lanes = require "lanes".configure()
-local sleep = require "socket".sleep
 
 --[[
 local lanes, lfs, argparse, tabular, sleep
@@ -1411,29 +1392,6 @@ function Toposorter:sort(): {Node}
         end
     end
     return sorted
-end
-
-local type RIpairs = function(): any, any
-
--- Обратный ipairs() итератор
-local function ripairs(t: {any}): RIpairs
-    local i = #t + 1
-    return function(): any, any
-        while i - 1 > 0 do
-            i = i - 1
-            return i, t[i]
-        end
-    end
-end
-
-local function filter<G>(collection: {G}, cb: function(G): boolean): {G}
-    local tmp = {}
-    for _, v in ipairs(collection) do
-        if cb(v) then
-            table.insert(tmp, v)
-        end
-    end
-    return tmp
 end
 
 local record Actions
@@ -1709,7 +1667,7 @@ local function _init(path: string, deps: {Dependency})
 
         -- XXX: На всякий случай удаляются имена null
         -- Но они могут и никогда не присутствовать :))
-        sorted = filter(sorted, function(node: Node): boolean
+        sorted = ut.filter(sorted, function(node: Node): boolean
             return node.value ~= "null"
         end)
         print('sorted', inspect(sorted))
@@ -1734,7 +1692,7 @@ local function _init(path: string, deps: {Dependency})
     --]]
 
     if use_toposort then
-        for _, node in ripairs(sorted) do
+        for _, node in ut.ripairs(sorted) do
             local dep = dependencies_name_map[(node as Node).value as string]
             print('dep', inspect(dep))
             dependency_init(dep, path)
@@ -1763,18 +1721,6 @@ local record Args
     full: string
     flags: {string}
 end
-
---[[
-local function check_for_unstaged(deps: {Dependency})
-    push_current_dir()
-    lfs.chdir(third_party)
-    for _, _ in ipairs(deps) do
-        -- XXX: extract dirnames
-        --lfs.chdir(dep.dirname)
-    end
-    pop_dir()
-end
---]]
 
 function actions.rmdirs(_args: Args)
     for _, dep in ipairs(dependencies) do
