@@ -581,6 +581,7 @@ end
 
 local function build_lfs(_: Dependency)
     print('lfs_custom_build', lfs.currentdir())
+    -- XXX: Путь для включаемых файлов должен быть из таблицы dependencies?
     cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
     cmd_do("ar rcs liblfs.a lfs.o")
 end
@@ -593,6 +594,10 @@ end
 local function build_box2c(_: Dependency)
     cmd_do("cmake .")
     cmd_do("make -j")
+end
+
+local function utf8proc_after_build(_: Dependency)
+    cmd_do("rm libutf8proc.so")
 end
 
 -- TODO: Тестировать получение и сборку каждой зависимости
@@ -796,6 +801,7 @@ dependencies = {
     {
         --depends = {'smallregex', "wfc"},
         build = build_with_make,
+        after_build = utf8proc_after_build,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
         dir = "utf8proc",
@@ -3157,9 +3163,9 @@ local function get_ready_includes(cfg: Cfg): {string}
     )
     --]]
 
-    print('get_ready_includes:')
-    print(tabular(_includedirs))
-    print(tabular(_includedirs_internal))
+    --print('get_ready_includes:')
+    --print(tabular(_includedirs))
+    --print(tabular(_includedirs_internal))
 
     return _includedirs 
 end
@@ -3237,6 +3243,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         }, " ")
     else
         table.insert(flags, "-O3")
+        -- TODO: Описать в документации как работает флан release_define
         if cfg.release_define then
             print("sub_make: appling release defines")
             for define, value in pairs(cfg.release_define) do
@@ -3246,6 +3253,20 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
             end
         end
     end
+
+    --[[
+    if cfg.dependencies then
+        for _, depname in ipairs(cfg.dependencies) do
+            if not dependencies_name_map[depname] then
+                print(format("there is no '%s'", depname))
+                print(tabular(dependencies))
+                os.exit(1)
+            end
+            table.insert(flags, format("-DKOH_DEP_NO_%s", depname))
+        end
+    end
+    --]]
+
     if not _args.noasan then
         table.insert(flags, "-fsanitize=address")
     end
