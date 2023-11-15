@@ -216,6 +216,19 @@ local function pop_dir(num: integer)
     end
 end
 
+-- TODO: Написать может быть
+--➜  git rev-parse --is-inside-work-tree
+--➜  git rev-parse --is-inside-git-dir 2>&1
+--➜  git rev-parse --is-inside-git-dir 2>&1
+--➜  git rev-parse --is-inside-git-dir 2>&1
+--➜  git rev-parse --is-inside-work-tree 2>&1
+--➜  git rev-parse --git-dir 2>&1  
+-- source: https://stackoverflow.com/questions/2180270/check-if-current-directory-is-a-git-repository
+--[[
+local function git_is_repo(dirpath: string): boolean
+end
+--]]
+
 local function git_is_repo_clean(dirpath: string): boolean
     push_current_dir()
     lfs.chdir(dirpath)
