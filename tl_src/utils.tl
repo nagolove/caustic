@@ -51,6 +51,7 @@ test_remove_double_slashes("/some///path/hi/")
 test_remove_double_slashes("/x/y/z/")
 --]]
 
+-- TODO: Должен быть абсолютный путь, добавить проверку
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")

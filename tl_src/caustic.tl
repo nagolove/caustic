@@ -447,59 +447,6 @@ local function paste_from_one_to_other(
     file_dst:close()
 end
 
---[[
-local function paste2cimgui_header()
-    local file_src = io.open(path_abs_third_party .. "/rlImGui/rlImGui.h", "r")
-    local file_dst = io.open(path_abs_third_party .. "/cimgui/cimgui.h", "a+")
-
-    assert(file_src)
-    assert(file_dst)
-
-    local in_block = false
-    local guard_coro = coroutine.create(guard)
-    local _, msg = coroutine.resume(guard_coro) as (boolean, string)
-    file_dst:write(msg)
-
-    for line in file_src:lines() do
-        if string.match(line, pattern_begin) then
-            in_block = true
-        end
-
-        if in_block then
-            file_dst:write(format("%s\n", line))
-        end
-
-        if in_block and string.match(line, pattern_end) then
-            in_block = false
-        end
-    end
-
-    _, msg = coroutine.resume(guard_coro) as (boolean, string)
-    file_dst:write(msg)
-    file_dst:close()
-end
---]]
-
---[[
-local function paste2cimgui_source()
-    local file_src = io.open(
-        path_abs_third_party .. "/rlImGui/rlImGui.cpp", "r"
-    )
-    local file_dst = io.open(
-        path_abs_third_party .. "/cimgui/cimgui.cpp", "a+"
-    )
-
-    assert(file_src)
-    assert(file_dst)
-
-    for line in file_src:lines() do
-        file_dst:write(format("%s\n", line))
-    end
-
-    file_dst:close()
-end
---]]
-
 -- TODO Добавить возможность конфигурирования каждой зависимости при помощи
 -- ключей команды caustic
 -- В частности - отключение или включение библиотеки freetype
@@ -532,11 +479,24 @@ end
 local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
     local imgui_files = {
+        --[[
         "../imgui/imgui.h",
         "../imgui/imgui.cpp",
         "../imgui/imconfig.h" ,
         "../imgui/imgui_internal.h",
         "../imgui/imstb_textedit.h",
+--]]
+        "../imgui/imconfig.h",
+        "../imgui/imgui.cpp",
+        "../imgui/imgui_demo.cpp",
+        "../imgui/imgui_draw.cpp",
+        "../imgui/imgui.h",
+        "../imgui/imgui_internal.h",
+        "../imgui/imgui_tables.cpp",
+        "../imgui/imgui_widgets.cpp",
+        "../imgui/imstb_rectpack.h",
+        "../imgui/imstb_textedit.h",
+        "../imgui/imstb_truetype.h",
     }
     local imgui_files_str = table.concat(imgui_files, " ")
     cmd_do("cp " .. imgui_files_str .. " ../cimgui/imgui")
@@ -595,8 +555,8 @@ local function rlimgui_after_init(_: Dependency)
 end
 
 local function cimgui_after_build(_: Dependency)
-    print("cimgui_after_build", lfs.currentdir())
-    cmd_do("mv cimgui.a libcimgua.a")
+    print("cimgui_after_build:", lfs.currentdir())
+    cmd_do("mv cimgui.a libcimgui.a")
 end
 
 --[[
@@ -675,12 +635,13 @@ dependencies = {
         build = build_lfs,
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
+        disabled = true,
         includes = { "luafilesystem/src" },
         libdirs = { "luafilesystem" },
         links_internal = { "lfs:static" },
         name = "lfs",
-        url_action = "git",
         url = "https://github.com/lunarmodules/luafilesystem.git",
+        url_action = "git",
     },
 
 --[[
@@ -767,7 +728,7 @@ dependencies = {
         git_branch = "linux-gcc",
         includes = { "box2c/include", },
         libdirs = { "box2c/src" },
-        links = { "box2c:static" },
+        links = { "box2d:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
         url = "https://github.com/nagolove/box2c.git",
@@ -893,23 +854,44 @@ local function get_urls(deps: {Dependency}): {string}
     return urls
 end
 
--- TODO: Окончательно удалить использование данной таблички
--- XXX: Изменил пути с относительных на абсолютные т.е. 
--- CAUSTIC_PATH - абсолютный путь к каталогу
-local _includedirs  = ut.caustic_path_substitute({ 
-    "../$CAUSTIC_PATH/%s/Chipmunk2D/include",                 -- ok
-    "../$CAUSTIC_PATH/%s/cimgui",                             -- ok
-    "../$CAUSTIC_PATH/%s/cimgui/generator/output",            -- ok
-    "../$CAUSTIC_PATH/%s/genann",                             -- ok
-    "../$CAUSTIC_PATH/%s/lua/",                               -- ok
-    "../$CAUSTIC_PATH/%s/luafilesystem/src",                  -- ok
-    "../$CAUSTIC_PATH/%s/raylib/src",                         -- ok
-    "../$CAUSTIC_PATH/%s/small-regex/libsmallregex",          -- ok
-    "../$CAUSTIC_PATH/%s/stb",                                -- ok
-    "../$CAUSTIC_PATH/%s/utf8proc",                           -- ok
-    "../$CAUSTIC_PATH/3rd_party/sunvox/sunvox_lib/headers",   -- ok
-    "../$CAUSTIC_PATH/src",                                   --
-}) as {string}
+local function get_include_dirs(deps: {Dependency}): {string}
+
+    --[[
+    local _includedirs  = ut.caustic_path_substitute({ 
+        "../$CAUSTIC_PATH/%s/Chipmunk2D/include",                 -- ok
+        "../$CAUSTIC_PATH/%s/cimgui",                             -- ok
+        "../$CAUSTIC_PATH/%s/cimgui/generator/output",            -- ok
+        "../$CAUSTIC_PATH/%s/genann",                             -- ok
+        "../$CAUSTIC_PATH/%s/lua/",                               -- ok
+        "../$CAUSTIC_PATH/%s/luafilesystem/src",                  -- ok
+        "../$CAUSTIC_PATH/%s/raylib/src",                         -- ok
+        "../$CAUSTIC_PATH/%s/small-regex/libsmallregex",          -- ok
+        "../$CAUSTIC_PATH/%s/stb",                                -- ok
+        "../$CAUSTIC_PATH/%s/utf8proc",                           -- ok
+        "../$CAUSTIC_PATH/%s/sunvox/sunvox_lib/headers",          -- ok
+        "../$CAUSTIC_PATH/src",                                   --
+    }) as {string}
+    --]]
+
+    local _includedirs = {}
+    for _, dep in ipairs(deps) do
+        if not dep.disabled then
+            if dep.includes then
+                for _, include in ipairs(dep.includes) do
+                    table.insert(_includedirs, include)
+                end
+            end
+        end
+    end
+
+    table.insert(_includedirs, "src")
+
+    for k, dir in ipairs(_includedirs) do
+        _includedirs[k] = path_caustic .. "/%s/" .. dir
+    end
+
+    return _includedirs
+end
 
 local _includedirs_internal  = { 
     "%s/Chipmunk2D/include",
@@ -934,12 +916,14 @@ local _includedirs_internal  = {
 
 -- TODO: Проверка на дубликаты путей:
 --      как проверка будет функционировать? какой-то флаг?
-local function gather_includedirs(deps: {Dependency}, path_prefix: string): {string}
+local function gather_includedirs(
+    deps: {Dependency}, path_prefix: string
+): {string}
     assert(deps)
     path_prefix = remove_last_backslash(path_prefix)
     local tmp_includedirs = {}
     for _, dep in ipairs(deps) do
-        if dep.includes and dep.disabled and not dep.disabled then
+        if  dep.includes and not dep.disabled then
             for _, include_path in ipairs(dep.includes) do
                 table.insert(tmp_includedirs, remove_last_backslash(include_path))
             end
@@ -2387,21 +2371,29 @@ end
 
 local type ObjectFiles = {string}
 
--- TODO: делать локальную копию таблички exclude тк ее значения перезаписываются
--- по ссылке
-local function build_project(output_dir: string, exclude: {string}): ObjectFiles
+local function build_project(
+    output_dir: string, exclude: {string}
+): ObjectFiles
     print('build_project:', output_dir)
-    local tmp_includedirs = ut.template_dirs(_includedirs, path_wasm_third_party)
-    --print('includedirs before')
-    --print(tabular(includedirs))
+    local tmp_includedirs = ut.template_dirs(
+        get_include_dirs(),
+        path_wasm_third_party
+    )
 
-    if exclude then
-        for k, v in ipairs(exclude) do
-            exclude[k] = string.match(v, ".*/(.*)$") or v
+    print('tmp_includedirs', inspect(tmp_includedirs))
+    print( "os.exit(1)" )
+    os.exit(1)
+
+    local _exclude = {}
+    for k, v in ipairs(exclude) do
+        _exclude[k] = v
+    end
+
+    if _exclude then
+        for k, v in ipairs(_exclude) do
+            _exclude[k] = string.match(v, ".*/(.*)$") or v
         end
     end
-    --print('exclude')
-    --print(tabular(exclude))
 
     local _includedirs = {}
     for _, v in ipairs(tmp_includedirs) do
@@ -2431,7 +2423,7 @@ local function build_project(output_dir: string, exclude: {string}): ObjectFiles
         print(cmd)
         cmd_do(cmd)
         table.insert(objfiles, src2obj(file))
-    end, exclude)
+    end, _exclude)
 
     return objfiles
 end
@@ -3140,7 +3132,7 @@ end
 local function get_ready_includes(cfg: Cfg): {string}
     local ready_deps: {Dependency} = {}
 
-    if cfg.dependencies then
+    if cfg and cfg.dependencies then
         for _, depname in ipairs(cfg.dependencies) do
             table.insert(ready_deps, dependencies_name_map[depname])
         end
@@ -3148,18 +3140,28 @@ local function get_ready_includes(cfg: Cfg): {string}
         ready_deps = dependencies
     end
 
+    --print('get_ready_includes:', inspect(ready_deps))
+
     local _includedirs = prefix_add(
         path_caustic .. "/",
         gather_includedirs(ready_deps, path_rel_third_party)
     )
     if _includedirs then
-        table.insert(includedirs, path_caustic .. "/src")
+        table.insert(_includedirs, path_caustic .. "/src")
     end
+
+    --[[
     local _includedirs_internal = prefix_add(
         path_caustic .. "/", 
         gather_includedirs(ready_deps, path_rel_third_party)
     )
-    return _includedirs or _includedirs_internal
+    --]]
+
+    print('get_ready_includes:')
+    print(tabular(_includedirs))
+    print(tabular(_includedirs_internal))
+
+    return _includedirs 
 end
 
 
@@ -3172,10 +3174,14 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     print(ut.push_current_dir())
     print('sub_make: pwd', lfs.currentdir())
+    print('sub_make: cfg', inspect(cfg))
 
     local src_dir = cfg.src or "src"
-    if not lfs.chdir(src_dir) then
-        print(format("sub_make: could not chdir to '%s'", src_dir))
+    local ok, errmsg =  lfs.chdir(src_dir) 
+    if not ok then
+        print(format(
+            "sub_make: could not chdir to '%s' with %s", src_dir, errmsg
+        ))
         os.exit(1)
     end
 
@@ -3198,10 +3204,16 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         "-DPLATFORM_DESKTOP",
     }, " ")
 
-
     local _includes: string = table.concat({
     }, " ")
-    local dirs = cfg.artifact and get_ready_includes(cfg)
+
+    print('cfg', inspect(cfg))
+    --print('cfg.artifact', cfg.artifact)
+    print("get_ready_includes(cfg)", inspect(get_ready_includes(cfg)))
+
+    --local dirs = cfg.artifact and get_ready_includes(cfg)
+    local dirs = get_ready_includes(cfg)
+    --print('cfg.artifact', cfg.artifact)
 
     for _, v in ipairs(dirs) do
         _includes = _includes .. " -I" .. v
@@ -3248,6 +3260,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     --print(tabular(_libdirs))
 
     table.insert(_libdirs, "-L/usr/lib")
+    print('cfg.artifact', cfg.artifact)
     if cfg.artifact then
         table.insert(_libdirs, "-L" .. path_caustic)
     end
@@ -3358,15 +3371,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
     -- скрипте.
-    if not cfg.artifact then
-        koh_link(objfiles_str, _args)
-        --cp("libcaustic.a", "../libcaustic.a")
-        cmd_do("mv libcaustic.a ../libcaustic.a")
-    else
+    if cfg.artifact then
         ut.push_current_dir()
-        print('caustic_path', path_caustic)
         lfs.chdir(path_caustic)
-        --lfs.chdir(os.getenv("HOME") .. "/caustic")
+        print("sub_make: currentdir", lfs.currentdir())
+        -- XXX: Что делает следущая команда сборки?
         sub_make({
             make = true,
             c = _args.c,
@@ -3390,7 +3399,10 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         --local dst = "../" .. cfg.artifact
         --cp(cfg.artifact, dst)
         --set_executable_bit(dst)
-
+    else
+        koh_link(objfiles_str, _args)
+        --cp("libcaustic.a", "../libcaustic.a")
+        cmd_do("mv libcaustic.a ../libcaustic.a")
     end
 
     ut.pop_dir(push_num)
