@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local coroutine = _tl_compat and _tl_compat.coroutine or coroutine; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
 
@@ -68,6 +68,8 @@ local format = string.format
 local cache_name = "cache.lua"
 local verbose = true
 local errexit = false
+local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
+local pattern_end = "{CAUSTIC_PASTE_END}"
 local cache
 
 
@@ -296,6 +298,25 @@ end
 
 
 
+
+
+
+
+local dependencies
+
+local function get_deps_name_map(deps)
+   assert(deps)
+   local map = {}
+   for _, dep in ipairs(deps) do
+      if map[dep.name] then
+         print("get_deps_name_map: name dublicated", dep.name)
+         os.exit(1)
+      end
+      map[dep.name] = dep
+   end
+   return map
+end
+
 local function build_with_make(_)
    cmd_do("make -j")
 end
@@ -376,6 +397,153 @@ local function build_small_regex(dep)
    lfs.chdir(prevdir)
 end
 
+local function guard()
+   local rnd_num = math.random(10000, 20000)
+
+   coroutine.yield(table.concat({
+      format("#ifndef GUARD_%s", rnd_num),
+      format("#define GUARD_%s\n", rnd_num),
+   }, "\n"))
+
+   coroutine.yield("#endif\n")
+end
+
+local function paste_from_one_to_other(
+   src, dst, guard_coro)
+
+   local file_src = io.open(src, "r")
+   local file_dst = io.open(dst, "a+")
+
+   assert(file_src)
+   assert(file_dst)
+
+   local in_block = false
+   if guard_coro and type(guard_coro) == 'thread' then
+      local _, msg = coroutine.resume(guard_coro)
+      file_dst:write(msg)
+   end
+
+   for line in file_src:lines() do
+      if string.match(line, pattern_begin) then
+         in_block = true
+      end
+
+      if in_block then
+         file_dst:write(format("%s\n", line))
+      end
+
+      if in_block and string.match(line, pattern_end) then
+         in_block = false
+      end
+   end
+
+   if guard_coro and type(guard_coro) == 'thread' then
+      local _, msg = coroutine.resume(guard_coro)
+      file_dst:write(msg)
+   end
+
+   file_dst:close()
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function build_cimgui(dep)
+   print('build_cimgui:', inspect(dep))
+
+   cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
+
+   print("current dir", lfs.currentdir())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   cmd_do("make clean")
+
+   cmd_do("make -j")
+end
+
+local function get_additional_includes()
+   local includes_str = ""
+   local includes = get_deps_name_map(dependencies)["raylib"].includes
+   for _, include in ipairs(includes) do
+      includes_str = includes_str ..
+      "-I" ..
+      path_abs_third_party ..
+      "/" ..
+      include
+   end
+   assert(includes_str)
+   print("include_str", includes_str)
+   assert(includes_str)
+   return includes_str
+end
+
 local function cimgui_after_init(dep)
    print("cimgui_after_init:", lfs.currentdir())
    local imgui_files = {
@@ -409,42 +577,35 @@ local function cimgui_after_init(dep)
 
    cmd_do("rm CMakeCache.txt")
 
-   local cmd_actions = {
+   local cmake_cmd = {
       format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
       "cmake .",
+      format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes()),
       "-DIMGUI_STATIC=1",
+      "-DNO_FONT_AWESOME=1",
    }
 
    if use_freetype then
-      table.insert(cmd_actions, "-DIMGUI_FREETYPE=1")
-      table.insert(cmd_actions, "-DIMGUI_ENABLE_FREETYPE=1")
+      table.insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
+      table.insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
    end
+   cmd_do(table.concat(cmake_cmd, " "))
 
-   cmd_do(table.concat(cmd_actions, " "))
+
+
+
+   paste_from_one_to_other(
+   path_abs_third_party .. "/rlImGui/rlImGui.h",
+   path_abs_third_party .. "/cimgui/cimgui.h",
+   coroutine.create(guard))
+
+
+   paste_from_one_to_other(
+   path_abs_third_party .. "/rlImGui/rlImGui.cpp",
+   path_abs_third_party .. "/cimgui/cimgui.cpp")
+
 
    ut.pop_dir()
-end
-
-
-
-
-local function build_cimgui(dep)
-   print('build_cimgui:', inspect(dep))
-
-
-
-
-
-
-
-
-
-
-
-   cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
-   cmd_do("make clean")
-   cmd_do("make -j")
-
 end
 
 local function rlimgui_after_init(_)
@@ -498,8 +659,7 @@ end
 
 
 
-
-local dependencies = {
+dependencies = {
 
    {
       disabled = false,
@@ -517,6 +677,7 @@ local dependencies = {
 
    {
       name = "imgui",
+      dir = "imgui",
       url_action = "git",
       url = "https://github.com/ocornut/imgui.git",
    },
@@ -620,16 +781,18 @@ local dependencies = {
    },
 
    {
-      copy_for_wasm = true,
       build = build_box2c,
+      copy_for_wasm = true,
       description = "box2c - плоский игровой физический движок",
+      dir = "box2c",
+      git_branch = "linux-gcc",
       includes = { "box2c/include" },
       libdirs = { "box2c/src" },
       links = { "box2c:static" },
       links_internal = { "box2c:static" },
       name = 'box2c',
-      git_branch = "linux-gcc",
-      url = "https://github.com/erincatto/box2c.git",
+      url = "https://github.com/nagolove/box2c.git",
+      url_action = 'git',
    },
 
    {
@@ -647,16 +810,17 @@ local dependencies = {
    },
 
    {
+      build = build_with_make,
       copy_for_wasm = true,
       description = "lua интерпритатор",
-      build = build_with_make,
+      dir = "lua",
       includes = { "lua" },
       libdirs = { "lua" },
       links = { "lua:static" },
       links_internal = { "lua:static" },
       name = 'lua',
-      url_action = "git",
       url = "https://github.com/lua/lua.git",
+      url_action = "git",
    },
 
    {
@@ -694,22 +858,24 @@ local dependencies = {
       build = build_with_make,
       copy_for_wasm = true,
       description = "библиотека для работы с utf8 Юникодом",
+      dir = "utf8proc",
       includes = { "utf8proc" },
       libdirs = { "utf8proc" },
       links = { "utf8proc:static" },
       links_internal = { "utf8proc:static" },
       name = 'utf8proc',
-      url_action = "git",
       url = "https://github.com/JuliaLang/utf8proc.git",
+      url_action = "git",
    },
 
    {
       copy_for_wasm = true,
       description = "набор библиотека заголовочных файлов для разных нужд",
+      dir = "stb",
       includes = { "stb" },
       name = 'stb',
-      url_action = "git",
       url = "https://github.com/nothings/stb.git",
+      url_action = "git",
    },
 
    {
@@ -724,6 +890,18 @@ local dependencies = {
       url = "https://github.com/krychu/wfc.git",
    },
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function get_urls(deps)
    local urls = {}
@@ -939,18 +1117,6 @@ local function get_deps_map(deps)
    return res
 end
 
-local function get_deps_name_map(deps)
-   local map = {}
-   for _, dep in ipairs(deps) do
-      if map[dep.name] then
-         print("get_deps_name_map: name dublicated", dep.name)
-         os.exit(1)
-      end
-      map[dep.name] = dep
-   end
-   return map
-end
-
 
 local dependencies_map = 
 get_deps_map(dependencies)
@@ -1124,21 +1290,18 @@ end
 
 
 local function _dependecy_init(dep)
-   print('_dependecy_init', dep)
    assert(dep)
    if dep.disabled then
       return
    end
-
    if dep.url_action == "git" then
-
       git_clone(dep)
-
    elseif dep.url_action == "zip" then
-
       download_and_unpack_zip(dep)
    else
+      print('_dependecy_init', inspect(dep))
       print("_dependecy_init: unknown dep.url_action", dep.url_action)
+      os.exit(1)
    end
    after_init(dep)
 end
@@ -2576,9 +2739,10 @@ local function _build(dep)
 
    local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
    if not ok_chd then
+      print("currend directory", lfs.currentdir())
       local msg = format(
-      "_build: could not do lfs.chdir() for '%s' dependency with %s",
-      dep.name, errmsg_chd)
+      "_build: could not do lfs.chdir('%s') dependency with %s",
+      dep.dir, errmsg_chd)
 
       print(ansicolors("%{red}" .. msg .. "%{reset}"))
       ut.pop_dir()
@@ -2646,12 +2810,11 @@ function actions.build(_args)
 
    print("actions.build: currend directory", lfs.currentdir())
 
-
-
-
    if _args.name then
       if dependencies_name_map[_args.name] then
-         local dep = dependencies_map[get_dir(dependencies_name_map[_args.name])]
+
+         local dir = get_dir(dependencies_name_map[_args.name])
+         local dep = dependencies_map[dir]
          _build(dep)
       else
          print("bad dependency name", _args.name)
@@ -2659,9 +2822,6 @@ function actions.build(_args)
          return
       end
    else
-
-
-
       for _, dep in ipairs(dependencies) do
          _build(dep)
       end
