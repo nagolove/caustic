@@ -24,7 +24,8 @@ end
 
 
 
-local path_third_party = remove_last_backslash("3rd_party")
+local path_rel_third_party = remove_last_backslash("3rd_party")
+local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
 local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 
 local lua_ver = "5.1"
@@ -35,13 +36,14 @@ package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" ..
 
 
-path_caustic .. "/" .. path_third_party .. "/json.lua/?.lua;" .. package.path
+path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" .. package.path
 package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
 
 assert(path_caustic)
-assert(path_third_party)
+assert(path_rel_third_party)
+assert(path_abs_third_party)
 assert(path_wasm_third_party)
 
 local tabular = require("tabular").show
@@ -55,6 +57,9 @@ local Cache = require("cache")
 if string.match(lfs.currentdir(), "tl_dst") then
    lfs.chdir("..")
 end
+
+
+
 
 local site_repo = "~/nagolove.github.io"
 
@@ -403,21 +408,20 @@ local function cimgui_after_init(dep)
    print("cimgui_after_init: code was generated");
 
    cmd_do("rm CMakeCache.txt")
+
+   local cmd_actions = {
+      format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
+      "cmake .",
+      "-DIMGUI_STATIC=1",
+   }
+
    if use_freetype then
-      cmd_do(table.concat({
-         format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
-         "cmake .",
-         "-DIMGUI_STATIC=1",
-         "-DIMGUI_FREETYPE=1",
-         "-DIMGUI_ENABLE_FREETYPE=1",
-      }, " "))
-   else
-      cmd_do(table.concat({
-         format("CXXFLAGS=-I%s/%s/freetype/include", path_caustic, path_third_party),
-         "cmake .",
-         "-DIMGUI_STATIC=1",
-      }, " "))
+      table.insert(cmd_actions, "-DIMGUI_FREETYPE=1")
+      table.insert(cmd_actions, "-DIMGUI_ENABLE_FREETYPE=1")
    end
+
+   cmd_do(table.concat(cmd_actions, " "))
+
    ut.pop_dir()
 end
 
@@ -434,11 +438,10 @@ local function build_cimgui(dep)
 
 
 
-   local path = path_caustic .. "/" .. path_third_party
-   print("path", path)
+
+
 
    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
-
    cmd_do("make clean")
    cmd_do("make -j")
 
@@ -771,17 +774,20 @@ local _includedirs_internal = {
 
 
 
+
 local function gather_includedirs(deps, path_prefix)
    assert(deps)
    path_prefix = remove_last_backslash(path_prefix)
    local tmp_includedirs = {}
    for _, dep in ipairs(deps) do
-      if dep.includes then
+      if dep.includes and dep.disabled and not dep.disabled then
          for _, include_path in ipairs(dep.includes) do
             table.insert(tmp_includedirs, remove_last_backslash(include_path))
          end
       end
    end
+
+
    for i, str in ipairs(tmp_includedirs) do
       tmp_includedirs[i] = path_prefix .. "/" .. str
    end
@@ -797,12 +803,14 @@ local function prefix_add(prefix, t)
 end
 
 local includedirs = prefix_add(
-path_caustic .. "/", gather_includedirs(dependencies, path_third_party))
+path_caustic .. "/", gather_includedirs(dependencies, path_rel_third_party))
 
 table.insert(includedirs, path_caustic .. "/src")
 
-local includedirs_internal = prefix_add(
-path_caustic .. "/", gather_includedirs(dependencies, path_third_party))
+
+
+
+
 
 
 
@@ -1611,7 +1619,7 @@ end
 function actions.rmdirs(_args)
    for _, dep in ipairs(dependencies) do
       if dep.dir then
-         cmd_do("rmdir " .. path_third_party .. "/" .. dep.dir)
+         cmd_do("rmdir " .. path_rel_third_party .. "/" .. dep.dir)
       end
    end
 end
@@ -1684,7 +1692,7 @@ function actions.init(_args)
 
 
 
-   _init(path_third_party, deps)
+   _init(path_rel_third_party, deps)
 
 
 end
@@ -1983,12 +1991,31 @@ local function rec_remove_dir(dirname)
 
    local ok, errmsg
 
-   if not ut.git_is_repo_clean(".") then
-      local curdir = lfs.currentdir()
-      local msg = format("rec_remove_dir: git index is dirty '%s'", curdir)
-      print(ansicolors("%{red}" .. msg .. "%{reset}"))
-      return
-   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
    ok, errmsg = lfs.rmdir(dirname)
@@ -2078,7 +2105,7 @@ function actions.remove(_args)
          table.insert(dirnames, dirname)
       end
    end
-   _remove(path_third_party, dirnames)
+   _remove(path_rel_third_party, dirnames)
    _remove(path_wasm_third_party, dirnames)
 
 end
@@ -2107,6 +2134,9 @@ function actions.verbose(_)
       links_internal = links_internal,
    }))
 end
+
+
+
 
 function actions.compile_flags(_)
    for _, v in ipairs(includedirs) do
@@ -2368,6 +2398,8 @@ end
 
 
 
+
+
 local function link_wasm_project(main_fname, _args)
 
    print('link_project:', lfs.currentdir())
@@ -2536,6 +2568,12 @@ local function _build(dep)
 
    ut.push_current_dir()
 
+   if not dep.dir then
+      print("dep.dir == nil")
+      print(inspect(dep))
+      os.exit(1)
+   end
+
    local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
    if not ok_chd then
       local msg = format(
@@ -2600,11 +2638,16 @@ end
 function actions.build(_args)
    ut.push_current_dir()
 
-   lfs.chdir(path_caustic)
-   lfs.chdir(path_third_party)
+
+
+
+
+   lfs.chdir(path_rel_third_party)
+
    print("actions.build: currend directory", lfs.currentdir())
-   print("os.exit()")
-   os.exit()
+
+
+
 
    if _args.name then
       if dependencies_name_map[_args.name] then
@@ -2814,7 +2857,7 @@ function actions.updates(_args)
          if dep.dir then
             print('dep.dir', dep.dir)
             ut.push_current_dir()
-            lfs.chdir(path_third_party .. "/" .. dep.dir)
+            lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
             cmd_do({
                "git fetch",
                "git status",
@@ -2990,6 +3033,35 @@ local function codegen(cg)
    end
 end
 
+
+local function get_ready_includes(cfg)
+   local ready_deps = {}
+
+   if cfg.dependencies then
+      for _, depname in ipairs(cfg.dependencies) do
+         table.insert(ready_deps, dependencies_name_map[depname])
+      end
+   else
+      ready_deps = dependencies
+   end
+
+   local _includedirs = prefix_add(
+   path_caustic .. "/",
+   gather_includedirs(ready_deps, path_rel_third_party))
+
+   if _includedirs then
+      table.insert(includedirs, path_caustic .. "/src")
+   end
+   local _includedirs_internal = prefix_add(
+   path_caustic .. "/",
+   gather_includedirs(ready_deps, path_rel_third_party))
+
+   return _includedirs or _includedirs_internal
+end
+
+
+
+
 local function sub_make(_args, cfg, push_num)
    if _args.c then
       cache_remove()
@@ -3023,9 +3095,10 @@ local function sub_make(_args, cfg, push_num)
       "-DPLATFORM_DESKTOP",
    }, " ")
 
+
    local _includes = table.concat({},
    " ")
-   local dirs = cfg.artifact and includedirs or includedirs_internal
+   local dirs = cfg.artifact and get_ready_includes(cfg)
 
    for _, v in ipairs(dirs) do
       _includes = _includes .. " -I" .. v
@@ -3066,7 +3139,7 @@ local function sub_make(_args, cfg, push_num)
 
    print("pwd", lfs.currentdir())
 
-   local _libdirs = make_L(ut.shallow_copy(libdirs), path_third_party)
+   local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
 
 
