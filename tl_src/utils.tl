@@ -74,14 +74,14 @@ local function shallow_copy<X>(a: X): X
 end
 
 local function deepcopy<X>(orig: X): X
-    local orig_type = type(orig)
     local copy: {any: any}
-    if orig_type == 'table' then
-        copy = {} 
+    if type(orig) == 'table' then
+        copy = {}
         for orig_key, orig_value in pairs(orig as {any: any}) do
             copy[deepcopy(orig_key as X)] = deepcopy(orig_value as X)
         end
-        setmetatable(copy as X, deepcopy(getmetatable(orig) as X) as metatable<X>)
+        local mt = deepcopy(getmetatable(orig) as X) as metatable<X>
+        setmetatable(copy as X, mt)
     else -- number, string, boolean, etc
         copy = orig as {any}
     end
@@ -179,7 +179,7 @@ end
 --]]
 
 -- Возвращает новую табличку, составленную из элементов таблицы a и таблицы b
-local function merge_tables(a: {string}, b: {string}): {string}
+local function merge_tables<X>(a: {X}, b: {X}): {X}
     local tmp = {}
     for _, v in ipairs(a) do
         table.insert(tmp, v)
