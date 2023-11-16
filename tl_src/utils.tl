@@ -74,18 +74,17 @@ local function shallow_copy<X>(a: X): X
 end
 
 local function deepcopy<X>(orig: X): X
-    local copy: {any: any}
     if type(orig) == 'table' then
-        copy = {}
-        for orig_key, orig_value in pairs(orig as {any: any}) do
-            copy[deepcopy(orig_key as X)] = deepcopy(orig_value as X)
+        local copy: {X: X} = {}
+        for orig_key, orig_value in pairs(orig as {X: X}) do
+            copy[deepcopy(orig_key)] = deepcopy(orig_value)
         end
-        local mt = deepcopy(getmetatable(orig) as X) as metatable<X>
-        setmetatable(copy as X, mt)
+        local mt = deepcopy(getmetatable(orig) as X)
+        setmetatable(copy as X, mt as metatable<X>)
+        return copy as X
     else -- number, string, boolean, etc
-        copy = orig as {any}
+        return orig
     end
-    return copy as X
 end
 
 local function cat_file(fname: string)
