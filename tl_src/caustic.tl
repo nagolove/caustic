@@ -2231,8 +2231,6 @@ local function get_ready_includes(cfg: Cfg): {string}
             table.insert(ready_deps, dependencies_name_map[depname])
         end
     else
-        -- TODO: Делать глубокую копию таблицы во избежании конфликтов из-за
-        -- изменений
         ready_deps = ut.deepcopy(dependencies)
     end
 
