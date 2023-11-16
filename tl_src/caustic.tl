@@ -77,6 +77,7 @@ local cache: Cache
 local record Cfg
     -- {{{
     dependencies: {string}
+    not_dependencies: {string}
     src: string
     artifact: string
     main: string
@@ -890,15 +891,16 @@ local function get_include_dirs(deps: {Dependency}): {string}
         end
     end
 
-    table.insert(_includedirs, "src")
-
     for k, dir in ipairs(_includedirs) do
         _includedirs[k] = path_caustic .. "/%s/" .. dir
     end
 
+    table.insert(_includedirs, path_caustic .. "/src")
+
     return _includedirs
 end
 
+--[[
 local _includedirs_internal  = { 
     "%s/Chipmunk2D/include",
 
@@ -916,6 +918,7 @@ local _includedirs_internal  = {
     "3rd_party/sunvox/sunvox_lib/headers",
     "src",
 }
+--]]
 
 --local includedirs = 
     --template_dirs(_includedirs, path_third_party)
@@ -951,10 +954,10 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
-local includedirs = prefix_add(
-    path_caustic .. "/", gather_includedirs(dependencies, path_rel_third_party)
-)
-table.insert(includedirs, path_caustic .. "/src")
+--local includedirs = prefix_add(
+    --path_caustic .. "/", gather_includedirs(dependencies, path_rel_third_party)
+--)
+--table.insert(includedirs, path_caustic .. "/src")
 
 --[[
 local includedirs_internal = prefix_add(
@@ -2219,12 +2222,57 @@ function actions.rocks(_: Args)
     end
 end
 
+-- Возвращет список включаемых каталог соответствующий конфигурации
+local function get_ready_includes(cfg: Cfg): {string}
+    local ready_deps: {Dependency} = {}
+
+    if cfg and cfg.dependencies then
+        for _, depname in ipairs(cfg.dependencies) do
+            table.insert(ready_deps, dependencies_name_map[depname])
+        end
+    else
+        -- TODO: Делать глубокую копию таблицы во избежании конфликтов из-за
+        -- изменений
+        ready_deps = ut.deepcopy(dependencies)
+    end
+
+    if cfg and cfg.not_dependencies then
+        local name2dep: {string: Dependency} = {}
+        for _, dep in ipairs(ready_deps) do
+            name2dep[dep.name] = dep
+        end
+
+        for _, depname in ipairs(cfg.not_dependencies) do
+            assert(name2dep[depname])
+            name2dep[depname] = nil
+        end
+
+        -- XXX: Порядок зависимостей нарушается от оригинального массива, 
+        -- но порядок не важен для списка включаемых каталогов
+        ready_deps = {}
+        for _, dep in pairs(name2dep) do
+            table.insert(ready_deps, dep)
+        end
+    end
+    --print('get_ready_includes:', inspect(ready_deps))
+
+    local _includedirs = prefix_add(
+        path_caustic .. "/",
+        gather_includedirs(ready_deps, path_rel_third_party)
+    )
+    if _includedirs then
+        table.insert(_includedirs, path_caustic .. "/src")
+    end
+
+    return _includedirs 
+end
+
 function actions.verbose(_: Args)
     print(tabular({
         urls = get_urls(dependencies),
         dependencies = dependencies,
         dirnames = get_dirs(dependencies),
-        includedirs = includedirs, 
+        includedirs = get_ready_includes(), 
         --links = links,
         libdirs = libdirs,
         links_internal = links_internal,
@@ -2234,8 +2282,9 @@ end
 -- Функция может как работать в рамках проекта, там и указывать все доступные
 -- каталоги?
 -- Пользовался-ли я этой функцией?
+-- TODO: Писать сразу в файл текущего каталога
 function actions.compile_flags(_: Args)
-    for _, v in ipairs(includedirs) do
+    for _, v in ipairs(get_ready_includes()) do
         print("-I" .. v)
     end
     print("-I../caustic/src")
@@ -2533,7 +2582,7 @@ local function link_wasm_project(main_fname: string, _args: Args)
     table.insert(flags, format("-o %s/%s.html", project_dir, 'index'))
 
     local _includedirs = {}
-    for _, v in ipairs(includedirs) do
+    for _, v in ipairs(get_ready_includes()) do
         table.insert(_includedirs, "-I" .. v)
     end
     local includes_str = table.concat(_includedirs, " ")
@@ -2548,7 +2597,7 @@ local function link_wasm_project(main_fname: string, _args: Args)
     table.insert(_libs, "caustic")
     table.insert(_libs, "project")
 
-    -- XXX:
+    -- XXX: Как присоединить sunvox к wasm проекту?
     --table.insert(_libs, "sunvox")
 
     print("_libs before", inspect(_libs))
@@ -3133,43 +3182,6 @@ local function codegen(cg: Cfg.Codegen)
         print(format("Could not open '%s' for writing", cg.file_out))
     end
 end
-
--- Возвращет список включаемых каталог соответствующий конфигурации
-local function get_ready_includes(cfg: Cfg): {string}
-    local ready_deps: {Dependency} = {}
-
-    if cfg and cfg.dependencies then
-        for _, depname in ipairs(cfg.dependencies) do
-            table.insert(ready_deps, dependencies_name_map[depname])
-        end
-    else
-        ready_deps = dependencies
-    end
-
-    --print('get_ready_includes:', inspect(ready_deps))
-
-    local _includedirs = prefix_add(
-        path_caustic .. "/",
-        gather_includedirs(ready_deps, path_rel_third_party)
-    )
-    if _includedirs then
-        table.insert(_includedirs, path_caustic .. "/src")
-    end
-
-    --[[
-    local _includedirs_internal = prefix_add(
-        path_caustic .. "/", 
-        gather_includedirs(ready_deps, path_rel_third_party)
-    )
-    --]]
-
-    --print('get_ready_includes:')
-    --print(tabular(_includedirs))
-    --print(tabular(_includedirs_internal))
-
-    return _includedirs 
-end
-
 
 -- TODO: Обработка массива dependencies
 -- Идея - файлы описания зависимостей могут лежать вне каустики.

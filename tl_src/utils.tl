@@ -73,6 +73,21 @@ local function shallow_copy<X>(a: X): X
     end
 end
 
+local function deepcopy<X>(orig: X): X
+    local orig_type = type(orig)
+    local copy: {any: any}
+    if orig_type == 'table' then
+        copy = {} 
+        for orig_key, orig_value in pairs(orig as {any: any}) do
+            copy[deepcopy(orig_key as X)] = deepcopy(orig_value as X)
+        end
+        setmetatable(copy as X, deepcopy(getmetatable(orig) as X) as metatable<X>)
+    else -- number, string, boolean, etc
+        copy = orig as {any}
+    end
+    return copy as X
+end
+
 local function cat_file(fname: string)
     local ok, errmsg: boolean, string = pcall(function()
         local file = io.open(fname, "r")
@@ -291,4 +306,5 @@ return {
     remove_last_backslash   = remove_last_backslash,
     shallow_copy            = shallow_copy,
     template_dirs           = template_dirs,
+    deepcopy                = deepcopy,
 }
