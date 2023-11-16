@@ -2,6 +2,7 @@
 ./3rd_party/
 ./wasm_3rd_party/*
 cache.lua
+*.bak
 *~
 #*.aseprite
 #*.kra
