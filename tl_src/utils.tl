@@ -179,7 +179,7 @@ end
 --]]
 
 -- Возвращает новую табличку, составленную из элементов таблицы a и таблицы b
-local function merge_tables(a: {string}, b: {string}): {string}
+local function merge_tables<X>(a: {X}, b: {X}): {X}
     local tmp = {}
     for _, v in ipairs(a) do
         table.insert(tmp, v)
