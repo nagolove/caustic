@@ -81,7 +81,8 @@ local function deepcopy(orig)
       for orig_key, orig_value in pairs(orig) do
          copy[deepcopy(orig_key)] = deepcopy(orig_value)
       end
-      setmetatable(copy, deepcopy(getmetatable(orig)))
+      local mt = deepcopy(getmetatable(orig))
+      setmetatable(copy, mt)
    else
       copy = orig
    end

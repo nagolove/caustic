@@ -22,11 +22,14 @@ else
    print("CAUSTIC_PATH", path_caustic)
 end
 
+local path_rel_third_party = remove_last_backslash(
+os.getenv("3rd_party") or "3rd_party")
+
+local path_wasm_third_party = remove_last_backslash(
+os.getenv("wasm_3rd_party") or "wasm_3rd_party")
 
 
-local path_rel_third_party = remove_last_backslash("3rd_party")
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
-local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 
 local lua_ver = "5.1"
 
@@ -134,7 +137,6 @@ local cache
 
 
 local function cmd_do(_cmd)
-
    if verbose then
       os.execute("echo `pwd`")
    end
@@ -166,7 +168,6 @@ local function cmd_do(_cmd)
          os.exit(1)
       end
    end
-
 end
 
 local function filter_sources_c(
@@ -247,6 +248,11 @@ local function search_and_load_cfgs_up(fname)
 
    return cfgs, push_num
 end
+
+
+
+
+
 
 
 
@@ -448,9 +454,6 @@ local function paste_from_one_to_other(
    file_dst:close()
 end
 
-
-
-
 local function build_cimgui(dep)
    print('build_cimgui:', inspect(dep))
 
@@ -480,13 +483,6 @@ end
 local function cimgui_after_init(dep)
    print("cimgui_after_init:", lfs.currentdir())
    local imgui_files = {
-
-
-
-
-
-
-
       "../imgui/imconfig.h",
       "../imgui/imgui.cpp",
       "../imgui/imgui_demo.cpp",
@@ -601,9 +597,6 @@ local function utf8proc_after_build(_)
    cmd_do("rm libutf8proc.so")
 end
 
-
-
-
 dependencies = {
 
    {
@@ -679,9 +672,10 @@ dependencies = {
 
    {
 
-
       after_init = cimgui_after_init,
+
       after_build = cimgui_after_build,
+
       build = build_cimgui,
       depends = { 'freetype', 'rlimgui' },
       description = "C биндинг для imgui",
@@ -702,7 +696,9 @@ dependencies = {
       description = "модульный звуковой синтезатор",
       dir = "sunvox",
 
-      fname = "sunvox_lib-2.1c.zip", includes = { "sunvox/sunvox_lib/headers" },
+      fname = "sunvox_lib-2.1c.zip",
+      includes = { "sunvox/sunvox_lib/headers" },
+
       libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" },
       name = 'sunvox',
       url_action = "zip",
@@ -863,23 +859,6 @@ end
 
 local function get_include_dirs(deps)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    local _includedirs = {}
    for _, dep in ipairs(deps) do
       if not dep.disabled then
@@ -899,29 +878,6 @@ local function get_include_dirs(deps)
 
    return _includedirs
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -960,16 +916,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
 local function gather_links(deps, linkstype)
    local links_tbl = {}
    for _, dep in ipairs(deps) do
@@ -982,51 +928,86 @@ local function gather_links(deps, linkstype)
    return links_tbl
 end
 
+local function get_ready_deps(cfg)
+   local ready_deps = {}
+
+   if cfg and cfg.dependencies then
+      for _, depname in ipairs(cfg.dependencies) do
+         table.insert(ready_deps, get_deps_name_map()[depname])
+      end
+   else
+      ready_deps = ut.deepcopy(dependencies)
+   end
+
+   if cfg and cfg.not_dependencies then
+      local name2dep = {}
+      for _, dep in ipairs(ready_deps) do
+         name2dep[dep.name] = dep
+      end
+
+      for _, depname in ipairs(cfg.not_dependencies) do
+         assert(name2dep[depname])
+         name2dep[depname] = nil
+      end
 
 
 
+      ready_deps = {}
+      for _, dep in pairs(name2dep) do
+         table.insert(ready_deps, dep)
+      end
+   end
+   return ready_deps
+end
 
+local function get_ready_links_internal()
+   local links_internal = ut.merge_tables(
+   gather_links(dependencies, "links_internal"),
+   { "stdc++", "m" })
 
+   return links_internal
+end
 
+local function get_ready_links(cfg)
+   local ready_deps = get_ready_deps(cfg)
+   local links = ut.merge_tables(
+   gather_links(ready_deps, "links"),
+   {
+      "stdc++",
+      "m",
+      "caustic",
+   })
 
+   return links
+end
 
+local function get_ready_links_linux_only(cfg)
+   local links_linux_only = {
+      "lfs",
+   }
 
+   if cfg and cfg.not_dependencies then
+      local map_links_linux_only = {}
+      for _, libname in ipairs(cfg.not_dependencies) do
+         map_links_linux_only[libname] = true
+      end
 
+      for _, depname in ipairs(cfg.not_dependencies) do
+         map_links_linux_only[depname] = nil
+      end
 
+      links_linux_only = {}
+      for libname, _ in pairs(map_links_linux_only) do
+         links_linux_only[#links_linux_only + 1] = libname
+      end
+   end
 
+   for k, libname in ipairs(links_linux_only) do
+      links_linux_only[k] = libname .. ":static"
+   end
 
-
-local links_internal = ut.merge_tables(
-gather_links(dependencies, "links_internal"),
-{ "stdc++", "m" })
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local links = ut.merge_tables(
-gather_links(dependencies, "links"),
-{
-   "stdc++",
-   "m",
-   "caustic",
-})
-
-
-local links_linix_only = {
-   "lfs:static",
-}
+   return links_linux_only
+end
 
 local function gather_libdirs(deps)
    local libdirs_tbl = {}
@@ -1058,8 +1039,13 @@ local wasm_libdirs = {
 
 local function get_dir(dep)
    assert(type(dep.url) == 'string')
+   assert(dep)
+   assert(dep.url_action)
+   assert(dep.url)
+   assert(dep.dir)
    local url = dep.url
    if not string.match(url, "%.zip$") then
+
       local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
       return dirname
    else
@@ -1084,64 +1070,11 @@ local function get_deps_map(deps)
          local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
          res[dirname] = dep
       else
-
          res[dep.dir] = dep
       end
    end
    return res
 end
-
-
-local dependencies_map = 
-get_deps_map(dependencies)
-
-
-local dependencies_name_map = 
-get_deps_name_map(dependencies)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1686,7 +1619,8 @@ local function _init(path, deps)
 
    if use_toposort then
       for _, node in ut.ripairs(sorted) do
-         local dep = dependencies_name_map[(node).value]
+         local name_map = get_deps_name_map(dependencies)
+         local dep = name_map[(node).value]
          print('dep', inspect(dep))
          dependency_init(dep, path)
       end
@@ -1776,6 +1710,7 @@ end
 function actions.init(_args)
    local deps = {}
    if _args.name then
+      local dependencies_name_map = get_deps_name_map(dependencies)
       print('partial init for dependency', _args.name)
       if dependencies_name_map[_args.name] then
          table.insert(deps, dependencies_name_map[_args.name])
@@ -2197,6 +2132,7 @@ end
 
 function actions.remove(_args)
    local dirnames = {}
+   local dependencies_name_map = get_deps_name_map(dependencies)
    if _args.name and dependencies_name_map[_args.name] then
       table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
    else
@@ -2224,36 +2160,7 @@ end
 
 
 local function get_ready_includes(cfg)
-   local ready_deps = {}
-
-   if cfg and cfg.dependencies then
-      for _, depname in ipairs(cfg.dependencies) do
-         table.insert(ready_deps, dependencies_name_map[depname])
-      end
-   else
-
-
-      ready_deps = ut.deepcopy(dependencies)
-   end
-
-   if cfg and cfg.not_dependencies then
-      local name2dep = {}
-      for _, dep in ipairs(ready_deps) do
-         name2dep[dep.name] = dep
-      end
-
-      for _, depname in ipairs(cfg.not_dependencies) do
-         assert(name2dep[depname])
-         name2dep[depname] = nil
-      end
-
-
-
-      ready_deps = {}
-      for _, dep in pairs(name2dep) do
-         table.insert(ready_deps, dep)
-      end
-   end
+   local ready_deps = get_ready_deps(cfg)
 
 
    local _includedirs = prefix_add(
@@ -2275,7 +2182,7 @@ function actions.verbose(_)
       includedirs = get_ready_includes(),
 
       libdirs = libdirs,
-      links_internal = links_internal,
+      links_internal = get_ready_links_internal(),
    }))
 end
 
@@ -2591,7 +2498,7 @@ local function link_wasm_project(main_fname, _args)
 
 
    local _libs = {}
-   for _, v in ipairs(links) do
+   for _, v in ipairs(get_ready_links()) do
       table.insert(_libs, v)
    end
    table.insert(_libs, "caustic")
@@ -2792,19 +2699,15 @@ end
 function actions.build(_args)
    ut.push_current_dir()
 
-
-
-
-
    lfs.chdir(path_rel_third_party)
 
    print("actions.build: currend directory", lfs.currentdir())
 
    if _args.name then
+      local dependencies_name_map = get_deps_name_map(dependencies)
       if dependencies_name_map[_args.name] then
-
          local dir = get_dir(dependencies_name_map[_args.name])
-         local dep = dependencies_map[dir]
+         local dep = get_deps_map()[dir]
          _build(dep)
       else
          print("bad dependency name", _args.name)
@@ -3224,21 +3127,11 @@ local function sub_make(_args, cfg, push_num)
 
    local _includes = table.concat({},
    " ")
-
-   print('cfg', inspect(cfg))
-
-   print("get_ready_includes(cfg)", inspect(get_ready_includes(cfg)))
-
-
    local dirs = get_ready_includes(cfg)
-
 
    for _, v in ipairs(dirs) do
       _includes = _includes .. " -I" .. v
    end
-
-
-
 
 
    local flags = {}
@@ -3301,13 +3194,10 @@ local function sub_make(_args, cfg, push_num)
    local _libspath = table.concat(_libdirs, " ")
    print(tabular(_libspath))
 
-   local _links = {}
-   for _, v in ipairs(links) do
-      table.insert(_links, v)
-   end
-   for _, v in ipairs(links_linix_only) do
-      table.insert(_links, v)
-   end
+   local _links = ut.merge_tables(
+   get_ready_links(cfg),
+   get_ready_links_linux_only(cfg))
+
 
    if verbose then
       print("_links")
@@ -3328,14 +3218,9 @@ local function sub_make(_args, cfg, push_num)
    local repr_queu = {}
 
    filter_sources_c(".", function(file)
-
       local _output = output_dir .. "/" ..
       string.gsub(file, "(.*%.)c$", "%1o")
-
       local _input = cwd .. file
-
-
-
 
 
       local cmd = format(
@@ -3384,7 +3269,6 @@ local function sub_make(_args, cfg, push_num)
 
    end
 
-
    print(tabular(repr_queu))
 
    if not _args.j then
@@ -3409,13 +3293,19 @@ local function sub_make(_args, cfg, push_num)
       lfs.chdir(path_caustic)
       print("sub_make: currentdir", lfs.currentdir())
 
-      sub_make({
-         make = true,
-         c = _args.c,
-         j = _args.j,
-         noasan = _args.noasan,
-         release = _args.release,
-      }, search_and_load_cfgs_up('bld.lua')[1])
+
+      local local_cfgs = search_and_load_cfgs_up('bld.lua')
+      for _, local_cfg in ipairs(local_cfgs) do
+         local args = {
+            make = true,
+            c = _args.c,
+            j = _args.j,
+            noasan = _args.noasan,
+            release = _args.release,
+         }
+         sub_make(args, local_cfg)
+      end
+
       ut.pop_dir()
 
       print("before project link", lfs.currentdir())
@@ -3434,7 +3324,6 @@ local function sub_make(_args, cfg, push_num)
 
    else
       koh_link(objfiles_str, _args)
-
       cmd_do("mv libcaustic.a ../libcaustic.a")
    end
 
@@ -3448,12 +3337,9 @@ function actions.make(_args)
       print(tabular(_args))
    end
 
-
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    for _, cfg in ipairs(cfgs) do
-
       sub_make(_args, cfg, push_num)
-
    end
 end
 
@@ -3493,6 +3379,7 @@ local function main()
    do_parser_setup(parser, parser_setup)
 
    parser:flag("-v --verbose", "use verbose output")
+
 
 
 
