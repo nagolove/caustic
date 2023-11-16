@@ -2186,17 +2186,23 @@ function actions.verbose(_)
    }))
 end
 
-
-
-
-
 function actions.compile_flags(_)
-   for _, v in ipairs(get_ready_includes()) do
-      print("-I" .. v)
+   print("current directory", lfs.currentdir())
+   cmd_do("cp compile_flags.txt compile_flags.txt.bak")
+   local target = io.open("compile_flags.txt", "w")
+   assert(target)
+
+   local function put(s)
+      target:write(s .. "\n")
+      print(s)
    end
-   print("-I../caustic/src")
-   print("-Isrc")
-   print("-I.")
+
+
+   for _, v in ipairs(get_ready_includes()) do
+      put("-I" .. v)
+   end
+   put("-Isrc")
+   put("-I.")
 end
 
 local function buildw_chipmunk()
@@ -2636,7 +2642,7 @@ local function _build(dep)
 
    local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
    if not ok_chd then
-      print("currend directory", lfs.currentdir())
+      print("current directory", lfs.currentdir())
       local msg = format(
       "_build: could not do lfs.chdir('%s') dependency with %s",
       dep.dir, errmsg_chd)
@@ -2672,36 +2678,12 @@ local function _build(dep)
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function actions.build(_args)
    ut.push_current_dir()
 
    lfs.chdir(path_rel_third_party)
 
-   print("actions.build: currend directory", lfs.currentdir())
+   print("actions.build: current directory", lfs.currentdir())
 
    if _args.name then
       local dependencies_name_map = get_deps_name_map(dependencies)
@@ -2800,8 +2782,6 @@ local function parallel_run(queue)
       end
       threads = live_threads
 
-
-
       stop = not has_jobs
    until stop
 end
@@ -2860,13 +2840,6 @@ local function project_link(ctx, cfg, _args)
    end
    cmd_do(cmd)
 end
-
-
-
-
-
-
-
 
 
 
@@ -3010,10 +2983,7 @@ local function codegen(cg)
 
 
 
-
-
    local marks = {}
-
 
    for i, line in ipairs(lines) do
       local capture = string.match(line, "{CODE_.*}")
@@ -3026,10 +2996,6 @@ local function codegen(cg)
          local last_mark = marks[#marks]
          print('capture', last_mark.capture)
          print('paste_linenum', last_mark.linenum)
-
-
-
-
       else
          if cg.on_read then
             cg.on_read(line)
@@ -3045,15 +3011,11 @@ local function codegen(cg)
       for j = index, mark.linenum - 1 do
          table.insert(write_lines, lines[j])
       end
-
-
-
       local gen_lines = cg.on_write(mark.capture)
       if not gen_lines then
          gen_lines = {}
       end
       for _, new_line in ipairs(gen_lines) do
-
          table.insert(write_lines, new_line)
       end
       local next_mark = marks[mark_index + 1]
@@ -3066,12 +3028,6 @@ local function codegen(cg)
          table.insert(write_lines, lines[j])
       end
    end
-
-
-
-
-
-
 
    if cg.on_finish then
       cg.on_finish()
@@ -3172,6 +3128,7 @@ local function sub_make(_args, cfg, push_num)
 
 
 
+
    if not _args.noasan then
       table.insert(flags, "-fsanitize=address")
    end
@@ -3181,9 +3138,6 @@ local function sub_make(_args, cfg, push_num)
    print("pwd", lfs.currentdir())
 
    local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
-
-
-
 
    table.insert(_libdirs, "-L/usr/lib")
    print('cfg.artifact', cfg.artifact)
@@ -3309,8 +3263,6 @@ local function sub_make(_args, cfg, push_num)
       ut.pop_dir()
 
       print("before project link", lfs.currentdir())
-
-
 
       project_link({
          objfiles = objfiles_str,

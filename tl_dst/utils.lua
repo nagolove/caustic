@@ -74,19 +74,17 @@ local function shallow_copy(a)
 end
 
 local function deepcopy(orig)
-   local orig_type = type(orig)
-   local copy
-   if orig_type == 'table' then
-      copy = {}
+   if type(orig) == 'table' then
+      local copy = {}
       for orig_key, orig_value in pairs(orig) do
          copy[deepcopy(orig_key)] = deepcopy(orig_value)
       end
       local mt = deepcopy(getmetatable(orig))
       setmetatable(copy, mt)
+      return copy
    else
-      copy = orig
+      return orig
    end
-   return copy
 end
 
 local function cat_file(fname)
