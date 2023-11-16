@@ -2186,17 +2186,23 @@ function actions.verbose(_: Args)
     }))
 end
 
--- Функция может как работать в рамках проекта, там и указывать все доступные
--- каталоги?
--- Пользовался-ли я этой функцией?
--- TODO: Писать сразу в файл текущего каталога
 function actions.compile_flags(_: Args)
-    for _, v in ipairs(get_ready_includes()) do
-        print("-I" .. v)
+    print("current directory", lfs.currentdir())
+    cmd_do("cp compile_flags.txt compile_flags.txt.bak")
+    local target = io.open("compile_flags.txt", "w")
+    assert(target)
+
+    local function put(s: string)
+        target:write(s .. "\n")
+        print(s)
     end
-    print("-I../caustic/src")
-    print("-Isrc")
-    print("-I.")
+
+    -- TODO: Пробовать загрузить конфиг, но только из текущего каталога
+    for _, v in ipairs(get_ready_includes()) do
+        put("-I" .. v)
+    end
+    put("-Isrc")
+    put("-I.")
 end
 
 local function buildw_chipmunk()
@@ -2636,7 +2642,7 @@ local function _build(dep: Dependency)
 
     local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
     if not ok_chd then
-        print("currend directory", lfs.currentdir())
+        print("current directory", lfs.currentdir())
         local msg = format(
             "_build: could not do lfs.chdir('%s') dependency with %s",
             dep.dir, errmsg_chd
@@ -2677,7 +2683,7 @@ function actions.build(_args: Args)
 
     lfs.chdir(path_rel_third_party)
 
-    print("actions.build: currend directory", lfs.currentdir())
+    print("actions.build: current directory", lfs.currentdir())
 
     if _args.name then
         local dependencies_name_map = get_deps_name_map(dependencies)
