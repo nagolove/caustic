@@ -22,14 +22,17 @@ else
     print("CAUSTIC_PATH", path_caustic)
 end
 
--- TODO: получение имен каталогов из переменных окружения
--- CAUSTIC_3RD_PARTY и WASM_3RD_PARTY
-local path_rel_third_party = remove_last_backslash("3rd_party")
+local path_rel_third_party = remove_last_backslash(
+    os.getenv("3rd_party") or "3rd_party"
+)
+local path_wasm_third_party = remove_last_backslash(
+    os.getenv("wasm_3rd_party") or "wasm_3rd_party"
+)
+
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
-local path_wasm_third_party = remove_last_backslash("wasm_3rd_party")
 
 local lua_ver = "5.1"
---local lua_ver = "5.4"
+
 package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
 package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
@@ -134,7 +137,6 @@ project dir -> bld.lua
 --]]
 
 local function cmd_do(_cmd: string|{string})
-    --push_current_dir()
     if verbose then
         os.execute("echo `pwd`")
     end
@@ -166,7 +168,6 @@ local function cmd_do(_cmd: string|{string})
             os.exit(1)
         end
     end
-    --pop_dir()
 end
 
 local function filter_sources_c(
@@ -253,9 +254,14 @@ local enum UrlAction
 	"zip"
 end
 
--- TODO: Фиксировать версии библиотек? 
 -- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
 -- значением хэша коммита
+-- TODO Добавить возможность конфигурирования каждой зависимости при помощи
+-- ключей команды caustic
+-- В частности - отключение или включение библиотеки freetype
+-- TODO: Тестировать получение и сборку каждой зависимости
+-- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
+-- каталогов библиотек и т.д.
 local record Dependency
     -- {{{
     description: string -- описание компонента зависимости
@@ -448,9 +454,6 @@ local function paste_from_one_to_other(
     file_dst:close()
 end
 
--- TODO Добавить возможность конфигурирования каждой зависимости при помощи
--- ключей команды caustic
--- В частности - отключение или включение библиотеки freetype
 local function build_cimgui(dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
@@ -480,13 +483,6 @@ end
 local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
     local imgui_files = {
-        --[[
-        "../imgui/imgui.h",
-        "../imgui/imgui.cpp",
-        "../imgui/imconfig.h" ,
-        "../imgui/imgui_internal.h",
-        "../imgui/imstb_textedit.h",
---]]
         "../imgui/imconfig.h",
         "../imgui/imgui.cpp",
         "../imgui/imgui_demo.cpp",
@@ -601,9 +597,6 @@ local function utf8proc_after_build(_: Dependency)
     cmd_do("rm libutf8proc.so")
 end
 
--- TODO: Тестировать получение и сборку каждой зависимости
--- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
--- каталогов библиотек и т.д.
 dependencies = {
 
     {
@@ -679,9 +672,10 @@ dependencies = {
 
     {
         -- скопировать файлы из rlimgui
-        -- нужно компилировать
         after_init = cimgui_after_init,
+        -- переименовывает библиотеку
         after_build = cimgui_after_build,
+        -- нужно компилировать
         build = build_cimgui,
         depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
@@ -702,8 +696,10 @@ dependencies = {
         description = "модульный звуковой синтезатор",
         dir = "sunvox",
         -- TODO: Извлекать имя архива из поля url
-        fname = "sunvox_lib-2.1c.zip", includes = { "sunvox/sunvox_lib/headers" },
-        libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" }, -- XXX: Зачем путь к .so файлу?
+        fname = "sunvox_lib-2.1c.zip", 
+        includes = { "sunvox/sunvox_lib/headers" },
+        -- XXX: Зачем путь к .so файлу?
+        libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" }, 
         name = 'sunvox',
         url_action = "zip",
         url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
@@ -863,23 +859,6 @@ end
 
 local function get_include_dirs(deps: {Dependency}): {string}
 
-    --[[
-    local _includedirs  = ut.caustic_path_substitute({ 
-        "../$CAUSTIC_PATH/%s/Chipmunk2D/include",                 -- ok
-        "../$CAUSTIC_PATH/%s/cimgui",                             -- ok
-        "../$CAUSTIC_PATH/%s/cimgui/generator/output",            -- ok
-        "../$CAUSTIC_PATH/%s/genann",                             -- ok
-        "../$CAUSTIC_PATH/%s/lua/",                               -- ok
-        "../$CAUSTIC_PATH/%s/luafilesystem/src",                  -- ok
-        "../$CAUSTIC_PATH/%s/raylib/src",                         -- ok
-        "../$CAUSTIC_PATH/%s/small-regex/libsmallregex",          -- ok
-        "../$CAUSTIC_PATH/%s/stb",                                -- ok
-        "../$CAUSTIC_PATH/%s/utf8proc",                           -- ok
-        "../$CAUSTIC_PATH/%s/sunvox/sunvox_lib/headers",          -- ok
-        "../$CAUSTIC_PATH/src",                                   --
-    }) as {string}
-    --]]
-
     local _includedirs = {}
     for _, dep in ipairs(deps) do
         if not dep.disabled then
@@ -899,29 +878,6 @@ local function get_include_dirs(deps: {Dependency}): {string}
 
     return _includedirs
 end
-
---[[
-local _includedirs_internal  = { 
-    "%s/Chipmunk2D/include",
-
-    "%s/cimgui",
-    "%s/cimgui/generator/output",
-
-    "%s/genann",
-    "%s/lua/",
-    "%s/luafilesystem/src",
-    "%s/raylib/src",
-    --"%s/rlImGui",
-    "%s/small-regex/libsmallregex",
-    "%s/stb",
-    "%s/utf8proc",
-    "3rd_party/sunvox/sunvox_lib/headers",
-    "src",
-}
---]]
-
---local includedirs = 
-    --template_dirs(_includedirs, path_third_party)
 
 -- TODO: Проверка на дубликаты путей:
 --      как проверка будет функционировать? какой-то флаг?
@@ -954,22 +910,12 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
---local includedirs = prefix_add(
-    --path_caustic .. "/", gather_includedirs(dependencies, path_rel_third_party)
---)
---table.insert(includedirs, path_caustic .. "/src")
-
---[[
-local includedirs_internal = prefix_add(
-    path_caustic .. "/", gather_includedirs(dependencies, path_third_party)
-)
---]]
-
 local enum LinksType
     "links_internal"
     "links"
 end
 
+-- XXX: Зачем нужен второй параметр?
 local function gather_links(deps: {Dependency}, linkstype: LinksType): {string}
     local links_tbl = {}
     for _, dep in ipairs(deps) do
@@ -982,51 +928,86 @@ local function gather_links(deps: {Dependency}, linkstype: LinksType): {string}
     return links_tbl
 end
 
---[[
-local links_internal = { 
-    "chipmunk:static",          -- ok
-    "cimgui:static",            -- ok
-    "genann:static",            -- ok
-    "lfs:static",               -- ok
-    "lua:static",               -- ok
-    "raylib",                   -- ok
-    "smallregex:static",        -- ok
-    "utf8proc:static",          -- ok
-}
---]]
+local function get_ready_deps(cfg: Cfg): {Dependency}
+    local ready_deps: {Dependency} = {}
 
+    if cfg and cfg.dependencies then
+        for _, depname in ipairs(cfg.dependencies) do
+            table.insert(ready_deps, get_deps_name_map()[depname])
+        end
+    else
+        ready_deps = ut.deepcopy(dependencies)
+    end
 
-local links_internal = ut.merge_tables(
-    gather_links(dependencies, "links_internal"),
-    { "stdc++", "m", }
-)
+    if cfg and cfg.not_dependencies then
+        local name2dep: {string: Dependency} = {}
+        for _, dep in ipairs(ready_deps) do
+            name2dep[dep.name] = dep
+        end
 
---[[
-local links = { 
-    "chipmunk:static",          --
-    "cimgui:static",            --
-    "genann:static",            --
-    "lua:static",               --
-    "m",                        --
-    "raylib:static",            --
-    "smallregex:static",        --
-    "stdc++",                   --
-    "utf8proc:static",          --
-}
---]]
+        for _, depname in ipairs(cfg.not_dependencies) do
+            assert(name2dep[depname])
+            name2dep[depname] = nil
+        end
 
-local links = ut.merge_tables(
-    gather_links(dependencies, "links"),
-    {
-        "stdc++",
-        "m",
-        "caustic", 
+        -- XXX: Порядок зависимостей нарушается от оригинального массива, 
+        -- но порядок не важен для списка включаемых каталогов
+        ready_deps = {}
+        for _, dep in pairs(name2dep) do
+            table.insert(ready_deps, dep)
+        end
+    end
+    return ready_deps
+end
+
+local function get_ready_links_internal(): {string}
+    local links_internal = ut.merge_tables(
+        gather_links(dependencies, "links_internal"),
+        { "stdc++", "m", }
+    )
+    return links_internal
+end
+
+local function get_ready_links(cfg: Cfg): {string}
+    local ready_deps = get_ready_deps(cfg)
+    local links = ut.merge_tables(
+        gather_links(ready_deps, "links"),
+        {
+            "stdc++",
+            "m",
+            "caustic", 
+        }
+    )
+    return links
+end
+
+local function get_ready_links_linux_only(cfg: Cfg): {string}
+    local links_linux_only = {
+        "lfs",
     }
-)
 
-local links_linix_only = {
-    "lfs:static",
-}
+    if cfg and cfg.not_dependencies then
+        local map_links_linux_only = {}
+        for _, libname in ipairs(cfg.not_dependencies) do
+            map_links_linux_only[libname] = true
+        end
+
+        for _, depname in ipairs(cfg.not_dependencies) do
+            map_links_linux_only[depname] = nil
+        end
+
+        links_linux_only = {}
+        for libname, _ in pairs(map_links_linux_only) do
+            links_linux_only[#links_linux_only + 1] = libname
+        end
+    end
+
+    for k, libname in ipairs(links_linux_only) do
+        links_linux_only[k] = libname .. ":static"
+    end
+
+    return links_linux_only
+end
 
 local function gather_libdirs(deps: {Dependency}): {string}
     local libdirs_tbl = {}
@@ -1058,8 +1039,13 @@ local wasm_libdirs = {
 
 local function get_dir(dep: Dependency): string
     assert(type(dep.url) == 'string')
+    assert(dep)
+    assert(dep.url_action)
+    assert(dep.url)
+    assert(dep.dir)
     local url = dep.url
     if not string.match(url, "%.zip$") then
+        -- TODO: Что делает поиск паттерна?
         local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
         return dirname
     else
@@ -1084,68 +1070,15 @@ local function get_deps_map(deps: {Dependency}): {string: Dependency}
             local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
             res[dirname] = dep
         else
-            --print('dep', inspect(dep))
             res[dep.dir] = dep
         end
     end
     return res
 end
 
--- ??
-local dependencies_map: {string: Dependency} = 
-    get_deps_map(dependencies)
-
 -- имя зависимости
-local dependencies_name_map: {string: Dependency} = 
-    get_deps_name_map(dependencies)
-
---print('dependencies_map', inspect(dependencies_map))
-
---[[
-local function get_dirs()
-    local res = {}
-    for _, dep in pairs(dependencies) do
-        assert(type(dep.url) == 'string')
-        local url = dep.url
-        local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
-        table.insert(res, dirname)
-    end
-    return res
-end
---]]
-
---[[
-local function check_luarocks(): string
-    local fd = io.popen("luarocks --version")
-    local version: string
-    local _, _: boolean, string = pcall(function()
-        version = fd:read("*a")
-    end)
-    return version and string.match(version, "LuaRocks")
-end
-
-if not check_luarocks() then
-    print("LuaRocks not found")
-    os.exit(1)
-end
---]]
-
---[[
-local lanes, lfs, argparse, tabular, sleep
-
-local ok, errmsg = pcall(function()
-    lanes = require "lanes".configure()
-    lfs = require "lfs"
-    argparse = require "argparse"
-    tabular = require "tabular"
-    sleep = require "socket".sleep
-end)
-
-if not ok then
-    print(errmsg)
-    print("Please run ./caustic rocks")
-end
---]]
+--local dependencies_name_map: {string: Dependency} = 
+    --get_deps_name_map(dependencies)
 
 local function after_init(dep: Dependency)
     assert(dep)
@@ -1686,7 +1619,8 @@ local function _init(path: string, deps: {Dependency})
 
     if use_toposort then
         for _, node in ut.ripairs(sorted) do
-            local dep = dependencies_name_map[(node as Node).value as string]
+            local name_map = get_deps_name_map(dependencies)
+            local dep = name_map[(node as Node).value as string]
             print('dep', inspect(dep))
             dependency_init(dep, path)
         end
@@ -1776,6 +1710,7 @@ end
 function actions.init(_args: Args)
     local deps = {}
     if _args.name then
+        local dependencies_name_map = get_deps_name_map(dependencies)
         print('partial init for dependency', _args.name)
         if dependencies_name_map[_args.name] then
             table.insert(deps, dependencies_name_map[_args.name])
@@ -2197,6 +2132,7 @@ end
 
 function actions.remove(_args: Args)
     local dirnames: {string} = {}
+    local dependencies_name_map = get_deps_name_map(dependencies)
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
@@ -2224,36 +2160,7 @@ end
 
 -- Возвращет список включаемых каталог соответствующий конфигурации
 local function get_ready_includes(cfg: Cfg): {string}
-    local ready_deps: {Dependency} = {}
-
-    if cfg and cfg.dependencies then
-        for _, depname in ipairs(cfg.dependencies) do
-            table.insert(ready_deps, dependencies_name_map[depname])
-        end
-    else
-        -- TODO: Делать глубокую копию таблицы во избежании конфликтов из-за
-        -- изменений
-        ready_deps = ut.deepcopy(dependencies)
-    end
-
-    if cfg and cfg.not_dependencies then
-        local name2dep: {string: Dependency} = {}
-        for _, dep in ipairs(ready_deps) do
-            name2dep[dep.name] = dep
-        end
-
-        for _, depname in ipairs(cfg.not_dependencies) do
-            assert(name2dep[depname])
-            name2dep[depname] = nil
-        end
-
-        -- XXX: Порядок зависимостей нарушается от оригинального массива, 
-        -- но порядок не важен для списка включаемых каталогов
-        ready_deps = {}
-        for _, dep in pairs(name2dep) do
-            table.insert(ready_deps, dep)
-        end
-    end
+    local ready_deps = get_ready_deps(cfg)
     --print('get_ready_includes:', inspect(ready_deps))
 
     local _includedirs = prefix_add(
@@ -2275,7 +2182,7 @@ function actions.verbose(_: Args)
         includedirs = get_ready_includes(), 
         --links = links,
         libdirs = libdirs,
-        links_internal = links_internal,
+        links_internal = get_ready_links_internal(),
     }))
 end
 
@@ -2591,7 +2498,7 @@ local function link_wasm_project(main_fname: string, _args: Args)
     --print()
 
     local _libs = {}
-    for _, v in ipairs(links) do
+    for _, v in ipairs(get_ready_links()) do
         table.insert(_libs, v)
     end
     table.insert(_libs, "caustic")
@@ -2764,47 +2671,19 @@ local function _build(dep: Dependency)
     ut.pop_dir()
 end
 
---[[
-function actions.build_smart(_args: Args)
-    ut.push_current_dir()
-    lfs.chdir(path_caustic)
-    lfs.chdir(path_third_party)
-
-    if _args.name then
-        if dependencies_name_map[_args.name] then
-            _build_smart(dependencies_name_map[_args.name])
-        else
-            print("bad dependency name", _args.name)
-	    ut.pop_dir()
-	    return
-        end
-    else
-        for _, dep in ipairs(dependencies) do
-            _build_smart(dep)
-        end
-    end
-
-    ut.pop_dir()
-end
---]]
-
 -- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
     ut.push_current_dir()
 
-    --[[
-    lfs.chdir(path_abs_caustic)
-    lfs.chdir(path_rel_third_party)
-    --]]
     lfs.chdir(path_rel_third_party)
 
     print("actions.build: currend directory", lfs.currentdir())
 
     if _args.name then
+        local dependencies_name_map = get_deps_name_map(dependencies)
         if dependencies_name_map[_args.name] then
-            -- FIXME: Исправить на более короткое получение dep
             local dir = get_dir(dependencies_name_map[_args.name])
-            local dep = dependencies_map[dir]
+            local dep = get_deps_map()[dir]
             _build(dep)
         else
             print("bad dependency name", _args.name)
@@ -2896,9 +2775,7 @@ local function parallel_run(queue: {string})
             end
         end
         threads = live_threads
-        --print('------------------------------------------------')
 
-        --end
         stop = not has_jobs
     until stop
 end
@@ -2957,13 +2834,6 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     end
     cmd_do(cmd)
 end
-
---[[
-local function set_executable_bit(fname: string)
-    local pipe = io.popen("chmod +x " .. fname)
-    print(pipe:read("*a"))
-end
---]]
 
 --local json = require "json"
 
@@ -3102,8 +2972,6 @@ local function codegen(cg: Cfg.Codegen)
         end
     end
 
-    --print(tabular(lines))
-    --local new_lines: {string} = {}
     local record Mark
         linenum: integer
         capture: string
@@ -3111,7 +2979,6 @@ local function codegen(cg: Cfg.Codegen)
 
     local marks: {Mark} = {}
 
-    --local paste_linenum = -1
     for i, line in ipairs(lines) do
         local capture = string.match(line, "{CODE_.*}")
         if capture then
@@ -3123,10 +2990,6 @@ local function codegen(cg: Cfg.Codegen)
             local last_mark = marks[#marks]
             print('capture', last_mark.capture)
             print('paste_linenum', last_mark.linenum)
-
-            --print('tmp', inspect(tmp))
-            --print( "os.exit()" )
-            --os.exit()
         else
             if cg.on_read then 
                 cg.on_read(line)
@@ -3142,15 +3005,11 @@ local function codegen(cg: Cfg.Codegen)
         for j = index, mark.linenum - 1 do
             table.insert(write_lines, lines[j])
         end
-        --for _, line in ipairs(new_lines) do
-            --table.insert(write_lines, line)
-        --end
         local gen_lines = cg.on_write(mark.capture)
         if not gen_lines then
             gen_lines = {}
         end
         for _, new_line in ipairs(gen_lines) do
-            --print('new_line', new_line)
             table.insert(write_lines, new_line)
         end
         local next_mark = marks[mark_index + 1]
@@ -3163,12 +3022,6 @@ local function codegen(cg: Cfg.Codegen)
             table.insert(write_lines, lines[j])
         end
     end
-
-    --[[
-    print("#new_lines", #new_lines)
-    print('write_lines')
-    print(tabular(write_lines))
-    --]]
 
     if cg.on_finish then
         cg.on_finish()
@@ -3224,21 +3077,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     local _includes: string = table.concat({
     }, " ")
-
-    print('cfg', inspect(cfg))
-    --print('cfg.artifact', cfg.artifact)
-    print("get_ready_includes(cfg)", inspect(get_ready_includes(cfg)))
-
-    --local dirs = cfg.artifact and get_ready_includes(cfg)
     local dirs = get_ready_includes(cfg)
-    --print('cfg.artifact', cfg.artifact)
 
     for _, v in ipairs(dirs) do
         _includes = _includes .. " -I" .. v
     end
-
-    --print(tabular(dirs))
-    --print(tabular(_includes))
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
@@ -3267,6 +3110,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     end
 
     --[[
+    -- TODO: Починить дефайны для включенных и выключенных зависимостей
     if cfg.dependencies then
         for _, depname in ipairs(cfg.dependencies) do
             if not dependencies_name_map[depname] then
@@ -3289,9 +3133,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
-    --print("_libdirs")
-    --print(tabular(_libdirs))
-
     table.insert(_libdirs, "-L/usr/lib")
     print('cfg.artifact', cfg.artifact)
     if cfg.artifact then
@@ -3301,13 +3142,10 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     local _libspath: string = table.concat(_libdirs, " ")
     print(tabular(_libspath))
 
-    local _links = {}
-    for _, v in ipairs(links) do
-        table.insert(_links, v)
-    end
-    for _, v in ipairs(links_linix_only) do
-        table.insert(_links, v)
-    end
+    local _links = ut.merge_tables(
+        get_ready_links(cfg),
+        get_ready_links_linux_only(cfg)
+    )
 
     if verbose then
         print("_links")
@@ -3328,14 +3166,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     local repr_queu = {}
 
     filter_sources_c(".", function(file: string)
-        --print('file', file)
         local _output = output_dir .. "/" .. 
                         string.gsub(file, "(.*%.)c$", "%1o")
-        --local _input = output_dir .. "/" .. file
         local _input = cwd .. file
-
-        --print("_input", _input)
-        --print('_input\'', cwd .. string.sub(_input, 3, -1))
 
         -- TODO: Проверять отсутствие объектного файла
         local cmd = format(
@@ -3356,7 +3189,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         os.exit(1)
 
         --[[
-        -- {{{
+        -- {{{ С++ code support
         filter_sources_cpp(".", function(file: string)
             --print('file', file)
             local _output = output_dir .. "/" .. 
@@ -3384,7 +3217,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     end
 
-    --print("queue", inspect(queue))
     print(tabular(repr_queu))
 
     if not _args.j then
@@ -3408,19 +3240,23 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         ut.push_current_dir()
         lfs.chdir(path_caustic)
         print("sub_make: currentdir", lfs.currentdir())
-        -- XXX: Что делает следущая команда сборки?
-        sub_make({
-            make = true,
-            c = _args.c,
-            j = _args.j,
-            noasan = _args.noasan,
-            release = _args.release
-        }, search_and_load_cfgs_up('bld.lua')[1])
+
+        -- Проверка каустики на необходимость пересборки
+        local local_cfgs = search_and_load_cfgs_up('bld.lua')
+        for _, local_cfg in ipairs(local_cfgs) do
+            local args = {
+                make = true,
+                c = _args.c,
+                j = _args.j,
+                noasan = _args.noasan,
+                release = _args.release
+            }
+            sub_make(args, local_cfg)
+        end
+
         ut.pop_dir()
 
         print("before project link", lfs.currentdir())
-        --print("_args")
-        --print(tabular(_args))
 
         project_link({
             objfiles = objfiles_str,
@@ -3434,7 +3270,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         --set_executable_bit(dst)
     else
         koh_link(objfiles_str, _args)
-        --cp("libcaustic.a", "../libcaustic.a")
         cmd_do("mv libcaustic.a ../libcaustic.a")
     end
 
@@ -3448,12 +3283,9 @@ function actions.make(_args: Args)
         print(tabular(_args))
     end
 
-    --print("make: pwd 0", lfs.currentdir())
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     for _, cfg in ipairs(cfgs) do
-        --print("make: pwd 1", lfs.currentdir())
         sub_make(_args, cfg, push_num)
-        --print("make: pwd 2", lfs.currentdir())
     end
 end
 
@@ -3500,6 +3332,7 @@ local function main()
     -- Сперва скопировать их в отдельный каталог.
     -- TODO: документация на все опции, команда help
     -- FIXME: команды build и init, оставить только одну из них?
+    -- }}}
     --]]
 
     parser:add_complete()
