@@ -982,17 +982,31 @@ local function get_ready_links(cfg: Cfg): {string}
 end
 
 local function get_ready_links_linux_only(cfg: Cfg): {string}
+    print('get_ready_links_linux_only:', inspect(cfg))
+    --print(debug.traceback())
+    --print( "os.exit(1)" )
+    --os.exit(1)
+
     local links_linux_only = {
         "lfs",
     }
 
     if cfg and cfg.not_dependencies then
+
+        --print("cfg.not_dependencies", inspect(cfg.not_dependencies))
+        --print( "os.exit(1)" )
+        --os.exit(1)
+
         local map_links_linux_only = {}
         for _, libname in ipairs(cfg.not_dependencies) do
             map_links_linux_only[libname] = true
         end
 
+        print('map_links_linux_only')
+        print(tabular(map_links_linux_only))
+
         for _, depname in ipairs(cfg.not_dependencies) do
+            print('depname', depname)
             map_links_linux_only[depname] = nil
         end
 
@@ -1001,6 +1015,9 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
             links_linux_only[#links_linux_only + 1] = libname
         end
     end
+
+    print('get_ready_links_linux_only:')
+    print(tabular(links_linux_only))
 
     for k, libname in ipairs(links_linux_only) do
         links_linux_only[k] = libname .. ":static"
@@ -1127,13 +1144,10 @@ end
 
 -- Разбить на download() и unpack()
 local function download_and_unpack_zip(dep: Dependency)
-    --local lfs = require 'lfs'
     print('download_and_unpack_zip', inspect(dep))
     print('current directory', lfs.currentdir())
     local url = dep.url
 
-    --print('download_zip', inspect(url))
-    --local path = libs_path .. "/" .. dep.dir
     local path = dep.dir
 
 	local attributes = lfs.attributes(dep.dir)
@@ -1152,7 +1166,6 @@ local function download_and_unpack_zip(dep: Dependency)
     local fname = path .. '/' .. dep.fname
     print('fname', fname)
     local cfile = io.open(fname, 'w')
-    --assert(file)
     print('file', cfile)
     local curl = require 'cURL'
     local c = curl.easy_init()
@@ -1173,13 +1186,11 @@ local function download_and_unpack_zip(dep: Dependency)
         print('zfile error', zerr)
     end
     for file in zfile:files() do
-        --print(inspect(file))
         if file.uncompressed_size == 0 then
             lfs.mkdir(file.filename)
         else
             local filereader = zfile:open(file.filename)
             local data = filereader:read("*a")
-            --print('file.filename', file.filename)
             local store = io.open(file.filename, "w")
             if store then
                 store:write(data)
