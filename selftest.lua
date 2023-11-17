@@ -1,7 +1,7 @@
 return {
-    "/home/nagolove/ecs-test",
-    "/home/nagolove/lua-tools-test",
-    "/home/nagolove/metaloader-test",
-    "/home/nagolove/set-test",
-    "/home/nagolove/strset-test",
+    "/home/nagolove/caustic-test-ecs",
+    "/home/nagolove/caustic-test-lua",
+    "/home/nagolove/caustic-test-metaloader",
+    "/home/nagolove/caustic-test-set",
+    "/home/nagolove/caustic-test-strset",
 }
