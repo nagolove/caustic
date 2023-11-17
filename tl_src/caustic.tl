@@ -19,7 +19,7 @@ if not path_caustic then
     os.exit(1)
 else
     path_caustic = remove_last_backslash(path_caustic)
-    print("CAUSTIC_PATH", path_caustic)
+    --print("CAUSTIC_PATH", path_caustic)
 end
 
 local path_rel_third_party = remove_last_backslash(
@@ -71,7 +71,7 @@ local site_repo = "~/nagolove.github.io"
 
 local format        = string.format
 local cache_name    = "cache.lua"
-local verbose       = true
+local verbose       = false
 local errexit       = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end   = "{CAUSTIC_PASTE_END}"
@@ -178,7 +178,9 @@ end
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
-    print("search_and_load_cfgs_up:", fname, lfs.currentdir())
+    if verbose then
+        print("search_and_load_cfgs_up:", fname, lfs.currentdir())
+    end
 
     -- C какой позиции в дереве каталогов начинать сборку?
     local push_num = 0
@@ -198,7 +200,12 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         end
     end
 
-    print("search_and_load_cfgs_up: cfg found at", lfs.currentdir(), push_num)
+    if verbose then
+        print(
+            "search_and_load_cfgs_up: cfg found at",
+            lfs.currentdir(), push_num
+        )
+    end
 
     local cfgs: {Cfg}
     local ok, errmsg: boolean, string = pcall(function()
@@ -982,31 +989,23 @@ local function get_ready_links(cfg: Cfg): {string}
 end
 
 local function get_ready_links_linux_only(cfg: Cfg): {string}
-    print('get_ready_links_linux_only:', inspect(cfg))
-    --print(debug.traceback())
-    --print( "os.exit(1)" )
-    --os.exit(1)
+    --print('get_ready_links_linux_only:', inspect(cfg))
 
     local links_linux_only = {
         "lfs",
     }
 
     if cfg and cfg.not_dependencies then
-
-        --print("cfg.not_dependencies", inspect(cfg.not_dependencies))
-        --print( "os.exit(1)" )
-        --os.exit(1)
-
         local map_links_linux_only = {}
         for _, libname in ipairs(cfg.not_dependencies) do
             map_links_linux_only[libname] = true
         end
 
-        print('map_links_linux_only')
-        print(tabular(map_links_linux_only))
+        --print('map_links_linux_only')
+        --print(tabular(map_links_linux_only))
 
         for _, depname in ipairs(cfg.not_dependencies) do
-            print('depname', depname)
+            --print('depname', depname)
             map_links_linux_only[depname] = nil
         end
 
@@ -1016,8 +1015,8 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
         end
     end
 
-    print('get_ready_links_linux_only:')
-    print(tabular(links_linux_only))
+    --print('get_ready_links_linux_only:')
+    --print(tabular(links_linux_only))
 
     for k, libname in ipairs(links_linux_only) do
         links_linux_only[k] = libname .. ":static"
@@ -1805,17 +1804,11 @@ local function sub_test(_args: Args, cfg: Cfg)
 end
 
 function actions.selftest(_args: Args)
-    print('selftestring')
-    --[[
-    Прочитать строки файла selftest.lua
-    Перекомпилировать каждый подпроект 
-    Вызвать исполняемый файл подпроекта
-    --]]
-    --local _, test_dirs = serpent.load("selftest.lua")
+    --print('selftest')
     local selftest_fname = path_caustic .. "/selftest.lua"
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(selftest_fname)() as {string}
-        print('test_dirs', inspect(test_dirs))
+        --print('test_dirs', inspect(test_dirs))
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             assert(type(dir) == "string")
@@ -2816,7 +2809,7 @@ end
 local function koh_link(objfiles_str: string, _args: Args)
     cmd_do("rm libcaustic.a")
     local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
-    print(cmd)
+    --print(cmd)
     cmd_do(cmd)
 end
 
@@ -3060,9 +3053,10 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         cache_remove()
     end
 
-    print(ut.push_current_dir())
-    print('sub_make: pwd', lfs.currentdir())
-    print('sub_make: cfg', inspect(cfg))
+    local _ = ut.push_current_dir()
+    --print("sub_make:", _)
+    --print('sub_make: pwd', lfs.currentdir())
+    --print('sub_make: cfg', inspect(cfg))
 
     local src_dir = cfg.src or "src"
     local ok, errmsg =  lfs.chdir(src_dir) 
@@ -3146,18 +3140,18 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
     local _flags: string = table.concat(flags, " ")
 
-    print("pwd", lfs.currentdir())
+    --print("pwd", lfs.currentdir())
 
     local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
     table.insert(_libdirs, "-L/usr/lib")
-    print('cfg.artifact', cfg.artifact)
+    --print('cfg.artifact', cfg.artifact)
     if cfg.artifact then
         table.insert(_libdirs, "-L" .. path_caustic)
     end
 
     local _libspath: string = table.concat(_libdirs, " ")
-    print(tabular(_libspath))
+    --print(tabular(_libspath))
 
     local _links = ut.merge_tables(
         get_ready_links(cfg),
@@ -3173,8 +3167,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         table.insert(_links, 1, "caustic:static")
     end
     local _libs: string = table.concat(make_l(_links), " ")
-    print('_libs')
-    print(tabular(_libs))
+
+    --print('_libs')
+    --print(tabular(_libs))
 
     local queue = {}
     local cwd = lfs.currentdir() .. "/"
@@ -3234,7 +3229,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     end
 
-    print(tabular(repr_queu))
+    if verbose then
+        print(tabular(repr_queu))
+    end
 
     if not _args.j then
         serial_run(queue)
@@ -3256,7 +3253,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if cfg.artifact then
         ut.push_current_dir()
         lfs.chdir(path_caustic)
-        print("sub_make: currentdir", lfs.currentdir())
+        if verbose then
+            print("sub_make: currentdir", lfs.currentdir())
+        end
 
         -- Проверка каустики на необходимость пересборки
         local local_cfgs = search_and_load_cfgs_up('bld.lua')
@@ -3273,7 +3272,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
         ut.pop_dir()
 
-        print("before project link", lfs.currentdir())
+        if verbose then
+            print("before project link", lfs.currentdir())
+        end
 
         project_link({
             objfiles = objfiles_str,
@@ -3355,7 +3356,7 @@ local function main()
     parser:add_complete()
     local _args = parser:parse()
 
-    print(inspect(_args))
+    --print(inspect(_args))
     verbose = _args.verbose == true
 
     for k, v in pairs(_args) do
