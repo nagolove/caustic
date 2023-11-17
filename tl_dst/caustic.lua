@@ -19,7 +19,7 @@ if not path_caustic then
    os.exit(1)
 else
    path_caustic = remove_last_backslash(path_caustic)
-   print("CAUSTIC_PATH", path_caustic)
+
 end
 
 local path_rel_third_party = remove_last_backslash(
@@ -71,7 +71,7 @@ local site_repo = "~/nagolove.github.io"
 
 local format = string.format
 local cache_name = "cache.lua"
-local verbose = true
+local verbose = false
 local errexit = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end = "{CAUSTIC_PASTE_END}"
@@ -178,7 +178,9 @@ end
 
 
 local function search_and_load_cfgs_up(fname)
-   print("search_and_load_cfgs_up:", fname, lfs.currentdir())
+   if verbose then
+      print("search_and_load_cfgs_up:", fname, lfs.currentdir())
+   end
 
 
    local push_num = 0
@@ -198,7 +200,12 @@ local function search_and_load_cfgs_up(fname)
       end
    end
 
-   print("search_and_load_cfgs_up: cfg found at", lfs.currentdir(), push_num)
+   if verbose then
+      print(
+      "search_and_load_cfgs_up: cfg found at",
+      lfs.currentdir(), push_num)
+
+   end
 
    local cfgs
    local ok, errmsg = pcall(function()
@@ -982,6 +989,8 @@ local function get_ready_links(cfg)
 end
 
 local function get_ready_links_linux_only(cfg)
+
+
    local links_linux_only = {
       "lfs",
    }
@@ -992,7 +1001,11 @@ local function get_ready_links_linux_only(cfg)
          map_links_linux_only[libname] = true
       end
 
+
+
+
       for _, depname in ipairs(cfg.not_dependencies) do
+
          map_links_linux_only[depname] = nil
       end
 
@@ -1001,6 +1014,9 @@ local function get_ready_links_linux_only(cfg)
          links_linux_only[#links_linux_only + 1] = libname
       end
    end
+
+
+
 
    for k, libname in ipairs(links_linux_only) do
       links_linux_only[k] = libname .. ":static"
@@ -1127,12 +1143,9 @@ end
 
 
 local function download_and_unpack_zip(dep)
-
    print('download_and_unpack_zip', inspect(dep))
    print('current directory', lfs.currentdir())
    local url = dep.url
-
-
 
    local path = dep.dir
 
@@ -1152,7 +1165,6 @@ local function download_and_unpack_zip(dep)
    local fname = path .. '/' .. dep.fname
    print('fname', fname)
    local cfile = io.open(fname, 'w')
-
    print('file', cfile)
    local curl = require('cURL')
    local c = curl.easy_init()
@@ -1173,13 +1185,11 @@ local function download_and_unpack_zip(dep)
       print('zfile error', zerr)
    end
    for file in zfile:files() do
-
       if file.uncompressed_size == 0 then
          lfs.mkdir(file.filename)
       else
          local filereader = zfile:open(file.filename)
          local data = filereader:read("*a")
-
          local store = io.open(file.filename, "w")
          if store then
             store:write(data)
@@ -1794,17 +1804,11 @@ local function sub_test(_args, cfg)
 end
 
 function actions.selftest(_args)
-   print('selftestring')
-
-
-
-
-
 
    local selftest_fname = path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(selftest_fname)()
-      print('test_dirs', inspect(test_dirs))
+
       ut.push_current_dir()
       for _, dir in ipairs(test_dirs) do
          assert(type(dir) == "string")
@@ -2805,7 +2809,7 @@ end
 local function koh_link(objfiles_str, _args)
    cmd_do("rm libcaustic.a")
    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
-   print(cmd)
+
    cmd_do(cmd)
 end
 
@@ -3049,9 +3053,10 @@ local function sub_make(_args, cfg, push_num)
       cache_remove()
    end
 
-   print(ut.push_current_dir())
-   print('sub_make: pwd', lfs.currentdir())
-   print('sub_make: cfg', inspect(cfg))
+   local _ = ut.push_current_dir()
+
+
+
 
    local src_dir = cfg.src or "src"
    local ok, errmsg = lfs.chdir(src_dir)
@@ -3135,18 +3140,18 @@ local function sub_make(_args, cfg, push_num)
    flags = ut.merge_tables(flags, { "-Wall", "-fPIC" })
    local _flags = table.concat(flags, " ")
 
-   print("pwd", lfs.currentdir())
+
 
    local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
    table.insert(_libdirs, "-L/usr/lib")
-   print('cfg.artifact', cfg.artifact)
+
    if cfg.artifact then
       table.insert(_libdirs, "-L" .. path_caustic)
    end
 
    local _libspath = table.concat(_libdirs, " ")
-   print(tabular(_libspath))
+
 
    local _links = ut.merge_tables(
    get_ready_links(cfg),
@@ -3162,8 +3167,9 @@ local function sub_make(_args, cfg, push_num)
       table.insert(_links, 1, "caustic:static")
    end
    local _libs = table.concat(make_l(_links), " ")
-   print('_libs')
-   print(tabular(_libs))
+
+
+
 
    local queue = {}
    local cwd = lfs.currentdir() .. "/"
@@ -3223,7 +3229,9 @@ local function sub_make(_args, cfg, push_num)
 
    end
 
-   print(tabular(repr_queu))
+   if verbose then
+      print(tabular(repr_queu))
+   end
 
    if not _args.j then
       serial_run(queue)
@@ -3245,7 +3253,9 @@ local function sub_make(_args, cfg, push_num)
    if cfg.artifact then
       ut.push_current_dir()
       lfs.chdir(path_caustic)
-      print("sub_make: currentdir", lfs.currentdir())
+      if verbose then
+         print("sub_make: currentdir", lfs.currentdir())
+      end
 
 
       local local_cfgs = search_and_load_cfgs_up('bld.lua')
@@ -3262,7 +3272,9 @@ local function sub_make(_args, cfg, push_num)
 
       ut.pop_dir()
 
-      print("before project link", lfs.currentdir())
+      if verbose then
+         print("before project link", lfs.currentdir())
+      end
 
       project_link({
          objfiles = objfiles_str,
@@ -3344,7 +3356,7 @@ local function main()
    parser:add_complete()
    local _args = parser:parse()
 
-   print(inspect(_args))
+
    verbose = _args.verbose == true
 
    for k, v in pairs(_args) do
