@@ -71,6 +71,13 @@ local site_repo = "~/nagolove.github.io"
 
 local format = string.format
 local cache_name = "cache.lua"
+
+
+
+
+
+
+
 local verbose = false
 local errexit = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
@@ -145,7 +152,9 @@ local function cmd_do(_cmd)
          print('cmd_do:', _cmd)
       end
       if not os.execute(_cmd) then
-         print(format('cmd was failed "%s"', _cmd))
+         if verbose then
+            print(format('cmd was failed "%s"', _cmd))
+         end
          if errexit then
             os.exit(1)
          end
@@ -156,7 +165,9 @@ local function cmd_do(_cmd)
             print('cmd_do', v)
          end
          if not os.execute(v) then
-            print(format('cmd was failed "%s"', _cmd))
+            if verbose then
+               print(format('cmd was failed "%s"', _cmd))
+            end
             if errexit then
                os.exit(1)
             end
@@ -792,12 +803,12 @@ dependencies = {
       copy_for_wasm = true,
       build = build_small_regex,
       description = "простая библиотека для регулярных выражений",
-      includes = { "small-regex/libsmallregex" },
-      libdirs = { "small-regex/libsmallregex" },
+      includes = { "small_regex/libsmallregex" },
+      libdirs = { "small_regex/libsmallregex" },
       links = { "smallregex:static" },
       links_internal = { "smallregex:static" },
-      name = 'small-regex',
-      dir = "small-regex",
+      name = 'small_regex',
+      dir = "small_regex",
       url_action = "git",
       url = "https://gitlab.com/relkom/small-regex.git",
    },
@@ -833,7 +844,7 @@ dependencies = {
       build = build_with_make,
       after_init = copy_headers_to_wfc,
       copy_for_wasm = true,
-      depends = { 'stb' },
+
       description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
       name = 'wfc',
       url_action = "git",
@@ -953,6 +964,7 @@ local function get_ready_deps(cfg)
       end
 
       for _, depname in ipairs(cfg.not_dependencies) do
+
          assert(name2dep[depname])
          name2dep[depname] = nil
       end
@@ -1117,7 +1129,8 @@ local function after_init(dep)
 end
 
 local function git_clone_with_checkout(dep, checkout_arg)
-   cmd_do("git clone " .. dep.url)
+   local dst = dep.dir or ""
+   cmd_do("git clone " .. dep.url .. " " .. dst)
    if dep.dir then
       lfs.chdir(dep.dir)
    else
@@ -2735,9 +2748,11 @@ local function get_cores_num()
 end
 
 local function parallel_run(queue)
-   print('parallel_run:', #queue)
    local cores_num = get_cores_num() * 2
-   print('cores_num', cores_num)
+   if verbose then
+      print('parallel_run:', #queue)
+      print('cores_num', cores_num)
+   end
 
    local function build_fun(cmd)
       cmd_do(cmd)
@@ -2840,7 +2855,7 @@ local function project_link(ctx, cfg, _args)
 
    if verbose then
       print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
-      print(ansicolors("%{blue}" .. cmd .. "%{reset}"))
+      print(ansicolors("project_link: %{blue}" .. cmd .. "%{reset}"))
    end
    cmd_do(cmd)
 end
@@ -2960,7 +2975,9 @@ end
 
 
 local function codegen(cg)
-   print('codegen', inspect(cg))
+   if verbose then
+      print('codegen', inspect(cg))
+   end
    local lines = {}
    local file = io.open(cg.file_in, "r")
    if not file then
@@ -2998,8 +3015,10 @@ local function codegen(cg)
          })
 
          local last_mark = marks[#marks]
-         print('capture', last_mark.capture)
-         print('paste_linenum', last_mark.linenum)
+         if verbose then
+            print('capture', last_mark.capture)
+            print('paste_linenum', last_mark.linenum)
+         end
       else
          if cg.on_read then
             cg.on_read(line)
@@ -3046,6 +3065,28 @@ local function codegen(cg)
    end
 end
 
+local function get_ready_deps_defines(cfg)
+   local ready_deps = get_ready_deps(cfg)
+   local map_all_deps = {}
+
+   for _, dep in ipairs(ut.deepcopy(dependencies)) do
+      map_all_deps[dep.name] = dep
+   end
+   for _, dep in ipairs(ready_deps) do
+      map_all_deps[dep.name] = nil
+   end
+
+   local flags = {}
+   for name, _ in pairs(map_all_deps) do
+      table.insert(flags, format("-DKOH_NO_%s", name:upper()))
+   end
+
+   for _, dep in ipairs(ready_deps) do
+      table.insert(flags, format("-DKOH_%s", dep.name:upper()))
+   end
+   return flags
+end
+
 
 
 local function sub_make(_args, cfg, push_num)
@@ -3053,10 +3094,11 @@ local function sub_make(_args, cfg, push_num)
       cache_remove()
    end
 
-   local _ = ut.push_current_dir()
-
-
-
+   local curdir = ut.push_current_dir()
+   if verbose then
+      print("sub_make: current directory", curdir)
+      print('sub_make: cfg', inspect(cfg))
+   end
 
    local src_dir = cfg.src or "src"
    local ok, errmsg = lfs.chdir(src_dir)
@@ -3120,38 +3162,27 @@ local function sub_make(_args, cfg, push_num)
       end
    end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    if not _args.noasan then
       table.insert(flags, "-fsanitize=address")
    end
    flags = ut.merge_tables(flags, { "-Wall", "-fPIC" })
+   flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
+
+   if verbose then
+      print('flags')
+      print(tabular(flags))
+   end
+
    local _flags = table.concat(flags, " ")
-
-
 
    local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
    table.insert(_libdirs, "-L/usr/lib")
-
    if cfg.artifact then
       table.insert(_libdirs, "-L" .. path_caustic)
    end
 
    local _libspath = table.concat(_libdirs, " ")
-
 
    local _links = ut.merge_tables(
    get_ready_links(cfg),
@@ -3168,9 +3199,6 @@ local function sub_make(_args, cfg, push_num)
    end
    local _libs = table.concat(make_l(_links), " ")
 
-
-
-
    local queue = {}
    local cwd = lfs.currentdir() .. "/"
 
@@ -3181,6 +3209,8 @@ local function sub_make(_args, cfg, push_num)
       local _output = output_dir .. "/" ..
       string.gsub(file, "(.*%.)c$", "%1o")
       local _input = cwd .. file
+
+
 
 
       local cmd = format(
