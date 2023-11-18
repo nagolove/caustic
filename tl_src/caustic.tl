@@ -3088,7 +3088,6 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
     return flags
 end
 
--- TODO: Обработка массива dependencies
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if _args.c then
@@ -3391,7 +3390,8 @@ local function main()
     verbose = _args.verbose == true
 
     for k, v in pairs(_args) do
-        if actions[k as ActionsEnum] and type(v) == 'boolean' and v == true then
+        local can_call = type(v) == 'boolean' and v == true 
+        if actions[k as ActionsEnum] and can_call then
             actions[k as ActionsEnum](_args as Args)
         end
     end
