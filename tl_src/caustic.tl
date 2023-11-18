@@ -844,7 +844,7 @@ dependencies = {
         build = build_with_make,
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
-        depends = {'stb'},
+        --depends = {'stb'},
         description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
         name = 'wfc',
         url_action = "git",
@@ -964,6 +964,7 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
         end
 
         for _, depname in ipairs(cfg.not_dependencies) do
+            -- Проверка - существует-ли такая зависимость вообще среди всех?
             assert(name2dep[depname])
             name2dep[depname] = nil
         end
@@ -2854,7 +2855,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     )
     if verbose then
         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
-        print(ansicolors("%{blue}" .. cmd .. "%{reset}"))
+        print(ansicolors("project_link: %{blue}" .. cmd .. "%{reset}"))
     end
     cmd_do(cmd)
 end
@@ -3199,7 +3200,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
                         string.gsub(file, "(.*%.)c$", "%1o")
         local _input = cwd .. file
 
-        -- TODO: Проверять отсутствие объектного файла
+        -- TODO: Проверять отсутствие объектного файла. 
+        -- Каким образом проверять?
+        -- Через lfs.attributes()?
         local cmd = format(
             "cc -lm %s %s %s %s -o %s -c %s %s", 
             _defines, _includes, _libspath, _flags,
