@@ -1148,7 +1148,8 @@ local function git_clone(dep: Dependency)
     elseif dep.git_branch then
         git_clone_with_checkout(dep, dep.git_branch)
     else
-        local git_cmd = "git clone --depth 1 " .. dep.url
+        local dst = dep.dir or ""
+        local git_cmd = "git clone --depth 1 " .. dep.url .. " " .. dst
         cmd_do(git_cmd)
     end
     ut.pop_dir()
