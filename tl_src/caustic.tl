@@ -3065,6 +3065,28 @@ local function codegen(cg: Cfg.Codegen)
     end
 end
 
+local function get_ready_deps_defines(cfg: Cfg): {string}
+    local ready_deps = get_ready_deps(cfg)
+    local map_all_deps = {}
+
+    for _, dep in ipairs(ut.deepcopy(dependencies)) do
+        map_all_deps[dep.name] = dep
+    end
+    for _, dep in ipairs(ready_deps) do
+        map_all_deps[dep.name] = nil
+    end
+
+    local flags = {}
+    for name, _ in pairs(map_all_deps) do
+        table.insert(flags, format("-DKOH_NO_%s", name:upper()))
+    end
+
+    for _, dep in ipairs(ready_deps) do
+        table.insert(flags, format("-DKOH_%s", dep.name:upper()))
+    end
+    return flags
+end
+
 -- TODO: Обработка массива dependencies
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
@@ -3140,30 +3162,18 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         end
     end
 
-    --[[
-    -- TODO: Починить дефайны для включенных и выключенных зависимостей
-    if cfg.dependencies then
-        for _, depname in ipairs(cfg.dependencies) do
-            if not dependencies_name_map[depname] then
-                print(format("there is no '%s'", depname))
-                print(tabular(dependencies))
-                os.exit(1)
-            end
-            table.insert(flags, format("-DKOH_DEP_NO_%s", depname))
-        end
-    end
-    --]]
-
     if not _args.noasan then
         table.insert(flags, "-fsanitize=address")
     end
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
-    local _flags: string = table.concat(flags, " ")
+    flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
     if verbose then
         print('flags')
         print(tabular(flags))
     end
+
+    local _flags: string = table.concat(flags, " ")
 
     local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
