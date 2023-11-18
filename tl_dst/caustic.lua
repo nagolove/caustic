@@ -1148,7 +1148,8 @@ local function git_clone(dep)
    elseif dep.git_branch then
       git_clone_with_checkout(dep, dep.git_branch)
    else
-      local git_cmd = "git clone --depth 1 " .. dep.url
+      local dst = dep.dir or ""
+      local git_cmd = "git clone --depth 1 " .. dep.url .. " " .. dst
       cmd_do(git_cmd)
    end
    ut.pop_dir()
@@ -3088,7 +3089,6 @@ local function get_ready_deps_defines(cfg)
 end
 
 
-
 local function sub_make(_args, cfg, push_num)
    if _args.c then
       cache_remove()
@@ -3390,7 +3390,8 @@ local function main()
    verbose = _args.verbose == true
 
    for k, v in pairs(_args) do
-      if actions[k] and type(v) == 'boolean' and v == true then
+      local can_call = type(v) == 'boolean' and v == true
+      if actions[k] and can_call then
          actions[k](_args)
       end
    end

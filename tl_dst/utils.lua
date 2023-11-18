@@ -52,6 +52,7 @@ end
 
 
 
+
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
    print("CAUSTIC_PATH is nil")
@@ -260,14 +261,16 @@ local function git_is_repo_clean(dirpath)
    return true
 end
 
-local function test_git_is_repo_clean(dirpath)
-   print(dirpath)
-   print(tostring(git_is_repo_clean(dirpath)))
-end
 
-test_git_is_repo_clean(".")
-test_git_is_repo_clean("3rd_party/genann/")
-test_git_is_repo_clean("3rd_party/Chipmunk2D/")
+
+
+
+
+
+
+
+
+
 
 
 
