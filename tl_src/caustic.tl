@@ -71,6 +71,13 @@ local site_repo = "~/nagolove.github.io"
 
 local format        = string.format
 local cache_name    = "cache.lua"
+-- Добавить разные уровни многословности?
+--[[
+local enum VerboseMode
+    "all"
+    "error"
+end
+--]]
 local verbose       = false
 local errexit       = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
@@ -145,7 +152,9 @@ local function cmd_do(_cmd: string|{string})
             print('cmd_do:', _cmd)
         end
         if not os.execute(_cmd as string) then
-            print(format('cmd was failed "%s"', _cmd))
+            if verbose then
+                print(format('cmd was failed "%s"', _cmd))
+            end
             if errexit then
                 os.exit(1)
             end
@@ -156,7 +165,9 @@ local function cmd_do(_cmd: string|{string})
                 print('cmd_do', v)
             end
             if not os.execute(v) then
-                print(format('cmd was failed "%s"', _cmd))
+                if verbose then
+                    print(format('cmd was failed "%s"', _cmd))
+                end
                 if errexit then
                     os.exit(1)
                 end
@@ -2735,9 +2746,11 @@ local function get_cores_num(): integer
 end
 
 local function parallel_run(queue: {string})
-    print('parallel_run:', #queue)
     local cores_num = get_cores_num() * 2
-    print('cores_num', cores_num)
+    if verbose then
+        print('parallel_run:', #queue)
+        print('cores_num', cores_num)
+    end
 
     local function build_fun(cmd: string): any
         cmd_do(cmd)
@@ -2960,7 +2973,9 @@ end
 --]]
 
 local function codegen(cg: Cfg.Codegen)
-    print('codegen', inspect(cg))
+    if verbose then
+        print('codegen', inspect(cg))
+    end
     local lines = {}
     local file = io.open(cg.file_in, "r")
     if not file then
@@ -2998,8 +3013,10 @@ local function codegen(cg: Cfg.Codegen)
             })
 
             local last_mark = marks[#marks]
-            print('capture', last_mark.capture)
-            print('paste_linenum', last_mark.linenum)
+            if verbose then
+                print('capture', last_mark.capture)
+                print('paste_linenum', last_mark.linenum)
+            end
         else
             if cg.on_read then 
                 cg.on_read(line)
@@ -3053,10 +3070,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         cache_remove()
     end
 
-    local _ = ut.push_current_dir()
-    --print("sub_make:", _)
-    --print('sub_make: pwd', lfs.currentdir())
-    --print('sub_make: cfg', inspect(cfg))
+    local curdir = ut.push_current_dir()
+    if verbose then
+        print("sub_make: current directory", curdir)
+        print('sub_make: cfg', inspect(cfg))
+    end
 
     local src_dir = cfg.src or "src"
     local ok, errmsg =  lfs.chdir(src_dir) 
@@ -3140,18 +3158,19 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
     local _flags: string = table.concat(flags, " ")
 
-    --print("pwd", lfs.currentdir())
+    if verbose then
+        print('flags')
+        print(tabular(flags))
+    end
 
     local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
     table.insert(_libdirs, "-L/usr/lib")
-    --print('cfg.artifact', cfg.artifact)
     if cfg.artifact then
         table.insert(_libdirs, "-L" .. path_caustic)
     end
 
     local _libspath: string = table.concat(_libdirs, " ")
-    --print(tabular(_libspath))
 
     local _links = ut.merge_tables(
         get_ready_links(cfg),
@@ -3167,9 +3186,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         table.insert(_links, 1, "caustic:static")
     end
     local _libs: string = table.concat(make_l(_links), " ")
-
-    --print('_libs')
-    --print(tabular(_libs))
 
     local queue = {}
     local cwd = lfs.currentdir() .. "/"
