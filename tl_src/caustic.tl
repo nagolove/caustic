@@ -803,12 +803,12 @@ dependencies = {
         copy_for_wasm = true,
         build = build_small_regex,
         description = "простая библиотека для регулярных выражений",
-        includes = { "small-regex/libsmallregex" },
-        libdirs = { "small-regex/libsmallregex" },
+        includes = { "small_regex/libsmallregex" },
+        libdirs = { "small_regex/libsmallregex" },
         links = { "smallregex:static" },
         links_internal = { "smallregex:static" },
-        name = 'small-regex',
-        dir = "small-regex",
+        name = 'small_regex',
+        dir = "small_regex",
         url_action = "git",
         url = "https://gitlab.com/relkom/small-regex.git",
     },
@@ -1128,7 +1128,8 @@ local function after_init(dep: Dependency)
 end
 
 local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
-    cmd_do("git clone " .. dep.url)
+    local dst = dep.dir or ""
+    cmd_do("git clone " .. dep.url .. " " ..dst)
     if dep.dir then
         lfs.chdir(dep.dir)
     else
