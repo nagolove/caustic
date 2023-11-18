@@ -51,7 +51,8 @@ test_remove_double_slashes("/some///path/hi/")
 test_remove_double_slashes("/x/y/z/")
 --]]
 
--- TODO: Должен быть абсолютный путь, добавить проверку
+-- TODO: Значение полученное из переменной окружения нужно проверить - является
+-- ли оно абсолютным путем к существуюшему каталогу?
 local path_caustic = os.getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")
@@ -260,6 +261,7 @@ local function git_is_repo_clean(dirpath: string): boolean
     return true
 end
 
+--[[
 local function test_git_is_repo_clean(dirpath: string)
     print(dirpath)
     print(tostring(git_is_repo_clean(dirpath)))
@@ -268,6 +270,7 @@ end
 test_git_is_repo_clean(".")
 test_git_is_repo_clean("3rd_party/genann/")
 test_git_is_repo_clean("3rd_party/Chipmunk2D/")
+--]]
 
 local type RIpairs = function(): any, any
 
