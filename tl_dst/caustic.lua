@@ -746,7 +746,10 @@ dependencies = {
       description = "box2c - плоский игровой физический движок",
       dir = "box2c",
       git_branch = "linux-gcc",
-      includes = { "box2c/include" },
+      includes = {
+         "box2c/include",
+         "box2c/src",
+      },
       libdirs = { "box2c/src" },
       links = { "box2d:static" },
       links_internal = { "box2c:static" },
