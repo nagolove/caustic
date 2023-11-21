@@ -4,4 +4,5 @@ return {
     "/home/nagolove/caustic-test-metaloader",
     "/home/nagolove/caustic-test-set",
     "/home/nagolove/caustic-test-strset",
+    "/home/nagolove/caustic-test-b2",
 }
