@@ -19,7 +19,6 @@ if not path_caustic then
     os.exit(1)
 else
     path_caustic = remove_last_backslash(path_caustic)
-    --print("CAUSTIC_PATH", path_caustic)
 end
 
 local path_rel_third_party = remove_last_backslash(
@@ -93,6 +92,8 @@ local record Cfg
     main: string
     codegen: {Codegen}
     -- Дефайны препроцессора, применяемые только к релизной сборке
+    -- Пары -Dключ=значение будут поданы компилятору
+    -- Позволяет отключить DEBUG режим
     release_define: {string: string}
     record Codegen
         file_in: string
@@ -1355,6 +1356,8 @@ local record Actions
     init: function(Args)
     init_add: function(Args)
     selftest: function(Args)
+    selftest_status: function(Args)
+    selftest_lg: function(Args)
     
     -- новая версия init, которая работает с таблицей dependencies через
     -- аргумент функции
@@ -1387,6 +1390,8 @@ local enum ActionsEnum
     "rocks"
     "run"
     "selftest"
+    "selftest_status"
+    "selftest_lg"
     "test"
     "updates"
     "verbose"
@@ -1462,6 +1467,12 @@ local parser_setup: {string:ParserSetup} = {
     },
     selftest = {
         summary = "build and run tests from selftest.lua",
+    },
+    selftest_status = {
+        summary = "print git status for selftest.lua entries",
+    },
+    selftest_lg = {
+        summary = "call lazygit for dirty selftest.lua entries",
     },
     verbose = {
         summary = "print internal data with urls, paths etc.",
@@ -1686,7 +1697,9 @@ end
 
 function actions.run(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    print('actions.run', inspect(_args))
+    if verbose then
+        print('actions.run', inspect(_args))
+    end
     local flags = table.concat(_args.flags, " ")
     -- XXX: Передача --no-fork действительная только для программ собранных
     -- с использованием библиотеки munit
@@ -1820,6 +1833,50 @@ local function sub_test(_args: Args, cfg: Cfg)
     ut.pop_dir()
 end
 
+function actions.selftest_lg(_args: Args)
+    --print('selftest')
+    local selftest_fname = path_caustic .. "/selftest.lua"
+    local ok, errmsg: boolean, string = pcall(function()
+        local test_dirs = loadfile(selftest_fname)() as {string}
+        --print('test_dirs', inspect(test_dirs))
+        ut.push_current_dir()
+        for _, dir in ipairs(test_dirs) do
+            lfs.chdir(dir)
+            print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+            if not ut.git_is_repo_clean(".") then
+                cmd_do("lazygit")
+                cmd_do("git push origin master")
+            end
+        end
+        ut.pop_dir()
+    end)
+    if not ok then
+        print(format("Could not load %s with %s", selftest_fname, errmsg))
+        os.exit(1)
+    end
+end
+
+
+function actions.selftest_status(_args: Args)
+    --print('selftest')
+    local selftest_fname = path_caustic .. "/selftest.lua"
+    local ok, errmsg: boolean, string = pcall(function()
+        local test_dirs = loadfile(selftest_fname)() as {string}
+        --print('test_dirs', inspect(test_dirs))
+        ut.push_current_dir()
+        for _, dir in ipairs(test_dirs) do
+            lfs.chdir(dir)
+            print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+            cmd_do("git status")
+        end
+        ut.pop_dir()
+    end)
+    if not ok then
+        print(format("Could not load %s with %s", selftest_fname, errmsg))
+        os.exit(1)
+    end
+end
+
 function actions.selftest(_args: Args)
     --print('selftest')
     local selftest_fname = path_caustic .. "/selftest.lua"
@@ -1830,8 +1887,8 @@ function actions.selftest(_args: Args)
         for _, dir in ipairs(test_dirs) do
             assert(type(dir) == "string")
             lfs.chdir(dir)
-            cmd_do("caustic make")
-            cmd_do("caustic run -c")
+            cmd_do("caustic make -x")
+            cmd_do("caustic run -c -x")
         end
         ut.pop_dir()
     end)
@@ -2826,7 +2883,10 @@ local function cache_remove()
 end
 
 local function koh_link(objfiles_str: string, _args: Args)
-    cmd_do("rm libcaustic.a")
+    local libname = "libcaustic.a"
+    if lfs.attributes(libname) then
+        cmd_do("rm libcaustic.a")
+    end
     local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
     --print(cmd)
     cmd_do(cmd)
@@ -3154,7 +3214,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         }, " ")
     else
         table.insert(flags, "-O3")
-        -- TODO: Описать в документации как работает флан release_define
         if cfg.release_define then
             print("sub_make: appling release defines")
             for define, value in pairs(cfg.release_define) do
@@ -3376,6 +3435,7 @@ local function main()
     do_parser_setup(parser, parser_setup)
 
     parser:flag("-v --verbose", "use verbose output")
+    parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
 
     --[[
     -- {{{
@@ -3391,6 +3451,9 @@ local function main()
 
     --print(inspect(_args))
     verbose = _args.verbose == true
+    if not _args.no_verbose_path then
+        print("CAUSTIC_PATH", path_caustic)
+    end
 
     for k, v in pairs(_args) do
         local can_call = type(v) == 'boolean' and v == true 

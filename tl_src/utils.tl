@@ -59,7 +59,7 @@ if not path_caustic then
     os.exit(1)
 else
     path_caustic = remove_last_backslash(path_caustic)
-    print("CAUSTIC_PATH", path_caustic)
+    --print("CAUSTIC_PATH", path_caustic)
 end
 
 local function shallow_copy<X>(a: X): X
