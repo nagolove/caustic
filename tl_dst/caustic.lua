@@ -19,7 +19,6 @@ if not path_caustic then
    os.exit(1)
 else
    path_caustic = remove_last_backslash(path_caustic)
-
 end
 
 local path_rel_third_party = remove_last_backslash(
@@ -83,6 +82,8 @@ local errexit = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end = "{CAUSTIC_PASTE_END}"
 local cache
+
+
 
 
 
@@ -1400,6 +1401,10 @@ end
 
 
 
+
+
+
+
 local parser_setup = {
 
    build = {
@@ -1462,6 +1467,12 @@ local parser_setup = {
    },
    selftest = {
       summary = "build and run tests from selftest.lua",
+   },
+   selftest_status = {
+      summary = "print git status for selftest.lua entries",
+   },
+   selftest_lg = {
+      summary = "call lazygit for dirty selftest.lua entries",
    },
    verbose = {
       summary = "print internal data with urls, paths etc.",
@@ -1686,7 +1697,9 @@ end
 
 function actions.run(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
-   print('actions.run', inspect(_args))
+   if verbose then
+      print('actions.run', inspect(_args))
+   end
    local flags = table.concat(_args.flags, " ")
 
 
@@ -1820,6 +1833,50 @@ local function sub_test(_args, cfg)
    ut.pop_dir()
 end
 
+function actions.selftest_lg(_args)
+
+   local selftest_fname = path_caustic .. "/selftest.lua"
+   local ok, errmsg = pcall(function()
+      local test_dirs = loadfile(selftest_fname)()
+
+      ut.push_current_dir()
+      for _, dir in ipairs(test_dirs) do
+         lfs.chdir(dir)
+         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+         if not ut.git_is_repo_clean(".") then
+            cmd_do("lazygit")
+            cmd_do("git push origin master")
+         end
+      end
+      ut.pop_dir()
+   end)
+   if not ok then
+      print(format("Could not load %s with %s", selftest_fname, errmsg))
+      os.exit(1)
+   end
+end
+
+
+function actions.selftest_status(_args)
+
+   local selftest_fname = path_caustic .. "/selftest.lua"
+   local ok, errmsg = pcall(function()
+      local test_dirs = loadfile(selftest_fname)()
+
+      ut.push_current_dir()
+      for _, dir in ipairs(test_dirs) do
+         lfs.chdir(dir)
+         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+         cmd_do("git status")
+      end
+      ut.pop_dir()
+   end)
+   if not ok then
+      print(format("Could not load %s with %s", selftest_fname, errmsg))
+      os.exit(1)
+   end
+end
+
 function actions.selftest(_args)
 
    local selftest_fname = path_caustic .. "/selftest.lua"
@@ -1830,8 +1887,8 @@ function actions.selftest(_args)
       for _, dir in ipairs(test_dirs) do
          assert(type(dir) == "string")
          lfs.chdir(dir)
-         cmd_do("caustic make")
-         cmd_do("caustic run -c")
+         cmd_do("caustic make -x")
+         cmd_do("caustic run -c -x")
       end
       ut.pop_dir()
    end)
@@ -2826,7 +2883,10 @@ local function cache_remove()
 end
 
 local function koh_link(objfiles_str, _args)
-   cmd_do("rm libcaustic.a")
+   local libname = "libcaustic.a"
+   if lfs.attributes(libname) then
+      cmd_do("rm libcaustic.a")
+   end
    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
 
    cmd_do(cmd)
@@ -3154,7 +3214,6 @@ local function sub_make(_args, cfg, push_num)
       }, " ")
    else
       table.insert(flags, "-O3")
-
       if cfg.release_define then
          print("sub_make: appling release defines")
          for define, value in pairs(cfg.release_define) do
@@ -3376,6 +3435,7 @@ local function main()
    do_parser_setup(parser, parser_setup)
 
    parser:flag("-v --verbose", "use verbose output")
+   parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
 
 
 
@@ -3391,6 +3451,9 @@ local function main()
 
 
    verbose = _args.verbose == true
+   if not _args.no_verbose_path then
+      print("CAUSTIC_PATH", path_caustic)
+   end
 
    for k, v in pairs(_args) do
       local can_call = type(v) == 'boolean' and v == true
