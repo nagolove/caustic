@@ -89,7 +89,13 @@ for (int i = 0; i < 8; i++) {
 metaloader_shutdown(&mt);
 }}} */
 
-MetaLoader *metaloader_new();
+struct MetaLoaderSetup {
+    // Подробный текстовый вывод в консоль в ходе операций. 
+    // Желательно отключать в тестах.
+    bool    verbose;
+};
+
+MetaLoader *metaloader_new(const struct MetaLoaderSetup *setup);
 void metaloader_free(MetaLoader *ml);
 
 bool metaloader_load_f(MetaLoader *ml, const char *fname);
