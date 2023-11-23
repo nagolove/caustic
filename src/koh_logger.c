@@ -35,7 +35,7 @@ static int filters_num = 0, filters_cap = 0;
 static const char *log_fname = "/tmp/causticlog";
 static FILE *log_stream = NULL;
 
-void filter_add(const char *pattern) {
+void trace_filter_add(const char *pattern) {
     if (pattern && strlen(pattern) == 0)
         return;
 
@@ -150,7 +150,7 @@ void trace(const char * format, ...) {
 int l_filter(lua_State *lua) {
     luaL_checktype(lua, 1, LUA_TSTRING);
     const char *pattern = lua_tostring(lua, 1);
-    filter_add(pattern);
+    trace_filter_add(pattern);
     return 0;
 }
 
