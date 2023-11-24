@@ -13,17 +13,41 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define B2VEC2_VECTOR2_IS_THE_SAME()            
+_Static_assert( \
+    sizeof(b2Vec2) == sizeof(Vector2), \
+    "Vector2 and b2Vec has different sizes" \
+);  \
+_Static_assert( \
+    offsetof(b2Vec2, x) == offsetof(Vector2, x),   \
+    "Vector2 and b2Vec2 has different layout"   \
+);  \
+_Static_assert( \
+    offsetof(b2Vec2, y) == offsetof(Vector2, y),   \
+    "Vector2 and b2Vec2 has different layout"   \
+);  \
+
 /// Draw a closed polygon provided in CCW order.
 static void draw_polygon(
     const b2Vec2* vertices, int vertexCount, b2Color color, void* context
 ) {
-    trace("draw_polygon:\n");
-    Vector2 _vertices[vertexCount];
-    for (int i = 0; i < vertexCount; i++) {
-        _vertices[i].x = vertices[i].x;
-        _vertices[i].y = vertices[i].y;
+    B2VEC2_VECTOR2_IS_THE_SAME();
+
+    char *str = b2Vec2_tostr_alloc(vertices, vertexCount);
+    assert(str);
+    trace("draw_polygon: %s\n", str);
+    free(str);
+
+    //Vector2 _vertices[vertexCount];
+    //for (int i = 0; i < vertexCount; i++) {
+        //_vertices[i].x = vertices[i].x;
+        //_vertices[i].y = vertices[i].y;
+    //}
+    Vector2 *verts = (Vector2*)vertices;
+    for (int i = 0; i < vertexCount - 1; i++) {
+        DrawLineV(verts[i], verts[i + 1], b2Color_to_Color(color));
+        //DrawTriangleFan((verts, vertexCount, b2Color_to_Color(color));
     }
-    DrawTriangleFan(_vertices, vertexCount, b2Color_to_Color(color));
 }
 
 /// Draw a solid closed polygon provided in CCW order.
@@ -139,7 +163,7 @@ b2DebugDraw b2_world_dbg_draw_create() {
     };
 }
 
-char *b2Vec2_tostr_alloc(b2Vec2 *verts, int num) {
+char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num) {
     assert(verts);
     assert(num >= 0);
     const int vert_buf_sz = 32;
@@ -155,3 +179,21 @@ char *b2Vec2_tostr_alloc(b2Vec2 *verts, int num) {
     assert(pbuf - buf < sz);
     return buf;
 }
+
+void shapes_store_init(struct ShapesStore *ss) {
+    assert(ss);
+    ss->shapes_on_screen_cap = 1024 * 10;
+    ss->shapes_on_screen_num = 0;
+    ss->shapes_on_screen = calloc(
+        ss->shapes_on_screen_cap, sizeof(ss->shapes_on_screen[0])
+    );
+}
+
+void shapes_store_shutdown(struct ShapesStore *ss) {
+    assert(ss);
+    if (ss->shapes_on_screen) {
+        free(ss->shapes_on_screen);
+        memset(ss, 0, sizeof(*ss));
+    }
+}
+
