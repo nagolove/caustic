@@ -2,6 +2,7 @@
 // vim: fdm=marker
 #pragma once
 
+#include "body.h"
 #include "box2d/box2d.h"
 #include "box2d/color.h"
 #include "box2d/debug_draw.h"
@@ -19,6 +20,8 @@ inline static Color b2Color_to_Color(b2Color c) {
     };
     // }}}
 }
+
+const char *b2BodyType_to_str(b2BodyType bt);
 
 b2DebugDraw b2_world_dbg_draw_create();
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
@@ -63,3 +66,6 @@ inline static void shapes_store_clear(struct ShapesStore *ss) {
     ss->shapes_on_screen_num = 0;
 }
 
+// Возвращает буфер в статической памяти.
+// Последний элемент массива - NULL
+char **b2WorldDef_to_str(b2WorldDef wdef);
