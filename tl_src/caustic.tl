@@ -345,6 +345,11 @@ local function get_deps_name_map(deps: {Dependency}): {string: Dependency}
     return map
 end
 
+local function build_with_cmake(_: Dependency)
+    cmd_do("cmake .")
+    cmd_do("make -j")
+end
+
 local function build_with_make(_: Dependency)
     cmd_do("make -j")
 end
@@ -617,6 +622,19 @@ local function utf8proc_after_build(_: Dependency)
 end
 
 dependencies = {
+    {
+        disabled = false,
+        build = build_with_cmake,
+        description = "task sheduler",
+        dir = "enkits",
+        includes = { "enkits/src" },
+        libdirs = { "enkits" },
+        links = { "enkiTS" },
+        links_internal = { "libenkiTS.a" },
+        name = "enkits",
+        url_action = "git",
+        url = "https://github.com/dougbinks/enkiTS.git",
+    },
 
     {
         disabled = false,
