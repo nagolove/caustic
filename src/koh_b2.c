@@ -379,14 +379,18 @@ char **b2ShapeDef_to_str(b2ShapeDef sd) {
         lines[i] = buf[i];
     }
     int i = 0;
-    //int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+    int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
 
-//userData
-//friction
-//restitution
-//density
-////b2Filter filter;
-//isSensor
+    p(lines[i++], "userData %p", sd.userData);
+    p(lines[i++], "friction %f", sd.friction);
+    p(lines[i++], "restitution %f", sd.restitution);
+    p(lines[i++], "density %f", sd.density);
+    char **filter = b2Filter_to_str(sd.filter, false);
+    while (*filter) {
+        p(lines[i++], "filter %s", *filter);
+        filter++;
+    }
+    p(lines[i++], "isSensor %s", sd.isSensor ? "true" : "false");
 
     lines[i] = NULL;
     return (char**)lines;
