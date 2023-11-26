@@ -1,18 +1,26 @@
 #include "koh_b2.h"
 
+#include "body.h"
+#include "box2d/box2d.h"
 #include "box2d/dynamic_tree.h"
 #include "box2d/geometry.h"
 #include "box2d/id.h"
 #include "box2d/math.h"
+#include "box2d/timer.h"
 #include "box2d/types.h"
 #include "box2d/debug_draw.h"
 
+#include "koh_common.h"
 #include "koh_logger.h"
 #include "raylib.h"
 #include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#define STR_LEN 64
+#define STR_NUM 64
 
 _Static_assert( 
     sizeof(b2Vec2) == sizeof(Vector2), 
@@ -275,29 +283,154 @@ const char *b2BodyType_to_str(b2BodyType bt) {
     return bodytype2str[bt];
 }
 
+static void _b2WorldDef_to_str_lua(char *buf[], int *i, b2WorldDef *def) {
+    assert(buf);
+    assert(i);
+    assert(def);
+    int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+    const char *grav = Vector2_tostr(b2Vec2_to_Vector2(def->gravity));
+    p(buf[(*i)++], "{ ");
+    p(buf[(*i)++], "gravity = %s", grav);
+    p(buf[(*i)++], "restitutionThreshold = %f,", def->restitutionThreshold);
+    p(buf[(*i)++], "contactPushoutVelocity = %f,", def->contactPushoutVelocity);
+    p(buf[(*i)++], "contactHertz = %f,", def->contactHertz);
+    p(buf[(*i)++], "contactDampingRatio = %f,", def->contactDampingRatio);
+    p(buf[(*i)++], "enableSleep = %s,", def->enableSleep ? "true" : "false");
+    p(buf[(*i)++], "bodyCapacity = %d,", def->bodyCapacity);
+    p(buf[(*i)++], "shapeCapacity = %d,", def->shapeCapacity);
+    p(buf[(*i)++], "contactCapacity = %d,", def->contactCapacity);
+    p(buf[(*i)++], "jointCapacity = %d,", def->jointCapacity);
+    p(buf[(*i)++], "stackAllocatorCapacity = %d,", def->stackAllocatorCapacity);
+    p(buf[(*i)++], "workerCount = %d,", def->workerCount);
+    p(buf[(*i)++], " }");
+}
 
-char **b2WorldDef_to_str(b2WorldDef wdef) {
-    static char buf[64][64] = {};
-    static char *lines[20];
-    int i = 0;
-    sprintf(
-        buf[i++], "gravity %s", Vector2_tostr(b2Vec2_to_Vector2(wdef.gravity))
-    );
-    sprintf(buf[i++], "restitutionThreshold %f", wdef.restitutionThreshold);
-    sprintf(buf[i++], "contactPushoutVelocity %f", wdef.contactPushoutVelocity);
-    sprintf(buf[i++], "contactHertz %f", wdef.contactHertz);
-    sprintf(buf[i++], "contactDampingRatio %f", wdef.contactDampingRatio);
-    sprintf(buf[i++], "enableSleep %s", wdef.enableSleep ? "true" : "false");
-    sprintf(buf[i++], "bodyCapacity %d", wdef.bodyCapacity);
-    sprintf(buf[i++], "shapeCapacity %d", wdef.shapeCapacity);
-    sprintf(buf[i++], "contactCapacity %d", wdef.contactCapacity);
-    sprintf(buf[i++], "jointCapacity %d", wdef.jointCapacity);
-    sprintf(buf[i++], "stackAllocatorCapacity %d", wdef.stackAllocatorCapacity);
-    sprintf(buf[i++], "workerCount %d", wdef.workerCount);
-    int j;
-    for (j = 0; j < i; j++) {
-        lines[j] = buf[j];
+static void _b2WorldDef_to_str_pure(char *buf[], int *i, b2WorldDef *def) {
+    assert(buf);
+    assert(i);
+    assert(def);
+    int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+    const char *grav = Vector2_tostr(b2Vec2_to_Vector2(def->gravity));
+    p(buf[(*i)++], "gravity %s", grav);
+    p(buf[(*i)++], "restitutionThreshold %f", def->restitutionThreshold);
+    p(buf[(*i)++], "contactPushoutVelocity %f", def->contactPushoutVelocity);
+    p(buf[(*i)++], "contactHertz %f", def->contactHertz);
+    p(buf[(*i)++], "contactDampingRatio %f", def->contactDampingRatio);
+    p(buf[(*i)++], "enableSleep %s", def->enableSleep ? "true" : "false");
+    p(buf[(*i)++], "bodyCapacity %d", def->bodyCapacity);
+    p(buf[(*i)++], "shapeCapacity %d", def->shapeCapacity);
+    p(buf[(*i)++], "contactCapacity %d", def->contactCapacity);
+    p(buf[(*i)++], "jointCapacity %d", def->jointCapacity);
+    p(buf[(*i)++], "stackAllocatorCapacity %d", def->stackAllocatorCapacity);
+    p(buf[(*i)++], "workerCount %d", def->workerCount);
+}
+
+char **b2WorldDef_to_str(b2WorldDef wdef, bool lua) {
+    static char (buf[STR_LEN])[STR_NUM];
+    static char *lines[STR_NUM];
+    for (int i = 0; i < STR_NUM; i++) {
+        lines[i] = buf[i];
     }
-    lines[j++] = NULL;
+    int i = 0;
+
+    if (lua) {
+        _b2WorldDef_to_str_lua(lines, &i, &wdef);
+    } else {
+        _b2WorldDef_to_str_pure(lines, &i, &wdef);
+    }
+
+    lines[i] = NULL;
+    lines[i++] = NULL;
     return (char**)lines;
 }
+
+char **b2Filter_to_str(b2Filter f, bool lua) {
+    static char (buf[STR_LEN])[STR_NUM];
+    static char *lines[STR_NUM];
+    for (int i = 0; i < STR_NUM; i++) {
+        lines[i] = buf[i];
+    }
+
+    int i = 0;
+    int (*p)(char *s, const char *format, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+    uint32_t group_index = *(uint32_t*)&f.groupIndex;
+    const char *(*bitstr)(uint32_t value) = to_bitstr_uint32_t;
+
+    if (lua) {
+        p(lines[i++], "categoryBits = '%s'", bitstr(f.categoryBits));
+        p(lines[i++], "maskBits = '%s'", bitstr(f.maskBits));
+        p(lines[i++], "groupIndex = '%s'", bitstr(group_index));
+    } else {
+        p(lines[i++], "{ ");
+        p(lines[i++], "categoryBits = '%s',", bitstr(f.categoryBits));
+        p(lines[i++], "maskBits = '%s',", bitstr(f.maskBits));
+        p(lines[i++], "groupIndex = '%s',", bitstr(group_index));
+        p(lines[i++], "} ");
+    }
+
+    lines[i] = NULL;
+    return (char**)lines;
+}
+
+char **b2ShapeDef_to_str(b2ShapeDef sd) {
+    static char (buf[STR_LEN])[STR_NUM];
+    static char *lines[STR_NUM];
+    for (int i = 0; i < STR_NUM; i++) {
+        lines[i] = buf[i];
+    }
+    int i = 0;
+    //int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+
+//userData
+//friction
+//restitution
+//density
+////b2Filter filter;
+//isSensor
+
+    lines[i] = NULL;
+    return (char**)lines;
+}
+
+char ** b2Statistics_to_str(b2WorldId world, bool lua) {
+    static char (buf[STR_LEN])[STR_NUM];
+    static char *lines[STR_NUM];
+    for (int i = 0; i < STR_NUM; i++) {
+        lines[i] = buf[i];
+    }
+
+    int i = 0;
+    int (*p)(char *s, const char *format, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+    b2Statistics stat = b2World_GetStatistics(world);
+
+    if (lua) {
+        p(lines[i++], "{ ");
+        p(lines[i++], "islandCount = %d,", stat.islandCount);
+        p(lines[i++], "bodyCount = %d,", stat.bodyCount);
+        p(lines[i++], "contactCount = %d,", stat.contactCount);
+        p(lines[i++], "jointCount = %d,", stat.jointCount);
+        p(lines[i++], "proxyCount = %d,", stat.proxyCount);
+        p(lines[i++], "treeHeight = %d,", stat.treeHeight);
+        p(lines[i++], "stackCapacity = %d,", stat.stackCapacity);
+        p(lines[i++], "stackUsed = %d,", stat.stackUsed);
+        p(lines[i++], "byteCount = %d,", stat.byteCount);
+        p(lines[i++], " }");
+    } else {
+        p(lines[i++], "islandCount %d", stat.islandCount);
+        p(lines[i++], "bodyCount %d", stat.bodyCount);
+        p(lines[i++], "contactCount %d", stat.contactCount);
+        p(lines[i++], "jointCount %d", stat.jointCount);
+        p(lines[i++], "proxyCount %d", stat.proxyCount);
+        p(lines[i++], "treeHeight %d", stat.treeHeight);
+        p(lines[i++], "stackCapacity %d", stat.stackCapacity);
+        p(lines[i++], "stackUsed %d", stat.stackUsed);
+        p(lines[i++], "byteCount %d", stat.byteCount);
+    }
+
+    lines[i] = NULL;
+    return (char**)lines;
+}
+
+#undef STR_LEN
+#undef STR_NUM
+

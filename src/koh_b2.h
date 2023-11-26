@@ -6,6 +6,7 @@
 #include "box2d/box2d.h"
 #include "box2d/color.h"
 #include "box2d/debug_draw.h"
+#include "TaskScheduler_c.h"
 #include "box2d/types.h"
 #include "raylib.h"
 #include "koh.h"
@@ -20,8 +21,6 @@ inline static Color b2Color_to_Color(b2Color c) {
     };
     // }}}
 }
-
-const char *b2BodyType_to_str(b2BodyType bt);
 
 b2DebugDraw b2_world_dbg_draw_create();
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
@@ -43,6 +42,8 @@ inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id);
 inline static void shapes_store_clear(struct ShapesStore *ss);
 
 struct WorldCtx {
+    enkiTaskSet         *task_set;
+    enkiTaskScheduler   *task_shed;
     b2WorldId           world;
     xorshift32_state    *xrng;
     uint32_t            world_width, world_height;
@@ -68,4 +69,7 @@ inline static void shapes_store_clear(struct ShapesStore *ss) {
 
 // Возвращает буфер в статической памяти.
 // Последний элемент массива - NULL
-char **b2WorldDef_to_str(b2WorldDef wdef);
+char **b2WorldDef_to_str(b2WorldDef wdef, bool lua);
+char ** b2Statistics_to_str(b2WorldId world, bool lua);
+const char *b2BodyType_to_str(b2BodyType bt);
+
