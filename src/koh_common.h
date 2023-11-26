@@ -27,6 +27,7 @@
 #include "raymath.h"
 
 #define KOH_FORCE_INLINE inline __attribute__((always_inline))
+#define KOH_ATTR_FORMAT(f, s) __attribute__((__format__(__printf__, f, s))) 
 
 struct Common {
     bool quit;
