@@ -345,7 +345,9 @@ local function get_deps_name_map(deps)
    return map
 end
 
-local function build_with_cmake(_)
+local function build_with_cmake(dep)
+   print('build_with_cmake: current dir', lfs.currentdir())
+   print('build_with_cmake: dep', inspect(dep))
    cmd_do("cmake .")
    cmd_do("make -j")
 end
@@ -622,6 +624,7 @@ local function utf8proc_after_build(_)
 end
 
 dependencies = {
+
    {
       disabled = false,
       build = build_with_cmake,
@@ -1112,6 +1115,7 @@ local function get_dirs(deps)
 end
 
 local function get_deps_map(deps)
+   assert(deps)
    local res = {}
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
@@ -2777,16 +2781,34 @@ end
 function actions.build(_args)
    ut.push_current_dir()
 
+
+   lfs.chdir(path_caustic)
+
    lfs.chdir(path_rel_third_party)
 
    print("actions.build: current directory", lfs.currentdir())
 
    if _args.name then
+      print(format("build '%s'", _args.name))
       local dependencies_name_map = get_deps_name_map(dependencies)
       if dependencies_name_map[_args.name] then
          local dir = get_dir(dependencies_name_map[_args.name])
-         local dep = get_deps_map()[dir]
-         _build(dep)
+
+         local deps_map = get_deps_map(dependencies)
+
+         local dep
+         local ok, errmsg = pcall(function()
+            dep = deps_map[dir]
+         end)
+         if ok then
+            _build(dep)
+         else
+            local msg = format(
+            "could not get '%s' dependency with %s",
+            _args.name, errmsg)
+
+            print(ansicolors("%{red}" .. msg .. "%{reset}"))
+         end
       else
          print("bad dependency name", _args.name)
          ut.pop_dir()
