@@ -290,7 +290,7 @@ static void _b2WorldDef_to_str_lua(char *buf[], int *i, b2WorldDef *def) {
     int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
     const char *grav = Vector2_tostr(b2Vec2_to_Vector2(def->gravity));
     p(buf[(*i)++], "{ ");
-    p(buf[(*i)++], "gravity = %s", grav);
+    p(buf[(*i)++], "gravity = %s,", grav);
     p(buf[(*i)++], "restitutionThreshold = %f,", def->restitutionThreshold);
     p(buf[(*i)++], "contactPushoutVelocity = %f,", def->contactPushoutVelocity);
     p(buf[(*i)++], "contactHertz = %f,", def->contactHertz);
