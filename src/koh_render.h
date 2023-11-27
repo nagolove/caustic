@@ -21,3 +21,8 @@ void render_texture_t(
 void koh_render_shutdown();
 void koh_render_init();
 void render_circle(Vector2 center, float radius, Color color);
+
+void render_texture_verts(
+    Texture2D texture, Rectangle source, Vector2 verts[4],
+    Vector2 origin, Color tint
+);
