@@ -1554,3 +1554,20 @@ void koh_backtrace_print() {
     int size = backtrace(trace, num);
     backtrace_symbols_fd(trace, size, STDOUT_FILENO);
 }
+
+char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
+    assert(verts);
+    assert(num >= 0);
+    const int vert_buf_sz = 32;
+    size_t sz = vert_buf_sz * sizeof(char) * num;
+    char *buf = malloc(sz);
+    assert(buf);
+    char *pbuf = buf;
+    pbuf += sprintf(pbuf, "{ ");
+    for (int i = 0; i < num; i++) {
+        pbuf += sprintf(pbuf, "{ %f, %f },", verts[i].x, verts[i].y);
+    }
+    sprintf(pbuf, " }");
+    assert(pbuf - buf < sz);
+    return buf;
+}

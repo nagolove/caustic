@@ -232,3 +232,5 @@ void koh_window_state_print();
 bool koh_window_is_point_in(Vector2 point, Camera2D *cam);
 
 void koh_backtrace_print();
+
+char *Vector2_tostr_alloc(const Vector2 *verts, int num);
