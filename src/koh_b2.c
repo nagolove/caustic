@@ -39,10 +39,6 @@ _Static_assert(
 static const float line_thick = 3.;
 static bool verbose = false;
 
-static inline Vector2 b2Vec2_to_Vector2(b2Vec2 v) {
-    return (Vector2) { v.x, v.y };
-}
-
 /// Draw a closed polygon provided in CCW order.
 static void draw_polygon(
     const b2Vec2* vertices, int vertexCount, b2Color color, void* context
@@ -273,7 +269,7 @@ void shapes_store_shutdown(struct ShapesStore *ss) {
     }
 }
 
-const char *bodytype2str[] = {
+static const char *bodytype2str[] = {
     [b2_staticBody] = "b2_staticBody",
     [b2_kinematicBody] = "b2_kinematicBody",
     [b2_dynamicBody] = "b2_dynamicBody",
@@ -438,4 +434,15 @@ char ** b2Statistics_to_str(b2WorldId world, bool lua) {
 
 #undef STR_LEN
 #undef STR_NUM
+
+static const char *shapetype2str[] = {
+    [b2_capsuleShape] = "b2_capsuleShape",
+    [b2_circleShape] = "b2_circleShape",
+    [b2_polygonShape] = "b2_polygonShape",
+    [b2_segmentShape] = "b2_segmentShape",
+};
+
+const char *b2ShapeType_to_str(b2ShapeType st) {
+    return shapetype2str[st];
+}
 

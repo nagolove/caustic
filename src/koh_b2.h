@@ -87,16 +87,32 @@ inline static void shapes_store_clear(struct ShapesStore *ss) {
 // Последний элемент массива - NULL
 char **b2WorldDef_to_str(b2WorldDef wdef, bool lua);
 char ** b2Statistics_to_str(b2WorldId world, bool lua);
-const char *b2BodyType_to_str(b2BodyType bt);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
+
+const char *b2BodyType_to_str(b2BodyType bt);
+const char *b2ShapeType_to_str(b2ShapeType st);
 
 // XXX: Рабочая ли функция? Как сделать тоже самое стандартным API box2d?
 KOH_FORCE_INLINE b2Shape *b2Shape_get(b2WorldId world_id, b2ShapeId id) {
     // {{{
     const b2World* world = b2GetWorldFromId(world_id);
-    b2BodyId body_id = b2Shape_GetBody(id);
-    const b2Body *body = world->bodies + body_id.index;
-    int32_t shape_index = body->shapeList + id.index;
-    return world->shapes + shape_index;
+    //b2BodyId body_id = b2Shape_GetBody(id);
+    //const b2Body *body = world->bodies + body_id.index;
+    //int32_t shape_index = body->shapeList + id.index;
+    ////return world->shapes + shape_index;
+    //trace("b2Shape_get: body->shapeList %d\n", body->shapeList);
+    ////return world->shapes + body->shapeList + id.index;
+    return world->shapes + id.index;
     // }}}
 }
+
+static inline const char *b2Vec2_to_str(b2Vec2 v) {
+    static char buf[64] = {0};
+    snprintf(buf, sizeof(buf), "{%6.5f, %6.5f}", v.x, v.y);
+    return buf;
+}
+
+static inline Vector2 b2Vec2_to_Vector2(b2Vec2 v) {
+    return (Vector2) { v.x, v.y };
+}
+
