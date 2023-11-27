@@ -627,6 +627,20 @@ dependencies = {
 
     {
         disabled = false,
+        build = nil,
+        description = "mum hash functions",
+        dir = "mum-hash",
+        includes = { "mum-hash" },
+        libdirs = { "mum-hash" },
+        links = {},
+        links_internal = {},
+        name = "mum-hash",
+        url_action = "git",
+        url = "https://github.com/vnmakarov/mum-hash",
+    },
+
+    {
+        disabled = false,
         build = build_with_cmake,
         description = "task sheduler",
         dir = "enkits",
