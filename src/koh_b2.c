@@ -9,7 +9,8 @@
 #include "box2d/timer.h"
 #include "box2d/types.h"
 #include "box2d/debug_draw.h"
-
+#include "world.h"
+#include "shape.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "raylib.h"

@@ -7,7 +7,12 @@
 #include "box2d/color.h"
 #include "box2d/debug_draw.h"
 #include "TaskScheduler_c.h"
+#include "box2d/id.h"
 #include "box2d/types.h"
+#include "contact.h"
+#include "world.h"
+#include "shape.h"
+#include "koh_common.h"
 #include "raylib.h"
 #include "koh.h"
 
@@ -25,10 +30,12 @@ inline static Color b2Color_to_Color(b2Color c) {
 b2DebugDraw b2_world_dbg_draw_create();
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
 
+/*
 // Настройка шага симуляции
 struct Box2DStep {
-    int32_t velocity_iteratioins, relax_iterations;
+    int32_t             velocity_iteratioins, relax_iterations;
 };
+*/
 
 // Хранение информации из AABB запроса
 struct ShapesStore {
@@ -42,11 +49,20 @@ inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id);
 inline static void shapes_store_clear(struct ShapesStore *ss);
 
 struct WorldCtx {
+    // Настройка шага симуляции
+    int32_t             velocity_iteratioins, relax_iterations;
+
+    // Пулы задач и распределитель времени
     enkiTaskSet         *task_set;
     enkiTaskScheduler   *task_shed;
+
+    b2WorldDef          world_def;
+    b2DebugDraw         world_dbg_draw;
+    bool                is_dbg_draw;
     b2WorldId           world;
+    int                 tasks_count;
+    uint32_t            width, height;
     xorshift32_state    *xrng;
-    uint32_t            world_width, world_height;
 };
 
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id) {
@@ -74,3 +90,13 @@ char ** b2Statistics_to_str(b2WorldId world, bool lua);
 const char *b2BodyType_to_str(b2BodyType bt);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
 
+// XXX: Рабочая ли функция? Как сделать тоже самое стандартным API box2d?
+KOH_FORCE_INLINE b2Shape *b2Shape_get(b2WorldId world_id, b2ShapeId id) {
+    // {{{
+    const b2World* world = b2GetWorldFromId(world_id);
+    b2BodyId body_id = b2Shape_GetBody(id);
+    const b2Body *body = world->bodies + body_id.index;
+    int32_t shape_index = body->shapeList + id.index;
+    return world->shapes + shape_index;
+    // }}}
+}
