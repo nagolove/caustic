@@ -9,12 +9,12 @@
 #include "koh_common.h"
 
 void render_texture(
-        Texture2D texture,
-        Rectangle source,
-        Rectangle dest,
-        Vector2 origin,
-        float rotation,
-        Color tint
+    Texture2D texture,
+    Rectangle source,
+    Rectangle dest,
+    Vector2 origin,
+    float rotation,
+    Color tint
  ) {
     // Check if texture is valid
     if (texture.id > 0)
@@ -162,6 +162,7 @@ void render_texture_t(
     }
 }
 
+// Рисует круг
 static const char *shdr_src = 
 "#version 100\n"
 "precision mediump float;\n"
@@ -220,5 +221,71 @@ void koh_render_init() {
 
 void koh_render_shutdown() {
     UnloadShader(shdr_circle);
+}
+
+void render_texture_verts(
+    Texture2D texture, Rectangle source, Vector2 verts[4],
+    Vector2 origin,
+    Color tint
+) {
+    // Check if texture is valid
+    if (texture.id > 0)
+    {
+        float width = (float)texture.width;
+        float height = (float)texture.height;
+
+        bool flipX = false;
+
+        if (source.width < 0) { flipX = true; source.width *= -1; }
+        if (source.height < 0) source.y -= source.height;
+
+        //Vector2 topLeft = { 0 };
+        //Vector2 topRight = { 0 };
+        //Vector2 bottomLeft = { 0 };
+        //Vector2 bottomRight = { 0 };
+
+        //topLeft = from_Vect(cpTransformPoint(mat, from_Vector2(topLeft)));
+        //topRight = from_Vect(cpTransformPoint(mat, from_Vector2(topRight)));
+        //bottomLeft = from_Vect(cpTransformPoint(mat, from_Vector2(bottomLeft)));
+        //bottomRight = from_Vect(cpTransformPoint(mat, from_Vector2(bottomRight)));
+
+        rlSetTexture(texture.id);
+        rlBegin(RL_QUADS);
+
+            rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+            rlNormal3f(0.0f, 0.0f, 1.0f);                          // Normal vector pointing towards viewer
+
+            // Top-left corner for texture and quad
+            if (flipX) 
+                rlTexCoord2f((source.x + source.width)/width, source.y/height);
+            else
+                rlTexCoord2f(source.x/width, source.y/height);
+            rlVertex2f(verts[0].x, verts[0].y);
+
+            // Bottom-left corner for texture and quad
+            if (flipX) 
+                rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+            else 
+                rlTexCoord2f(source.x/width, (source.y + source.height)/height);
+            rlVertex2f(verts[3].x, verts[3].y);
+
+            // Bottom-right corner for texture and quad
+            if (flipX) 
+                rlTexCoord2f(source.x/width, (source.y + source.height)/height);
+            else 
+                rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+            rlVertex2f(verts[2].x, verts[2].y);
+
+            // Top-right corner for texture and quad
+            if (flipX) 
+                rlTexCoord2f(source.x/width, source.y/height);
+            else 
+                rlTexCoord2f((source.x + source.width)/width, source.y/height);
+            rlVertex2f(verts[1].x, verts[1].y);
+
+        rlEnd();
+        rlSetTexture(0);
+
+    }
 }
 
