@@ -116,3 +116,11 @@ static inline Vector2 b2Vec2_to_Vector2(b2Vec2 v) {
     return (Vector2) { v.x, v.y };
 }
 
+static inline b2AABB rect2aabb(Rectangle r) {
+    return (b2AABB) {
+        .lowerBound.x = r.x + r.width,
+        .lowerBound.y = r.y + r.height,
+        .upperBound.x = r.x,
+        .upperBound.y = r.y
+    };
+}
