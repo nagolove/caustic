@@ -288,7 +288,7 @@ local record Dependency
 
     -- Имена и зависимости(поля name и depends) обрабатываются в команде init
     name: string        -- имя зависимости
-    depends: {string}   -- список имен зависомостей от которых зависит данная
+    --depends: {string}   -- список имен зависомостей от которых зависит данная
 
 	url_action: UrlAction
     -- Если указано, то копировать определенную ветку
@@ -731,7 +731,7 @@ dependencies = {
         after_build = cimgui_after_build,
         -- нужно компилировать
         build = build_cimgui,
-        depends = {'freetype', 'rlimgui'},
+        --depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
         includes = { "cimgui", "cimgui/generator/output", },
@@ -1631,9 +1631,9 @@ local function _init(path: string, deps: {Dependency})
     local func = lanes.gen("*", opt_tbl, dependency_init)
 	--local func = lanes.gen("package base", opt_tbl, dependency_init)
 
-    local sorter = Toposorter.new()
+    --local sorter = Toposorter.new()
 	local single_thread = true
-    local use_toposort = false
+    --local use_toposort = false
 
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
@@ -1641,12 +1641,15 @@ local function _init(path: string, deps: {Dependency})
 
 		print('processing', dep.name)
 
+        --[[
         if use_toposort and dep.depends then
             for _, dep_name in ipairs(dep.depends) do
 				print('sorter:addd', dep.name, dep_name)
                 sorter:add(dep.name, dep_name)
             end
         else
+        --]]
+        do
 			print('without dependency', dep.name)
             --sorter:add(dep.name, "null")
 			if single_thread then
@@ -1660,7 +1663,8 @@ local function _init(path: string, deps: {Dependency})
         end
     end
 
-    local sorted: {Node}
+    --local sorted: {Node}
+    --[[
     if use_toposort then
         sorted = sorter:sort()
         print('sorted')
@@ -1672,6 +1676,7 @@ local function _init(path: string, deps: {Dependency})
         end)
         print('sorted', inspect(sorted))
     end
+    --]]
 
 	if #threads ~= 0 then
 		print(tabular(threads))
@@ -1691,6 +1696,7 @@ local function _init(path: string, deps: {Dependency})
     print('----------------------------')
     --]]
 
+    --[[
     if use_toposort then
         for _, node in ut.ripairs(sorted) do
             local name_map = get_deps_name_map(dependencies)
@@ -1699,6 +1705,7 @@ local function _init(path: string, deps: {Dependency})
             dependency_init(dep, path)
         end
     end
+    --]]
 
     ut.pop_dir()
 end
