@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <stdlib.h>
-//#include "mum.h"
+#include "mum.h"
 
 //typedef uint32_t Hash_t;
 typedef uint64_t Hash_t;
@@ -15,8 +15,7 @@ extern Hash_t koh_seed;
 void koh_hashers_init();
 
 static inline Hash_t koh_hasher_mum(const void *data, size_t len) {
-    //return mum_hash(data, len, koh_seed);
-    return 0;
+    return mum_hash(data, len, koh_seed);
 }
 
 static inline Hash_t koh_hasher_fnv64(const void *data, size_t len) {
@@ -56,4 +55,17 @@ static inline Hash_t koh_hasher_fnv32(const void *data, int len) {
     assert(h != 0);
     return h;
 }
+*/
+
+/*
+static Hash_t hasher_djb2(const char *data, int key_len) {
+    unsigned long hash = 5381;
+
+    for (int i = 0; i < key_len; ++i) {
+        hash = ((hash << 5) + hash) + data[i]; // hash * 33 + c 
+    }
+
+    return hash;
+}
+
 */

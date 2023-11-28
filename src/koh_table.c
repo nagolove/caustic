@@ -211,8 +211,7 @@ int _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
 
     int index = ht->hash_func(key, key_len) % ht->cap;
     for (int i = 0; i < ht->cap; i++) {
-        if (!ht->arr[index])
-            break;
+        if (!ht->arr[index]) break;
         if (memcmp(get_key(ht->arr[index]), key, key_len) == 0)
             break;
         index = (index + 1) % ht->cap;
@@ -245,15 +244,17 @@ HTable *htable_new(struct HTableSetup *setup) {
         ht->cap = setup->cap;
     } else
         ht->cap = 17;
+
     if (setup) {
         ht->on_remove = setup->on_remove;
+        assert(setup->hash_func);
         ht->hash_func = setup->hash_func;
     } else {
         _Static_assert(
             sizeof(Hash_t) == sizeof(uint64_t),
             "Please use 64 bit Hash_t value"
         );
-        ht->hash_func = koh_hasher_fnv64;
+        ht->hash_func = koh_hasher_mum;
     }
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
     ht->taken = 0;

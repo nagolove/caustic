@@ -1,6 +1,7 @@
 // vim: fdm=marker
 #include "koh_inotifier.h"
 #include "koh_console.h"
+#include "koh_hashers.h"
 #include "koh_script.h"
 
 #if defined(PLATFORM_WEB)
@@ -151,7 +152,8 @@ void inotifier_init() {
     }
 
     tbl = htable_new(&(struct HTableSetup) {
-        .cap = MAX_WATCHED_FILES
+        .cap       = MAX_WATCHED_FILES,
+        .hash_func = koh_hasher_mum,
     });
 
     fd = inotify_init1(IN_NONBLOCK);

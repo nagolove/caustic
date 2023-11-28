@@ -22,36 +22,33 @@ typedef struct koh_Set {
     // Что тогда делать с удалением и добавлением ключей, как распределять
     // память?
 
-    struct Bucket *arr;
-    int cap, taken;
+    HashFunction    hash_func;
+    struct Bucket   *arr;
+    size_t          cap, taken;
 } koh_Set;
 
-static uint32_t hasher_djb2(const char *data, int key_len) {
-    unsigned long hash = 5381;
-
-    for (int i = 0; i < key_len; ++i) {
-        hash = ((hash << 5) + hash) + data[i]; /* hash * 33 + c */
-    }
-
-    return hash;
-}
-
-koh_Set *set_new() {
+koh_Set *set_new(struct koh_SetSetup *setup) {
     koh_Set *set = calloc(1, sizeof(koh_Set));
     assert(set);
     set->cap = 11;
     set->arr = calloc(set->cap, sizeof(set->arr[0]));
+    if (setup) {
+        assert(setup->hash_func);
+        set->hash_func = setup->hash_func;
+    } else
+        set->hash_func = koh_hasher_mum;
     assert(set->arr);
     return set;
 }
 
+// XXX: Сочетание int, size_t и устремленности на 64 архитектуру.
 static int _set_get(koh_Set *set, const char *key, int key_len) {
     assert(set);
 
     if (!key || !key_len)
         return -1;
 
-    int index = hasher_djb2(key, key_len) % set->cap;
+    size_t index = set->hash_func(key, key_len) % set->cap;
     for (int i = 0; i < set->cap; i++) {
         if (!set->arr[index].taken)
             break;
@@ -103,8 +100,8 @@ koh_SetResult set_add(koh_Set *set, const void *key, int key_len) {
 
     assert(set->taken < set->cap);
 
-    Hash_t hash = hasher_djb2(key, key_len); 
-    int index = hash % set->cap;
+    Hash_t hash = set->hash_func(key, key_len); 
+    size_t index = hash % set->cap;
 
     while (set->arr[index].taken)
         index = (index + 1) % set->cap;
@@ -269,7 +266,7 @@ bool koh_set_view_verbose = false;
 struct koh_SetView set_each_begin(koh_Set *set) {
     assert(set);
     if (koh_set_view_verbose)
-        printf("set_each_begin: cap %d\n", set->cap);
+        printf("set_each_begin: cap %zu\n", set->cap);
     struct koh_SetView view = {
         .set = set,
         .i = -1,

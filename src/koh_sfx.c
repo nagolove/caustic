@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "koh_hashers.h"
 #include "lua.h"
 #include "raylib.h"
 
@@ -51,6 +52,7 @@ int l_sound_play(lua_State *lua) {
 void sfx_init() {
     trace("sfx_init:\n");
     sounds_tbl = htable_new(&(struct HTableSetup) {
+        .hash_func = koh_hasher_mum,
         .cap = 64,
     });
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "koh_hashers.h"
 #include <stdbool.h>
 
 /*
@@ -27,7 +28,11 @@ typedef enum koh_SetResult {
     koh_SR_added   = 1,
 } koh_SetResult;
 
-koh_Set *set_new();
+struct koh_SetSetup {
+    HashFunction hash_func;
+};
+
+koh_Set *set_new(struct koh_SetSetup *setup);
 bool set_exist(koh_Set *set, const void *key, int key_len);
 koh_SetResult set_add(koh_Set *set, const void *key, int key_len);
 void set_clear(koh_Set *set);

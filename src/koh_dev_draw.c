@@ -4,6 +4,7 @@
 #include "chipmunk/chipmunk_types.h"
 #include "chipmunk/cpVect.h"
 #include "koh_common.h"
+#include "koh_hashers.h"
 #include "koh_logger.h"
 #include "koh_routine.h"
 #include "koh_script.h"
@@ -191,6 +192,7 @@ void register_funcs() {
 static void traces_init() {
     traces = htable_new(&(struct HTableSetup) {
         .cap = 256,
+        .hash_func = koh_hasher_mum,
     });
 }
 
