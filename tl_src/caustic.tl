@@ -1406,6 +1406,7 @@ local record Actions
     run: function(Args)
     test: function(Args)
     verbose: function(Args)
+    dependencies: function(Args)
     wbuild: function(Args)
     build_smart: function(Args)
     updates: function(Args)
@@ -1432,6 +1433,7 @@ local enum ActionsEnum
     "updates"
     "verbose"
     "wbuild"
+    "dependencies"
 end
 
 local record ParserSetup
@@ -1443,6 +1445,9 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+    dependencies = {
+        summary = "print dependendies table",
+    },
     build = {
         summary = "build dependendies for native platform",
         options = { "-n --name" },
@@ -2293,6 +2298,12 @@ local function get_ready_includes(cfg: Cfg): {string}
     end
 
     return _includedirs 
+end
+
+function actions.dependencies(_: Args)
+    for _, dep in ipairs(dependencies) do
+        print(tabular(dep));
+    end
 end
 
 function actions.verbose(_: Args)
