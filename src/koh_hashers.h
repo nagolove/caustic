@@ -1,11 +1,37 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
+#include <stdlib.h>
+//#include "mum.h"
 
-typedef uint32_t Hash_t;
-typedef Hash_t (*HashFunction)(const void *key, int key_len);
+//typedef uint32_t Hash_t;
+typedef uint64_t Hash_t;
+typedef Hash_t (*HashFunction)(const void *data, size_t data_len);
 
+extern Hash_t koh_seed;
+
+void koh_hashers_init();
+
+static inline Hash_t koh_hasher_mum(const void *data, size_t len) {
+    //return mum_hash(data, len, koh_seed);
+    return 0;
+}
+
+static inline Hash_t koh_hasher_fnv64(const void *data, size_t len) {
+	size_t i;
+	uint64_t h = 0xcbf29ce484222325ull;
+	const char *c = (char*)data;
+
+	for (i = 0; i < len; i++) {
+		h = (h * 0x100000001b3ll) ^ c[i];
+	}
+
+	return h;
+}
+
+/*
 static inline Hash_t koh_hasher_fnv32(const void *data, int len) {
     assert(data);
     assert(len > 0);
@@ -30,4 +56,4 @@ static inline Hash_t koh_hasher_fnv32(const void *data, int len) {
     assert(h != 0);
     return h;
 }
-
+*/
