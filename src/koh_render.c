@@ -223,10 +223,21 @@ void koh_render_shutdown() {
     UnloadShader(shdr_circle);
 }
 
-void render_texture_verts(
-    Texture2D texture, Rectangle source, Vector2 verts[4],
-    Vector2 origin,
-    Color tint
+void render_verts(Vector2 verts[4], Color tint) {
+    rlSetTexture(0);
+    rlBegin(RL_QUADS);
+        rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+        rlNormal3f(0.0f, 0.0f, 1.0f);                          // Normal vector pointing towards viewer
+        rlVertex2f(verts[0].x, verts[0].y);
+        rlVertex2f(verts[3].x, verts[3].y);
+        rlVertex2f(verts[2].x, verts[2].y);
+        rlVertex2f(verts[1].x, verts[1].y);
+    rlEnd();
+    rlSetTexture(0);
+}
+
+void render_verts_with_tex(
+    Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
 ) {
     // Check if texture is valid
     if (texture.id > 0)
