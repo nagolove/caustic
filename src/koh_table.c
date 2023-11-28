@@ -13,9 +13,10 @@ typedef struct Bucket {
 } Bucket;
 
 typedef struct HTable {
-    Bucket         **arr;
-    int            taken, cap;
-    HTableOnRemove on_remove;
+    Bucket          **arr;
+    size_t          taken, cap;
+    HTableOnRemove  on_remove;
+    HashFunction    hash_func;
 } HTable;
 
 static int _htable_get(HTable *ht, const void *key, int key_len, int *value_len);
@@ -47,7 +48,7 @@ void htable_fprint(HTable *ht, FILE *f) {
     for (int i = 0; i < ht->cap; i++) {
         if (ht->arr[i])
             fprintf(
-                f, "[%.3d] %10.10s = %10d, hash mod cap = %.3u\n",
+                f, "[%.3d] %10.10s = %10d, hash mod cap = %.3zu\n",
                 i, (char*)get_key(ht->arr[i]), *((int*)get_value(ht->arr[i])),
                 ht->arr[i]->hash % ht->cap
             );
@@ -79,7 +80,7 @@ void htable_extend(HTable *ht) {
     assert(ht->arr);
     for (int j = 0; j < ht->cap; j++) {
         if (ht->arr[j]) {
-            ht->arr[j]->hash = koh_hasher_fnv32(
+            ht->arr[j]->hash = ht->hash_func(
                 get_key(ht->arr[j]), ht->arr[j]->key_len
             );
             _htable_add_uniq(&tmp, ht->arr[j]);
@@ -119,8 +120,10 @@ void _htable_add_uniq(HTable *ht, Bucket *bucket) {
     ht->taken++;
 }
 
-void *htable_add(HTable *ht, const void *key, int key_len, 
-    const void *value, int value_len) {
+void *htable_add(
+    HTable *ht, const void *key, int key_len, 
+    const void *value, int value_len
+) {
 
     assert(ht);
     if (!key) return NULL;
@@ -146,7 +149,7 @@ void *htable_add(HTable *ht, const void *key, int key_len,
 
     assert(ht->taken < ht->cap);
 
-    Hash_t hash = koh_hasher_fnv32(key, key_len);
+    Hash_t hash = ht->hash_func(key, key_len);
     index = hash % ht->cap;
 
     while (ht->arr[index])
@@ -206,7 +209,7 @@ void htable_free(HTable *ht) {
 int _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     assert(ht);
 
-    int index = koh_hasher_fnv32(key, key_len) % ht->cap;
+    int index = ht->hash_func(key, key_len) % ht->cap;
     for (int i = 0; i < ht->cap; i++) {
         if (!ht->arr[index])
             break;
@@ -242,8 +245,16 @@ HTable *htable_new(struct HTableSetup *setup) {
         ht->cap = setup->cap;
     } else
         ht->cap = 17;
-    if (setup)
+    if (setup) {
         ht->on_remove = setup->on_remove;
+        ht->hash_func = setup->hash_func;
+    } else {
+        _Static_assert(
+            sizeof(Hash_t) == sizeof(uint64_t),
+            "Please use 64 bit Hash_t value"
+        );
+        ht->hash_func = koh_hasher_fnv64;
+    }
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
     ht->taken = 0;
     return ht;

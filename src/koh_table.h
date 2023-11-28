@@ -1,5 +1,6 @@
 #pragma once
 
+#include "koh_hashers.h"
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -18,8 +19,9 @@ typedef void (*HTableOnRemove)(
 );
 
 struct HTableSetup {
-    HTableOnRemove on_remove;
-    int            cap;
+    HTableOnRemove  on_remove;
+    HashFunction    hash_func;
+    size_t          cap;
 };
 
 void *htable_add(
