@@ -330,6 +330,8 @@ end
 
 
 
+
+
 local dependencies
 
 local function get_deps_name_map(deps)
@@ -627,6 +629,20 @@ dependencies = {
 
    {
       disabled = false,
+      build = nil,
+      description = "mum hash functions",
+      dir = "mum-hash",
+      includes = { "mum-hash" },
+      libdirs = { "mum-hash" },
+      links = {},
+      links_internal = {},
+      name = "mum_hash",
+      url_action = "git",
+      url = "https://github.com/vnmakarov/mum-hash",
+   },
+
+   {
+      disabled = false,
       build = build_with_cmake,
       description = "task sheduler",
       dir = "enkits",
@@ -717,7 +733,7 @@ dependencies = {
       after_build = cimgui_after_build,
 
       build = build_cimgui,
-      depends = { 'freetype', 'rlimgui' },
+
       description = "C биндинг для imgui",
       dir = "cimgui",
       includes = { "cimgui", "cimgui/generator/output" },
@@ -1427,8 +1443,13 @@ end
 
 
 
+
+
 local parser_setup = {
 
+   dependencies = {
+      summary = "print dependendies table",
+   },
    build = {
       summary = "build dependendies for native platform",
       options = { "-n --name" },
@@ -1617,9 +1638,9 @@ local function _init(path, deps)
    local func = lanes.gen("*", opt_tbl, dependency_init)
 
 
-   local sorter = Toposorter.new()
+
    local single_thread = true
-   local use_toposort = false
+
 
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
@@ -1627,12 +1648,15 @@ local function _init(path, deps)
 
       print('processing', dep.name)
 
-      if use_toposort and dep.depends then
-         for _, dep_name in ipairs(dep.depends) do
-            print('sorter:addd', dep.name, dep_name)
-            sorter:add(dep.name, dep_name)
-         end
-      else
+
+
+
+
+
+
+
+
+      do
          print('without dependency', dep.name)
 
          if single_thread then
@@ -1646,18 +1670,20 @@ local function _init(path, deps)
       end
    end
 
-   local sorted
-   if use_toposort then
-      sorted = sorter:sort()
-      print('sorted')
 
 
 
-      sorted = ut.filter(sorted, function(node)
-         return node.value ~= "null"
-      end)
-      print('sorted', inspect(sorted))
-   end
+
+
+
+
+
+
+
+
+
+
+
 
    if #threads ~= 0 then
       print(tabular(threads))
@@ -1677,14 +1703,16 @@ local function _init(path, deps)
 
 
 
-   if use_toposort then
-      for _, node in ut.ripairs(sorted) do
-         local name_map = get_deps_name_map(dependencies)
-         local dep = name_map[(node).value]
-         print('dep', inspect(dep))
-         dependency_init(dep, path)
-      end
-   end
+
+
+
+
+
+
+
+
+
+
 
    ut.pop_dir()
 end
@@ -2272,6 +2300,12 @@ local function get_ready_includes(cfg)
    end
 
    return _includedirs
+end
+
+function actions.dependencies(_)
+   for _, dep in ipairs(dependencies) do
+      print(tabular(dep));
+   end
 end
 
 function actions.verbose(_)
