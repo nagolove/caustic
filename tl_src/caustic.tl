@@ -287,6 +287,8 @@ local record Dependency
     disabled: boolean   -- временно исключает запись из обработки
 
     -- Имена и зависимости(поля name и depends) обрабатываются в команде init
+    -- Поле имени не должно содержать пробелов и дефисов так как используется в
+    -- создании макроопределения и передается компилятору как -DKOH_name
     name: string        -- имя зависимости
     --depends: {string}   -- список имен зависомостей от которых зависит данная
 
@@ -634,7 +636,7 @@ dependencies = {
         libdirs = { "mum-hash" },
         links = {},
         links_internal = {},
-        name = "mum-hash",
+        name = "mum_hash",
         url_action = "git",
         url = "https://github.com/vnmakarov/mum-hash",
     },
