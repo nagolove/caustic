@@ -62,6 +62,7 @@ void stage_active_gui_render(StagesStore *ss);
 KOH_FORCE_INLINE static Stage *l_stage_find(
     lua_State *l, const char *store_name, const char *stage_name
 ) {
+    assert(l);
     //trace("l_stage_find: [%s]\n", stack_dump(l));
     lua_getglobal(l, store_name);
     StagesStore *ss = lua_touserdata(l, -1);

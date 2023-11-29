@@ -41,12 +41,20 @@ StagesStore *stage_new(struct StageStoreSetup *setup) {
     StagesStore *ss = calloc(1, sizeof(*ss));
     assert(ss);
     if (setup && setup->l && setup->stage_store_name) {
+        // FIXME: Починить условие
+        /*
         if (lua_getglobal(setup->l, setup->stage_store_name) != LUA_TNONE) {
             trace(
                 "stage_new: there is a '%s' value in global space\n",
                 setup->stage_store_name
             );
-        } else {
+        } else 
+            */
+        {
+            trace(
+                "stage_new: setup global light user data '%s'\n",
+                setup->stage_store_name
+            );
             lua_pushlightuserdata(setup->l, ss);
             lua_setglobal(setup->l, setup->stage_store_name);
         }
@@ -57,7 +65,6 @@ StagesStore *stage_new(struct StageStoreSetup *setup) {
 void stage_init(StagesStore *ss) {
     //memset(&stages, 0, sizeof(stages));
     assert(ss);
-    memset(ss, 0, sizeof(*ss));
 
     for(int i = 0; i < ss->num; i++) {
         Stage *st = ss->stages[i];
@@ -102,6 +109,11 @@ Stage *stage_add(StagesStore *ss, Stage *st, const char *name) {
 
     ss->stages[ss->num++] = st;
     strncpy(st->name, name, MAX_STAGE_NAME - 1);
+    trace(
+        "stage_add: name '%s', num %d\n",
+        ss->stages[ss->num - 1]->name,
+        ss->num
+    );
     return st;
 }
 
