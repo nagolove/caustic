@@ -29,6 +29,7 @@ typedef struct MenuSetup {
     bool        input_active;
     int         active_item;
     char        *name;
+    StagesStore *ss;
 } MenuSetup;
 
 typedef struct Menu Menu;
@@ -56,4 +57,4 @@ void menu_input_active_set(Menu *mnu, bool state);
 bool menu_input_active_get(Menu *mnu);
 void menu_active_reset(Menu *mnu);
 void menu_dump(Menu *mnu);
-
+StagesStore *menu_get_stages_store(Menu *mnu);

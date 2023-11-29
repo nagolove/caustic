@@ -8,6 +8,7 @@
 #include "koh_logger.h"
 #include "koh_routine.h"
 #include "koh_routine.h"
+#include "lua.h"
 #include "raylib.h"
 #include "utf8proc.h"
 #include <assert.h>
@@ -19,6 +20,7 @@
 #define MENU_MAX_NAME   48
 
 struct Menu {
+    StagesStore *ss;
     Color       arrow_down_color, arrow_up_color;
     Font        fnt;
     MenuAction  render_before;
@@ -83,6 +85,7 @@ void menu_dump(Menu *mnu) {
 Menu *menu_new(MenuSetup setup) {
     Menu *mnu = calloc(1, sizeof(Menu));
     assert(mnu);
+    mnu->ss = setup.ss;
     mnu->fnt = setup.fnt;
     mnu->font_owned = setup.font_owned;
     mnu->pos = setup.pos;
@@ -389,3 +392,7 @@ void menu_active_reset(Menu *mnu) {
     mnu->active_item = 0;
 }
 
+StagesStore *menu_get_stages_store(Menu *mnu) {
+    assert(mnu);
+    return mnu->ss;
+}
