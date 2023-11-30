@@ -18,6 +18,8 @@ typedef void (*Stage_callback)(struct Stage *s);
 typedef void (*Stage_data_callback)(struct Stage *s, const char *str);
 typedef struct StagesStore StagesStore;
 
+// TODO: Оставить одну структуру сцены. В ней хранить подсцены вместе 
+// StagesStore
 typedef struct Stage {
     StagesStore         *store;
     Stage_data_callback init, enter, leave;
