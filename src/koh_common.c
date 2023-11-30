@@ -135,6 +135,12 @@ void koh_common_shutdown(void) {
     memset(&cmn, 0, sizeof(cmn));
 }
 
+const char *Color_to_str(Color c) {
+    static char buf[48] = {0, };
+    sprintf(buf, "{%d, %d, %d, %d}", (int)c.r, (int)c.g, (int)c.b, (int)c.a);
+    return buf;
+}
+
 const char *color2str(Color c) {
     static char buf[48] = {0, };
     sprintf(buf, "{%d, %d, %d, %d}", (int)c.r, (int)c.g, (int)c.b, (int)c.a);
@@ -711,7 +717,41 @@ Vector2 camera2screen(Camera2D cam, Vector2 in) {
     };
 }
 
+static const Color num2color[] = {
+    // {{{
+    LIGHTGRAY,
+    GRAY     ,
+    DARKGRAY ,
+    YELLOW   ,
+    GOLD     ,
+    ORANGE   ,
+    PINK     ,
+    RED      ,
+    MAROON   ,
+    GREEN    ,
+    LIME     ,
+    DARKGREEN,
+    SKYBLUE  ,
+    BLUE     ,
+    DARKBLUE ,
+    PURPLE   ,
+    VIOLET   ,
+    DARKPURPLE,
+    BEIGE    ,
+    BROWN    ,
+    DARKBROWN,
+    WHITE    ,
+    BLACK    ,
+    // }}}
+};
+
+int color_max_index() {
+    return sizeof(num2color) / sizeof(num2color[0]);
+}
+
 Color color_by_index(int colornum) {
+    /*
+    // {{{
     Color color = BLACK;
     switch (colornum) {
         case 1: color = LIGHTGRAY ;break; 
@@ -739,6 +779,12 @@ Color color_by_index(int colornum) {
         case 23: color = BLACK     ;break; 
     }
     return color;
+    // }}}
+    */
+    if (colornum >= 0 && colornum < color_max_index()) {
+        return num2color[colornum];
+    } else
+        return BLANK;
 }
 
 void texture_save(Texture2D tex, const char *fname) {

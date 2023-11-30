@@ -51,6 +51,7 @@ void koh_common_shutdown(void);
 //Color height_color(float value);
 
 const char *color2str(Color color);
+const char *Color_to_str(Color color);
 Font load_font_unicode(const char *fname, int size);
 
 struct SpaceShutdownCtx {
@@ -104,10 +105,16 @@ void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter);
 cpShape *circle2polyshape(cpSpace *space, cpShape *inshape);
 cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr);
 
-// XXX: Что делает camera2screen()?
+// Возвращает вектор смещение камеры плюс вектор in 
 Vector2 camera2screen(Camera2D cam, Vector2 in);
 
+// Возвращает один из стандартных цветов raylib по числовому индексу.
+// Если индекс меньше нуля или больше color_max_index(), то возвращает
+// прозрачный цвет - BLANK
 Color color_by_index(int colornum);
+// Возвращает максимальное значение индекса для прошлой функции
+int color_max_index();
+
 void texture_save(Texture2D tex, const char *fname);
 
 // Применение:
