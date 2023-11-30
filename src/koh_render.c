@@ -224,14 +224,27 @@ void koh_render_shutdown() {
 }
 
 void render_verts(Vector2 verts[4], Color tint) {
+    char *str = Vector2_tostr_alloc(verts, 4);
+    trace("render_verts: verts %s, color %s\n", str, Color_to_str(tint));
+    free(str);
+
     rlSetTexture(0);
     rlBegin(RL_QUADS);
         rlColor4ub(tint.r, tint.g, tint.b, tint.a);
-        rlNormal3f(0.0f, 0.0f, 1.0f);                          // Normal vector pointing towards viewer
+        // Normal vector pointing towards viewer
+        rlNormal3f(0.0f, 0.0f, 1.0f);                          
+        // XXX: Важен-ли здесь порядок вершин?
+
         rlVertex2f(verts[0].x, verts[0].y);
         rlVertex2f(verts[3].x, verts[3].y);
         rlVertex2f(verts[2].x, verts[2].y);
         rlVertex2f(verts[1].x, verts[1].y);
+
+        //rlVertex2f(verts[3].x, verts[3].y);
+        //rlVertex2f(verts[2].x, verts[2].y);
+        //rlVertex2f(verts[1].x, verts[1].y);
+        //rlVertex2f(verts[0].x, verts[0].y);
+
     rlEnd();
     rlSetTexture(0);
 }
