@@ -625,7 +625,26 @@ local function utf8proc_after_build(_: Dependency)
     cmd_do("rm libutf8proc.so")
 end
 
+local function build_munit(_: Dependency)
+    cmd_do("gcc -c munit.c")
+    cmd_do("ar rcs libmunit.a munit.o")
+end
+
 dependencies = {
+
+    {
+        disabled = false,
+        build = build_munit,
+        description = "munit testing framework",
+        dir = "munit",
+        includes = { "munit" },
+        libdirs = { "munit" },
+        links = { "munit", },
+        links_internal = {},
+        name = "munit",
+        url_action = "git",
+        url = "https://github.com/nemequ/munit",
+    },
 
     {
         disabled = false,
@@ -1612,10 +1631,13 @@ local function _init_smart(path: string, deps: {Dependency})
 end
 --]]
 
+-- FIXME: Переключаться в каталог CAUSTIC_PATH
 local function _init(path: string, deps: {Dependency})
     print("_init", path)
 	--print(tabular(deps))
     ut.push_current_dir()
+
+    lfs.chdir(path_caustic)
 
     if not lfs.chdir(path) then
         if not lfs.mkdir(path) then
@@ -2977,7 +2999,8 @@ end
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local flags: string = ""
     if not _args.noasan then
-        flags = flags .. " -fsanitize=address "
+        --flags = flags .. " -fsanitize=address "
+        flags = flags .. " -fsanitize=undefined,address "
     end
     if _args.make_type == 'release' then
         flags = ""
@@ -3299,7 +3322,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     end
 
     if not _args.noasan then
-        table.insert(flags, "-fsanitize=address")
+        --table.insert(flags, "-fsanitize=address")
+        table.insert(flags, "-fsanitize=address,undefined")
     end
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
