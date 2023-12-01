@@ -224,9 +224,11 @@ void koh_render_shutdown() {
 }
 
 void render_verts(Vector2 verts[4], Color tint) {
+    /*
     char *str = Vector2_tostr_alloc(verts, 4);
     trace("render_verts: verts %s, color %s\n", str, Color_to_str(tint));
     free(str);
+    */
 
     rlSetTexture(0);
     rlBegin(RL_QUADS);
