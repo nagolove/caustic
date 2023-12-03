@@ -1,14 +1,14 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "koh_stages.h"
+#include "koh_stages2.h"
 #include "lualib.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
 #include "cimgui.h"
 #include "cimgui_impl.h"
-#include "koh.h"
+//#include "koh.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include "raylib.h"
@@ -22,28 +22,29 @@
 
 #define MAX_STAGES_NUM  32
 
-struct StagesStore {
-    Stage    *stages[MAX_STAGES_NUM];
+struct StagesStore2 {
+    Stage2   *stages[MAX_STAGES_NUM];
     bool     selected[MAX_STAGES_NUM];
-    Stage    *cur;
+    Stage2   *cur;
     uint32_t num;
 };
 
 // Убрать глобальную переменную, использовать переносимый контекст сцен.
-//static struct StagesStore stages = {0, };
+//static struct StagesStore2 stages = {0, };
 
 int l_stages_get(lua_State *lua);
-int l_stage_restart(lua_State *lua);
-int l_stage_set_active(lua_State *lua);
-int l_stage_get_active(lua_State *lua);
+int l_stage2_restart(lua_State *lua);
+int l_stage2_set_active(lua_State *lua);
+int l_stage2_get_active(lua_State *lua);
 
 /*
 Как провести попытку рефакторинга минимально разрушая текущую конфигурацию?
 Скопировать файлы, переименовать подсистему, добавить суффикс7
  */
-StagesStore *stage_new(struct StageStoreSetup *setup) {
-    StagesStore *ss = calloc(1, sizeof(*ss));
+Stage2 *stage2_new(struct StageStoreSetup2 *setup) {
+    Stage2 *ss = calloc(1, sizeof(*ss));
     assert(ss);
+    ss->store = calloc(1, sizeof(struct StagesStore2));
     if (setup && setup->l && setup->stage_store_name) {
         // FIXME: Починить условие
         /*
@@ -66,14 +67,16 @@ StagesStore *stage_new(struct StageStoreSetup *setup) {
     return ss;
 }
 
-void stage_init(StagesStore *ss) {
+void stage2_init(Stage2 *ss) {
     //memset(&stages, 0, sizeof(stages));
     assert(ss);
 
-    for(int i = 0; i < ss->num; i++) {
-        Stage *st = ss->stages[i];
-        if (st->init) {
-            st->init(st, NULL);
+    if (ss->store) {
+        for(int i = 0; i < ss->store->num; i++) {
+            Stage2 *st = ss->store->stages[i];
+            if (st->init) {
+                st->init(st, NULL);
+            }
         }
     }
 
@@ -104,72 +107,81 @@ void stage_init(StagesStore *ss) {
     */
 }
 
-Stage *stage_add(StagesStore *ss, Stage *st, const char *name) {
+Stage2 *stage2_add(Stage2 *ss, Stage2 *st, const char *name) {
     assert(ss);
     assert(st);
     assert(name);
     assert(strlen(name) < MAX_STAGE_NAME);
-    assert(ss->num < MAX_STAGES_NUM);
+    // Не может быть NULL, но может число элементов может == 0
+    assert(ss->store);  
+    assert(ss->store->num < MAX_STAGES_NUM);
 
-    ss->stages[ss->num++] = st;
+    ss->store->stages[ss->store->num++] = st;
     strncpy(st->name, name, MAX_STAGE_NAME - 1);
     trace(
         "stage_add: name '%s', num %d\n",
-        ss->stages[ss->num - 1]->name,
-        ss->num
+        ss->store->stages[ss->store->num - 1]->name,
+        ss->store->num
     );
     return st;
 }
 
-void stage_shutdown(StagesStore *ss) {
+/*
+void stage2_shutdown(Stage2 *ss) {
     assert(ss);
-    for(int i = 0; i < ss->num; i++) {
-        Stage *st = ss->stages[i];
+    for(int i = 0; i < ss->store->num; i++) {
+        Stage2 *st = ss->store->stages[i];
         if (st) {
             if (st->shutdown) 
                 st->shutdown(st);
             free(st);
-            ss->stages[i] = NULL;
+            ss->store->stages[i] = NULL;
         }
     }
 }
+*/
 
-void stage_active_update(StagesStore *ss) {
+void stage2_active_update(Stage2 *ss) {
     assert(ss);
-    Stage *st = ss->cur;
-    if (!st)
+    if (!ss->store->cur)
         return;
+    Stage2 *st = ss->store->cur;
+    // TODO: Разделить обновление и рисовку?
     if (st->update) st->update(st);
     if (st->draw) st->draw(st);
 }
 
-Stage *stage_find(StagesStore *ss, const char *name) {
-    for(int i = 0; i < ss->num; i++) {
-        Stage *st = ss->stages[i];
-        if (!strcmp(name, st->name)) {
-            return st;
+Stage2 *stage2_find(Stage2 *ss, const char *name) {
+    if (ss->store) {
+        for(int i = 0; i < ss->store->num; i++) {
+            Stage2 *st = ss->store->stages[i];
+            if (!strcmp(name, st->name)) {
+                return st;
+            }
         }
     }
     return NULL;
 }
 
-void stage_active_set(StagesStore *ss, const char *name, void *data) {
-    Stage *st = stage_find(ss, name);
+void stage2_active_set(Stage2 *ss, const char *name, void *data) {
+    Stage2 *st = stage2_find(ss, name);
     //assert(st);
 
     if (!st) {
         trace("stage_set_active: '%s' not found\n", name);
     }
 
-    if (ss->cur && ss->cur->leave) {
+    // TODO: Добавить проверку на ss->store
+
+    if (ss->store->cur && ss->store->cur->leave) {
         trace(
             "stage_set_active: leave from '%s'\n",
-            ss->cur->name
+            ss->store->cur->name
         );
-        ss->cur->leave(ss->cur, data);
+        ss->store->cur->leave(ss->store->cur, data);
     }
 
-    ss->cur = st;
+    ss->store->cur = st;
 
     if (st && st->enter) {
         trace("stage_set_active: enter to '%s'\n", st->name);
@@ -185,10 +197,10 @@ int l_stages_get(lua_State *lua) {
     return 0;
 }
 
-int l_stage_restart(lua_State *lua) {
+int l_stage2_restart(lua_State *lua) {
     luaL_checktype(lua, 1, LUA_TSTRING);
-    const char *stage_name = lua_tostring(lua, 1);
-    Stage *st = stage_find(stage_name);
+    const char *stage2_name = lua_tostring(lua, 1);
+    Stage *st = stage2_find(stage_name);
     if (st) {
         if (st->shutdown)
             st->shutdown(st);
@@ -198,26 +210,26 @@ int l_stage_restart(lua_State *lua) {
     return 0;
 }
 
-int l_stage_set_active(lua_State *lua) {
+int l_stage2_set_active(lua_State *lua) {
     bool arg1 = lua_isstring(lua, 1);
     bool arg2 = lua_isstring(lua, 2);
     if (arg1 && !arg2) {
-        const char *stage_name = lua_tostring(lua, 1);
+        const char *stage2_name = lua_tostring(lua, 1);
         trace("l_stage_set_active: \"%s\"\n", stage_name);
-        stage_set_active(stage_name, NULL);
+        stage2_set_active(stage_name, NULL);
     } else if (arg1 && arg2) {
         const char *name = lua_tostring(lua, 1);
         const char *arg = lua_tostring(lua, 2);
         trace("l_stage_set_active: \"%s\" %s\n", name, arg);
         // XXX: Может быть ошиюка при передачи arg из-за освобождения 
         // памяти строки
-        stage_set_active(name, (void*)arg);
+        stage2_set_active(name, (void*)arg);
     } else 
         trace("l_stage_set_active: bad arguments\n");
     return 0;
 }
 
-int l_stage_get_active(lua_State *lua) {
+int l_stage2_get_active(lua_State *lua) {
     if (stages.cur) {
         lua_pushstring(lua, stages.cur->name);
         return 1;
@@ -226,19 +238,24 @@ int l_stage_get_active(lua_State *lua) {
 }
 */
 
-void stage_print(StagesStore *ss) {
+// TODO: Добавить получение табличного Lua представления для всех всложенных 
+// сцен. Такая функция должна возвращать char**, построчно
+void stage2_print(Stage2 *ss) {
     assert(ss);
     trace("stage_print:\n");
-    if (!ss->num) return;
+    if (!ss->store)
+        return;
+    if (!ss->store->num) 
+        return;
 
     lua_State *l = luaL_newstate();
     luaL_openlibs(l);
     const size_t len = 1024;
-    char *table_str = malloc(len * ss->num);
+    char *table_str = malloc(len * ss->store->num);
     char *p = table_str;
 
-    for (int i = 0; i < ss->num; i++) {
-        const Stage *st = ss->stages[i];
+    for (int i = 0; i < ss->store->num; i++) {
+        const Stage2 *st = ss->store->stages[i];
         p += sprintf(p, "{ ");
         p += sprintf(p, "init = %p", st->init);
         p += sprintf(p, "enter = %p", st->enter);
@@ -254,7 +271,7 @@ void stage_print(StagesStore *ss) {
 
     if (!luaL_dostring(l, table_str)) {
         trace(
-            "stage_print: luaL_dostring(l, table_str) failed with '%s'\n",
+            "stage2_print: luaL_dostring(l, table_str) failed with '%s'\n",
             lua_tostring(l, -1)
         );
         goto _exit;
@@ -287,40 +304,46 @@ _exit:
     */
 }
 
-const char *stage_active_name_get(StagesStore *ss) {
-    if (ss->cur) {
+const char *stage2_active_name_get(Stage2 *ss) {
+    assert(ss);
+    if (!ss->store)
+        return NULL;
+    if (ss->store->cur) {
         static char ret_buf[MAX_STAGE_NAME] = {0};
-        strcpy(ret_buf, ss->cur->name);
+        strcpy(ret_buf, ss->store->cur->name);
         return ret_buf;
     }
     return NULL;
 }
 
 /*
-void *stage_assert(Stage *st, const char *name) {
+void *stage2_assert(Stage *st, const char *name) {
     assert(st);
-    Stage *res = stage_find(st->name);
+    Stage *res = stage2_find(st->name);
     assert(res);
     return res;
 }
 */
 
-static Stage *get_selected_stage(StagesStore *ss) {
+static Stage2 *get_selected_stage(Stage2 *ss) {
     assert(ss);
-    for (int i = 0; i < ss->num; i++) {
-        if (ss->selected[i])
-            return ss->stages[i];
+    // FIXME: Можно поставить утверждение
+    if (!ss->store)
+        return NULL;
+    for (int i = 0; i < ss->store->num; i++) {
+        if (ss->store->selected[i])
+            return ss->store->stages[i];
     }
     return NULL;
 }
 
-void stages_gui_window(StagesStore *ss) {
+void stage2_gui_window(Stage2 *ss) {
     assert(ss);
     bool opened = true;
     ImGuiWindowFlags flags = 0;
     igBegin("stages window", &opened, flags);
 
-    igText("active stage: %s", ss->cur ? ss->cur->name : NULL);
+    igText("active stage: %s", ss->store->cur ? ss->store->cur->name : NULL);
 
     ImGuiTableFlags table_flags = 
         ImGuiTableFlags_SizingStretchSame |
@@ -345,43 +368,43 @@ void stages_gui_window(StagesStore *ss) {
         igTableSetupColumn("data", 0, 0, 7);
         igTableHeadersRow();
 
-        for (int i = 0; i < ss->num; ++i) {
+        for (int i = 0; i < ss->store->num; ++i) {
             ImGuiTableFlags row_flags = 0;
             igTableNextRow(row_flags, 0);
 
             char name_label[64] = {};
-            sprintf(name_label, "%s", ss->stages[i]->name);
+            sprintf(name_label, "%s", ss->store->stages[i]->name);
             igTableSetColumnIndex(0);
             if (igSelectable_BoolPtr(
-                name_label, &ss->selected[i],
+                name_label, &ss->store->selected[i],
                 ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
             )) {
-                for (int j = 0; j < ss->num; ++j) {
+                for (int j = 0; j < ss->store->num; ++j) {
                     if (j != i)
-                        ss->selected[j] = false;
+                        ss->store->selected[j] = false;
                 }
             }
 
             igTableSetColumnIndex(1);
-            igText("%p", ss->stages[i]->init);
+            igText("%p", ss->store->stages[i]->init);
 
             igTableSetColumnIndex(2);
-            igText("%p", ss->stages[i]->shutdown);
+            igText("%p", ss->store->stages[i]->shutdown);
 
             igTableSetColumnIndex(3);
-            igText("%p", ss->stages[i]->draw);
+            igText("%p", ss->store->stages[i]->draw);
 
             igTableSetColumnIndex(4);
-            igText("%p", ss->stages[i]->update);
+            igText("%p", ss->store->stages[i]->update);
 
             igTableSetColumnIndex(5);
-            igText("%p", ss->stages[i]->enter);
+            igText("%p", ss->store->stages[i]->enter);
 
             igTableSetColumnIndex(6);
-            igText("%p", ss->stages[i]->leave);
+            igText("%p", ss->store->stages[i]->leave);
 
             igTableSetColumnIndex(7);
-            igText("%p", ss->stages[i]->data);
+            igText("%p", ss->store->stages[i]->data);
 
         }
         igEndTable();
@@ -394,22 +417,36 @@ void stages_gui_window(StagesStore *ss) {
     );
 
     if (igButton("switch to selected stage", (ImVec2) {0, 0})) {
-        const Stage *selected = get_selected_stage(ss);
+        const Stage2 *selected = get_selected_stage(ss);
         if (selected)
-            stage_active_set(ss, selected->name, NULL);
+            stage2_active_set(ss, selected->name, NULL);
     }
 
     koh_window_post();
     igEnd();
 }
 
-void stage_active_gui_render(StagesStore *ss) {
-    Stage *st = ss->cur;
+void stage2_active_gui_render(Stage2 *ss) {
+    assert(ss);
+    if (!ss->store)
+        return;
+    Stage2 *st = ss->store->cur;
     if (st && st->gui) st->gui(st);
 }
 
-void stage_free(StagesStore *ss) {
+void stage2_free(Stage2 *ss) {
     if (ss) {
+        // Пройти по всем дочерним сценам
+        if (ss->store) {
+            for (int i = 0; i < ss->store->num; i++) {
+                stage2_free(ss->store->stages[i]);
+                ss->store->stages[i] = NULL;
+            }
+            // Освободить память хранилища
+            free(ss->store);
+            ss->store = NULL;
+        }
+        // Освободить память сцены
         free(ss);
     }
 }
