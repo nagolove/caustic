@@ -3276,6 +3276,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         end
     end
 
+    -- FIXME: Сборка caustic не запускается из каталога caustic_path/src
+    -- Почему?
     cache = Cache.new(cache_name)
     local exclude = {}
     local output_dir = "."
