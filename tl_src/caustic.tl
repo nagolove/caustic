@@ -308,6 +308,9 @@ local record Dependency
     -- глубину и после копирования вызвается git checkout commit
     git_commit: string      
 
+    -- Ручное обновление репозитория
+    update: function(_dep: Dependency)
+
     -- TODO: Возможно добавить поддержку шаблонов
     includes: {string}  -- Список каталогов для включаемых файлов.
 
@@ -630,6 +633,28 @@ local function build_munit(_: Dependency)
     cmd_do("ar rcs libmunit.a munit.o")
 end
 
+-- TODO: Сделать общую функцию
+local function update_box2c(dep: Dependency)
+    ut.push_current_dir()
+    --print("dep", inspect(dep))
+    lfs.chdir(path_abs_third_party)
+    lfs.chdir(dep.dir)
+
+    print("update_box2c", lfs.currentdir())
+
+    if ut.git_is_repo_clean(".", true) then
+        print(ansicolors("%{green}repository in clean state%{reset}"))
+        cmd_do("git config pull.rebase false")
+        -- TODO: Проверка на существование записи
+        cmd_do("git remote add erin  https://github.com/erincatto/box2c.git")
+        cmd_do("git pull erin main")
+    else
+        print(ansicolors("%{red}repository is dirty%{reset}"))
+    end
+
+    ut.pop_dir()
+end
+
 dependencies = {
 
     {
@@ -807,6 +832,7 @@ dependencies = {
             "box2c/include",
             "box2c/src",
         },
+        update = update_box2c,
         libdirs = { "box2c/src" },
         links = { "box2d:static" },
         links_internal = { "box2c:static" },
@@ -1430,7 +1456,8 @@ local record Actions
     dependencies: function(Args)
     wbuild: function(Args)
     build_smart: function(Args)
-    updates: function(Args)
+    --updates: function(Args)
+    update: function(Args)
     rmdirs: function(Args)
 end
 
@@ -1438,6 +1465,7 @@ local enum ActionsEnum
     "build"
     "build_smart"
     "compile_flags"
+    "dependencies"
     "deps"
     "init"
     "init_add"
@@ -1448,13 +1476,13 @@ local enum ActionsEnum
     "rocks"
     "run"
     "selftest"
-    "selftest_status"
     "selftest_lg"
+    "selftest_status"
     "test"
-    "updates"
+    "update"
     "verbose"
-    "wbuild"
-    "dependencies"
+    --"updates"
+    --"wbuild"
 end
 
 local record ParserSetup
@@ -1466,6 +1494,10 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+    update = {
+        summary = "call update() function to get latest git version of source",
+        options = { "-n --name", },
+    },
     dependencies = {
         summary = "print dependendies table",
     },
@@ -3056,6 +3088,29 @@ local record Aseprite
 end
 --]]
 
+local function _update(dep: Dependency)
+    if dep.update then
+        dep.update(dep)
+    end
+end
+
+function actions.update(_args: Args)
+    if _args.name then
+        local dependencies_name_map = get_deps_name_map(dependencies)
+        print('update for', _args.name)
+        if dependencies_name_map[_args.name] then
+            local dep = dependencies_name_map[_args.name]
+            _update(dep);
+        else
+            print("bad dependency name", _args.name)
+            return
+        end
+    else
+        print("use only with --name option")
+    end
+end
+
+--[[
 function actions.updates(_args: Args)
     print("updates")
     for _, dep in ipairs(dependencies) do
@@ -3073,6 +3128,8 @@ function actions.updates(_args: Args)
         end
     end
 end
+--]]
+
 
 -- json->lua конвертация из aseprite
 --[[ TODO: Сделать конвертацию данных на основе bld.lua
