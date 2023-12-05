@@ -24,6 +24,11 @@ static void _htable_remove(HTable *ht, int index);
 static void bucket_free(HTable *ht, int index);
 static void _htable_add_uniq(HTable *ht, Bucket *bucket);
 
+_Static_assert(
+    sizeof(Hash_t) == sizeof(uint64_t),
+    "Please use 64 bit Hash_t value"
+);
+
 static inline uint32_t get_aligned_size(uint32_t size) {
     int mod = size % 16;
     return size - mod + (((mod + 15) >> 4) << 4);
@@ -247,15 +252,12 @@ HTable *htable_new(struct HTableSetup *setup) {
 
     if (setup) {
         ht->on_remove = setup->on_remove;
-        assert(setup->hash_func);
         ht->hash_func = setup->hash_func;
-    } else {
-        _Static_assert(
-            sizeof(Hash_t) == sizeof(uint64_t),
-            "Please use 64 bit Hash_t value"
-        );
-        ht->hash_func = koh_hasher_mum;
     }
+
+    if (!ht->hash_func)
+        ht->hash_func = koh_hasher_mum;
+
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
     ht->taken = 0;
     return ht;
