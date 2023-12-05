@@ -2,6 +2,7 @@
 // vim: fdm=marker
 
 #include "koh_common.h"
+#include "koh_rand.h"
 #include "koh_routine.h"
 
 #define PCRE2_CODE_UNIT_WIDTH   8
