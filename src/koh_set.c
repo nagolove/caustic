@@ -33,10 +33,13 @@ koh_Set *set_new(struct koh_SetSetup *setup) {
     set->cap = 11;
     set->arr = calloc(set->cap, sizeof(set->arr[0]));
     if (setup) {
-        assert(setup->hash_func);
         set->hash_func = setup->hash_func;
-    } else
+    }
+
+    // Установка функции хэширования по умолчанию
+    if (!set->hash_func)
         set->hash_func = koh_hasher_mum;
+
     assert(set->arr);
     return set;
 }
