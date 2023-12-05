@@ -332,6 +332,9 @@ end
 
 
 
+
+
+
 local dependencies
 
 local function get_deps_name_map(deps)
@@ -630,6 +633,28 @@ local function build_munit(_)
    cmd_do("ar rcs libmunit.a munit.o")
 end
 
+
+local function update_box2c(dep)
+   ut.push_current_dir()
+
+   lfs.chdir(path_abs_third_party)
+   lfs.chdir(dep.dir)
+
+   print("update_box2c", lfs.currentdir())
+
+   if ut.git_is_repo_clean(".", true) then
+      print(ansicolors("%{green}repository in clean state%{reset}"))
+      cmd_do("git config pull.rebase false")
+
+      cmd_do("git remote add erin  https://github.com/erincatto/box2c.git")
+      cmd_do("git pull erin main")
+   else
+      print(ansicolors("%{red}repository is dirty%{reset}"))
+   end
+
+   ut.pop_dir()
+end
+
 dependencies = {
 
    {
@@ -807,6 +832,7 @@ dependencies = {
          "box2c/include",
          "box2c/src",
       },
+      update = update_box2c,
       libdirs = { "box2c/src" },
       links = { "box2d:static" },
       links_internal = { "box2c:static" },
@@ -1464,8 +1490,14 @@ end
 
 
 
+
+
 local parser_setup = {
 
+   update = {
+      summary = "call update() function to get latest git version of source",
+      options = { "-n --name" },
+   },
    dependencies = {
       summary = "print dependendies table",
    },
@@ -3056,23 +3088,48 @@ end
 
 
 
-function actions.updates(_args)
-   print("updates")
-   for _, dep in ipairs(dependencies) do
-      if dep.url and string.match(dep.url, "%.git$") then
-         if dep.dir then
-            print('dep.dir', dep.dir)
-            ut.push_current_dir()
-            lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
-            cmd_do({
-               "git fetch",
-               "git status",
-            })
-            ut.pop_dir()
-         end
-      end
+local function _update(dep)
+   if dep.update then
+      dep.update(dep)
    end
 end
+
+function actions.update(_args)
+   if _args.name then
+      local dependencies_name_map = get_deps_name_map(dependencies)
+      print('update for', _args.name)
+      if dependencies_name_map[_args.name] then
+         local dep = dependencies_name_map[_args.name]
+         _update(dep);
+      else
+         print("bad dependency name", _args.name)
+         return
+      end
+   else
+      print("use only with --name option")
+   end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3275,6 +3332,8 @@ local function sub_make(_args, cfg, push_num)
          codegen(v)
       end
    end
+
+
 
    cache = Cache.new(cache_name)
    local exclude = {}
