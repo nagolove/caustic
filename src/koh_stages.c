@@ -317,7 +317,8 @@ static Stage *get_selected_stage(StagesStore *ss) {
 void stages_gui_window(StagesStore *ss) {
     assert(ss);
     bool opened = true;
-    ImGuiWindowFlags flags = 0;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_AlwaysAutoResize; 
     igBegin("stages window", &opened, flags);
 
     igText("active stage: %s", ss->cur ? ss->cur->name : NULL);
@@ -334,7 +335,7 @@ void stages_gui_window(StagesStore *ss) {
     ImVec2 outer_size = {0., 0.};
     const int columns_num = 8;
     if (igBeginTable("stage", columns_num, table_flags, outer_size, 0.)) {
-
+        // table {{{
         igTableSetupColumn("name", 0, 0, 0);
         igTableSetupColumn("init", 0, 0, 1);
         igTableSetupColumn("shutdown", 0, 0, 2);
@@ -385,6 +386,7 @@ void stages_gui_window(StagesStore *ss) {
 
         }
         igEndTable();
+        // }}}
     }
 
     static char stage_str_argument[64] = {};
@@ -397,6 +399,19 @@ void stages_gui_window(StagesStore *ss) {
         const Stage *selected = get_selected_stage(ss);
         if (selected)
             stage_active_set(ss, selected->name, NULL);
+    }
+
+    igSameLine(0., 5.);
+
+    if (igButton("shutdown/init selected", (ImVec2) {0, 0})) {
+        Stage *selected = get_selected_stage(ss);
+        if (selected) {
+            if (selected->shutdown && selected->init) {
+                selected->shutdown(selected);
+                selected->init(selected, NULL);
+            }
+            //stage_active_set(ss, selected->name, NULL);
+        }
     }
 
     koh_window_post();
