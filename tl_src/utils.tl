@@ -245,17 +245,29 @@ local function git_is_repo(dirpath: string): boolean
 end
 --]]
 
-local function git_is_repo_clean(dirpath: string): boolean
+local function git_is_repo_clean(
+    dirpath: string, skip_unknown: boolean
+): boolean
     push_current_dir()
     lfs.chdir(dirpath)
     local pipe = io.popen("git status --porcelain", "r")
     local i = 0
-    for _ in pipe:lines() do
-        i = i + 1
+    for line in pipe:lines() do
+        if skip_unknown then
+            if string.match(line, "^%?%?.*") then
+                print("git_is_repo_clean:", line)
+            else
+                i = i + 1
+            end
+        else
+            i = i + 1
+        end
+
         if i > 0 then
             pop_dir()
             return false
         end
+
     end
     pop_dir()
     return true
