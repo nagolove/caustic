@@ -1,3 +1,6 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
+
 #include "koh_destral_ecs.h"
 
 /*
@@ -16,6 +19,7 @@
 #include <stdlib.h>
 #include "koh_logger.h"
 #include "koh_common.h"
+#include "koh_table.h"
 
 #define DE_USE_STORAGE_CAPACITY 
 #define DE_USE_SPARSE_CAPACITY
@@ -71,7 +75,7 @@ de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
 
 /*
     de_sparse:
-
+    {{{
     How the components sparse set works?
     The main idea comes from ENTT C++ library:
     https://github.com/skypjack/entt
@@ -110,6 +114,7 @@ de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
 
     dense         idx:    0    1
     dense     content: [ e3,  e2]
+    }}}
 */
 typedef struct de_sparse {
     /*  sparse entity identifiers indices array.
@@ -312,6 +317,7 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
 
 /*
     de_storage
+    {{{
 
     handles the raw component data aligned with a de_sparse.
     stores packed component data elements for each entity in the sparse set.
@@ -342,7 +348,7 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
         void*   ecp = cp_data[i];
     }
 
-
+    }}}
 */
 typedef struct de_storage {
     size_t      cp_id; /* component id for this storage */
@@ -598,10 +604,12 @@ typedef struct de_ecs {
     de_entity*      entities; /* contains all the created entities */
     de_entity_id    available_id; /* first index in the list to recycle */
 
-    de_cp_type registry[DE_REGISTRY_MAX];
-    int registry_num;
+    //de_cp_type      registry[DE_REGISTRY_MAX];
+    //int             registry_num;
+    HTable          *cp_types;
 } de_ecs;
 
+/*
 void de_ecs_register(de_ecs *r, de_cp_type comp) {
     de_trace("de_ecs_register: ecs %p, type %s\n", r, de_cp_type2str(comp));
     for (int i = 0; i < r->registry_num; i++) {
@@ -615,6 +623,7 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
     }
     r->registry[r->registry_num++] = comp;
 }
+*/
 
 de_ecs* de_ecs_make() {
     de_trace("de_ecs_make:\n");
@@ -625,7 +634,8 @@ de_ecs* de_ecs_make() {
     r->available_id.id = de_null;
     r->entities_size = 0;
     r->entities = 0;
-    r->registry_num = 0;
+    //r->registry_num = 0;
+    r->cp_types = htable_new(NULL);
     return r;
 } 
 
@@ -633,16 +643,18 @@ void de_ecs_destroy(de_ecs* r) {
     de_trace("de_ecs_destroy: %p\n", r);
     assert(r);
 
-    /*if (!r) return;*/
+    htable_free(r->cp_types);
 
     if (r->storages) {
         for (size_t i = 0; i < r->storages_size; i++) {
             de_storage_delete(r->storages[i]);
         }
         free(r->storages);
-        r->storages = NULL;
     }
-    free(r->entities);
+
+    if (r->entities)
+        free(r->entities);
+
     memset(r, 0, sizeof(de_ecs));
     free(r);
 }
@@ -839,10 +851,30 @@ bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
     return de_storage_contains(de_assure(r, cp_type), e);
 }
 
+static void type_registor(de_ecs *r, de_cp_type cp_type) {
+    assert(strlen(cp_type.name) > 0);
+    htable_add(
+        r->cp_types, 
+        cp_type.name, strlen(cp_type.name) + 1, 
+        &cp_type, sizeof(cp_type)
+    );
+}
+
 void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
-    assert(de_valid(r, e));
-    assert(de_assure(r, cp_type));
+
+    type_registor(r, cp_type);
+
+    if (!de_valid(r, e)) {
+        trace("de_emplace: invalid entity\n");
+        abort();
+    }
+
+    if (!de_assure(r, cp_type)) {
+        trace("de_emplace: de_assure() failed for '%s'\n", cp_type.name);
+        abort();
+    }
+
     de_trace(
         "de_emplace: ecs %p, e %u, type %s\n", 
         r, e, de_cp_type2str(cp_type)
@@ -1242,8 +1274,8 @@ de_ecs *de_ecs_clone(de_ecs *in) {
     de_ecs *out = de_ecs_make();
     assert(out);
 
-    memcpy(out->registry, in->registry, sizeof(in->registry));
-    out->registry_num = in->registry_num;
+    //memcpy(out->registry, in->registry, sizeof(in->registry));
+    //out->registry_num = in->registry_num;
 
     out->storages_size = in->storages_size;
     out->entities_size = in->entities_size;
@@ -1268,4 +1300,87 @@ de_ecs *de_ecs_clone(de_ecs *in) {
 
 void de_set_options(de_options options) {
     _options = options;
+}
+
+HTableAction iter_type( 
+    const void *key, int key_len, void *value, int value_len, void *udata
+) {
+    de_cp_type *type = value;
+    ImGuiTableFlags row_flags = 0;
+    igTableNextRow(row_flags, 0);
+
+    //static bool selected = false;
+
+    char name_label[64] = {};
+    sprintf(name_label, "%s", type->name);
+
+    /*
+    if (igSelectable_BoolPtr(
+        //name_label, &ss->selected[i],
+        name_label, &selected,
+        ImGuiSelectableFlags_SpanAllColumns,
+        (ImVec2){0, 0}
+    )) {
+        //for (int j = 0; j < ss->num; ++j) {
+            //if (j != i)
+                //ss->selected[j] = false;
+        //}
+    }
+    */
+
+    igTableSetColumnIndex(0);
+    igText("%zu", type->cp_id);
+
+    igTableSetColumnIndex(1);
+    igText("%zu", type->cp_sizeof);
+
+    igTableSetColumnIndex(2);
+    igText("%p", type->on_destroy);
+
+    igTableSetColumnIndex(3);
+    igText("%s", type->name);
+
+    igTableSetColumnIndex(4);
+    igText("%s", type->description);
+
+    igTableSetColumnIndex(5);
+    igText("%zu", type->initial_cap);
+
+    return HTABLE_ACTION_NEXT;
+}
+
+void de_gui(de_ecs *r) {
+    ImGuiWindowFlags wnd_flags = 0;
+        //ImGuiWindowFlags_AlwaysAutoResize; // |
+        /*ImGuiWindowFlags_NoResize;*/
+    bool opened = true;
+    igBegin("de_ecs explorer", &opened, wnd_flags);
+
+    ImGuiTableFlags table_flags = 
+        ImGuiTableFlags_SizingStretchSame |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_BordersOuter |
+        ImGuiTableFlags_BordersV |
+        ImGuiTableFlags_ContextMenuInBody;
+
+    //ImGuiInputTextFlags input_flags = 0;
+
+    ImVec2 outer_size = {0., 0.};
+    const int columns_num = 6;
+    if (igBeginTable("components", columns_num, table_flags, outer_size, 0.)) {
+
+        igTableSetupColumn("cp_id", 0, 0, 0);
+        igTableSetupColumn("cp_sizeof", 0, 0, 1);
+        igTableSetupColumn("on_destroy", 0, 0, 2);
+        igTableSetupColumn("name", 0, 0, 3);
+        igTableSetupColumn("description", 0, 0, 4);
+        igTableSetupColumn("initial_cap", 0, 0, 5);
+        igTableHeadersRow();
+
+        htable_each(r->cp_types, iter_type, r);
+
+        igEndTable();
+    }
+
+    igEnd();
 }

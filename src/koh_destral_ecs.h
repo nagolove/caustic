@@ -56,7 +56,8 @@ typedef struct de_cp_type {
     size_t      cp_id; // component unique id
     size_t      cp_sizeof; // component sizeof
     void        (*on_destroy)(void *payload, de_entity e);
-    const char* name; // component name
+    const char  *name; // component name
+    const char  *description;
     size_t      initial_cap;
 } de_cp_type;
 
@@ -281,3 +282,5 @@ typedef struct de_options {
 
 void de_set_options(de_options options);
 void de_ecs_print(de_ecs *r);
+
+void de_gui(de_ecs *r);
