@@ -55,7 +55,12 @@ typedef struct de_entity_id { uint32_t id; } de_entity_id;
 typedef struct de_cp_type {
     size_t      cp_id; // component unique id
     size_t      cp_sizeof; // component sizeof
-    void        (*on_destroy)(void *payload, de_entity e);
+                           //
+    //void        (*on_destroy)(void *payload, de_entity e);
+    //void        (*on_create)(void *payload, de_entity e);
+    // Для компонентного проводника
+    char        **(*str_repr)(void *payload, de_entity e);
+
     const char  *name; // component name
     const char  *description;
     size_t      initial_cap;
@@ -272,7 +277,7 @@ void* de_view_get_safe(de_view *v, de_cp_type cp_type);
 void* de_view_get_by_index(de_view* v, size_t pool_index);
 void de_view_next(de_view* v);
 
-int de_typeof_num(de_ecs* r, de_cp_type cp_type);
+size_t de_typeof_num(de_ecs* r, de_cp_type cp_type);
 
 de_ecs *de_ecs_clone(de_ecs *r);
 

@@ -356,7 +356,7 @@ typedef struct de_storage {
     size_t      cp_data_size, cp_data_cap; /* number of elements in the cp_data array */
     size_t      cp_sizeof; /* sizeof for each cp_data element */
     de_sparse   sparse;
-    void (*on_destroy)(void *payload, de_entity e);
+    void        (*on_destroy)(void *payload, de_entity e);
     char        name[64];
     size_t      initial_cap;
 } de_storage;
@@ -364,6 +364,8 @@ typedef struct de_storage {
 
 static char *de_cp_type2str(de_cp_type cp_type) {
     static char buf[128] = {};
+
+    /*
     snprintf(
         buf, sizeof(buf),
         "id %zu, sizeof %zu, initial cap %zu, name '%s', on_destroy %p", 
@@ -373,6 +375,17 @@ static char *de_cp_type2str(de_cp_type cp_type) {
         cp_type.name,
         cp_type.on_destroy
     );
+    */
+
+    snprintf(
+        buf, sizeof(buf),
+        "id %zu, sizeof %zu, initial cap %zu, name '%s'", 
+        cp_type.cp_id,
+        cp_type.cp_sizeof,
+        cp_type.initial_cap,
+        cp_type.name
+    );
+
     return buf;
 }
 
@@ -408,7 +421,7 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     de_sparse_init(&s->sparse);
     s->cp_sizeof = cp_type.cp_sizeof;
     s->cp_id = cp_type.cp_id;
-    s->on_destroy = cp_type.on_destroy;
+    //s->on_destroy = cp_type.on_destroy;
     s->initial_cap = cp_type.initial_cap ? cp_type.initial_cap : 1000;
     s->sparse.initial_cap = cp_type.initial_cap;
     strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
@@ -607,6 +620,11 @@ typedef struct de_ecs {
     //de_cp_type      registry[DE_REGISTRY_MAX];
     //int             registry_num;
     HTable          *cp_types;
+
+    // Для ImGui таблицы
+    bool            *selected;
+    size_t          selected_num;
+    de_cp_type      selected_type;
 } de_ecs;
 
 /*
@@ -643,7 +661,10 @@ void de_ecs_destroy(de_ecs* r) {
     de_trace("de_ecs_destroy: %p\n", r);
     assert(r);
 
-    htable_free(r->cp_types);
+    if (r->cp_types) {
+        htable_free(r->cp_types);
+        r->cp_types = NULL;
+    }
 
     if (r->storages) {
         for (size_t i = 0; i < r->storages_size; i++) {
@@ -654,6 +675,11 @@ void de_ecs_destroy(de_ecs* r) {
 
     if (r->entities)
         free(r->entities);
+
+    if (r->selected) {
+        free(r->selected);
+        r->selected = NULL;
+    }
 
     memset(r, 0, sizeof(de_ecs));
     free(r);
@@ -743,7 +769,9 @@ de_entity de_create(de_ecs* r) {
 }
 
 // Находит или создает хранилище данного типа
-de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
+// Как назвать функцию, которая будет только искать хранилище определенного 
+// типа?
+static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     assert(r);
     de_trace("de_assure: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
     de_storage* storage_found = NULL;
@@ -761,7 +789,8 @@ de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
         de_storage* storage_new = de_storage_new(cp_type.cp_sizeof, cp_type);
         //r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof * r->storages);
         r->storages_size++;
-        r->storages = realloc(r->storages, r->storages_size * sizeof(r->storages[0]));
+        size_t sz = r->storages_size * sizeof(r->storages[0]);
+        r->storages = realloc(r->storages, sz);
         r->storages[r->storages_size - 1] = storage_new;
         return storage_new;
     }
@@ -845,25 +874,56 @@ void de_destroy(de_ecs* r, de_entity e) {
 
 bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
-    assert(de_valid(r, e));
-    assert(de_assure(r, cp_type));
+
+    // Для релиза проверку можно убрать?
+    if (!de_valid(r, e)) {
+        trace("de_has: invalid entity\n");
+        abort();
+    }
+
+    if (!de_assure(r, cp_type)) {
+        trace("de_has: de_assure() failed for '%s'\n", cp_type.name);
+        abort();
+    }
+
     de_trace("de_has: ecs %p, e %u, type %s\n", r, e, de_cp_type2str(cp_type));
     return de_storage_contains(de_assure(r, cp_type), e);
 }
 
-static void type_registor(de_ecs *r, de_cp_type cp_type) {
+// Все используемые типы добавляются в хтабличку
+static void type_register(de_ecs *r, de_cp_type cp_type) {
     assert(strlen(cp_type.name) > 0);
     htable_add(
         r->cp_types, 
         cp_type.name, strlen(cp_type.name) + 1, 
         &cp_type, sizeof(cp_type)
     );
+
+    // 0 1
+    // 1 2
+    size_t new_num = htable_count(r->cp_types);
+    if (r->selected_num != new_num) {
+        size_t sz = new_num * sizeof(r->selected[0]);
+        if (!r->selected) {
+            r->selected_num = new_num;
+            r->selected = malloc(sz);
+        }
+
+        void *new_ptr = realloc(r->selected, sz);
+        assert(new_ptr);
+        r->selected = new_ptr;
+
+        memset(r->selected, 0, sz);
+        trace("type_register: r->selected was zeroed\n");
+    }
+
+    r->selected_num = new_num;
 }
 
 void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
 
-    type_registor(r, cp_type);
+    type_register(r, cp_type);
 
     if (!de_valid(r, e)) {
         trace("de_emplace: invalid entity\n");
@@ -1163,7 +1223,7 @@ de_entity de_view_entity(de_view* v) {
     return v->pool->sparse.dense[v->current_entity_index];
 }
 
-int de_typeof_num(de_ecs* r, de_cp_type cp_type) {
+size_t de_typeof_num(de_ecs* r, de_cp_type cp_type) {
     de_storage *storage = de_assure(r, cp_type);
     assert(storage);
     de_trace("de_typeof_num: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
@@ -1302,32 +1362,30 @@ void de_set_options(de_options options) {
     _options = options;
 }
 
+struct TypeCtx {
+    de_ecs  *r;
+    int     i;
+};
+
 HTableAction iter_type( 
     const void *key, int key_len, void *value, int value_len, void *udata
 ) {
+    struct TypeCtx* ctx = udata;
+    de_ecs *r = ctx->r;
+    int *i = &ctx->i;
     de_cp_type *type = value;
     ImGuiTableFlags row_flags = 0;
     igTableNextRow(row_flags, 0);
 
     //static bool selected = false;
 
-    char name_label[64] = {};
-    sprintf(name_label, "%s", type->name);
+    // {{{
+    //char name_label[64] = {};
+    //snprintf(name_label, sizeof(name_label), "%s", type->name);
 
-    /*
-    if (igSelectable_BoolPtr(
-        //name_label, &ss->selected[i],
-        name_label, &selected,
-        ImGuiSelectableFlags_SpanAllColumns,
-        (ImVec2){0, 0}
-    )) {
-        //for (int j = 0; j < ss->num; ++j) {
-            //if (j != i)
-                //ss->selected[j] = false;
-        //}
-    }
-    */
-
+    // }}}
+    // */
+    
     igTableSetColumnIndex(0);
     igText("%zu", type->cp_id);
 
@@ -1335,18 +1393,42 @@ HTableAction iter_type(
     igText("%zu", type->cp_sizeof);
 
     igTableSetColumnIndex(2);
-    igText("%p", type->on_destroy);
+    if (igSelectable_BoolPtr(
+        type->name, &r->selected[*i],
+        ImGuiSelectableFlags_SpanAllColumns,
+        (ImVec2){0, 0}
+    )) {
+        r->selected_type = *type;
+        for (int j = 0; j < r->selected_num; ++j) {
+            if (j != *i)
+                r->selected[j] = false;
+        }
+    }
+    //igText("%s", type->name);
+    
+    (*i)++;
 
     igTableSetColumnIndex(3);
-    igText("%s", type->name);
+    igText("%zu", de_typeof_num(r, *type));
 
     igTableSetColumnIndex(4);
-    igText("%s", type->description);
-
-    igTableSetColumnIndex(5);
     igText("%zu", type->initial_cap);
 
+    //igTableSetColumnIndex(5);
+    //igText("%p", type->on_destroy);
+
+    igTableSetColumnIndex(5);
+    igText("%s", type->description);
+
     return HTABLE_ACTION_NEXT;
+}
+
+static int get_selected(const de_ecs *r) {
+    for (int i = 0; i < r->selected_num; i++) {
+        if (r->selected[i])
+            return i;
+    }
+    return -1;
 }
 
 void de_gui(de_ecs *r) {
@@ -1371,16 +1453,57 @@ void de_gui(de_ecs *r) {
 
         igTableSetupColumn("cp_id", 0, 0, 0);
         igTableSetupColumn("cp_sizeof", 0, 0, 1);
-        igTableSetupColumn("on_destroy", 0, 0, 2);
-        igTableSetupColumn("name", 0, 0, 3);
-        igTableSetupColumn("description", 0, 0, 4);
-        igTableSetupColumn("initial_cap", 0, 0, 5);
+        igTableSetupColumn("name", 0, 0, 2);
+        igTableSetupColumn("num", 0, 0, 3);
+        igTableSetupColumn("initial_cap", 0, 0, 4);
+        //igTableSetupColumn("on_destroy", 0, 0, 5);
+        igTableSetupColumn("description", 0, 0, 5);
         igTableHeadersRow();
 
-        htable_each(r->cp_types, iter_type, r);
+        struct TypeCtx ctx = {
+            .i = 0,
+            .r = r, 
+        };
+        htable_each(r->cp_types, iter_type, &ctx);
 
         igEndTable();
     }
+
+    int index = get_selected(r);
+    trace("de_gui: index %d\n", index);
+    if (index != -1 && r->selected_type.str_repr) {
+        if (igBeginTable("explore", 1, 0, (ImVec2) {}, 0.)) {
+            trace("de_gui: explore table\n");
+            de_view_single v = de_create_view_single(r, r->selected_type);
+            int i = 0;
+            for (; de_view_single_valid(&v); de_view_single_next(&v), i++) {
+                trace("de_gui: de_view_single iteration\n");
+                //if (igTreeNode_StrStr("hi", "%d", i)) {
+
+                char id_str[16] = {};
+                sprintf(id_str, "%d", i);
+
+                //if (igTreeNode_Str(id_str)) {
+                    void *payload = de_view_single_get(&v);
+                    de_entity e = de_view_single_entity(&v);
+                    trace("de_gui: igTreeNode_StrStr() item\n");
+                    char **lines = r->selected_type.str_repr(payload, e);
+                    while (*lines) {
+                        igTableNextRow(0, 0.);
+                        igText("%s", *lines);
+                        trace("de_gui: line %s\n", *lines);
+                        lines++;
+                    }
+                    //igTreePop();
+                //}
+
+            }
+
+            igEndTable();
+        }
+    }
+
+    //trace("de_gui: r->selected_num %zu\n", r->selected_num);
 
     igEnd();
 }
