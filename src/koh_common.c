@@ -1618,3 +1618,51 @@ char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
     assert(pbuf - buf < sz);
     return buf;
 }
+
+static char *pixelformat2str[] = {
+    [PIXELFORMAT_UNCOMPRESSED_GRAYSCALE] = "PIXELFORMAT_UNCOMPRESSED_GRAYSCALE", // 8 bit per pixel (no alpha)
+    [PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA] = "PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA",    // 8*2 bpp (2 channels)
+    [PIXELFORMAT_UNCOMPRESSED_R5G6B5] = "PIXELFORMAT_UNCOMPRESSED_R5G6B5",        // 16 bpp
+    [PIXELFORMAT_UNCOMPRESSED_R8G8B8] = "PIXELFORMAT_UNCOMPRESSED_R8G8B8",        // 24 bpp
+    [PIXELFORMAT_UNCOMPRESSED_R5G5B5A1] = "PIXELFORMAT_UNCOMPRESSED_R5G5B5A1",      // 16 bpp (1 bit alpha)
+    [PIXELFORMAT_UNCOMPRESSED_R4G4B4A4] = "PIXELFORMAT_UNCOMPRESSED_R4G4B4A4",      // 16 bpp (4 bit alpha)
+    [PIXELFORMAT_UNCOMPRESSED_R8G8B8A8] = "PIXELFORMAT_UNCOMPRESSED_R8G8B8A8",      // 32 bpp
+    [PIXELFORMAT_UNCOMPRESSED_R32] = "PIXELFORMAT_UNCOMPRESSED_R32",           // 32 bpp (1 channel - float)
+    [PIXELFORMAT_UNCOMPRESSED_R32G32B32] = "PIXELFORMAT_UNCOMPRESSED_R32G32B32",     // 32*3 bpp (3 channels - float)
+    [PIXELFORMAT_UNCOMPRESSED_R32G32B32A32] = "PIXELFORMAT_UNCOMPRESSED_R32G32B32A32",  // 32*4 bpp (4 channels - float)
+    [PIXELFORMAT_UNCOMPRESSED_R16] = "PIXELFORMAT_UNCOMPRESSED_R16",           // 16 bpp (1 channel - half float)
+    [PIXELFORMAT_UNCOMPRESSED_R16G16B16] = "PIXELFORMAT_UNCOMPRESSED_R16G16B16",     // 16*3 bpp (3 channels - half float)
+    [PIXELFORMAT_UNCOMPRESSED_R16G16B16A16] = "PIXELFORMAT_UNCOMPRESSED_R16G16B16A16",  // 16*4 bpp (4 channels - half float)
+    [PIXELFORMAT_COMPRESSED_DXT1_RGB] = "PIXELFORMAT_COMPRESSED_DXT1_RGB",        // 4 bpp (no alpha)
+    [PIXELFORMAT_COMPRESSED_DXT1_RGBA] = "PIXELFORMAT_COMPRESSED_DXT1_RGBA",       // 4 bpp (1 bit alpha)
+    [PIXELFORMAT_COMPRESSED_DXT3_RGBA] = "PIXELFORMAT_COMPRESSED_DXT3_RGBA",       // 8 bpp
+    [PIXELFORMAT_COMPRESSED_DXT5_RGBA] = "PIXELFORMAT_COMPRESSED_DXT5_RGBA",       // 8 bpp
+    [PIXELFORMAT_COMPRESSED_ETC1_RGB] = "PIXELFORMAT_COMPRESSED_ETC1_RGB",        // 4 bpp
+    [PIXELFORMAT_COMPRESSED_ETC2_RGB] = "PIXELFORMAT_COMPRESSED_ETC2_RGB",        // 4 bpp
+    [PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA] = "PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA",   // 8 bpp
+    [PIXELFORMAT_COMPRESSED_PVRT_RGB] = "PIXELFORMAT_COMPRESSED_PVRT_RGB",        // 4 bpp
+    [PIXELFORMAT_COMPRESSED_PVRT_RGBA] = "PIXELFORMAT_COMPRESSED_PVRT_RGBA",       // 4 bpp
+    [PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA] = "PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA",   // 8 bpp
+    [PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA] = "PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA", // 2 bpp
+};
+
+#define STR_NUM 8
+char **Texture2D_to_str(Texture2D *tex) {
+    assert(tex);
+    static char (buf[64 + 32])[STR_NUM];
+    static char *lines[STR_NUM];
+    for (int j = 0; j < STR_NUM; ++j) {
+        lines[j] = buf[j];
+    }
+    int i = 0;
+    sprintf(lines[i++], "{");
+    sprintf(lines[i++], "%u", tex->id);
+    sprintf(lines[i++], "format = %s,", pixelformat2str[tex->format]);
+    sprintf(lines[i++], "width = %d,", tex->width);
+    sprintf(lines[i++], "height = %d,", tex->height);
+    sprintf(lines[i++], "mipmaps = %d,", tex->mipmaps);
+    sprintf(lines[i++], "}");
+    lines[i] = NULL;
+    return (char**)lines;
+}
+#undef STR_NUM
