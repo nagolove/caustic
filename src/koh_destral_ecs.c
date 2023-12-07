@@ -12,11 +12,14 @@
     - Callbacks on component insertions/deletions/updates
 */
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "cimgui.h"
 #include "koh_logger.h"
 #include "koh_common.h"
 #include "koh_table.h"
@@ -1431,6 +1434,28 @@ static int get_selected(const de_ecs *r) {
     return -1;
 }
 
+static void entity_print(de_ecs *r) {
+    /*trace("de_gui: explore table\n");*/
+    if (igTreeNode_Str("explore")) {
+        de_view_single v = de_create_view_single(r, r->selected_type);
+        int i = 0;
+        for (; de_view_single_valid(&v); de_view_single_next(&v), i++) {
+            if (igTreeNode_Ptr((void*)(uintptr_t)i, "%d", i)) {
+                void *payload = de_view_single_get(&v);
+                de_entity e = de_view_single_entity(&v);
+                char **lines = r->selected_type.str_repr(payload, e);
+                while (*lines) {
+                    igText("%s", *lines);
+                    //trace("de_gui: line %s\n", *lines);
+                    lines++;
+                }
+                igTreePop();
+            }
+        }
+        igTreePop();
+    }
+}
+
 void de_gui(de_ecs *r) {
     ImGuiWindowFlags wnd_flags = 0;
         //ImGuiWindowFlags_AlwaysAutoResize; // |
@@ -1439,11 +1464,13 @@ void de_gui(de_ecs *r) {
     igBegin("de_ecs explorer", &opened, wnd_flags);
 
     ImGuiTableFlags table_flags = 
+        // {{{
         ImGuiTableFlags_SizingStretchSame |
         ImGuiTableFlags_Resizable |
         ImGuiTableFlags_BordersOuter |
         ImGuiTableFlags_BordersV |
         ImGuiTableFlags_ContextMenuInBody;
+    // }}}
 
     //ImGuiInputTextFlags input_flags = 0;
 
@@ -1470,40 +1497,10 @@ void de_gui(de_ecs *r) {
     }
 
     int index = get_selected(r);
-    trace("de_gui: index %d\n", index);
+    //trace("de_gui: index %d\n", index);
     if (index != -1 && r->selected_type.str_repr) {
-        if (igBeginTable("explore", 1, 0, (ImVec2) {}, 0.)) {
-            trace("de_gui: explore table\n");
-            de_view_single v = de_create_view_single(r, r->selected_type);
-            int i = 0;
-            for (; de_view_single_valid(&v); de_view_single_next(&v), i++) {
-                trace("de_gui: de_view_single iteration\n");
-                //if (igTreeNode_StrStr("hi", "%d", i)) {
-
-                char id_str[16] = {};
-                sprintf(id_str, "%d", i);
-
-                //if (igTreeNode_Str(id_str)) {
-                    void *payload = de_view_single_get(&v);
-                    de_entity e = de_view_single_entity(&v);
-                    trace("de_gui: igTreeNode_StrStr() item\n");
-                    char **lines = r->selected_type.str_repr(payload, e);
-                    while (*lines) {
-                        igTableNextRow(0, 0.);
-                        igText("%s", *lines);
-                        trace("de_gui: line %s\n", *lines);
-                        lines++;
-                    }
-                    //igTreePop();
-                //}
-
-            }
-
-            igEndTable();
-        }
+        entity_print(r);
     }
-
-    //trace("de_gui: r->selected_num %zu\n", r->selected_num);
 
     igEnd();
 }
