@@ -48,8 +48,11 @@ assert(path_rel_third_party)
 assert(path_abs_third_party)
 assert(path_wasm_third_party)
 
+-- requires {{{
 local tabular    = require "tabular".show
 local lfs        = require 'lfs'
+local mkdir      = lfs.mkdir
+local chdir      = lfs.chdir
 local ansicolors = require 'ansicolors'
 local inspect    = require 'inspect'
 local argparse   = require 'argparse'
@@ -57,9 +60,10 @@ local ut         = require "utils"
 local Cache      = require "cache"
 local lanes      = require "lanes".configure()
 local sleep      = require "socket".sleep
+--- }}}
 
 if string.match(lfs.currentdir(), "tl_dst") then
-    lfs.chdir("..")
+    chdir("..")
 end
 
 -- TODO: Как-то предухранить каталог caustic с рабочей средой от затирания
@@ -202,7 +206,7 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         if not file then
             push_num = push_num + 1
             ut.push_current_dir()
-            lfs.chdir("..")
+            chdir("..")
         else
             break
         end
@@ -324,8 +328,10 @@ local record Dependency
     init: function(dep: Dependency): Dependency
     after_init: function(dep: Dependency)
 
-    -- TODO: заменить custom_build на build. Значения коллбэка - build_make,
-    -- build_cmake, etc
+    -- Строки для дефайнов компилятора
+    custom_defines: function(dep: Dependency): {string}
+    lualibrary_install: function(abs_project_root_dir: string, to_dir: string)
+    -- Значения коллбэка - build_make, build_cmake, etc
     build: function(dep: Dependency)
 	-- for WebAssembly
     wbuild: function(dep: Dependency) 
@@ -376,7 +382,7 @@ local function gennann_after_build(dep: Dependency)
     print('linking genann to static library', dep.dir)
     ut.push_current_dir()
     print("dep.dir", dep.dir)
-    lfs.chdir(dep.dir)
+    chdir(dep.dir)
     cmd_do("ar rcs libgenann.a genann.o")
     ut.pop_dir()
 end
@@ -384,7 +390,7 @@ end
 local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
     ut.push_current_dir()
-    lfs.chdir(dep.dir)
+    chdir(dep.dir)
     local opts = {
         "BUILD_DEMOS=OFF",
         "INSTALL_DEMOS=OFF",
@@ -403,7 +409,7 @@ end
 local function build_pcre2(dep: Dependency)
     ut.push_current_dir()
     print("pcre2_custom_build: dep.dir", dep.dir)
-    lfs.chdir(dep.dir)
+    chdir(dep.dir)
     print("pcre2_custom_build:", lfs.currentdir())
 
     cmd_do("rm CMakeCache.txt")
@@ -416,9 +422,9 @@ local function build_small_regex(dep: Dependency)
     print('custom_build:', dep.dir)
     print('currentdir:', lfs.currentdir())
     local prevdir = lfs.currentdir()
-    local ok, errmsg = lfs.chdir('libsmallregex')
+    local ok, errmsg = chdir('libsmallregex')
     if not ok then
-        print('custom_build: lfs.chdir()', errmsg)
+        print('custom_build: chdir()', errmsg)
         return
     end
     print(lfs.currentdir())
@@ -434,7 +440,7 @@ local function build_small_regex(dep: Dependency)
         print("error in ", cmd_ar)
     end
     print(fd:read("*a"))
-    lfs.chdir(prevdir)
+    chdir(prevdir)
 end
 
 local function guard()
@@ -530,7 +536,7 @@ local function cimgui_after_init(dep: Dependency)
     cmd_do("cp " .. imgui_files_str .. " ../cimgui/imgui")
 
     ut.push_current_dir()
-    lfs.chdir(dep.dir)
+    chdir(dep.dir)
 
     print("cimgui_after_init:", lfs.currentdir())
 
@@ -538,7 +544,7 @@ local function cimgui_after_init(dep: Dependency)
 
     cmd_do('git submodule update --init --recursive --depth 1')
     ut.push_current_dir()
-    lfs.chdir('generator')
+    chdir('generator')
     local lua_path = 'LUA_PATH="./?.lua;"$LUA_PATH'
     if use_freetype then
         cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv freetype"')
@@ -601,7 +607,7 @@ local function freetype_after_init(_: Dependency)
 	--     cmake -B build -D FT_REQUIRE_ZLIB=TRUE  -D FT_REQUIRE_BZIP2=TRUE  -D FT_REQUIRE_PNG=TRUE  -D FT_REQUIRE_HARFBUZZ=TRUE  -D FT_REQUIRE_BROTLI=TRUE
 
     push_current_dir()
-    lfs.chdir("build")
+    chdir("build")
     cmd_do("make -j")
     pop_dir()
 end
@@ -637,8 +643,8 @@ end
 local function update_box2c(dep: Dependency)
     ut.push_current_dir()
     --print("dep", inspect(dep))
-    lfs.chdir(path_abs_third_party)
-    lfs.chdir(dep.dir)
+    chdir(path_abs_third_party)
+    chdir(dep.dir)
 
     print("update_box2c", lfs.currentdir())
 
@@ -655,7 +661,64 @@ local function update_box2c(dep: Dependency)
     ut.pop_dir()
 end
 
+local function defines_luafun(_: Dependency): {string}
+    return { "" }
+end
+
+local function lualibrary_install_luafun(
+    abs_project_root_dir: string, to_dir: string
+)
+    ut.push_current_dir()
+    chdir(to_dir)
+    mkdir('luafun')
+    ut.pop_dir()
+    print('lualibrary_install_luafun:', lfs.currentdir())
+    print('lualibrary_install_luafun:', to_dir)
+    cmd_do(format("cp fun.lua %s/luafun", to_dir))
+
+    chdir(abs_project_root_dir)
+    chdir("src")
+
+    local header = io.open("package_path.h", "w")
+    header:write([[
+#ifndef KOH_PACKAGE_PATH_
+#define KOH_PACKAGE_PATH_
+    extern char **koh_packages_path;
+#endif
+]])
+    header:close()
+
+    local source = io.open("package_path.h", "w")
+    source:write([[
+    Тут полная лажа
+    ]])
+    source:close()
+
+
+end
+
 dependencies = {
+
+    -- TODO: Определить действие для Lua библиотек, которые должны быть 
+    -- скопированы в каталог приложения, уровнем глубже чем assets
+    -- Но повторное копирование не требуется. Добавлять путь для LUA_PATH
+    -- TODO: Добавить возможность добавления библиотекой дефайнов для 
+    -- компилятора, в частности для разрешения пути.
+    {
+        disabled = false,
+        --build = build_munit,
+        description = "lua functional style library",
+        custom_defines = defines_luafun,
+        lualibrary_install = lualibrary_install_luafun,
+        dir = "luafun",
+        includes = { },
+        libdirs = { },
+        links = { },
+        links_internal = {},
+        name = "luafun",
+        url_action = "git",
+        url = "https://github.com/luafun/luafun.git",
+    },
 
     {
         disabled = false,
@@ -1032,6 +1095,7 @@ local function gather_links(deps: {Dependency}, linkstype: LinksType): {string}
     return links_tbl
 end
 
+-- Возвращает список зависимостей заданный в конфигурационном файле.
 local function get_ready_deps(cfg: Cfg): {Dependency}
     local ready_deps: {Dependency} = {}
 
@@ -1204,7 +1268,7 @@ local function after_init(dep: Dependency)
     ut.push_current_dir()
     local ok, errmsg: boolean, string = pcall(function()
         print('after_init:', dep.name)
-        lfs.chdir(dep.dir)
+        chdir(dep.dir)
         dep.after_init(dep)
     end)
     if not ok then
@@ -1219,7 +1283,7 @@ local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
     local dst = dep.dir or ""
     cmd_do("git clone " .. dep.url .. " " ..dst)
     if dep.dir then
-        lfs.chdir(dep.dir)
+        chdir(dep.dir)
     else
         print('git_clone: dep.dir == nil', lfs.currentdir())
     end
@@ -1253,9 +1317,9 @@ local function download_and_unpack_zip(dep: Dependency)
 	local attributes = lfs.attributes(dep.dir)
 	if not attributes then
 		print('download_and_unpack_zip: directory is not exists')
-		local ok, err = lfs.mkdir(dep.dir)
+		local ok, err = mkdir(dep.dir)
 		if not ok then
-			print('download_and_unpack_zip: lfs.mkdir error', err)
+			print('download_and_unpack_zip: mkdir error', err)
 			print('dep', inspect(dep))
 			os.exit(1)
 		end
@@ -1278,7 +1342,7 @@ local function download_and_unpack_zip(dep: Dependency)
     cfile:close()
 
     ut.push_current_dir()
-    lfs.chdir(dep.dir)
+    chdir(dep.dir)
 
     local zip = require 'zip'
     local zfile, zerr = zip.open(dep.fname)
@@ -1287,7 +1351,7 @@ local function download_and_unpack_zip(dep: Dependency)
     end
     for file in zfile:files() do
         if file.uncompressed_size == 0 then
-            lfs.mkdir(file.filename)
+            mkdir(file.filename)
         else
             local filereader = zfile:open(file.filename)
             local data = filereader:read("*a")
@@ -1446,6 +1510,7 @@ local record Actions
     -- аргумент функции
     init_smart: function(Args)
 
+    luainit: function(Args)
     make: function(Args)
     publish: function(Args)
     remove: function(Args)
@@ -1494,6 +1559,10 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+    luainit = {
+        summary = "create 'assets' directory and copy there lua libraries",
+        --options = { "-n --name", },
+    },
     update = {
         summary = "call update() function to get latest git version of source",
         options = { "-n --name", },
@@ -1601,12 +1670,12 @@ local function _init_smart(path: string, deps: {Dependency})
     print("_init_smart", path, inspect(deps))
     ut.push_current_dir()
 
-    if not lfs.chdir(path) then
-        if not lfs.mkdir(path) then
-            print('could not do lfs.mkdir()')
+    if not chdir(path) then
+        if not mkdir(path) then
+            print('could not do mkdir()')
             os.exit()
         end
-        lfs.chdir(path)
+        chdir(path)
     end
 
     local threads: {lanes.Thread} = {}
@@ -1669,14 +1738,14 @@ local function _init(path: string, deps: {Dependency})
 	--print(tabular(deps))
     ut.push_current_dir()
 
-    lfs.chdir(path_caustic)
+    chdir(path_caustic)
 
-    if not lfs.chdir(path) then
-        if not lfs.mkdir(path) then
-            print('could not do lfs.mkdir()')
+    if not chdir(path) then
+        if not mkdir(path) then
+            print('could not do mkdir()')
             os.exit()
         end
-        lfs.chdir(path)
+        chdir(path)
     end
 
     if not ut.git_is_repo_clean(".") then
@@ -1887,7 +1956,7 @@ TODO:
 local function sub_test(_args: Args, cfg: Cfg)
     local src_dir = cfg.src or "src"
     ut.push_current_dir()
-    if not lfs.chdir(src_dir) then
+    if not chdir(src_dir) then
         print(format("sub_test: could not chdir to '%s'", src_dir))
         os.exit(1)
     end
@@ -1945,7 +2014,7 @@ function actions.selftest_lg(_args: Args)
         --print('test_dirs', inspect(test_dirs))
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
-            lfs.chdir(dir)
+            chdir(dir)
             print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
             if not ut.git_is_repo_clean(".") then
                 cmd_do("lazygit")
@@ -1969,7 +2038,7 @@ function actions.selftest_status(_args: Args)
         --print('test_dirs', inspect(test_dirs))
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
-            lfs.chdir(dir)
+            chdir(dir)
             print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
             cmd_do("git status")
         end
@@ -1990,7 +2059,7 @@ function actions.selftest(_args: Args)
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             assert(type(dir) == "string")
-            lfs.chdir(dir)
+            chdir(dir)
             cmd_do("caustic make -x")
             cmd_do("caustic run -c -x")
         end
@@ -2166,7 +2235,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
 
     local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
     local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
-    lfs.mkdir(game_dir)
+    mkdir(game_dir)
     local cmd = format(
         --"cp -r %s %s/%s",
         "cp %s/* %s/%s",
@@ -2176,7 +2245,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
     cmd_do(cmd)
 
     ut.push_current_dir()
-    lfs.chdir(site_repo_tmp)
+    chdir(site_repo_tmp)
     print(lfs.currentdir())
 
     --io.popen("ls")
@@ -2211,7 +2280,7 @@ local function rec_remove_dir(dirname: string)
     -- XXX Не работает проверка на незакрепленные изменения в гите.
     -- Проверять только если каталог является гит хранилищем
     ut.push_current_dir()
-    ok, errmsg = lfs.chdir(dirname)
+    ok, errmsg = chdir(dirname)
     if ok then
         if not ut.git_is_repo_clean(dirname) then
             local curdir = lfs.currentdir()
@@ -2291,7 +2360,7 @@ end
 
 local function _remove(path: string, dirnames: {string})
     ut.push_current_dir()
-    lfs.chdir(path)
+    chdir(path)
 
     if not string.match(lfs.currentdir(), path) then
         print("Bad current directory")
@@ -2395,7 +2464,7 @@ end
 
 local function buildw_chipmunk()
     ut.push_current_dir()
-    lfs.chdir("wasm_3rd_party/Chipmunk2D/")
+    chdir("wasm_3rd_party/Chipmunk2D/")
 
     cmd_do("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
     cmd_do("emmake make -j")
@@ -2419,7 +2488,7 @@ end
 
 local function buildw_lua()
     local prevdir = lfs.currentdir()
-    lfs.chdir("wasm_3rd_party/lua")
+    chdir("wasm_3rd_party/lua")
 
     local objfiles = {}
     local exclude = {
@@ -2437,12 +2506,12 @@ local function buildw_lua()
     end, exclude)
     link(objfiles, 'liblua.a')
 
-    lfs.chdir(prevdir)
+    chdir(prevdir)
 end
 
 local function buildw_raylib()
     ut.push_current_dir()
-    lfs.chdir("wasm_3rd_party/raylib")
+    chdir("wasm_3rd_party/raylib")
 
     --[[
     make CC=x86_64-w64-mingw32-gcc \
@@ -2451,7 +2520,7 @@ local function buildw_raylib()
         RAYLIB_LIBTYPE=SHARED
     --]]
 
-    lfs.chdir("src")
+    chdir("src")
     local EMSDK = os.getenv('EMSDK')
     local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
     print(cmd)
@@ -2464,7 +2533,7 @@ end
 
 local function buildw_genann()
     local prevdir = lfs.currentdir()
-    lfs.chdir("wasm_3rd_party/genann")
+    chdir("wasm_3rd_party/genann")
 
     local objfiles = {}
     local sources = { 
@@ -2486,12 +2555,12 @@ local function buildw_genann()
     end
     link(objfiles, 'libgenann.a')
 
-    lfs.chdir(prevdir)
+    chdir(prevdir)
 end
 
 local function buildw_smallregex()
     local prevdir = lfs.currentdir()
-    lfs.chdir("wasm_3rd_party/small-regex/libsmallregex")
+    chdir("wasm_3rd_party/small-regex/libsmallregex")
 
     local objfiles = {}
     local sources = { 
@@ -2513,12 +2582,12 @@ local function buildw_smallregex()
     end
     link(objfiles, 'libsmallregex.a')
 
-    lfs.chdir(prevdir)
+    chdir(prevdir)
 end
 
 local function buildw_utf8proc()
     ut.push_current_dir()
-    lfs.chdir("wasm_3rd_party/utf8proc/")
+    chdir("wasm_3rd_party/utf8proc/")
 
     cmd_do("emmake make")
 
@@ -2564,7 +2633,7 @@ local function build_project(
 
     local define_str = "-DPLATFORM_WEB=1"
 
-    lfs.mkdir(output_dir)
+    mkdir(output_dir)
     local path = "src"
     local objfiles = {}
     filter_sources_c(path, function(file: string)
@@ -2588,11 +2657,11 @@ local function link_wasm_libproject(objfiles: {string})
     print('link_libproject')
     assert(objfiles)
     local prevdir = lfs.currentdir()
-    lfs.chdir("wasm_objects")
+    chdir("wasm_objects")
     print('currentdir', lfs.currentdir())
     print(tabular(objfiles))
     link(objfiles, 'libproject.a')
-    lfs.chdir(prevdir)
+    chdir(prevdir)
 end
 
 local function link_koh_lib(objs_dir: string)
@@ -2659,7 +2728,7 @@ local function link_wasm_project(main_fname: string, _args: Args)
     print('link_project:', lfs.currentdir())
     --local project_dir = string.match(currentdir, ".*/(.*)$")
     local project_dir = "wasm_build"
-    lfs.mkdir(project_dir)
+    mkdir(project_dir)
 
     local prev_dir = lfs.currentdir()
 
@@ -2740,7 +2809,7 @@ local function link_wasm_project(main_fname: string, _args: Args)
     print(cmd)
     cmd_do(cmd)
 
-    lfs.chdir(prev_dir)
+    chdir(prev_dir)
 end
 
 function actions.wbuild(_args: Args)
@@ -2787,7 +2856,7 @@ local function _build_smart(dep: Dependency)
     end
 
     local prevdir = lfs.currentdir()
-    lfs.chdir(dirname)
+    chdir(dirname)
 
     if dep.build then
         local ok, errmsg: boolean, string = pcall(function()
@@ -2809,7 +2878,7 @@ local function _build_smart(dep: Dependency)
         end
     end
 
-    lfs.chdir(prevdir)
+    chdir(prevdir)
 end
 --]]
 
@@ -2828,11 +2897,11 @@ local function _build(dep: Dependency)
         os.exit(1)
     end
 
-    local ok_chd, errmsg_chd = lfs.chdir(dep.dir)
+    local ok_chd, errmsg_chd = chdir(dep.dir)
     if not ok_chd then
         print("current directory", lfs.currentdir())
         local msg = format(
-            "_build: could not do lfs.chdir('%s') dependency with %s",
+            "_build: could not do chdir('%s') dependency with %s",
             dep.dir, errmsg_chd
         )
         print(ansicolors("%{red}" .. msg .. "%{reset}"))
@@ -2870,9 +2939,9 @@ function actions.build(_args: Args)
     ut.push_current_dir()
 
     -- Путь к развернутой системе
-    lfs.chdir(path_caustic)
+    chdir(path_caustic)
     -- Путь к библиотекам
-    lfs.chdir(path_rel_third_party)
+    chdir(path_rel_third_party)
 
     print("actions.build: current directory", lfs.currentdir())
 
@@ -3002,7 +3071,7 @@ end
 
 local function cache_remove()
     ut.push_current_dir()
-    lfs.chdir('src')
+    chdir('src')
     local err = os.remove(cache_name)
     if not err then
         print('cache removed')
@@ -3118,7 +3187,7 @@ function actions.updates(_args: Args)
             if dep.dir then
                 print('dep.dir', dep.dir)
                 ut.push_current_dir()
-                lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
+                chdir(path_rel_third_party .. "/" .. dep.dir)
                 cmd_do({ 
                     "git fetch",
                     "git status",
@@ -3287,9 +3356,11 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
     local ready_deps = get_ready_deps(cfg)
     local map_all_deps = {}
 
+    -- Отображение: Имя -> Зависимость
     for _, dep in ipairs(ut.deepcopy(dependencies)) do
         map_all_deps[dep.name] = dep
     end
+    -- Удаление зависимостей согласно конфигурационной структуре
     for _, dep in ipairs(ready_deps) do
         map_all_deps[dep.name] = nil
     end
@@ -3301,7 +3372,13 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
 
     for _, dep in ipairs(ready_deps) do
         table.insert(flags, format("-DKOH_%s", dep.name:upper()))
+        if dep.custom_defines then
+            for define in ipairs(dep.custom_defines()) do
+                table.insert(flags, format("-D%s", define))
+            end
+        end
     end
+
     return flags
 end
 
@@ -3318,7 +3395,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     end
 
     local src_dir = cfg.src or "src"
-    local ok, errmsg =  lfs.chdir(src_dir) 
+    local ok, errmsg =  chdir(src_dir) 
     if not ok then
         print(format(
             "sub_make: could not chdir to '%s' with %s", src_dir, errmsg
@@ -3434,6 +3511,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         -- Через lfs.attributes()?
         local cmd = format(
             "cc -lm %s %s %s %s -o %s -c %s %s", 
+            -- TODO: Объеденить _defines и _flags
             _defines, _includes, _libspath, _flags,
             _output, _input, _libs
         )
@@ -3501,7 +3579,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     -- скрипте.
     if cfg.artifact then
         ut.push_current_dir()
-        lfs.chdir(path_caustic)
+        chdir(path_caustic)
         if verbose then
             print("sub_make: currentdir", lfs.currentdir())
         end
@@ -3553,6 +3631,56 @@ function actions.make(_args: Args)
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     for _, cfg in ipairs(cfgs) do
         sub_make(_args, cfg, push_num)
+    end
+end
+
+local function sub_luainit(_args: Args, cfg: Cfg, push_num: integer)
+    ut.push_current_dir()
+    print('sub_luainit', lfs.currentdir())
+
+    mkdir('assets')
+    chdir('assets')
+
+    print('sub_luainit', lfs.currentdir())
+
+    mkdir('lualibs')
+    chdir('lualibs')
+
+    local to = lfs.currentdir()
+
+    for _, dep in ipairs(get_ready_deps(cfg)) do
+        if dep.lualibrary_install then
+            ut.push_current_dir()
+
+            chdir(path_abs_third_party)
+            chdir(dep.dir)
+
+            print("sub_luainit: before lualibrary_install", lfs.currentdir())
+
+            dep.lualibrary_install(to)
+            ut.pop_dir()
+        end
+    end
+
+    print('sub_luainit', lfs.currentdir())
+
+    if not chdir(path_rel_third_party) then
+        print('sub_luainit: problem with chdir(path_rel_third_party)')
+        os.exit(1)
+    end
+    print('sub_luainit', lfs.currentdir())
+    ut.pop_dir(push_num)
+end
+
+function actions.luainit(_args: Args)
+    if verbose then
+        print('luainit:')
+        print(tabular(_args))
+    end
+
+    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    for _, cfg in ipairs(cfgs) do
+        sub_luainit(_args, cfg, push_num)
     end
 end
 
