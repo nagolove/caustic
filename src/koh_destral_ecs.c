@@ -2,6 +2,7 @@
 // vim: fdm=marker
 
 #include "koh_destral_ecs.h"
+#include "lauxlib.h"
 
 /*
  TODO LIST:
@@ -10,10 +11,15 @@
     (de_it_start, de_it_next, de_it_valid
     (de_multi_start, de_multi_next, de_multi_valid,)
     - Callbacks on component insertions/deletions/updates
+
+    Что с доступом из другого потока? Возможность потерять компонент, который
+    от записи из другого потока станет недействительным.
 */
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
+// includes {{{
+#include "lua.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -23,6 +29,8 @@
 #include "koh_logger.h"
 #include "koh_common.h"
 #include "koh_table.h"
+#include "koh_script.h"
+// }}}
 
 #define DE_USE_STORAGE_CAPACITY 
 #define DE_USE_SPARSE_CAPACITY
@@ -624,10 +632,13 @@ typedef struct de_ecs {
     //int             registry_num;
     HTable          *cp_types;
 
+    // TODO: Вынести GUI поля в отдельную струткурку
     // Для ImGui таблицы
     bool            *selected;
     size_t          selected_num;
     de_cp_type      selected_type;
+    lua_State       *l;
+    int             ref_filter_func;
 } de_ecs;
 
 /*
@@ -1380,15 +1391,6 @@ HTableAction iter_type(
     ImGuiTableFlags row_flags = 0;
     igTableNextRow(row_flags, 0);
 
-    //static bool selected = false;
-
-    // {{{
-    //char name_label[64] = {};
-    //snprintf(name_label, sizeof(name_label), "%s", type->name);
-
-    // }}}
-    // */
-    
     igTableSetColumnIndex(0);
     igText("%zu", type->cp_id);
 
@@ -1407,7 +1409,6 @@ HTableAction iter_type(
                 r->selected[j] = false;
         }
     }
-    //igText("%s", type->name);
     
     (*i)++;
 
@@ -1416,9 +1417,6 @@ HTableAction iter_type(
 
     igTableSetColumnIndex(4);
     igText("%zu", type->initial_cap);
-
-    //igTableSetColumnIndex(5);
-    //igText("%p", type->on_destroy);
 
     igTableSetColumnIndex(5);
     igText("%s", type->description);
@@ -1434,6 +1432,39 @@ static int get_selected(const de_ecs *r) {
     return -1;
 }
 
+static void lines_print_filter(de_ecs *r, char **lines) {
+    char halfmegabuf[1024 * 512] = {};
+    char *p = halfmegabuf;
+    while (*lines) {
+        p += sprintf(p, "%s", *lines);
+        lines++;
+    }
+
+    lua_settop(r->l, 0);
+
+    int type = lua_rawgeti(r->l, LUA_REGISTRYINDEX, r->ref_filter_func);
+    assert(type == LUA_TFUNCTION);
+
+    if (luaL_dostring(r->l, halfmegabuf) != LUA_OK) {
+        const char *msg = lua_tostring(r->l, -1);
+        trace("lines_print_filter: Lua failed with '%s'\n", msg);
+        exit(EXIT_FAILURE);
+    }
+
+    lua_pushnil(r->l);
+    // Или нужен абсолютный индекс?
+    while (lua_next(r->l, -2)) {
+        lua_pop(r->l, 1);
+    }
+}
+
+static void lines_print(char **lines) {
+    while (*lines) {
+        igText("%s", *lines);
+        lines++;
+    }
+}
+
 static void entity_print(de_ecs *r) {
     /*trace("de_gui: explore table\n");*/
     if (igTreeNode_Str("explore")) {
@@ -1444,11 +1475,11 @@ static void entity_print(de_ecs *r) {
                 void *payload = de_view_single_get(&v);
                 de_entity e = de_view_single_entity(&v);
                 char **lines = r->selected_type.str_repr(payload, e);
-                while (*lines) {
-                    igText("%s", *lines);
-                    //trace("de_gui: line %s\n", *lines);
-                    lines++;
-                }
+
+                if (r->l && r->ref_filter_func)
+                    lines_print_filter(r, lines);
+                else
+                    lines_print(lines);
                 igTreePop();
             }
         }
@@ -1473,6 +1504,35 @@ void de_gui(de_ecs *r) {
     // }}}
 
     //ImGuiInputTextFlags input_flags = 0;
+    static bool use_lua_filter = false;
+    igCheckbox("lua filter", &use_lua_filter);
+
+    if (use_lua_filter) {
+        if (!r->l) {
+            r->l = sc_state_new(true);
+        }
+    } else {
+        if (r->l) {
+            lua_close(r->l);
+            r->l = NULL;
+        }
+    }
+
+    if (use_lua_filter) {
+        static char buf[512] = {};
+        if (igInputText("query", buf, sizeof(buf) - 1, 0, NULL, NULL)) {
+            lua_settop(r->l, 0);
+            if (luaL_loadstring(r->l, buf) == LUA_OK) {
+                // XXX: Не происходит-ли создания новой ссылки на каждом 
+                // обновлении?
+                r->ref_filter_func = luaL_ref(r->l, -1);
+            } else {
+                igText("%", lua_tostring(r->l, -1));
+            }
+        }
+    }
+
+    igText("r->ref_filter_func %d\n", r->ref_filter_func);
 
     ImVec2 outer_size = {0., 0.};
     const int columns_num = 6;
