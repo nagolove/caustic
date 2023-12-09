@@ -49,3 +49,4 @@ static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
     return r;
 }
 
+lua_State *sc_state_new(bool openlibs);

@@ -841,3 +841,15 @@ void koh_sc_from_args(int argc, char **argv) {
     }
 }
 
+lua_State *sc_state_new(bool openlibs) {
+    lua = luaL_newstate();
+    assert(lua);
+    trace("sc_init: lua version %f\n", lua_version(lua));
+    if (luaL_dostring(lua, "package.path = package.path .. ''") != LUA_OK) {
+        trace("sc_state_new: could not changed package.path\n");
+        abort();
+    }
+    if (openlibs)
+        luaL_openlibs(lua);
+    return lua;
+}
