@@ -662,7 +662,10 @@ local function update_box2c(dep)
 end
 
 local function defines_luafun(_)
-   return { "" }
+
+
+
+   return {}
 end
 
 local function lualibrary_install_luafun(
