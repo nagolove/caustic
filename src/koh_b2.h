@@ -59,9 +59,9 @@ struct WorldCtx {
     b2WorldDef          world_def;
     b2DebugDraw         world_dbg_draw;
     bool                is_dbg_draw;
-    b2WorldId           world;
     int                 tasks_count;
     uint32_t            width, height;
+    b2WorldId           world;
     xorshift32_state    *xrng;
 };
 
