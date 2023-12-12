@@ -662,7 +662,10 @@ local function update_box2c(dep: Dependency)
 end
 
 local function defines_luafun(_: Dependency): {string}
-    return { "" }
+    -- XXX: Пустая строка приводит к такой ошибке компилятора
+    --<command-line>: error: macro names must be identifiers                                         /
+    --return { "" }
+    return {}
 end
 
 local function lualibrary_install_luafun(
