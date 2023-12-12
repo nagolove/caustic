@@ -243,3 +243,4 @@ void koh_backtrace_print();
 char *Vector2_tostr_alloc(const Vector2 *verts, int num);
 
 char **Texture2D_to_str(Texture2D *tex);
+Rectangle rect_by_texture(Texture2D tex);

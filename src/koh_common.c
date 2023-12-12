@@ -1666,3 +1666,12 @@ char **Texture2D_to_str(Texture2D *tex) {
     return (char**)lines;
 }
 #undef STR_NUM
+
+Rectangle rect_by_texture(Texture2D tex) {
+    return (Rectangle) {
+        .x = 0,
+        .y = 0,
+        .width = tex.width,
+        .height = tex.height,
+    };
+}
