@@ -86,7 +86,7 @@ inline static void shapes_store_clear(struct ShapesStore *ss) {
 // Возвращает буфер в статической памяти.
 // Последний элемент массива - NULL
 char **b2WorldDef_to_str(b2WorldDef wdef, bool lua);
-char ** b2Statistics_to_str(b2WorldId world, bool lua);
+char **b2Statistics_to_str(b2WorldId world, bool lua);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
 
 const char *b2BodyType_to_str(b2BodyType bt);
