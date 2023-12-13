@@ -15,6 +15,7 @@ typedef struct Resource {
     void                *data, *source_data;
 } Resource;
 
+// Как добавить подсчет ссылок на загруженные текстуры?
 Texture2D res_tex_load(Resource *res_list, const char *fname);
 Font res_font_load(Resource *res_list, const char *fname, int font_size);
 Shader res_shader_load(Resource *res_list, const char *vertex_fname);

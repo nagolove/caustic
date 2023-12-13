@@ -22,8 +22,11 @@ void koh_render_shutdown();
 void koh_render_init();
 void render_circle(Vector2 center, float radius, Color color);
 
-void render_verts_with_tex(
+void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
+);
+void render_v3_with_tex(
+    Texture2D texture, Rectangle source, Vector2 verts[3], Color tint, int order
 );
 void render_verts4(Vector2 verts[4], Color tint);
 void render_verts3(Vector2 verts[3], Color tint);

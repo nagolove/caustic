@@ -282,7 +282,7 @@ void render_verts4(Vector2 verts[4], Color tint) {
     rlSetTexture(0);
 }
 
-void render_verts_with_tex(
+void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
 ) {
     // Check if texture is valid
@@ -344,5 +344,100 @@ void render_verts_with_tex(
         rlSetTexture(0);
 
     }
+}
+
+void render_v3_with_tex(
+    Texture2D texture, Rectangle source, Vector2 verts[3], Color tint, int order
+) {
+    // Check if texture is valid
+    if (texture.id <= 0)
+        return;
+
+    float width = (float)texture.width;
+    float height = (float)texture.height;
+
+    /*
+    bool flipX = false;
+
+    if (source.width < 0) { flipX = true; source.width *= -1; }
+    if (source.height < 0) source.y -= source.height;
+    */
+
+    rlSetTexture(texture.id);
+    rlBegin(RL_TRIANGLES);
+
+        rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+        rlNormal3f(0.0f, 0.0f, 1.0f);                          // Normal vector pointing towards viewer
+
+        /*
+        // Bottom-left corner for texture and quad
+        if (flipX) 
+            rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+        else 
+            rlTexCoord2f(source.x/width, (source.y + source.height)/height);
+        rlVertex2f(verts[3].x, verts[3].y);
+        */
+
+        switch (order) {
+        case 0: 
+        // Bottom-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+        rlVertex2f(verts[2].x, verts[2].y);
+
+        // Top-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, source.y/height);
+        rlVertex2f(verts[1].x, verts[1].y);
+
+        // Top-left corner for texture and quad
+        rlTexCoord2f(source.x/width, source.y/height);
+        rlVertex2f(verts[0].x, verts[0].y);
+        break;
+        case 1:
+        // Top-left corner for texture and quad
+        rlTexCoord2f(source.x/width, source.y/height);
+        rlVertex2f(verts[0].x, verts[0].y);
+
+        // Top-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, source.y/height);
+        rlVertex2f(verts[1].x, verts[1].y);
+
+        // Bottom-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+        rlVertex2f(verts[2].x, verts[2].y);
+        break;
+        case 2:
+        // Top-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, source.y/height);
+        rlVertex2f(verts[1].x, verts[1].y);
+
+        // Bottom-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+        rlVertex2f(verts[2].x, verts[2].y);
+
+        // Top-left corner for texture and quad
+        rlTexCoord2f(source.x/width, source.y/height);
+        rlVertex2f(verts[0].x, verts[0].y);
+        break;
+        case 3:
+        // Top-left corner for texture and quad
+        rlTexCoord2f(source.x/width, source.y/height);
+        rlVertex2f(verts[0].x, verts[0].y);
+
+        // Bottom-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, (source.y + source.height)/height);
+        rlVertex2f(verts[2].x, verts[2].y);
+
+        // Top-right corner for texture and quad
+        rlTexCoord2f((source.x + source.width)/width, source.y/height);
+        rlVertex2f(verts[1].x, verts[1].y);
+
+        break;
+    default:
+        break;
+    }
+
+    rlEnd();
+    rlSetTexture(0);
+
 }
 
