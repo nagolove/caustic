@@ -1487,7 +1487,7 @@ static void entity_print(de_ecs *r) {
     }
 }
 
-void de_gui(de_ecs *r) {
+void de_gui(de_ecs *r, de_entity highlight ) {
     ImGuiWindowFlags wnd_flags = 0;
         //ImGuiWindowFlags_AlwaysAutoResize; // |
         /*ImGuiWindowFlags_NoResize;*/
@@ -1505,7 +1505,11 @@ void de_gui(de_ecs *r) {
 
     //ImGuiInputTextFlags input_flags = 0;
     static bool use_lua_filter = false;
+    static bool show_hightlight = false;
     igCheckbox("lua filter", &use_lua_filter);
+    igSameLine(0., 5.);
+    igCheckbox("show hightlight", &show_hightlight);
+
 
     if (use_lua_filter) {
         if (!r->l) {
@@ -1556,10 +1560,17 @@ void de_gui(de_ecs *r) {
         igEndTable();
     }
 
-    int index = get_selected(r);
-    //trace("de_gui: index %d\n", index);
-    if (index != -1 && r->selected_type.str_repr) {
-        entity_print(r);
+    if (show_hightlight) {
+        // Как получить строковое представление о сущности, если не известны
+        // составляющие ее компоненты?
+
+        // Проверь используя сождержимое хэштаблицы cp_type
+    } else {
+        int index = get_selected(r);
+        //trace("de_gui: index %d\n", index);
+        if (index != -1 && r->selected_type.str_repr) {
+            entity_print(r);
+        }
     }
 
     igEnd();

@@ -288,4 +288,4 @@ typedef struct de_options {
 void de_set_options(de_options options);
 void de_ecs_print(de_ecs *r);
 
-void de_gui(de_ecs *r);
+void de_gui(de_ecs *r, de_entity e);
