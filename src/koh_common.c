@@ -1647,25 +1647,28 @@ static char *pixelformat2str[] = {
 };
 
 #define STR_NUM 8
+#define BUF_LEN 64
 char **Texture2D_to_str(Texture2D *tex) {
     assert(tex);
-    static char (buf[64 + 32])[STR_NUM];
+    static char (buf[STR_NUM])[BUF_LEN];
     static char *lines[STR_NUM];
     for (int j = 0; j < STR_NUM; ++j) {
         lines[j] = buf[j];
     }
     int i = 0;
-    sprintf(lines[i++], "{");
-    sprintf(lines[i++], "%u", tex->id);
-    sprintf(lines[i++], "format = %s,", pixelformat2str[tex->format]);
-    sprintf(lines[i++], "width = %d,", tex->width);
-    sprintf(lines[i++], "height = %d,", tex->height);
-    sprintf(lines[i++], "mipmaps = %d,", tex->mipmaps);
-    sprintf(lines[i++], "}");
+    snprintf(lines[i++], BUF_LEN, "{");
+    snprintf(lines[i++], BUF_LEN, "id = %u,", tex->id);
+    const char *format_str = pixelformat2str[tex->format];
+    snprintf(lines[i++], BUF_LEN, "format = %s,", format_str);
+    snprintf(lines[i++], BUF_LEN, "width = %d,", tex->width);
+    snprintf(lines[i++], BUF_LEN, "height = %d,", tex->height);
+    snprintf(lines[i++], BUF_LEN, "mipmaps = %d,", tex->mipmaps);
+    snprintf(lines[i++], BUF_LEN, "}");
     lines[i] = NULL;
     return (char**)lines;
 }
 #undef STR_NUM
+#undef BUF_LEN
 
 Rectangle rect_by_texture(Texture2D tex) {
     return (Rectangle) {
