@@ -31,17 +31,20 @@ struct WatchContext {
 
 #define MAX_WATCHED_FILES 32
 
-static int fd;
-static int wd[MAX_WATCHED_FILES] = {0};
-static char *fnames[MAX_WATCHED_FILES] = {0};
-static int watched_num = 0;
-static HTable *tbl = NULL;
-static struct pollfd fds[1] = {0};
+// TODO: Перенести в структуру
+struct {
+    int fd;
+    int wd[MAX_WATCHED_FILES];
+    char *fnames[MAX_WATCHED_FILES];
+    int watched_num;
+    HTable *tbl;
+    struct pollfd fds[1];
+} in;
 
 static const char *get_fname(int target_wd) {
-    for (int i = 0; i < watched_num; ++i) {
-        if (wd[i] == target_wd) {
-            return fnames[i];
+    for (int i = 0; i < in.watched_num; ++i) {
+        if (in.wd[i] == target_wd) {
+            return in.fnames[i];
         }
     }
     return NULL;
@@ -95,7 +98,7 @@ static void process_event(const struct inotify_event *event) {
 
     //trace("fname %s\n", fname);
     struct WatchContext *ctx;
-    ctx = htable_get(tbl, fname, strlen(fname) + 1, NULL);
+    ctx = htable_get(in.tbl, fname, strlen(fname) + 1, NULL);
     //trace("ctx %p\n", ctx);
     if (ctx && ctx->cb) {
         trace("process_event: callback\n");
@@ -110,7 +113,7 @@ static void inotifier_handle_events() {
     const struct inotify_event *event;
 
     for (;;) {
-        ssize_t len = read(fd, buf, sizeof(buf));
+        ssize_t len = read(in.fd, buf, sizeof(buf));
         if (len == -1 && errno != EAGAIN) {
             perror("handle_events: read");
             exit(EXIT_FAILURE);
@@ -137,32 +140,32 @@ static HTableAction iter_list(
 }
 
 static int l_inotifier_list(lua_State *lua) {
-    htable_each(tbl, iter_list, NULL);
+    htable_each(in.tbl, iter_list, NULL);
     return 0;
 }
 
 void inotifier_init() {
     trace("inotifier_init:\n");
 
-    if (tbl) {
+    if (in.tbl) {
         const char *msg = "inotifier_init: tbl ~= NULL, "
                           "may be a double initialization?\n";
         trace("%s", msg);
         exit(EXIT_FAILURE);
     }
 
-    tbl = htable_new(&(struct HTableSetup) {
+    in.tbl = htable_new(&(struct HTableSetup) {
         .cap       = MAX_WATCHED_FILES,
         .hash_func = koh_hasher_mum,
     });
 
-    fd = inotify_init1(IN_NONBLOCK);
-    if (fd == -1) {
+    in.fd = inotify_init1(IN_NONBLOCK);
+    if (in.fd == -1) {
         perror("inotify_init1");
         exit(EXIT_FAILURE);
     }
-    fds[0] = (struct pollfd) {
-        .fd = fd,
+    in.fds[0] = (struct pollfd) {
+        .fd = in.fd,
         .events = POLLIN,
     };
     //fds[1] = (struct pollfd) {
@@ -179,14 +182,14 @@ void inotifier_init() {
 
 void inotifier_update() {
     // Система не инициализирована
-    if (!tbl) return;
+    if (!in.tbl) return;
 
     //trace("inotifier_update\n");
     //fds[0].fd = STDIN_FILENO;       [> Console input <]
     //fds[0].events = POLLIN;
 
     int timeout = 0;
-    int poll_num = poll(fds, 1, timeout);
+    int poll_num = poll(in.fds, 1, timeout);
 
     //trace("poll_num %d\n", poll_num);
     
@@ -215,31 +218,34 @@ void inotifier_update() {
           );
     */
 
-    if (poll_num > 0 && fds[0].revents & POLLIN) {
+    if (poll_num > 0 && in.fds[0].revents & POLLIN) {
         /*trace(" fds[0].revents & POLLIN %d\n", fds[0].revents & POLLIN);*/
         inotifier_handle_events();
     }
 }
 
 static void fnames_free() {
-    for (int i = watched_num - 1; i >= 0; i--) {
-        free(fnames[i]);
+    for (int i = in.watched_num - 1; i >= 0; i--) {
+        free(in.fnames[i]);
     }
+    in.watched_num = 0;
 }
 
 void inotifier_shutdown() {
     trace("inotifier_shutdown:\n");
-    htable_free(tbl);
-    tbl = NULL;
-    close(fd);
+    if (in.tbl) {
+        htable_free(in.tbl);
+        in.tbl = NULL;
+    }
+    close(in.fd);
     fnames_free();
 }
 
 void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     // Система не инициализирована
-    if (!tbl) return;
+    if (!in.tbl) return;
 
-    if (watched_num == MAX_WATCHED_FILES) {
+    if (in.watched_num == MAX_WATCHED_FILES) {
         trace("inotifier_watch: MAX_WATCHED_FILES reached\n");
         return;
     }
@@ -247,29 +253,29 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     trace("inotifier_watch: '%s' with data %p\n", fname, data);
     uint32_t mask = IN_ALL_EVENTS;
     //uint32_t mask = IN_MOVE_SELF;
-    wd[watched_num] = inotify_add_watch(fd, fname, mask);
-    fnames[watched_num] = strdup(fname);
+    in.wd[in.watched_num] = inotify_add_watch(in.fd, fname, mask);
+    in.fnames[in.watched_num] = strdup(fname);
 
-    if (wd[watched_num] == -1) {
+    if (in.wd[in.watched_num] == -1) {
         trace("inotifier_watch: cannot watch '%s': %s\n", fname, strerror(errno));
     }
 
     struct WatchContext ctx = {
         .cb = cb, .data = data,
     };
-    htable_add(tbl, fname, strlen(fname) + 1, &ctx, sizeof(ctx));
-    watched_num++;
+    htable_add(in.tbl, fname, strlen(fname) + 1, &ctx, sizeof(ctx));
+    in.watched_num++;
 }
 
 void inotifier_remove_watch(const char *fname) {
     // Система не инициализирована
-    if (!tbl) return;
+    if (!in.tbl) return;
 
     assert(fname);
-    for (int i = 0; i < watched_num; i++) {
-        if (!strcmp(fname, fnames[i])) {
-            inotify_rm_watch(fd, wd[i]);
-            htable_remove(tbl, fname, strlen(fname) + 1);
+    for (int i = 0; i < in.watched_num; i++) {
+        if (!strcmp(fname, in.fnames[i])) {
+            inotify_rm_watch(in.fd, in.wd[i]);
+            htable_remove(in.tbl, fname, strlen(fname) + 1);
         }
     }
 }
