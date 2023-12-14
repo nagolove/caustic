@@ -10,8 +10,10 @@ struct Timer {
     double          start_time; // GetTime()
     double          duration;   // in seconds
     double          amount;     // 0..1
+    double          last_now;
     //bool            expired;
-    size_t          id, sz;
+    size_t          id; // уникальный номер
+    size_t          sz; // XXX: если == 0, то для data не выделяется память ???
     void            *data;      // всегда динамически выделяемая память
     // возвращает истину для удаления таймера
     bool            (*on_update)(struct Timer *tmr); 
@@ -34,11 +36,13 @@ enum TimerManAction {
     TMA_REMOVE_BREAK,
 };
 
-struct TimerMan *timerman_new(int cap);
+struct TimerMan *timerman_new(int cap, const char *name);
 void timerman_free(struct TimerMan *tm);
 
 bool timerman_add(struct TimerMan *tm, struct TimerDef td);
+// Производит обновление. Возвращает количество таймеров.
 int timerman_update(struct TimerMan *tm);
+struct TimerMan *timerman_clone(struct TimerMan *tm);
 void timerman_pause(struct TimerMan *tm, bool is_paused);
 void timerman_window(struct TimerMan *tm);
 void timerman_clear(struct TimerMan *tm);

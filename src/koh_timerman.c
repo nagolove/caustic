@@ -13,15 +13,18 @@ struct TimerMan {
     struct Timer        *timers;
     int                 timers_cap, timers_size;
     bool                paused;
+    double              pause_time; // время начала паузы
+    char                name[128];
 };
 
-struct TimerMan *timerman_new(int cap) {
+struct TimerMan *timerman_new(int cap, const char *name) {
     struct TimerMan *tm = calloc(1, sizeof(*tm));
     assert(tm);
     assert(cap > 0);
     assert(cap < 2048 && "too many timers, 2048 is ceil");
     tm->timers = calloc(cap, sizeof(tm->timers[0]));
     tm->timers_cap = cap;
+    strncpy(tm->name, name, sizeof(tm->name));
     return tm;
 }
 
@@ -51,7 +54,8 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     struct Timer *tmr = &tm->timers[tm->timers_size++];
     static size_t id = 0;
     tmr->id = id++;
-    tmr->start_time = GetTime();
+    tmr->start_time = tmr->last_now = GetTime();
+    assert(td.duration > 0);
     tmr->duration = td.duration;;
 
     if (td.sz) {
@@ -137,6 +141,29 @@ int timerman_update(struct TimerMan *tm) {
 
 void timerman_pause(struct TimerMan *tm, bool is_paused) {
     tm->paused = is_paused;
+/*
+   if (is_paused) {
+        if (!tm->paused) {
+            // enable -> disable
+            trace("timerman_pause: enable -> disable\n");
+            tm->pause_time = GetTime();
+            for (int i = 0; i < tm->timers_size; ++i) {
+                tm->timers[i].last_now = tm->pause_time;
+            }
+            tm->paused = is_paused;
+        }
+    } else {
+        if (tm->paused) {
+            // disable -> enable
+            double shift = GetTime() - tm->pause_time;
+            trace("timerman_pause: disable -> enable, shift %f\n", shift);
+            for (int i = 0; i < tm->timers_size; ++i) {
+                tm->timers[i].start_time += shift;
+            }
+            tm->paused = is_paused;
+        }
+    }
+*/
 }
 
 void timerman_window(struct TimerMan *tm) {
@@ -290,4 +317,16 @@ copy:
         memcpy(tm->timers, tmp, sizeof(struct Timer) * tmp_num);
     }
     tm->timers_size = tmp_num;
+}
+
+struct TimerMan *timerman_clone(struct TimerMan *tm) {
+    assert(tm);
+    struct TimerMan *ret = calloc(1, sizeof(*tm));
+    assert(ret);
+    *ret = *tm;
+    ret->timers = calloc(ret->timers_cap, sizeof(ret->timers[0]));
+    assert(ret->timers);
+    size_t sz = sizeof(tm->timers[0]) * tm->timers_size;
+    memcpy(ret->timers, tm->timers, sz);
+    return ret;
 }
