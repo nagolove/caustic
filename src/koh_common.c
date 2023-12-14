@@ -1678,3 +1678,37 @@ Rectangle rect_by_texture(Texture2D tex) {
         .height = tex.height,
     };
 }
+
+// TODO: Почему-бы не сделать итератор в виде структуры?
+/*
+struct StrIter {
+    char    **lines;
+    size_t  num;
+};
+ */
+char *concat_iter_to_allocated_str(char **lines) {
+    size_t merged_cap = 128, merged_len = 0;
+    char *merged = calloc(merged_cap, sizeof(merged[0]));
+    while (*lines) {
+        size_t line_len = strlen(*lines);
+
+        if (line_len + merged_len >= merged_cap) {
+            /*printf("concat_iter_to_allocated_str: realloc\n");*/
+            merged_cap += merged_cap + 1;
+            size_t new_sz = sizeof(merged[0]) * merged_cap;
+            void *new_ptr = realloc(merged, new_sz);
+            assert(new_ptr);
+            merged = new_ptr;
+        }
+        
+        // FIXME: Все время ищется длина, квадратичность алгоритма. Исправить
+        // использованием указателя на последний элемент.
+        /*printf("concat_iter_to_allocated_str: lines '%s'\n", *lines);*/
+        merged_len += strlen(*lines);
+        strcat(merged, *lines);
+
+        lines++;
+    }
+    merged[merged_len] = 0;
+    return merged;
+}
