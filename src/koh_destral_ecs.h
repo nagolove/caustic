@@ -56,7 +56,7 @@ typedef struct de_cp_type {
     size_t      cp_id; // component unique id
     size_t      cp_sizeof; // component sizeof
                            //
-    //void        (*on_destroy)(void *payload, de_entity e);
+    void        (*on_destroy)(void *payload, de_entity e);
     //void        (*on_create)(void *payload, de_entity e);
     // Для компонентного проводника
     char        **(*str_repr)(void *payload, de_entity e);

@@ -432,7 +432,7 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     de_sparse_init(&s->sparse);
     s->cp_sizeof = cp_type.cp_sizeof;
     s->cp_id = cp_type.cp_id;
-    //s->on_destroy = cp_type.on_destroy;
+    s->on_destroy = cp_type.on_destroy;
     s->initial_cap = cp_type.initial_cap ? cp_type.initial_cap : 1000;
     s->sparse.initial_cap = cp_type.initial_cap;
     strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
@@ -800,6 +800,8 @@ static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     if (storage_found) {
         return storage_found;
     } else {
+        // Стоит-ли поместить регистрацию типа сюда, из de_emplace()?
+        //
         de_storage* storage_new = de_storage_new(cp_type.cp_sizeof, cp_type);
         //r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof * r->storages);
         r->storages_size++;
@@ -906,6 +908,7 @@ bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
 
 // Все используемые типы добавляются в хтабличку
 static void type_register(de_ecs *r, de_cp_type cp_type) {
+    printf("type_register: cp_type.name '%s'\n", cp_type.name);
     assert(strlen(cp_type.name) > 0);
     htable_add(
         r->cp_types, 
