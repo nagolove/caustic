@@ -369,6 +369,35 @@ char **b2Filter_to_str(b2Filter f, bool lua) {
     return (char**)lines;
 }
 
+char **b2BodyDef_to_str(b2BodyDef bd) {
+    static char (buf[STR_LEN])[STR_NUM];
+    static char *lines[STR_NUM];
+    for (int i = 0; i < STR_NUM; i++) {
+        lines[i] = buf[i];
+    }
+    int i = 0;
+    int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
+
+    p(lines[i++], "{");
+    p(lines[i++], "type = '%s',",  b2BodyType_to_str(bd.type));   
+    p(lines[i++], "position = %s,", b2Vec2_to_str(bd.position));   
+    p(lines[i++], "angle = %f,",  bd.angle);  
+    p(lines[i++], "linearVelocity = %s,",  b2Vec2_to_str(bd.linearVelocity)); 
+    p(lines[i++], "angularVelocity = %f,",  bd.angularVelocity);    
+    p(lines[i++], "linearDamping = %f,",  bd.linearDamping);  
+    p(lines[i++], "angularDamping = %f,",  bd.angularDamping); 
+    p(lines[i++], "gravityScale = %f,",  bd.gravityScale);   
+    uint64_t user_data = (uint64_t)(bd.userData ? bd.userData : 0);
+    p(lines[i++], "userData = %lX,",  user_data); 
+    p(lines[i++], "enableSleep = %s,",  bd.enableSleep ? "true" : "false");    
+    p(lines[i++], "isAwake = %s,",  bd.isAwake ? "true" : "false");    
+    p(lines[i++], "fixedRotation = %s,",  bd.fixedRotation ? "true" : "false");  
+    p(lines[i++], "isEnabled = %s,",  bd.isEnabled ? "true" : "false");  
+    p(lines[i++], "}");
+    lines[i] = NULL;
+    return (char**)lines;
+}
+
 char **b2ShapeDef_to_str(b2ShapeDef sd) {
     static char (buf[STR_LEN])[STR_NUM];
     static char *lines[STR_NUM];
@@ -378,16 +407,22 @@ char **b2ShapeDef_to_str(b2ShapeDef sd) {
     int i = 0;
     int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
 
-    p(lines[i++], "userData %p", sd.userData);
-    p(lines[i++], "friction %f", sd.friction);
-    p(lines[i++], "restitution %f", sd.restitution);
-    p(lines[i++], "density %f", sd.density);
-    char **filter = b2Filter_to_str(sd.filter, false);
+    p(lines[i++], "{");
+    uint64_t user_data = (uint64_t)(sd.userData ? sd.userData : 0);
+    p(lines[i++], "userData = %lX,", user_data);
+    p(lines[i++], "friction = %f,", sd.friction);
+    p(lines[i++], "restitution = %f,", sd.restitution);
+    p(lines[i++], "density = %f,", sd.density);
+    p(lines[i++], "}");
+
+    char **filter = b2Filter_to_str(sd.filter, true);
+    p(lines[i++], "filter = %s", *filter);
     while (*filter) {
-        p(lines[i++], "filter %s", *filter);
+        p(lines[i++], "%s", *filter);
         filter++;
     }
-    p(lines[i++], "isSensor %s", sd.isSensor ? "true" : "false");
+    p(lines[i++], ",");
+    p(lines[i++], "isSensor = %s,", sd.isSensor ? "true" : "false");
 
     lines[i] = NULL;
     return (char**)lines;
@@ -446,3 +481,36 @@ const char *b2ShapeType_to_str(b2ShapeType st) {
     return shapetype2str[st];
 }
 
+#define STR_NUM 9
+char **b2BodyId_to_str(b2BodyId body_id) {
+    static char (buf[STR_NUM])[128];
+    memset(buf, 0, sizeof(buf));
+    static char *lines[STR_NUM];
+    for (int j = 0; j < STR_NUM; ++j) {
+        lines[j] = buf[j];
+    }
+    int i = 0;
+
+    if (!b2Body_IsValid(body_id)) {
+        sprintf(lines[i++], "{ 'bad body id', }");
+    }
+
+    const char *linear_vel = b2Vec2_to_str(b2Body_GetLinearVelocity(body_id));
+    float w = b2Body_GetAngularVelocity(body_id);
+    const char *body_type = b2BodyType_to_str(b2Body_GetType(body_id));
+    const char *position = b2Vec2_to_str(b2Body_GetPosition(body_id));
+
+    sprintf(lines[i++], "{");
+    sprintf(lines[i++], "\tmass = %f,", b2Body_GetMass(body_id));
+    sprintf(lines[i++], "\tlinear_velocity = %s,", linear_vel);
+    sprintf(lines[i++], "\tangular_velovity = %f,", w);
+    sprintf(lines[i++], "\tbody_type = '%s',", body_type);
+    sprintf(lines[i++], "\tposition = %s,", position);
+    sprintf(lines[i++], "\tangle = %f,", b2Body_GetAngle(body_id));
+    sprintf(lines[i++], "}");
+
+    lines[i] = NULL;
+    //lines[i++] = NULL;
+    return (char**)lines;
+}
+#undef STR_NUM

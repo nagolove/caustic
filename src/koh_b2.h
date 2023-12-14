@@ -30,13 +30,6 @@ inline static Color b2Color_to_Color(b2Color c) {
 b2DebugDraw b2_world_dbg_draw_create();
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
 
-/*
-// Настройка шага симуляции
-struct Box2DStep {
-    int32_t             velocity_iteratioins, relax_iterations;
-};
-*/
-
 // Хранение информации из AABB запроса
 struct ShapesStore {
     b2ShapeId           *shapes_on_screen;
@@ -58,7 +51,7 @@ struct WorldCtx {
 
     b2WorldDef          world_def;
     b2DebugDraw         world_dbg_draw;
-    bool                is_dbg_draw;
+    bool                is_dbg_draw, is_paused;
     int                 tasks_count;
     uint32_t            width, height;
     b2WorldId           world;
@@ -88,7 +81,8 @@ inline static void shapes_store_clear(struct ShapesStore *ss) {
 char **b2WorldDef_to_str(b2WorldDef wdef, bool lua);
 char **b2Statistics_to_str(b2WorldId world, bool lua);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
-
+char **b2BodyDef_to_str(b2BodyDef bd);
+char **b2BodyId_to_str(b2BodyId id);
 const char *b2BodyType_to_str(b2BodyType bt);
 const char *b2ShapeType_to_str(b2ShapeType st);
 
