@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+// TODO: Поменять тип int на size_t в _htable_get()
+// Но что тогда возвращать вместо -1 ??
+// SIZE_MAX
+// Сперва проверить на WASM
+
 typedef struct Bucket {
     int    key_len, value_len;
     Hash_t hash;
@@ -28,6 +33,12 @@ _Static_assert(
     sizeof(Hash_t) == sizeof(uint64_t),
     "Please use 64 bit Hash_t value"
 );
+
+_Static_assert(
+    sizeof(size_t) == 8,
+    "Only 64 bit size_t supported"
+);
+
 
 static inline uint32_t get_aligned_size(uint32_t size) {
     int mod = size % 16;
