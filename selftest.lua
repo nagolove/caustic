@@ -7,4 +7,5 @@ return {
     "/home/nagolove/caustic-test-render",
     "/home/nagolove/caustic-test-set",
     "/home/nagolove/caustic-test-strset",
+    "/home/nagolove/caustic-test-htable",
 }
