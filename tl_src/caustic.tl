@@ -3428,6 +3428,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     }, " ")
 
     local _includes: string = table.concat({
+        --"/usr/include",
     }, " ")
     local dirs = get_ready_includes(cfg)
 
@@ -3437,8 +3438,12 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
+
         -- Ошибки сборки с флагом последней версии языка C
+        -- Отсутствуют разные функции стандартной библиотеки
         --"-std=c2x",
+        --"-DUSE_C2X_HACKS",
+
         --"-D_USE_MATH_DEFINES",
         --"-D__USE_MISC",
     }
