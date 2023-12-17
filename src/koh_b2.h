@@ -100,6 +100,11 @@ KOH_FORCE_INLINE b2Shape *b2Shape_get(b2WorldId world_id, b2ShapeId id) {
     // }}}
 }
 
+KOH_FORCE_INLINE b2Body *b2Body_get(b2WorldId world_id, b2BodyId id) {
+    const b2World* world = b2GetWorldFromId(world_id);
+    return world->bodies + id.index;
+}
+
 static inline const char *b2Vec2_to_str(b2Vec2 v) {
     static char buf[64] = {0};
     snprintf(buf, sizeof(buf), "{%6.5f, %6.5f}", v.x, v.y);
