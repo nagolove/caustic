@@ -124,8 +124,8 @@ typedef struct de_storage {
 */
 typedef struct de_ecs {
     de_storage**    storages; /* array to pointers to storage */
-    size_t          storages_size; /* size of the storages array */
-    size_t          entities_size;
+    size_t          storages_size, storages_cap; /* size of the storages array */
+    size_t          entities_size, entitities_cap;
     de_entity*      entities; /* contains all the created entities */
     de_entity_id    available_id; /* first index in the list to recycle */
 
@@ -147,4 +147,12 @@ typedef struct de_orphans_fun_data {
     void* orphans_udata;
     void (*orphans_fun)(de_ecs*, de_entity, void*);
 } de_orphans_fun_data;
+
+size_t de_sparse_remove(de_sparse* s, de_entity e);
+de_sparse de_sparse_clone(const de_sparse in);
+de_sparse* de_sparse_init(de_sparse* s, size_t initial_cap);
+void de_sparse_destroy(de_sparse* s);
+bool de_sparse_contains(de_sparse* s, de_entity e);
+size_t de_sparse_index(de_sparse* s, de_entity e);
+void de_sparse_emplace(de_sparse* s, de_entity e);
 

@@ -86,33 +86,16 @@ de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
     return e;
 }
 
-__attribute__((unused))
-static void de_sparce_print(de_sparse *s) {
-    assert(s);
-    for (int i = 0; i < s->dense_size; i++) {
-        de_trace("%u ", s->dense[i]);
-    }
-    de_trace("\n");
-}
-
-static de_sparse* de_sparse_init(de_sparse* s) {
+de_sparse* de_sparse_init(de_sparse* s, size_t initial_cap) {
     assert(s);
     de_trace("de_sparse_init: %p\n", s);
-    if (s) {
-        *s = (de_sparse){ 0 };
-        //s->sparse = 0;
-        //s->dense = 0;
-    }
+    assert(initial_cap > 0);
+    *s = (de_sparse){ 0 };
+    s->initial_cap = initial_cap;
     return s;
 }
 
-/*
-static de_sparse* de_sparse_new() {
-    return de_sparse_init(malloc(sizeof(de_sparse)));
-}
-*/
-
-static void de_sparse_destroy(de_sparse* s) {
+void de_sparse_destroy(de_sparse* s) {
     assert(s);
     de_trace("de_sparse_destroy: %p", s);
     if (!s) return;
@@ -126,14 +109,7 @@ static void de_sparse_destroy(de_sparse* s) {
     }
 }
 
-/*
-static void de_sparse_delete(de_sparse* s) {
-    de_sparse_destroy(s);
-    free(s);
-}
-*/
-
-static bool de_sparse_contains(de_sparse* s, de_entity e) {
+bool de_sparse_contains(de_sparse* s, de_entity e) {
     assert(s);
     assert(e != de_null);
     de_trace("de_sparse_contains: de_sparse %p, e %u\n", s, e);
@@ -141,14 +117,14 @@ static bool de_sparse_contains(de_sparse* s, de_entity e) {
     return (eid.id < s->sparse_size) && (s->sparse[eid.id] != de_null);
 }
 
-static size_t de_sparse_index(de_sparse* s, de_entity e) {
+size_t de_sparse_index(de_sparse* s, de_entity e) {
     assert(s);
     assert(de_sparse_contains(s, e));
     de_trace("de_sparse_index: de_sparse %p, e %u\n", s, e);
     return s->sparse[de_entity_identifier(e).id];
 }
 
-static void de_sparse_emplace(de_sparse* s, de_entity e) {
+void de_sparse_emplace(de_sparse* s, de_entity e) {
     assert(s);
     assert(e != de_null);
     de_trace("de_sparse_emplace: de_sparse %p, e %u\n", s, e);
@@ -166,7 +142,8 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
 
         // расширение выделения
         if (new_sparse_size == s->sparse_cap) {
-            s->sparse_cap *= 2;
+            // TODO: Гибкая политика выделения памяти
+            s->sparse_cap *= 2 + 1;
             s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
         }
 
@@ -225,7 +202,7 @@ static void de_sparse_emplace(de_sparse* s, de_entity e) {
 #endif
 }
 
-static size_t de_sparse_remove(de_sparse* s, de_entity e) {
+size_t de_sparse_remove(de_sparse* s, de_entity e) {
     assert(s);
     assert(de_sparse_contains(s, e));
     de_trace("de_sparse_remove: de_sparse %p, e %u\n", s, e);
@@ -313,6 +290,8 @@ static char *de_storage2str(de_storage *s) {
 }
 */
 
+static const size_t default_storage_initial_cap = 1000;
+
 static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
     assert(s);
     de_trace(
@@ -321,12 +300,25 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
         de_cp_type2str(cp_type)
     );
     *s = (de_storage){ 0 };
-    de_sparse_init(&s->sparse);
     s->cp_sizeof = cp_type.cp_sizeof;
     s->cp_id = cp_type.cp_id;
     s->on_destroy = cp_type.on_destroy;
-    s->initial_cap = cp_type.initial_cap ? cp_type.initial_cap : 1000;
-    s->sparse.initial_cap = cp_type.initial_cap;
+
+    size_t initial_cap = cp_type.initial_cap ? 
+        cp_type.initial_cap : default_storage_initial_cap;
+
+    /*
+    assert(cp_type.initial_cap);
+    if (!cp_type.initial_cap) {
+        const char *msg = "de_storage_init: storage '%s' "
+                          "should have positive initial_cap value\n";
+        printf(msg, cp_type.name);
+        abort();
+    }
+    */
+
+    de_sparse_init(&s->sparse, initial_cap);
+
     strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
     return s;
 }
@@ -337,7 +329,9 @@ static de_storage* de_storage_new(size_t cp_size, de_cp_type cp_type) {
         cp_size,
         de_cp_type2str(cp_type)
     );
-    return de_storage_init(malloc(sizeof(de_storage)), cp_type);
+    de_storage *storage = calloc(1, sizeof(de_storage));
+    assert(storage);
+    return de_storage_init(storage, cp_type);
 }
 
 static void de_storage_destroy(de_storage* s) {
@@ -401,16 +395,6 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 
     return cp_data_ptr;
 #endif
-}
-
-__attribute__((unused))
-static void _de_storage_print(const de_storage *s) {
-    assert(s);
-    de_trace("_de_storage_print: entities\n");
-    for (int i = 0; i < s->sparse.dense_size; i++) {
-        de_trace("%u, ", s->sparse.dense[i]);
-    }
-    de_trace("\n");
 }
 
 static void de_storage_remove(de_storage* s, de_entity e) {
@@ -492,14 +476,14 @@ static void* de_storage_get(de_storage* s, de_entity e) {
     return de_storage_get_by_index(s, de_sparse_index(&s->sparse, e));
 }
 
-static void* de_storage_try_get(de_storage* s, de_entity e) {
+inline static void* de_storage_try_get(de_storage* s, de_entity e) {
     assert(s);
     assert(e != de_null);
     de_trace("de_storage_try_get: [%s], e %u\n", s->name, e);
     return de_sparse_contains(&s->sparse, e) ? de_storage_get(s, e) : 0;
 }
 
-static bool de_storage_contains(de_storage* s, de_entity e) {
+inline static bool de_storage_contains(de_storage* s, de_entity e) {
     assert(s);
     assert(e != de_null);
     de_trace("de_storage_contains: [%s], e %u\n", s->name, e);
@@ -600,8 +584,10 @@ static de_entity _de_generate_entity(de_ecs* r) {
     // can't create more identifiers entities
     assert(r->entities_size < DE_ENTITY_ID_MASK);
     de_trace("_de_generate_entity: ecs %p\n", r);
+    // TODO: Сделать выделение памяти бОльшими кусками.
     // alloc one more element to the entities array
-    r->entities = realloc(r->entities, (r->entities_size + 1) * sizeof(de_entity));
+    size_t sz = (r->entities_size + 1) * sizeof(r->entities[0]);
+    r->entities = realloc(r->entities, sz);
 
     // create new entity and add it to the array
     const de_entity e = de_make_entity((de_entity_id) {(uint32_t)r->entities_size}, (de_entity_ver) { 0 });
@@ -813,7 +799,7 @@ static void type_register(de_ecs *r, de_cp_type cp_type) {
         r->selected = new_ptr;
 
         memset(r->selected, 0, sz);
-        trace("type_register: r->selected was zeroed\n");
+        //trace("type_register: r->selected was zeroed\n");
     }
 
     r->selected_num = new_num;
@@ -1162,7 +1148,7 @@ de_ecs *de_ecs_clone(de_ecs *in) {
 }
 */
 
-static de_sparse de_sparse_clone(const de_sparse in) {
+de_sparse de_sparse_clone(const de_sparse in) {
     de_trace("de_sparse_clone:\n");
     de_sparse out = {};
 
@@ -1472,10 +1458,19 @@ void de_storage_print(de_ecs *r, de_cp_type cp_type) {
     printf("\tinitial_cap = %zu,\n", s->initial_cap);
     printf("}\n");
 
+    printf("sparce = ");
+
     printf("{ ");
     const de_sparse *sp = &s->sparse;
     for (int i = 0; i < sp->dense_size; i++) {
-        printf("%u ", sp->dense[i]);
+        printf("%u, ", sp->dense[i]);
+    }
+    printf("}\n");
+
+    printf("entities:\n");
+    printf("{ ");
+    for (int i = 0; i < r->entities_size; i++) {
+        printf("%u, ", r->entities[i]);
     }
     printf("}\n");
 
