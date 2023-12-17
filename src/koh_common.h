@@ -26,6 +26,10 @@
 #include "raylib.h"
 #include "raymath.h"
 
+#ifndef M_PI
+# define M_PI		3.14159265358979323846	/* pi */
+#endif
+
 #define KOH_FORCE_INLINE inline __attribute__((always_inline))
 #define KOH_ATTR_FORMAT(f, s) __attribute__((__format__(__printf__, f, s))) 
 

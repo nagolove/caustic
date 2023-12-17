@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include "koh_common.h"
 
 struct PartsRequest {
     struct Parts_ExplositionDef def;

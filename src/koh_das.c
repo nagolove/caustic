@@ -284,14 +284,18 @@ void square(DAS_Context *ctx) {
     for(int i = 0; i < ctx->mapSize - 1; i += ctx->chunkSize) {
 
 #if !defined(PLATFORM_WEB)
-        //thrd_sleep(&(struct timespec){ .tv_nsec = 10000000000000}, NULL);
+        // XXX: Правильное время стоит?
+        thrd_sleep(&(struct timespec){ .tv_nsec = 10000000000000}, NULL);
         //nanosleep(&(struct timespec){ .tv_sec = 0., .tv_nsec = 10000000000000}, NULL);
         //printf("blaaa\n");
+        /*
+        // Зачем использовать pselect()?
         pselect(
             0, NULL, NULL, NULL, 
             &(struct timespec){ .tv_sec = 0., .tv_nsec = 10000000000000}, 
             NULL
         );
+        */
         //thrd_sleep((struct timespec*)&(struct timeval){ .tv_usec = 100000}, NULL);
 #endif
         if (ctx->mapn > 10) {
