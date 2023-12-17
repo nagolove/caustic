@@ -30,6 +30,7 @@
 #include "koh_common.h"
 #include "koh_table.h"
 #include "koh_script.h"
+#include "koh_destral_ecs_internal.h"
 // }}}
 
 #define DE_USE_STORAGE_CAPACITY 
@@ -61,6 +62,9 @@ static void de_trace(const char* fmt, ...) {
 }
 #endif
 
+static void* de_storage_get(struct de_storage* s, de_entity e);
+static struct de_storage* de_assure(de_ecs* r, de_cp_type cp_type);
+
 const de_entity de_null = (de_entity)DE_ENTITY_ID_MASK;
 
 /* Returns the version part of the entity */
@@ -81,68 +85,6 @@ de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
     de_trace("de_make_entity: id %u, ver %u, e %u\n", id.id, version.ver, e);
     return e;
 }
-
-// SPARSE SET
-
-/*
-    de_sparse:
-    {{{
-    How the components sparse set works?
-    The main idea comes from ENTT C++ library:
-    https://github.com/skypjack/entt
-    https://github.com/skypjack/entt/wiki/Crash-Course:-entity-component-system#views
-    (Credits to skypjack) for the awesome library.
-
-    We have an sparse array that maps entity identifiers to the dense array indices that contains the full entity.
-
-
-    sparse array:
-    sparse => contains the index in the dense array of an entity identifier (without version)
-    that means that the index of this array is the entity identifier (without version) and
-    the content is the index of the dense array.
-
-    dense array:
-    dense => contains all the entities (de_entity).
-    the index is just that, has no meaning here, it's referenced in the sparse.
-    the content is the de_entity.
-
-    this allows fast iteration on each entity using the dense array or
-    lookup for an entity position in the dense using the sparse array.
-
-    ---------- Example:
-    Adding:
-     de_entity = 3 => (e3)
-     de_entity = 1 => (e1)
-
-    In order to check the entities first in the sparse, we have to retrieve the de_entity_id part of the de_entity.
-    The de_entity_id part will be used to index the sparse array.
-    The full de_entity will be the value in the dense array.
-
-
-                           0    1     2    3
-    sparse idx:         eid0 eid1  eid2  eid3    this is the array index based on de_entity_id (NO VERSION)
-    sparse content:   [ null,   1, null,   0 ]   this is the array content. (index in the dense array)
-
-    dense         idx:    0    1
-    dense     content: [ e3,  e2]
-    }}}
-*/
-typedef struct de_sparse {
-    /*  sparse entity identifiers indices array.
-        - index is the de_entity_id. (without version)
-        - value is the index of the dense array
-    */
-    de_entity*  sparse;
-    size_t      sparse_size, sparse_cap;
-
-    /*  Dense entities array.
-        - index is linked with the sparse value.
-        - value is the full de_entity
-    */
-    de_entity*  dense;
-    size_t      dense_size, dense_cap;
-    size_t      initial_cap;
-} de_sparse;
 
 __attribute__((unused))
 static void de_sparce_print(de_sparse *s) {
@@ -323,56 +265,6 @@ static size_t de_sparse_remove(de_sparse* s, de_entity e) {
 #endif
 }
 
-// STORAGE FUNCTIONS
-
-
-/*
-    de_storage
-    {{{
-
-    handles the raw component data aligned with a de_sparse.
-    stores packed component data elements for each entity in the sparse set.
-
-    the packed component elements data is aligned always with the dense array from the sparse set.
-
-    adding/removing an entity to the storage will:
-        - add/remove from the sparse
-        - use the sparse_set dense array position to move the components data aligned.
-
-    Example:
-
-                  idx:    0    1    2
-    dense     content: [ e3,  e2,  e1]
-    cp_data   content: [e3c, e2c, e1c] contains component data for the entity in the corresponding index
-
-    If now we remove from the storage the entity e2:
-
-                  idx:    0    1    2
-    dense     content: [ e3,  e1]
-    cp_data   content: [e3c, e1c] contains component data for the entity in the corresponding index
-
-    note that the alignment to the index in the dense and in the cp_data is always preserved.
-
-    This allows fast iteration for each component and having the entities accessible aswell.
-    for (i = 0; i < dense_size; i++) {  // mental example, wrong syntax
-        de_entity e = dense[i];
-        void*   ecp = cp_data[i];
-    }
-
-    }}}
-*/
-typedef struct de_storage {
-    size_t      cp_id; /* component id for this storage */
-    void*       cp_data; /*  packed component elements array. aligned with sparse->dense*/
-    size_t      cp_data_size, cp_data_cap; /* number of elements in the cp_data array */
-    size_t      cp_sizeof; /* sizeof for each cp_data element */
-    de_sparse   sparse;
-    void        (*on_destroy)(void *payload, de_entity e);
-    char        name[64];
-    size_t      initial_cap;
-} de_storage;
-
-
 static char *de_cp_type2str(de_cp_type cp_type) {
     static char buf[128] = {};
 
@@ -512,9 +404,9 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 }
 
 __attribute__((unused))
-static void de_storage_print(const de_storage *s) {
+static void _de_storage_print(const de_storage *s) {
     assert(s);
-    de_trace("de_storage_print: entities\n");
+    de_trace("_de_storage_print: entities\n");
     for (int i = 0; i < s->sparse.dense_size; i++) {
         de_trace("%u, ", s->sparse.dense[i]);
     }
@@ -616,30 +508,6 @@ static bool de_storage_contains(de_storage* s, de_entity e) {
 
 #define DE_REGISTRY_MAX 256
 
-/*  de_ecs
-
-    Is the global context that holds each storage for each component types
-    and the entities.
-*/
-typedef struct de_ecs {
-    de_storage**    storages; /* array to pointers to storage */
-    size_t          storages_size; /* size of the storages array */
-    size_t          entities_size;
-    de_entity*      entities; /* contains all the created entities */
-    de_entity_id    available_id; /* first index in the list to recycle */
-
-    //de_cp_type      registry[DE_REGISTRY_MAX];
-    //int             registry_num;
-    HTable          *cp_types;
-
-    // TODO: Вынести GUI поля в отдельную струткурку
-    // Для ImGui таблицы
-    bool            *selected;
-    size_t          selected_num;
-    de_cp_type      selected_type;
-    lua_State       *l;
-    int             ref_filter_func;
-} de_ecs;
 
 /*
 void de_ecs_register(de_ecs *r, de_cp_type comp) {
@@ -782,12 +650,7 @@ de_entity de_create(de_ecs* r) {
     }
 }
 
-// Находит или создает хранилище данного типа
-// Как назвать функцию, которая будет только искать хранилище определенного 
-// типа?
-static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
-    assert(r);
-    de_trace("de_assure: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
+static inline de_storage *de_storage_find(de_ecs *r, de_cp_type cp_type) {
     de_storage* storage_found = NULL;
 
     for (size_t i = 0; i < r->storages_size; i++) {
@@ -796,6 +659,18 @@ static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
             break;
         }
     }
+
+    return storage_found;
+}
+
+// Находит или создает хранилище данного типа
+// Как назвать функцию, которая будет только искать хранилище определенного 
+// типа?
+static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
+    assert(r);
+    de_trace("de_assure: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
+
+    de_storage* storage_found = de_storage_find(r, cp_type);
 
     if (storage_found) {
         return storage_found;
@@ -845,6 +720,7 @@ void de_remove(de_ecs* r, de_entity e, de_cp_type cp_type) {
     de_storage_remove(de_assure(r, cp_type), e);
 }
 
+/*
 static bool iter_each_print(de_ecs *r, de_entity e, void *udata) {
     printf(
         "(id %u, ver %u) ", 
@@ -853,13 +729,18 @@ static bool iter_each_print(de_ecs *r, de_entity e, void *udata) {
     );
     return false;
 }
+*/
 
 void de_ecs_print(de_ecs *r) {
     assert(r);
     koh_term_color_set(KOH_TERM_BLUE);
-    printf("de_ecs_print: ");
-    de_each(r, iter_each_print, NULL);
-    printf("\n");
+    printf("de_ecs_print:\n");
+    //de_each(r, iter_each_print, NULL);
+    printf("{ ");
+    for (int i = 0; i < r->entities_size; i++) {
+        printf("%u ", r->entities[i]);
+    }
+    printf("}\n");
     koh_term_color_reset();
 }
 
@@ -897,18 +778,19 @@ bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
         abort();
     }
 
-    if (!de_assure(r, cp_type)) {
+    de_storage *storage = de_assure(r, cp_type);
+
+    if (!storage) {
         trace("de_has: de_assure() failed for '%s'\n", cp_type.name);
         abort();
     }
 
     de_trace("de_has: ecs %p, e %u, type %s\n", r, e, de_cp_type2str(cp_type));
-    return de_storage_contains(de_assure(r, cp_type), e);
+    return de_storage_contains(storage, e);
 }
 
 // Все используемые типы добавляются в хтабличку
 static void type_register(de_ecs *r, de_cp_type cp_type) {
-    printf("type_register: cp_type.name '%s'\n", cp_type.name);
     assert(strlen(cp_type.name) > 0);
     htable_add(
         r->cp_types, 
@@ -916,10 +798,10 @@ static void type_register(de_ecs *r, de_cp_type cp_type) {
         &cp_type, sizeof(cp_type)
     );
 
-    // 0 1
-    // 1 2
     size_t new_num = htable_count(r->cp_types);
     if (r->selected_num != new_num) {
+        printf("type_register: new type '%s'\n", cp_type.name);
+
         size_t sz = new_num * sizeof(r->selected[0]);
         if (!r->selected) {
             r->selected_num = new_num;
@@ -997,6 +879,7 @@ void de_each(de_ecs* r, de_function fun, void* udata) {
     } else {
         for (size_t i = r->entities_size; i; --i) {
             const de_entity e = r->entities[i - 1];
+            // Что за проверка de_entity_identifier()?
             if (de_entity_identifier(e).id == (i - 1)) {
                 if (fun(r, e, udata))
                     return;
@@ -1018,12 +901,6 @@ bool de_orphan(de_ecs* r, de_entity e) {
     }
     return true;
 }
-
-/* Internal function to iterate orphans*/
-typedef struct de_orphans_fun_data {
-    void* orphans_udata;
-    void (*orphans_fun)(de_ecs*, de_entity, void*);
-} de_orphans_fun_data;
 
 static bool _de_orphans_each_executor(de_ecs* r, de_entity e, void* udata) {
     de_trace("_de_orphans_each_executor: ecs %p, e %u\n", r, e);
@@ -1578,3 +1455,39 @@ void de_gui(de_ecs *r, de_entity highlight ) {
 
     igEnd();
 }
+
+// Где будет использоваться данная функция? Возвращать-ли char** строк?
+void de_storage_print(de_ecs *r, de_cp_type cp_type) {
+    de_storage *s = de_storage_find(r, cp_type);
+    if (!s)
+        return;
+
+    printf("de_storage_print:\n");
+    printf("{\n");
+    printf("\tname = '%s',\n", s->name);
+    printf("\tcp_id = %zu,\n", s->cp_id);
+    printf("\tcp_data_size = %zu,\n", s->cp_data_size);
+    printf("\tcp_data_cap = %zu,\n", s->cp_data_cap);
+    printf("\tcp_sizeof = %zu,\n", s->cp_sizeof);
+    printf("\tinitial_cap = %zu,\n", s->initial_cap);
+    printf("}\n");
+
+    printf("{ ");
+    const de_sparse *sp = &s->sparse;
+    for (int i = 0; i < sp->dense_size; i++) {
+        printf("%u ", sp->dense[i]);
+    }
+    printf("}\n");
+
+/*
+    size_t      cp_id; // component id for this storage 
+    void*       cp_data; //  packed component elements array. aligned with sparse->dense
+    size_t      cp_data_size, cp_data_cap; // number of elements in the cp_data array 
+    size_t      cp_sizeof; // sizeof for each cp_data element 
+    de_sparse   sparse;
+    void        (*on_destroy)(void *payload, de_entity e);
+    char        name[64];
+    size_t      initial_cap;
+    */
+}
+

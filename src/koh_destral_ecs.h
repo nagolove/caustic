@@ -289,3 +289,4 @@ void de_set_options(de_options options);
 void de_ecs_print(de_ecs *r);
 
 void de_gui(de_ecs *r, de_entity e);
+void de_storage_print(de_ecs *r, de_cp_type cp_type);
