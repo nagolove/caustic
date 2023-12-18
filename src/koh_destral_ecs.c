@@ -6,7 +6,8 @@
 
 /*
  TODO LIST:
-    - Context variables (those are like global variables) but are inside the registry, malloc/freed inside the registry.
+    - Context variables (those are like global variables) but are inside the 
+    registry, malloc/freed inside the registry.
     - Try to make the API simpler  for single/multi views. 
     (de_it_start, de_it_next, de_it_valid
     (de_multi_start, de_multi_next, de_multi_valid,)
@@ -115,6 +116,7 @@ bool de_sparse_contains(de_sparse* s, de_entity e) {
     de_trace("de_sparse_contains: de_sparse %p, e %u\n", s, e);
     const de_entity_id eid = de_entity_identifier(e);
     return (eid.id < s->sparse_size) && (s->sparse[eid.id] != de_null);
+    //return (eid.id < s->sparse_size) && (s->dense[s->sparse[eid.id]] == e);
 }
 
 size_t de_sparse_index(de_sparse* s, de_entity e) {
@@ -138,28 +140,34 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
             s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
         }
 
+        // TODO: Добавить проверку на максимальное значение сущности
         const size_t new_sparse_size = eid.id + 1;
 
         // расширение выделения
-        if (new_sparse_size == s->sparse_cap) {
+        if (new_sparse_size >= s->sparse_cap) {
             // TODO: Гибкая политика выделения памяти
+
             s->sparse_cap *= 2 + 1;
+
+            // границы нового элемента слишком далеко
+            if (new_sparse_size >= s->sparse_cap)
+                s->sparse_cap = new_sparse_size;
+
             s->sparse = realloc(s->sparse, s->sparse_cap * sizeof(s->sparse[0]));
         }
 
-        //s->sparse = realloc(s->sparse, new_sparse_size * sizeof(s->sparse[0]));
-
-        //memset(s->sparse + s->sparse_size, de_null, (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]));
         de_entity *start = s->sparse + s->sparse_size;
-        int bytes_num = (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]);
+        size_t bytes_num = new_sparse_size - s->sparse_size;
         while (bytes_num) {
             *start++ = de_null;
-            bytes_num -= sizeof(de_entity);
+            bytes_num--;
         }
         
         s->sparse_size = new_sparse_size;
     }
-    s->sparse[eid.id] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
+
+    // set this eid index to the last dense index (dense_size)
+    s->sparse[eid.id] = (de_entity)s->dense_size;
     //trace("s->dense_size: %d\n", s->dense_size);
 
     // первоначальное выделение
@@ -169,9 +177,10 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
         s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
     }
 
-    // расширение выделения
-    if (s->dense_size == s->dense_cap) {
-        s->dense_cap *= 2;
+    // расширение выделения для плотного массива индексов сущностей
+    if (s->dense_size >= s->dense_cap) {
+        s->dense_cap *= 2 + 1;
+
         s->dense = realloc(s->dense, s->dense_cap * sizeof(s->dense[0]));
     }
 
@@ -202,16 +211,20 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
 #endif
 }
 
+// Что за индекс возвращает функция?
+// Возвращает индекс элемента в массиве cp_data для удаления
 size_t de_sparse_remove(de_sparse* s, de_entity e) {
     assert(s);
     assert(de_sparse_contains(s, e));
     de_trace("de_sparse_remove: de_sparse %p, e %u\n", s, e);
 #ifdef DE_USE_SPARSE_CAPACITY
 
-    const size_t pos = s->sparse[de_entity_identifier(e).id];
+    de_entity_id eid = de_entity_identifier(e);
+    const size_t pos = s->sparse[eid.id];
     const de_entity other = s->dense[s->dense_size - 1];
+    const de_entity_id other_eid = de_entity_identifier(other);
 
-    s->sparse[de_entity_identifier(other).id] = (de_entity)pos;
+    s->sparse[other_eid.id] = (de_entity)pos;
     s->dense[pos] = other;
     s->sparse[pos] = de_null;
 
@@ -224,7 +237,6 @@ size_t de_sparse_remove(de_sparse* s, de_entity e) {
     */
 
     s->dense_size--;
-
     return pos;
 #else
 
@@ -445,7 +457,7 @@ static void de_storage_remove(de_storage* s, de_entity e) {
 }
 
 
-static void* de_storage_get_by_index(de_storage* s, size_t index) {
+inline static void* de_storage_get_by_index(de_storage* s, size_t index) {
     de_trace("de_storage_get_by_index: [%s], index %zu\n", s->name, index);
     /*
     static int _counter = 0;
