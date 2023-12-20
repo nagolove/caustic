@@ -626,7 +626,10 @@ local function build_raylib(_: Dependency)
 end
 
 local function build_box2c(_: Dependency)
-    cmd_do("cmake .")
+    -- TODO: Добавить сборку без отладочной информации.
+    -- Любые сборки которые попадают в сеть должны быть без отладочной 
+    -- информации, с максимальной оптимизацией. В целях безопасности
+    cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
     cmd_do("make -j")
 end
 
