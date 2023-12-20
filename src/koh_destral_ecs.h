@@ -86,15 +86,18 @@ de_entity_ver de_entity_version(de_entity e);
 de_entity_id de_entity_identifier(de_entity e);
 
 /* Makes a de_entity from entity_id and entity_version */
+// FIXME de_make_entity -> de_entity_make
 de_entity de_make_entity(de_entity_id id, de_entity_ver version);
 
 
 /* de_ecs functions */
 
 /*  Allocates and initializes a de_ecs context */
+// de_ecs_make -> de_ecs_new
 de_ecs* de_ecs_make();
 
 /*  Deinitializes and frees a de_ecs context */
+// de_ecs_destroy -> de_ecs_free
 void de_ecs_destroy(de_ecs* r);
 
 void de_ecs_register(de_ecs *r, de_cp_type comp);

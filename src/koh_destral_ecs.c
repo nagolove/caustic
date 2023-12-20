@@ -219,6 +219,7 @@ size_t de_sparse_remove(de_sparse* s, de_entity e) {
     de_trace("de_sparse_remove: de_sparse %p, e %u\n", s, e);
 #ifdef DE_USE_SPARSE_CAPACITY
 
+     // roig
     de_entity_id eid = de_entity_identifier(e);
     const size_t pos = s->sparse[eid.id];
     const de_entity other = s->dense[s->dense_size - 1];
@@ -226,7 +227,35 @@ size_t de_sparse_remove(de_sparse* s, de_entity e) {
 
     s->sparse[other_eid.id] = (de_entity)pos;
     s->dense[pos] = other;
-    s->sparse[pos] = de_null;
+    //s->sparse[pos] = de_null;
+    s->sparse[eid.id] = de_null;
+    s->dense_size--;
+    
+    return pos;
+    // */
+
+    /*
+    const auto last = dense.back();
+    swap(dense.back(), dense[sparse[element]]);
+    swap(sparse[last], sparse[element]);
+    dense.pop_back();
+    */
+
+    /* // skypjack
+    de_entity_id eid = de_entity_identifier(e);
+    const size_t pos = s->sparse[eid.id];
+    const de_entity last = s->dense[s->dense_size - 1];
+    const de_entity_id last_eid = de_entity_identifier(last);
+
+    s->dense[s->dense_size - 1] = s->dense[s->sparse[eid.id]];
+    s->sparse[last_eid.id] = s->sparse[eid.id];
+    //s->sparse[pos] = de_null;
+    //s->sparse[eid.id] = de_null;
+
+    s->dense_size--;
+
+    return pos;
+    */
 
     /*
     // XXX: Возможно ошибка при работе с памятью
@@ -236,8 +265,6 @@ size_t de_sparse_remove(de_sparse* s, de_entity e) {
     }
     */
 
-    s->dense_size--;
-    return pos;
 #else
 
     const size_t pos = s->sparse[de_entity_identifier(e).id];
@@ -459,19 +486,11 @@ static void de_storage_remove(de_storage* s, de_entity e) {
 
 inline static void* de_storage_get_by_index(de_storage* s, size_t index) {
     de_trace("de_storage_get_by_index: [%s], index %zu\n", s->name, index);
-    /*
-    static int _counter = 0;
-    trace(
-        "de_storage_get_by_index: s %p, s->cp_data_size %ld, index %ld"
-        " counter %d\n",
-        s, s->cp_data_size, index, _counter++
-    );
-    */
     assert(s);
 
     //assert(index < s->cp_data_size);
     if (index >= s->cp_data_size) {
-        de_trace(
+        printf(
             "de_storage_get_by_index: index %zu, s->cp_data_size %zu\n",
             index, s->cp_data_size
         );
@@ -592,7 +611,7 @@ bool de_valid(de_ecs* r, de_entity e) {
     return ret;
 }
 
-static de_entity _de_generate_entity(de_ecs* r) {
+inline static de_entity _de_generate_entity(de_ecs* r) {
     // can't create more identifiers entities
     assert(r->entities_size < DE_ENTITY_ID_MASK);
     de_trace("_de_generate_entity: ecs %p\n", r);
@@ -610,7 +629,7 @@ static de_entity _de_generate_entity(de_ecs* r) {
 }
 
 /* internal function to recycle a non used entity from the linked list */
-static de_entity _de_recycle_entity(de_ecs* r) {
+inline static de_entity _de_recycle_entity(de_ecs* r) {
     assert(r->available_id.id != de_null);
     de_trace("_de_recycle_entity: ecs %p\n", r);
     // get the first available entity id
@@ -626,7 +645,7 @@ static de_entity _de_recycle_entity(de_ecs* r) {
     return recycled_e;
 }
 
-static void _de_release_entity(
+inline static void _de_release_entity(
     de_ecs* r, de_entity e, de_entity_ver desired_version
 ) {
     de_trace(
@@ -668,21 +687,19 @@ static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     assert(r);
     de_trace("de_assure: ecs %p, type %s\n", r, de_cp_type2str(cp_type));
 
-    de_storage* storage_found = de_storage_find(r, cp_type);
+    de_storage* storage = de_storage_find(r, cp_type);
 
-    if (storage_found) {
-        return storage_found;
-    } else {
+    if (!storage) {
         // Стоит-ли поместить регистрацию типа сюда, из de_emplace()?
-        //
-        de_storage* storage_new = de_storage_new(cp_type.cp_sizeof, cp_type);
+        storage = de_storage_new(cp_type.cp_sizeof, cp_type);
         //r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof * r->storages);
         r->storages_size++;
         size_t sz = r->storages_size * sizeof(r->storages[0]);
         r->storages = realloc(r->storages, sz);
-        r->storages[r->storages_size - 1] = storage_new;
-        return storage_new;
+        r->storages[r->storages_size - 1] = storage;
     }
+
+    return storage;
 }
 
 void de_remove_all(de_ecs* r, de_entity e) {
@@ -798,7 +815,7 @@ static void type_register(de_ecs *r, de_cp_type cp_type) {
 
     size_t new_num = htable_count(r->cp_types);
     if (r->selected_num != new_num) {
-        printf("type_register: new type '%s'\n", cp_type.name);
+        de_trace("type_register: new type '%s'\n", cp_type.name);
 
         size_t sz = new_num * sizeof(r->selected[0]);
         if (!r->selected) {
