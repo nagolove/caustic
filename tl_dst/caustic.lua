@@ -626,7 +626,7 @@ local function build_raylib(_)
 end
 
 local function build_box2c(_)
-   cmd_do("cmake .")
+   cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
    cmd_do("make -j")
 end
 
