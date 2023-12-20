@@ -15,6 +15,7 @@
 #include "koh_common.h"
 #include "raylib.h"
 #include "koh.h"
+#include <assert.h>
 
 inline static Color b2Color_to_Color(b2Color c) {
     // {{{
@@ -122,4 +123,21 @@ static inline b2AABB rect2aabb(Rectangle r) {
         .upperBound.x = r.x,
         .upperBound.y = r.y
     };
+}
+
+inline static void b2Body_user_data_reset(
+    struct WorldCtx *wctx, b2BodyId body_id, void *user_data
+) {
+    assert(wctx);
+    assert(user_data);
+    b2Body *body = b2Body_get(wctx->world, body_id); 
+    body->userData = user_data;
+
+    int32_t shape_index = body->shapeList;
+    const b2World *world = b2GetWorldFromId(wctx->world);
+    while (shape_index != B2_NULL_INDEX) {
+        b2Shape* shape = world->shapes + shape_index;
+        shape->userData = user_data;
+        shape_index = shape->nextShapeIndex;
+    }
 }
