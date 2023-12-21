@@ -514,3 +514,12 @@ char **b2BodyId_to_str(b2BodyId body_id) {
     return (char**)lines;
 }
 #undef STR_NUM
+
+const char *b2BodyId_id_to_str(b2BodyId id) {
+    static char buf[128];
+    sprintf(
+        buf, "{ index = %d, world = %hd, revision = %hu }",
+        id.index, id.world, id.revision
+    );
+    return buf;
+}

@@ -84,6 +84,7 @@ char **b2Statistics_to_str(b2WorldId world, bool lua);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
 char **b2BodyDef_to_str(b2BodyDef bd);
 char **b2BodyId_to_str(b2BodyId id);
+const char *b2BodyId_id_to_str(b2BodyId id);
 const char *b2BodyType_to_str(b2BodyType bt);
 const char *b2ShapeType_to_str(b2ShapeType st);
 
@@ -128,8 +129,10 @@ static inline b2AABB rect2aabb(Rectangle r) {
 inline static void b2Body_user_data_reset(
     struct WorldCtx *wctx, b2BodyId body_id, void *user_data
 ) {
+    // {{{
     assert(wctx);
     assert(user_data);
+    assert(b2Body_IsValid(body_id));
     b2Body *body = b2Body_get(wctx->world, body_id); 
     body->userData = user_data;
 
@@ -140,4 +143,33 @@ inline static void b2Body_user_data_reset(
         shape->userData = user_data;
         shape_index = shape->nextShapeIndex;
     }
+    // }}}
+}
+
+
+inline static bool b2Body_has_shape(
+    struct WorldCtx *wctx, b2BodyId body_id, b2ShapeId shape_id
+) {
+    // {{{
+    assert(wctx);
+    assert(b2Body_IsValid(body_id));
+    assert(b2Shape_IsValid(shape_id));
+
+    if (body_id.world != shape_id.world)
+        return false;
+
+    const b2Body *body = b2Body_get(wctx->world, body_id); 
+    const b2Shape *unknown_shape = b2Shape_get(wctx->world, shape_id);
+
+    int32_t shape_index = body->shapeList;
+    const b2World *world = b2GetWorldFromId(wctx->world);
+    while (shape_index != B2_NULL_INDEX) {
+        const b2Shape* shape = world->shapes + shape_index;
+        if (unknown_shape == shape) {
+            return true;
+        }
+        shape_index = shape->nextShapeIndex;
+    }
+    return false;
+    // }}}
 }
