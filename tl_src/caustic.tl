@@ -629,6 +629,7 @@ local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     -- Любые сборки которые попадают в сеть должны быть без отладочной 
     -- информации, с максимальной оптимизацией. В целях безопасности
+    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
     cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
     cmd_do("make clean && make -j")
 end
