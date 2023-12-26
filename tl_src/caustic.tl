@@ -630,7 +630,7 @@ local function build_box2c(_: Dependency)
     -- Любые сборки которые попадают в сеть должны быть без отладочной 
     -- информации, с максимальной оптимизацией. В целях безопасности
     cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
-    cmd_do("make -j")
+    cmd_do("make clean && make -j")
 end
 
 local function utf8proc_after_build(_: Dependency)
@@ -703,6 +703,8 @@ local function lualibrary_install_luafun(
 
 end
 
+-- Любые сборки которые попадают в сеть должны быть без отладочной 
+-- информации, с максимальной оптимизацией. В целях безопасности
 dependencies = {
 
     -- TODO: Определить действие для Lua библиотек, которые должны быть 
