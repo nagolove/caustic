@@ -88,6 +88,7 @@ const char *b2BodyId_id_to_str(b2BodyId id);
 const char *b2BodyType_to_str(b2BodyType bt);
 const char *b2ShapeType_to_str(b2ShapeType st);
 
+/*
 // XXX: Рабочая ли функция? Как сделать тоже самое стандартным API box2d?
 KOH_FORCE_INLINE b2Shape *b2Shape_get(b2WorldId world_id, b2ShapeId id) {
     // {{{
@@ -101,6 +102,7 @@ KOH_FORCE_INLINE b2Shape *b2Shape_get(b2WorldId world_id, b2ShapeId id) {
     return world->shapes + id.index;
     // }}}
 }
+*/
 
 KOH_FORCE_INLINE b2Body *b2Body_get(b2WorldId world_id, b2BodyId id) {
     const b2World* world = b2GetWorldFromId(world_id);
@@ -109,7 +111,8 @@ KOH_FORCE_INLINE b2Body *b2Body_get(b2WorldId world_id, b2BodyId id) {
 
 static inline const char *b2Vec2_to_str(b2Vec2 v) {
     static char buf[64] = {0};
-    snprintf(buf, sizeof(buf), "{%6.5f, %6.5f}", v.x, v.y);
+    //snprintf(buf, sizeof(buf), "{%6.5f, %6.5f}", v.x, v.y);
+    snprintf(buf, sizeof(buf), "{%f, %f}", v.x, v.y);
     return buf;
 }
 
@@ -129,47 +132,25 @@ static inline b2AABB rect2aabb(Rectangle r) {
 inline static void b2Body_user_data_reset(
     struct WorldCtx *wctx, b2BodyId body_id, void *user_data
 ) {
-    // {{{
-    assert(wctx);
-    assert(user_data);
-    assert(b2Body_IsValid(body_id));
-    b2Body *body = b2Body_get(wctx->world, body_id); 
-    body->userData = user_data;
-
-    int32_t shape_index = body->shapeList;
-    const b2World *world = b2GetWorldFromId(wctx->world);
-    while (shape_index != B2_NULL_INDEX) {
-        b2Shape* shape = world->shapes + shape_index;
-        shape->userData = user_data;
-        shape_index = shape->nextShapeIndex;
+    b2ShapeId shape_id = b2Body_GetFirstShape(body_id);
+    while (!B2_IS_NULL(shape_id)) {
+        b2Shape_SetUserData(shape_id, user_data);
+        shape_id = b2Body_GetNextShape(shape_id);
     }
-    // }}}
 }
-
 
 inline static bool b2Body_has_shape(
-    struct WorldCtx *wctx, b2BodyId body_id, b2ShapeId shape_id
+    struct WorldCtx *wctx, b2BodyId body_id, b2ShapeId target_shape
 ) {
-    // {{{
-    assert(wctx);
-    assert(b2Body_IsValid(body_id));
-    assert(b2Shape_IsValid(shape_id));
-
-    if (body_id.world != shape_id.world)
-        return false;
-
-    const b2Body *body = b2Body_get(wctx->world, body_id); 
-    const b2Shape *unknown_shape = b2Shape_get(wctx->world, shape_id);
-
-    int32_t shape_index = body->shapeList;
-    const b2World *world = b2GetWorldFromId(wctx->world);
-    while (shape_index != B2_NULL_INDEX) {
-        const b2Shape* shape = world->shapes + shape_index;
-        if (unknown_shape == shape) {
+    b2ShapeId cur_shape = b2Body_GetFirstShape(body_id);
+    while (!B2_IS_NULL(cur_shape)) {
+        if (B2_ID_EQUALS(cur_shape, target_shape)) {
             return true;
         }
-        shape_index = shape->nextShapeIndex;
+        cur_shape = b2Body_GetNextShape(cur_shape);
     }
     return false;
-    // }}}
 }
+
+const char *b2Polygon_to_str(const b2Polygon *poly);
+void box2d_gui(struct WorldCtx *wctx);

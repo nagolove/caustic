@@ -523,3 +523,67 @@ const char *b2BodyId_id_to_str(b2BodyId id) {
     );
     return buf;
 }
+
+const char *b2Polygon_to_str(const b2Polygon *poly) {
+    static char buf[256];
+    char *pbuf = buf;
+    assert(poly);
+    pbuf += sprintf(pbuf, "{ ");
+    for (int i = 0; i < poly->count; i++) {
+        pbuf += sprintf(pbuf, "%s, ", b2Vec2_to_str(poly->vertices[i]));
+    }
+    pbuf += sprintf(pbuf, "} ");
+    return buf;
+}
+
+static void stat_gui(struct WorldCtx *ctx) {
+    static bool tree_open = false;
+    igSetNextItemOpen(tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str("stat")) {
+        char **lines = b2Statistics_to_str(ctx->world, false);
+        while (*lines) {
+            igText("%s", *lines);
+            lines++;
+        }
+        igTreePop();
+    }
+}
+
+static void box2d_setup_gui(struct WorldCtx *wctx) {
+    assert(wctx);
+    ImGuiSliderFlags slider_flags = 0;
+    igSliderInt(
+        "velocity iterations", &wctx->velocity_iteratioins,
+        3, 10, "%d", slider_flags
+    );
+    igSliderInt(
+        "relax iterations", &wctx->relax_iterations,
+        3, 10, "%d", slider_flags
+    );
+}
+
+static void world_def_gui(b2WorldDef wdef) {
+    if (igTreeNode_Str("world def")) {
+        char **lines = b2WorldDef_to_str(wdef, false);
+        while (*lines) {
+            igText("%s", *lines);
+            lines++;
+        }
+        igTreePop();
+    }
+}
+
+void box2d_gui(struct WorldCtx *wctx) {
+    assert(wctx);
+    bool wnd_open = true;
+    ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
+    igBegin("box2d", &wnd_open, wnd_flags);
+    box2d_setup_gui(wctx);
+    igCheckbox("draw debug faces", &wctx->is_dbg_draw);
+    igSameLine(0., 5.);
+    igCheckbox("pause", &wctx->is_paused);
+    stat_gui(wctx);
+    world_def_gui(wctx->world_def);
+    igEnd();
+
+}
