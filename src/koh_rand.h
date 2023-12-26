@@ -8,6 +8,7 @@ typedef struct xorshift32_state {
   uint32_t a;
 } xorshift32_state;
 
+typedef xorshift32_state prng_32;
 
 static inline xorshift32_state xorshift32_init(void) {
     return (xorshift32_state) { .a = (uint32_t)time(NULL) };
