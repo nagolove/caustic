@@ -626,8 +626,12 @@ local function build_raylib(_)
 end
 
 local function build_box2c(_)
+
+
+
+   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
    cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
-   cmd_do("make -j")
+   cmd_do("make clean && make -j")
 end
 
 local function utf8proc_after_build(_)
@@ -699,6 +703,8 @@ local function lualibrary_install_luafun(
 
 
 end
+
+
 
 dependencies = {
 
