@@ -30,7 +30,8 @@ local path_wasm_third_party = remove_last_backslash(
 
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
 
-local lua_ver = "5.1"
+--local lua_ver = "5.1"
+local lua_ver = "5.4"
 
 package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
@@ -457,6 +458,7 @@ end
 local function paste_from_one_to_other(
     src: string, dst: string, guard_coro: thread
 )
+    print(format("paste_from_one_to_other: src '%s', dst '%s'", src, dst))
     local file_src = io.open(src, "r")
     local file_dst = io.open(dst, "a+")
 
@@ -868,13 +870,13 @@ dependencies = {
         description = "модульный звуковой синтезатор",
         dir = "sunvox",
         -- TODO: Извлекать имя архива из поля url
-        fname = "sunvox_lib-2.1c.zip", 
+        fname = "sunvox_lib-2.1.1c.zip", 
         includes = { "sunvox/sunvox_lib/headers" },
         -- XXX: Зачем путь к .so файлу?
         libdirs = { "sunvox/sunvox_lib/linux/lib_x86_64" }, 
         name = 'sunvox',
         url_action = "zip",
-        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1c.zip",
+        url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1.1c.zip",
     },
 
     {
@@ -1288,8 +1290,27 @@ local function after_init(dep: Dependency)
     ut.pop_dir()
 end
 
+local ssh_github_active = false
+
 local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
     local dst = dep.dir or ""
+
+    -- TODO: Сделать проверку для других хостов
+    if not ssh_github_active and string.match(dep.url, "git@github.com") then
+        local errcode = os.execute("ssh -T git@github.com") as integer
+        print("errcode", errcode)
+        if errcode then
+            local msg = format(
+                "Could not access through ssh to github.com with '%s'",
+                errcode as string
+            )
+            print(ansicolors("%{red}" .. msg .. "%{reset}"))
+            error()
+        else
+            ssh_github_active = true
+        end
+    end
+
     cmd_do("git clone " .. dep.url .. " " ..dst)
     if dep.dir then
         chdir(dep.dir)
@@ -1566,6 +1587,7 @@ local record ParserSetup
     arguments: {{string}}
 end
 
+-- TODO: комментарии на русском?
 local parser_setup: {string:ParserSetup} = {
     -- {{{
     luainit = {
@@ -1596,6 +1618,7 @@ local parser_setup: {string:ParserSetup} = {
         summary = "remove emty directories in path_third_party",
     },
     init = {
+        -- TODO: указать куда будут скопированы файлы
         summary = "download dependencies from network",
         options = { "-n --name" },
     },
