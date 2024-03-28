@@ -419,6 +419,7 @@ local function build_pcre2(dep: Dependency)
     ut.pop_dir()
 end
 
+--[[
 local function build_small_regex(dep: Dependency)
     print('custom_build:', dep.dir)
     print('currentdir:', lfs.currentdir())
@@ -443,6 +444,7 @@ local function build_small_regex(dep: Dependency)
     print(fd:read("*a"))
     chdir(prevdir)
 end
+--]]
 
 local function guard()
     local rnd_num = math.random(10000, 20000)
@@ -957,6 +959,7 @@ dependencies = {
         url = "https://github.com/raysan5/raylib.git",
     },
 
+    --[[
     {
         --build_method = 'other',
         --depends = {'lua'},
@@ -970,8 +973,10 @@ dependencies = {
         name = 'small_regex',
         dir = "small_regex",
         url_action = "git",
-        url = "https://gitlab.com/relkom/small-regex.git",
+        --url = "https://gitlab.com/relkom/small-regex.git",
+        url = "https://repo.4neko.org/4NEKO/small-regex-c.git",
     },
+--]]
 
     {
         --depends = {'smallregex', "wfc"},
@@ -1221,7 +1226,7 @@ local wasm_libdirs = {
     --"../caustic/wasm_3rd_party/raylib/raylib",
     "../caustic/wasm_3rd_party/raylib",
     "../caustic/wasm_3rd_party/lua",
-    "../caustic/wasm_3rd_party/small-regex/libsmallregex",
+    --"../caustic/wasm_3rd_party/small-regex/libsmallregex",
     --"../caustic/wasm_3rd_party/sunvox/sunvox_lib/
     "../caustic/3rd_party/sunvox/sunvox_lib/js/lib"
 }
@@ -1615,7 +1620,7 @@ local parser_setup: {string:ParserSetup} = {
         },
     },
     rmdirs = {
-        summary = "remove emty directories in path_third_party",
+        summary = "remove empty directories in path_third_party",
     },
     init = {
         -- TODO: указать куда будут скопированы файлы
@@ -2414,6 +2419,7 @@ local function _remove(path: string, dirnames: {string})
 end
 
 function actions.remove(_args: Args)
+    print("actions.remove")
     local dirnames: {string} = {}
     local dependencies_name_map = get_deps_name_map(dependencies)
     if _args.name and dependencies_name_map[_args.name] then
@@ -2423,6 +2429,7 @@ function actions.remove(_args: Args)
             table.insert(dirnames, dirname)
         end
     end
+    print("actions.remove", inspect(dirnames))
     _remove(path_rel_third_party, dirnames)
     _remove(path_wasm_third_party, dirnames)
     --_remove(win_third_party, dirnames)
@@ -3014,7 +3021,9 @@ end
 
 function actions.deps(_args: Args)
     if _args.full then
-        print(tabular(dependencies))
+        -- XXX: Когда это запускается? Было закоменченно для отладки 
+        -- actions.make()
+        --print(tabular(dependencies))
     else
         local shorts = {}
         for _, dep in ipairs(dependencies) do
@@ -3416,6 +3425,15 @@ end
 
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
+    if verbose then
+        print(format(
+            "sub_make: _args %s, cfg %s, push_num %d",
+            inspect(_args),
+            inspect(cfg),
+            push_num
+        ))
+    end
+
     if _args.c then
         cache_remove()
     end
@@ -3608,7 +3626,14 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     if verbose then
         print('objfiles')
-        print(tabular(objfiles))
+        local objfiles_sorted = {}
+        for k, v in ipairs(objfiles) do
+            objfiles_sorted[k] = v
+        end
+        table.sort(objfiles_sorted, function(a: string, b: string): boolean
+            return a < b
+        end)
+        print(tabular(objfiles_sorted))
     end
     local objfiles_str = table.concat(objfiles, " ")
 
@@ -3662,7 +3687,8 @@ end
 function actions.make(_args: Args)
     if verbose then
         print('make:')
-        print(tabular(_args))
+        --print(tabular(_args))
+        print(inspect(_args))
     end
 
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
@@ -3773,6 +3799,11 @@ local function main()
 
     --print(inspect(_args))
     verbose = _args.verbose == true
+
+    if verbose then
+        print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
+    end
+
     if not _args.no_verbose_path then
         print("CAUSTIC_PATH", path_caustic)
     end

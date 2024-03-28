@@ -7,15 +7,18 @@
 
 #define PCRE2_CODE_UNIT_WIDTH   8
 
+// TODO: Переписать libsmallregex на pcre2
+//#define USE_REGEX    1
+
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_private.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
-#include "koh.h"
-#include "lauxlib.h"
-#include "libsmallregex.h"
-#include "lua.h"
-#include "lualib.h"
+//#include "koh.h"
+//#include "lauxlib.h"
+//#include "libsmallregex.h"
+//#include "lua.h"
+//#include "lualib.h"
 #include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -38,7 +41,11 @@
 #endif
 
 struct FilesSearchResultInternal {
+#ifdef USE_REGEX
     struct small_regex *regex;
+#else
+    char void_payload[1];
+#endif
 };
 
 static struct IgWindowState wnd_state = {};
@@ -1216,7 +1223,9 @@ static void search_files_rec(
         return;
 
     assert(fsr->internal);
+#ifdef USE_REGEX
     struct small_regex *regex = fsr->internal->regex;
+#endif
 
     struct dirent *entry = NULL;
     while ((entry = readdir(dir))) {
@@ -1245,7 +1254,10 @@ static void search_files_rec(
                 if (verbose_search_files_rec)
                     trace("search_files_rec: regular %s\n", entry->d_name);
 
-                int found = regex_matchp(regex, entry->d_name);
+                int found = -1;
+#ifdef USE_REGEX
+                found = regex_matchp(regex, entry->d_name);
+#endif
                 if (found == -1)
                     break;
 
@@ -1301,7 +1313,10 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
         "koh_search_files: path '%s' regex_pattern '%s'\n", 
         fsr.path, fsr.regex_pattern
     );
+
+#ifdef USE_REGEX
     fsr.internal->regex = regex_compile(fsr.regex_pattern);
+
     if (!fsr.internal->regex) {
         trace(
             "koh_search_files: could not compile regex '%s'\n",
@@ -1310,6 +1325,14 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
         koh_search_files_shutdown(&fsr);
         return fsr;
     }
+#else
+    trace(
+        "koh_search_files: could not compile regex '%s'\n",
+        fsr.regex_pattern
+    );
+    koh_search_files_shutdown(&fsr);
+    return fsr;
+#endif
 
     int deep_counter = setup->deep;
     if (setup->deep < 0)
@@ -1327,8 +1350,10 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
         free(fsr->names[i]);
 
     if (fsr->internal) {
+#ifdef USE_REGEX
         if (fsr->internal->regex)
             regex_free(fsr->internal->regex);
+#endif
         free(fsr->internal);
         fsr->internal = NULL;
     }
@@ -1712,3 +1737,5 @@ char *concat_iter_to_allocated_str(char **lines) {
     merged[merged_len] = 0;
     return merged;
 }
+
+#undef USE_REGEX

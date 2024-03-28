@@ -1,11 +1,14 @@
 // vim: fdm=marker
 #include "koh_logger.h"
 
+// TODO: Переписать libsmallregex на pcre2
+//#define USE_REGEX    1
+
 #include "koh_console.h"
 #include "koh_script.h"
 #include "koh_strset.h"
 #include "lauxlib.h"
-#include "libsmallregex.h"
+//#include "libsmallregex.h"
 #include "lua.h"
 #include <assert.h>
 #include <stdarg.h>
@@ -26,7 +29,9 @@ static StrSet *traces_set = NULL;
 static bool is_trace_enabled = true;
 
 struct FilterEntry {
+#ifdef USE_REGEX
     struct small_regex *regex;
+#endif
     char *pattern;
 };
 
@@ -51,10 +56,16 @@ void trace_filter_add(const char *pattern) {
 
     struct FilterEntry *fe = &filters[filters_num++];
     fe->pattern = strdup(pattern);
+#ifdef USE_REGEX
     fe->regex = regex_compile(pattern);
+#endif
 }
 
 bool filter_match(const char *string) {
+#ifndef USE_REGEX
+    return false;
+#endif
+
     if (!string)
         return false;
 
@@ -62,9 +73,11 @@ bool filter_match(const char *string) {
         return false;
 
     for (int j = 0; j < filters_num; j++) {
+#ifdef USE_REGEX
         if (regex_matchp(filters[j].regex, string) != -1) {
             return true;
         }
+#endif
     }
 
     return false;
@@ -80,8 +93,10 @@ void filter_free() {
         struct FilterEntry *fe = &filters[i];
         if (fe->pattern)
             free(fe->pattern);
+#ifdef USE_REGEX
         if (fe->regex)
             regex_free(fe->regex);
+#endif
     }
 }
 
@@ -264,3 +279,5 @@ void trace_enable(bool state) {
 
 #undef MAX_TRACE_LEN
 #undef MAX_TRACE_GROUPS
+
+#undef USE_REGEX
