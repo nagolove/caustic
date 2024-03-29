@@ -2108,6 +2108,7 @@ function actions.selftest(_args: Args)
     end
 end
 
+-- TODO: Недоделанная функция
 function actions.test(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     for _, cfg in ipairs(cfgs) do
@@ -3430,13 +3431,15 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
 end
 
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
+-- TODO: не работает несколько конфигов в одном сборочной файле.
+-- Возникает конфликт двух точек входа.
 local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if verbose then
         print(format(
             "sub_make: _args %s, cfg %s, push_num %d",
             inspect(_args),
             inspect(cfg),
-            push_num
+            push_num or 0
         ))
     end
 
