@@ -2465,21 +2465,27 @@ local function get_ready_includes(cfg)
 end
 
 function actions.dependencies(_)
-   for _, dep in ipairs(dependencies) do
-      print(tabular(dep));
-   end
+
+
+
+
+
+
 end
 
 function actions.verbose(_)
-   print(tabular({
-      urls = get_urls(dependencies),
-      dependencies = dependencies,
-      dirnames = get_dirs(dependencies),
-      includedirs = get_ready_includes(),
 
-      libdirs = libdirs,
-      links_internal = get_ready_links_internal(),
-   }))
+
+
+
+
+
+
+
+
+
+
+
 end
 
 function actions.compile_flags(_)
@@ -3612,7 +3618,7 @@ local function sub_make(_args, cfg, push_num)
    end
 
    if verbose then
-
+      print(tabular(repr_queu))
    end
 
    if not _args.j then
@@ -3795,24 +3801,35 @@ local function main()
 
 
    parser:add_complete()
-   local _args = parser:parse()
+   local ok, _args = parser:pparse()
+   local has_command = false
 
+   if ok then
 
-   verbose = _args.verbose == true
-
-   if verbose then
-      print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
-   end
-
-   if not _args.no_verbose_path then
-      print("CAUSTIC_PATH", path_caustic)
-   end
-
-   for k, v in pairs(_args) do
-      local can_call = type(v) == 'boolean' and v == true
-      if actions[k] and can_call then
-         actions[k](_args)
+      if _args.verbose then
+         verbose = true
       end
+
+
+      if verbose then
+         print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
+      end
+
+      if not _args.no_verbose_path then
+         print("CAUSTIC_PATH", path_caustic)
+      end
+
+      for k, v in pairs(_args) do
+         local can_call = type(v) == 'boolean' and v == true
+         if actions[k] and can_call then
+            actions[k](_args)
+            has_command = true
+         end
+      end
+   end
+
+   if not has_command then
+      actions.make(_args)
    end
 end
 
