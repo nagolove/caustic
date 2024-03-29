@@ -3795,24 +3795,35 @@ local function main()
     --]]
 
     parser:add_complete()
-    local _args = parser:parse()
+    local ok, _args: boolean, argparse.Args = parser:pparse() as (boolean, argparse.Args)
+    local has_command = false
 
-    --print(inspect(_args))
-    verbose = _args.verbose == true
-
-    if verbose then
-        print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
-    end
-
-    if not _args.no_verbose_path then
-        print("CAUSTIC_PATH", path_caustic)
-    end
-
-    for k, v in pairs(_args) do
-        local can_call = type(v) == 'boolean' and v == true 
-        if actions[k as ActionsEnum] and can_call then
-            actions[k as ActionsEnum](_args as Args)
+    if ok then
+        --print(inspect(_args))
+        if _args.verbose then
+            verbose = true
         end
+        --verbose = _args.verbose == true
+
+        if verbose then
+            print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
+        end
+
+        if not _args.no_verbose_path then
+            print("CAUSTIC_PATH", path_caustic)
+        end
+
+        for k, v in pairs(_args) do
+            local can_call = type(v) == 'boolean' and v == true 
+            if actions[k as ActionsEnum] and can_call then
+                actions[k as ActionsEnum](_args as Args)
+                has_command = true
+            end
+        end
+    end
+
+    if not has_command then
+        actions.make(_args as Args)
     end
 end
 
