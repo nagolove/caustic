@@ -22,6 +22,7 @@
 #include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
+
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -34,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #ifdef PLATFORM_DESKTOP
 #include <signal.h>
