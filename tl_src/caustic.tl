@@ -2465,12 +2465,17 @@ local function get_ready_includes(cfg: Cfg): {string}
 end
 
 function actions.dependencies(_: Args)
+    --[[
+    XXX: uncomment please!
     for _, dep in ipairs(dependencies) do
         print(tabular(dep));
     end
+    --]]
 end
 
 function actions.verbose(_: Args)
+    --[[
+    XXX: uncomment please!
     print(tabular({
         urls = get_urls(dependencies),
         dependencies = dependencies,
@@ -2480,6 +2485,7 @@ function actions.verbose(_: Args)
         libdirs = libdirs,
         links_internal = get_ready_links_internal(),
     }))
+    --]]
 end
 
 function actions.compile_flags(_: Args)
