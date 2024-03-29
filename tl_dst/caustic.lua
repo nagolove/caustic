@@ -2108,6 +2108,7 @@ function actions.selftest(_args)
    end
 end
 
+
 function actions.test(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    for _, cfg in ipairs(cfgs) do
@@ -3436,7 +3437,7 @@ local function sub_make(_args, cfg, push_num)
       "sub_make: _args %s, cfg %s, push_num %d",
       inspect(_args),
       inspect(cfg),
-      push_num))
+      push_num or 0))
 
    end
 
