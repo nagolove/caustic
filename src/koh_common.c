@@ -67,8 +67,7 @@ void custom_log(int msgType, const char *text, va_list args)
     strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
     printf("[%s] ", timeStr);
 
-    switch (msgType)
-    {
+    switch (msgType) {
         case LOG_INFO: printf("[INFO] : "); break;
         case LOG_ERROR: printf("[ERROR]: "); break;
         case LOG_WARNING: printf("[WARN] : "); break;
