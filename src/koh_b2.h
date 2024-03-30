@@ -129,6 +129,12 @@ static inline b2AABB rect2aabb(Rectangle r) {
     };
 }
 
+static inline void b2Shape_SetUserData(b2ShapeId shapeId, void *udata) {
+    b2World* world = b2GetWorldFromIndex(shapeId.world);
+    b2Shape* shape = b2GetShape(world, shapeId);
+    shape->userData = udata;
+}
+
 inline static void b2Body_user_data_reset(
     struct WorldCtx *wctx, b2BodyId body_id, void *user_data
 ) {
