@@ -419,6 +419,19 @@ local function build_pcre2(dep)
    ut.pop_dir()
 end
 
+local function build_small_regex(dep)
+   print('build_small_regex:', dep.dir)
+   print('currentdir:', lfs.currentdir())
+   local prevdir = lfs.currentdir()
+   local ok, errmsg = chdir('libsmallregex')
+   if not ok then
+      print('custom_build: chdir()', errmsg)
+      return
+   end
+   print(lfs.currentdir())
+
+   cmd_do('gcc -c libsmallregex.c')
+   cmd_do("ar rcs libsmallregex.a libsmallregex.o")
 
 
 
@@ -433,17 +446,8 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+   chdir(prevdir)
+end
 
 
 local function guard()
@@ -959,24 +963,22 @@ dependencies = {
       url = "https://github.com/raysan5/raylib.git",
    },
 
+   {
 
 
+      copy_for_wasm = true,
+      build = build_small_regex,
+      description = "простая библиотека для регулярных выражений",
+      includes = { "small_regex/libsmallregex" },
+      libdirs = { "small_regex/libsmallregex" },
+      links = { "smallregex:static" },
+      links_internal = { "smallregex:static" },
+      name = 'small_regex',
+      dir = "small_regex",
+      url_action = "git",
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      url = "git@github.com:nagolove/small-regex-c.git",
+   },
 
    {
 
@@ -2466,12 +2468,9 @@ local function get_ready_includes(cfg)
 end
 
 function actions.dependencies(_)
-
-
-
-
-
-
+   for _, dep in ipairs(dependencies) do
+      print(tabular(dep));
+   end
 end
 
 function actions.verbose(_)
@@ -3429,6 +3428,8 @@ local function get_ready_deps_defines(cfg)
 
    return flags
 end
+
+
 
 
 local function sub_make(_args, cfg, push_num)
