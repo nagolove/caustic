@@ -2,7 +2,7 @@
 #include "koh_logger.h"
 
 // TODO: Переписать libsmallregex на pcre2
-//#define USE_REGEX    1
+#define USE_REGEX    1
 
 #include "koh_console.h"
 #include "koh_script.h"

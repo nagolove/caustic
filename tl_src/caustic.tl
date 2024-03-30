@@ -419,9 +419,8 @@ local function build_pcre2(dep: Dependency)
     ut.pop_dir()
 end
 
---[[
 local function build_small_regex(dep: Dependency)
-    print('custom_build:', dep.dir)
+    print('build_small_regex:', dep.dir)
     print('currentdir:', lfs.currentdir())
     local prevdir = lfs.currentdir()
     local ok, errmsg = chdir('libsmallregex')
@@ -430,6 +429,10 @@ local function build_small_regex(dep: Dependency)
         return
     end
     print(lfs.currentdir())
+    -- TODO: Разница между cmd_do() и popen()?
+    cmd_do('gcc -c libsmallregex.c')
+    cmd_do("ar rcs libsmallregex.a libsmallregex.o")
+    --[[
     local cmd_gcc = 'gcc -c libsmallregex.c'
     local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
     local fd = io.popen(cmd_gcc)
@@ -442,6 +445,7 @@ local function build_small_regex(dep: Dependency)
         print("error in ", cmd_ar)
     end
     print(fd:read("*a"))
+    --]]
     chdir(prevdir)
 end
 --]]
@@ -959,7 +963,6 @@ dependencies = {
         url = "https://github.com/raysan5/raylib.git",
     },
 
-    --[[
     {
         --build_method = 'other',
         --depends = {'lua'},
@@ -974,9 +977,8 @@ dependencies = {
         dir = "small_regex",
         url_action = "git",
         --url = "https://gitlab.com/relkom/small-regex.git",
-        url = "https://repo.4neko.org/4NEKO/small-regex-c.git",
+        url = "git@github.com:nagolove/small-regex-c.git",
     },
---]]
 
     {
         --depends = {'smallregex', "wfc"},
@@ -2466,12 +2468,9 @@ local function get_ready_includes(cfg: Cfg): {string}
 end
 
 function actions.dependencies(_: Args)
-    --[[
-    XXX: uncomment please!
     for _, dep in ipairs(dependencies) do
         print(tabular(dep));
     end
-    --]]
 end
 
 function actions.verbose(_: Args)

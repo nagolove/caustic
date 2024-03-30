@@ -8,7 +8,7 @@
 #define PCRE2_CODE_UNIT_WIDTH   8
 
 // TODO: Переписать libsmallregex на pcre2
-//#define USE_REGEX    1
+#define USE_REGEX    1
 
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_private.h"
