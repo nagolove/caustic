@@ -1,5 +1,6 @@
 return {
     "/home/nagolove/caustic-test-b2",
+    "/home/nagolove/caustic-test-common",
     "/home/nagolove/caustic-test-ecs",
     "/home/nagolove/caustic-test-lua",
     "/home/nagolove/caustic-test-metaloader",
