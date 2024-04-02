@@ -208,8 +208,10 @@ struct FilesSearchResult {
 };
 
 struct FilesSearchSetup {
-    const char *path, *regex_pattern;
-    int deep; // глубина поиска, -1 - неограниченная
+    const char  *path,          // относительный или абсолютный?
+                *regex_pattern;
+    int     deep; // глубина поиска, -1 - неограниченная
+    bool    engine_pcre2;
 };
 
 struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup);

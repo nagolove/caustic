@@ -11,14 +11,9 @@
 #define USE_REGEX    1
 
 #include "chipmunk/chipmunk.h"
-#include "chipmunk/chipmunk_private.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
-//#include "koh.h"
-//#include "lauxlib.h"
-//#include "libsmallregex.h"
-//#include "lua.h"
-//#include "lualib.h"
+#include "libsmallregex.h"
 #include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -43,11 +38,15 @@
 #endif
 
 struct FilesSearchResultInternal {
+    union {
 #ifdef USE_REGEX
-    struct small_regex *regex;
+        struct small_regex *regex_small;
 #else
-    char void_payload[1];
+        char void_payload[1];
 #endif
+        pcre2_code *regex_pcre;
+        pcre2_match_data *match_data;
+    };
 };
 
 static struct IgWindowState wnd_state = {};
@@ -57,6 +56,14 @@ static int cpu_count = 0;
 
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 static void add_chars_range(int first, int last);
+
+bool koh_search_files_small(
+    struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
+);
+bool koh_search_files_pcre2(
+    struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
+);
+static char *pcre_code_str(int errnumber);
 
 void custom_log(int msgType, const char *text, va_list args)
 {
@@ -1224,9 +1231,35 @@ static void search_files_rec(
         return;
 
     assert(fsr->internal);
-#ifdef USE_REGEX
-    struct small_regex *regex = fsr->internal->regex;
-#endif
+
+    struct small_regex *regex_small = NULL;
+    pcre2_code *regex_pcre = NULL;
+
+    regex_small = fsr->internal->regex_small;
+    regex_pcre = fsr->internal->regex_pcre;
+
+    if (regex_small) {
+        printf("search_files_rec: regex engine small_regex\n");
+    } else if (regex_pcre) {
+        printf("search_files_rec: regex engine pcre2\n");
+    } else {
+        printf("search_files_rec: no regex engine allocated\n");
+        return;
+    }
+
+    if (!regex_small || !regex_pcre) {
+        printf("search_files_rec: no regex engine allocated\n");
+        return;
+    }
+
+    pcre2_match_data *match_data = NULL;
+    if (regex_pcre) {
+        match_data = pcre2_match_data_create_from_pattern(
+            regex_pcre, NULL
+        );
+        printf("search_files_rec: pcre2_match_data %p\n", match_data);
+        assert(match_data);
+    }
 
     struct dirent *entry = NULL;
     while ((entry = readdir(dir))) {
@@ -1256,11 +1289,20 @@ static void search_files_rec(
                     trace("search_files_rec: regular %s\n", entry->d_name);
 
                 int found = -1;
-#ifdef USE_REGEX
-                found = regex_matchp(regex, entry->d_name);
-#endif
-                if (found == -1)
-                    break;
+                if (regex_small) {
+                    found = regex_matchp(regex_small, entry->d_name);
+                    if (found == -1)
+                        break;
+                } else if (regex_pcre) {
+                    found = pcre2_match(
+                        regex_pcre,
+                        (unsigned char*)entry->d_name,
+                        strlen(entry->d_name), 
+                        0, 0, match_data, NULL
+                    );
+                    if (found < 0)
+                        break;
+                }
 
                 char fname[1024] = {};
                 strcat(fname, path);
@@ -1290,10 +1332,16 @@ static void search_files_rec(
 
     }
 
+    if (match_data)
+        pcre2_match_data_free(match_data);
+
     closedir(dir);
 }
 
 struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
+    assert(setup);
+    //return (struct FilesSearchResult){};
+
     assert(setup);
     struct FilesSearchResult fsr = {};
 
@@ -1315,25 +1363,13 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
         fsr.path, fsr.regex_pattern
     );
 
-#ifdef USE_REGEX
-    fsr.internal->regex = regex_compile(fsr.regex_pattern);
-
-    if (!fsr.internal->regex) {
-        trace(
-            "koh_search_files: could not compile regex '%s'\n",
-            fsr.regex_pattern
-        );
-        koh_search_files_shutdown(&fsr);
-        return fsr;
+    if (setup->engine_pcre2) {
+        if (!koh_search_files_pcre2(setup, &fsr))
+            return fsr;
+    } else {
+        if (!koh_search_files_small(setup, &fsr))
+            return fsr;
     }
-#else
-    trace(
-        "koh_search_files: could not compile regex '%s'\n",
-        fsr.regex_pattern
-    );
-    koh_search_files_shutdown(&fsr);
-    return fsr;
-#endif
 
     int deep_counter = setup->deep;
     if (setup->deep < 0)
@@ -1341,6 +1377,52 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
     search_files_rec(&fsr, fsr.path, deep_counter);
 
     return fsr;
+
+}
+
+bool koh_search_files_pcre2(
+    struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
+) {
+    assert(setup);
+    assert(fsr);
+
+    int errnumner;
+    size_t erroffset;
+    fsr->internal->regex_pcre = pcre2_compile(
+        (unsigned char*)fsr->regex_pattern, 
+        PCRE2_ZERO_TERMINATED, 0, &errnumner, &erroffset, NULL
+    );
+
+    if (!fsr->internal->regex_pcre) {
+        trace(
+            "koh_search_files: could not compile regex '%s' with '%s'\n",
+            fsr->regex_pattern, pcre_code_str(errnumner)
+        );
+        koh_search_files_shutdown(fsr);
+        return false;
+    }
+
+    return true;
+}
+
+bool koh_search_files_small(
+        struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
+) {
+    assert(setup);
+    assert(fsr);
+
+    fsr->internal->regex_small = regex_compile(fsr->regex_pattern);
+
+    if (!fsr->internal->regex_small) {
+        trace(
+            "koh_search_files: could not compile regex '%s'\n",
+            fsr->regex_pattern
+        );
+        koh_search_files_shutdown(fsr);
+        return false;
+    }
+
+    return true;
 }
 
 void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
@@ -1351,10 +1433,10 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
         free(fsr->names[i]);
 
     if (fsr->internal) {
-#ifdef USE_REGEX
-        if (fsr->internal->regex)
-            regex_free(fsr->internal->regex);
-#endif
+        if (fsr->internal->regex_small)
+            regex_free(fsr->internal->regex_small);
+        if (fsr->internal->regex_pcre)
+            pcre2_code_free(fsr->internal->regex_pcre);
         free(fsr->internal);
         fsr->internal = NULL;
     }
@@ -1469,7 +1551,7 @@ const char *koh_incremental_fname(const char *fname, const char *ext) {
 }
 
 static char *pcre_code_str(int errnumber) {
-    static char buffer[256] = {};
+    static char buffer[512] = {};
     pcre2_get_error_message(
         errnumber, (unsigned char*)buffer, sizeof(buffer)
     );

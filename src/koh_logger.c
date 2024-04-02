@@ -8,7 +8,7 @@
 #include "koh_script.h"
 #include "koh_strset.h"
 #include "lauxlib.h"
-//#include "libsmallregex.h"
+#include "libsmallregex.h"
 #include "lua.h"
 #include <assert.h>
 #include <stdarg.h>
