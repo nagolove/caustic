@@ -3,7 +3,7 @@
 
 #include "raylib.h"
 
-#define PARAGRAPH_INITIAL_LINES 25
+#define KOH_PARAGRAPH_INITIAL_LINES 25
 
 typedef struct Paragraph {
     Color   color_text, color_background;

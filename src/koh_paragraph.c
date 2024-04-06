@@ -60,7 +60,7 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     va_end(args);
 
     if (prgh->linesnum == prgh->linescap) {
-        prgh->linescap += PARAGRAPH_INITIAL_LINES;
+        prgh->linescap += KOH_PARAGRAPH_INITIAL_LINES;
         prgh->lines = realloc(prgh->lines, sizeof(char*) * prgh->linescap);
         assert(prgh->lines);
     }
