@@ -1215,7 +1215,9 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
 
     switch (fsr->internal->regex_engine) {
         case RE_PCRE2: {
-           assert(fsr->internal->regex.pcre.match_data);
+            assert(fsr->internal->regex.pcre.r);
+            assert(fsr->internal->regex.pcre.match_data);
+            //trace("match: regex engine pcre2\n");
             found = pcre2_match(
                 fsr->internal->regex.pcre.r,
                 (unsigned char*)str,
@@ -1227,7 +1229,8 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
             break;
         }
         case RE_SMALL: {
-            printf("search_files_rec: regex engine small_regex\n");
+            assert(fsr->internal->regex.small);
+            trace("match: regex engine small_regex\n");
                 found = regex_matchp(fsr->internal->regex.small, str);
                 if (found == -1)
                     return false;
@@ -1265,17 +1268,14 @@ static void search_files_rec(
     /*struct small_regex *regex_small = NULL;*/
     /*pcre2_code *regex_pcre = NULL;*/
 
+    trace(
+        "search_files_rec: regex_engine %d\n",
+        fsr->internal->regex_engine
+    );
+
     switch (fsr->internal->regex_engine) {
         case RE_PCRE2: {
             printf("search_files_rec: regex engine pcre2\n");
-
-            pcre2_match_data *md = pcre2_match_data_create_from_pattern(
-                fsr->internal->regex.pcre.r, NULL
-            );
-            fsr->internal->regex.pcre.match_data = md;
-            printf("search_files_rec: pcre2_match_data %p\n", md);
-            assert(md);
-
             break;
         }
         case RE_SMALL: {
@@ -1389,11 +1389,13 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
     );
 
     if (setup->engine_pcre2) {
+        fsr.internal->regex_engine = RE_PCRE2;
         if (!koh_search_files_pcre2(setup, &fsr)) {
             trace("koh_search_files: could not create 'pcre2' regex engine\n");
             return fsr;
         }
     } else {
+        fsr.internal->regex_engine = RE_SMALL;
         if (!koh_search_files_small(setup, &fsr)) {
             trace(
                 "koh_search_files_small: could not create "
@@ -1438,6 +1440,13 @@ bool koh_search_files_pcre2(
         return false;
     }
 
+    pcre2_match_data *md = pcre2_match_data_create_from_pattern(
+        fsr->internal->regex.pcre.r, NULL
+    );
+    fsr->internal->regex.pcre.match_data = md;
+    printf("search_files_rec: pcre2_match_data %p\n", md);
+    assert(md);
+
     return true;
 }
 
@@ -1471,11 +1480,20 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
         free(fsr->names[i]);
 
     if (fsr->internal) {
-        if (fsr->internal->regex.small)
-            regex_free(fsr->internal->regex.small);
-        if (fsr->internal->regex.pcre.r)
-            pcre2_code_free(fsr->internal->regex.pcre.r);
-        // XXX: Когда освобождать regex.pcre.r.match_data?
+        switch (fsr->internal->regex_engine) {
+            case RE_SMALL:
+                regex_free(fsr->internal->regex.small);
+                break;
+            case RE_PCRE2: {
+                pcre2_match_data **md = &fsr->internal->regex.pcre.match_data;
+                if (*md) {
+                    pcre2_match_data_free(*md);
+                    *md = NULL;
+                }
+                pcre2_code_free(fsr->internal->regex.pcre.r);
+                break;
+            }
+        }
         free(fsr->internal);
         fsr->internal = NULL;
     }
@@ -1636,7 +1654,6 @@ void koh_search_files_exclude_pcre(
     assert(alive_names);
 
     for (int i = 0; i < fsr->num; i++) {
-        //if (regex_matchp(regex, fsr->names[i]) == -1) {
         int rc = pcre2_match(
             regex, (unsigned char*)fsr->names[i], strlen(fsr->names[i]), 
             0, 0, match_data, NULL
@@ -1660,7 +1677,6 @@ void koh_search_files_exclude_pcre(
     pcre2_code_free(regex);
     pcre2_match_data_free(match_data);
 }
-
 
 const char *koh_extract_path(const char *fname) {
     assert(fname);
@@ -1852,6 +1868,8 @@ char *concat_iter_to_allocated_str(char **lines) {
         // использованием указателя на последний элемент.
         /*printf("concat_iter_to_allocated_str: lines '%s'\n", *lines);*/
         merged_len += strlen(*lines);
+        // XXX: strcat() бежит по строке известной длины, можно заменить на 
+        // strncpy() или memcpy()?
         strcat(merged, *lines);
 
         lines++;
