@@ -2,6 +2,7 @@
 
 #include "koh_hashers.h"
 #include "koh_logger.h"
+#include "koh_paragraph.h"
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -19,6 +20,8 @@ typedef struct StrSet {
     int cap, taken;
 } StrSet;
 
+// TODO: Заменить хэш функцию, добавить возможность её выбора при создании
+// контейнера.
 static uint32_t hasher_djb2(const char *str) {
     unsigned long hash = 5381;
     int c;
@@ -212,6 +215,7 @@ void strset_each(StrSet *set, StrSetEachCallback cb, void *udata) {
             }
         }
 _exit:
+    return;
 }
 
 struct CompareCtx {
@@ -237,4 +241,59 @@ bool strset_compare(const StrSet *s1, const StrSet *s2) {
     };
     strset_each((StrSet*)s1, iter_compare, &ctx);
     return ctx.eq;
+}
+
+struct PrintCtx {
+    FILE *f;
+};
+
+static StrSetAction iter_print(const char *key, void *udata) {
+    struct PrintCtx *ctx = udata;
+    fprintf(ctx->f, "%s\n", key);
+    return SSA_next;
+}
+
+void strset_print(StrSet *set, FILE *f) {
+    assert(set);
+    assert(f);
+
+    strset_each(set, iter_print, &(struct PrintCtx) {
+        .f = f,
+    });
+}
+
+struct DifferenceCtx {
+    StrSet *s2, *difference;
+};
+
+static StrSetAction iter_diffence(const char *key, void *udata) {
+    struct DifferenceCtx *ctx = udata;
+    if (!strset_exist(ctx->s2, key)) {
+        //trace("iter_diffence: add to difference '%s'\n", key);
+        strset_add(ctx->difference, key);
+    }
+    return SSA_next;
+}
+
+StrSet *strset_difference(const StrSet *s1, const StrSet *s2) {
+    assert(s1);
+    assert(s2);
+
+    struct DifferenceCtx ctx = {
+        .s2 = (StrSet*)s2,
+        .difference = strset_new(),
+    };
+    strset_each((StrSet*)s1, iter_diffence, &ctx);
+
+    return ctx.difference;
+}
+
+bool strset_compare_strs(const StrSet *s1, char **lines, size_t lines_num) {
+    assert(s1);
+    assert(lines);
+    for (size_t i = 0; i < lines_num; i++) {
+        if (!strset_exist(s1, lines[i]))
+            return false;
+    }
+    return true;
 }
