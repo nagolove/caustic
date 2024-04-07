@@ -16,26 +16,24 @@ struct Bucket {
 };
 
 typedef struct StrSet {
-    struct Bucket *arr;
-    int cap, taken;
+    struct Bucket   *arr;
+    size_t          cap, taken;
+    HashFunction    hasher;
 } StrSet;
 
-// TODO: Заменить хэш функцию, добавить возможность её выбора при создании
-// контейнера.
-static uint32_t hasher_djb2(const char *str) {
-    unsigned long hash = 5381;
-    int c;
-
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
-    return hash;
-}
-
-StrSet *strset_new() {
+StrSet *strset_new(struct StrSetSetup *setup) {
     StrSet *set = calloc(1, sizeof(StrSet));
     assert(set);
-    set->cap = 11;
+
+    if (!setup) {
+        set->cap = 11;
+        set->hasher = koh_hasher_mum;
+    } else {
+        set->cap = setup->capacity;
+        set->hasher = setup->hasher;
+    }
+    /*set->hasher = koh_hasher_fnv64;*/
+
     set->arr = calloc(set->cap, sizeof(set->arr[0]));
     assert(set->arr);
     return set;
@@ -47,7 +45,8 @@ static int _strset_get(const StrSet *set, const char *key) {
     if (!key)
         return -1;
 
-    int index = hasher_djb2(key) % set->cap;
+    // XXX: Не хранится длина ключа, может понадобиться для длинных ключей
+    int index = set->hasher(key, strlen(key)) % set->cap;
     for (int i = 0; i < set->cap; i++) {
         if (!set->arr[index].taken)
             break;
@@ -87,6 +86,10 @@ void strset_extend(StrSet *set) {
 }
 
 void strset_add(StrSet *set, const char *key) {
+    strset_addn(set, key, strlen(key));
+}
+
+void strset_addn(StrSet *set, const char *key, size_t key_len) {
     assert(set);
     if (!key) return;
 
@@ -98,7 +101,8 @@ void strset_add(StrSet *set, const char *key) {
 
     assert(set->taken < set->cap);
 
-    Hash_t hash = hasher_djb2(key); 
+    Hash_t hash = set->hasher(key, key_len); 
+    /*printf("strset_addn: hash %lu\n", hash);*/
     int index = hash % set->cap;
 
     while (set->arr[index].taken)
@@ -281,7 +285,7 @@ StrSet *strset_difference(const StrSet *s1, const StrSet *s2) {
 
     struct DifferenceCtx ctx = {
         .s2 = (StrSet*)s2,
-        .difference = strset_new(),
+        .difference = strset_new(NULL),
     };
     strset_each((StrSet*)s1, iter_diffence, &ctx);
 
@@ -296,4 +300,9 @@ bool strset_compare_strs(const StrSet *s1, char **lines, size_t lines_num) {
             return false;
     }
     return true;
+}
+
+size_t strset_count(const StrSet *set) {
+    assert(set);
+    return set->taken;
 }
