@@ -54,9 +54,9 @@ struct WorldCtx {
     b2DebugDraw         world_dbg_draw;
     bool                is_dbg_draw, is_paused;
     int                 tasks_count;
-    uint32_t            width, height;
+    uint32_t            width, height; // размеры карты в пикселях?
     b2WorldId           world;
-    xorshift32_state    *xrng;
+    xorshift32_state    *xrng; // TODO Заменить на prng (64 бита)
 };
 
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id) {
