@@ -115,7 +115,7 @@ void logger_init(void) {
     if (!log_stream)
         printf("logger_init: log fopen error %s\n", strerror(errno));
 
-    traces_set = strset_new();
+    traces_set = strset_new(NULL);
     filter_init();
 }
 

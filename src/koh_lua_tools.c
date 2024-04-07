@@ -526,8 +526,8 @@ char *table_dump2allocated_str(lua_State *l) {
                         "   if ok then\n"
                         "       return serpent.dump(tbl)\n"
                         "   else\n"
-                        // XXX Отдадочная печать!
-                        "       print(errmsg)\n"
+                        // XXX: Отдадочная печать!
+                        "       --print(errmsg)\n"
                         "       return nil\n"
                         "   end\n"
                         "end\n"

@@ -3,18 +3,24 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
-#include <stdlib.h>
 #include "mum.h"
 
 //typedef uint32_t Hash_t;
 typedef uint64_t Hash_t;
 typedef Hash_t (*HashFunction)(const void *data, size_t data_len);
 
+struct HashFunctionDef {
+    HashFunction f;
+    char *fname;
+};
+
 extern Hash_t koh_seed;
+extern struct HashFunctionDef koh_hashers[];
 
 void koh_hashers_init();
 
 static inline Hash_t koh_hasher_mum(const void *data, size_t len) {
+    assert(koh_seed != 0);
     return mum_hash(data, len, koh_seed);
 }
 
@@ -30,42 +36,24 @@ static inline Hash_t koh_hasher_fnv64(const void *data, size_t len) {
 	return h;
 }
 
-/*
-static inline Hash_t koh_hasher_fnv32(const void *data, int len) {
-    assert(data);
-    assert(len > 0);
-    const char *bytes = (char*)data;
-    Hash_t h = 0x811c9dc5;
+static inline Hash_t koh_hasher_djb2(const void *data, size_t len) {
+    Hash_t hash = 5381;
+    const char *str = data;
 
-    for (; len >= 8; len -= 8, bytes += 8) {
-        h = (h ^ bytes[0]) * 0x01000193;
-        h = (h ^ bytes[1]) * 0x01000193;
-        h = (h ^ bytes[2]) * 0x01000193;
-        h = (h ^ bytes[3]) * 0x01000193;
-        h = (h ^ bytes[4]) * 0x01000193;
-        h = (h ^ bytes[5]) * 0x01000193;
-        h = (h ^ bytes[6]) * 0x01000193;
-        h = (h ^ bytes[7]) * 0x01000193;
-    }
-
-    while (len--) {
-        h = (h ^ *bytes++) * 0x01000193;
-    }
-
-    assert(h != 0);
-    return h;
-}
-*/
-
-/*
-static Hash_t hasher_djb2(const char *data, int key_len) {
-    unsigned long hash = 5381;
-
-    for (int i = 0; i < key_len; ++i) {
-        hash = ((hash << 5) + hash) + data[i]; // hash * 33 + c 
-    }
+    for (size_t i = 0; i < len; ++i)
+        hash = ((hash << 5) + hash) + str[i]; // hash * 33 + c 
 
     return hash;
 }
 
+/*
+static inline Hash_t koh_hasher_djb2(const char *str) {
+    Hash_t hash = 5381;
+    int c;
+
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c 
+
+    return hash;
+}
 */

@@ -1878,3 +1878,27 @@ char *concat_iter_to_allocated_str(char **lines) {
     return merged;
 }
 
+static const char *engine_type2str(enum RegexEngine e) {
+    switch(e) {
+        case RE_PCRE2: return "RE_PCRE2";
+        case RE_SMALL: return "RE_SMALL";
+    }
+    return NULL;
+}
+
+char *koh_files_search_setup_2str(struct FilesSearchSetup *setup) {
+    static char buf[512] = {};
+    assert(setup);
+    snprintf(
+        buf, sizeof(buf) - 1, 
+        "{\n"
+        "   path = '%s',\n"
+        "   regex_pattern = '%s',\n"
+        "   deep = %d,\n"
+        "   engine_pcre2 = '%s',\n"
+        "}", 
+        setup->path, setup->regex_pattern, setup->deep, 
+        engine_type2str(setup->engine_pcre2)
+    );
+    return buf;
+}

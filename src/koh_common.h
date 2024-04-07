@@ -214,6 +214,8 @@ struct FilesSearchSetup {
     bool    engine_pcre2;
 };
 
+// Возвращает указатель на статискую строчку
+char *koh_files_search_setup_2str(struct FilesSearchSetup *setup);
 struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup);
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 void koh_search_files_print(struct FilesSearchResult *fsr);
