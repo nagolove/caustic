@@ -140,6 +140,8 @@ void logger_shutdown() {
     strset_free(traces_set);
 }
 
+FILE *tmp_file = NULL;
+
 void trace(const char * format, ...) {
     if (!is_trace_enabled)
         return;
@@ -150,8 +152,16 @@ void trace(const char * format, ...) {
     vsnprintf(buf, sizeof(buf) - 1, format, args);
     va_end(args);
 
-    if (traces_set)
+/*
+    tmp_file = fopen("strset_data1.txt", "a");
+    assert(tmp_file);
+    fprintf(tmp_file, "%s", buf);
+    fflush(tmp_file);
+*/
+
+    if (traces_set) {
         strset_add(traces_set, buf);
+    }
 
     if (!filter_match(buf)) {
         printf("%s", buf);
