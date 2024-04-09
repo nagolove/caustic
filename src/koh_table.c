@@ -7,11 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// TODO: Поменять тип int на size_t в _htable_get()
-// Но что тогда возвращать вместо -1 ??
-// SIZE_MAX
-// Сперва проверить на WASM
-
 typedef struct Bucket {
     int    key_len, value_len;
     Hash_t hash;
@@ -24,7 +19,9 @@ typedef struct HTable {
     HashFunction    hash_func;
 } HTable;
 
-static int _htable_get(HTable *ht, const void *key, int key_len, int *value_len);
+static size_t _htable_get(
+    HTable *ht, const void *key, int key_len, int *value_len
+);
 static void _htable_remove(HTable *ht, int index);
 static void bucket_free(HTable *ht, int index);
 static void _htable_add_uniq(HTable *ht, Bucket *bucket);
@@ -61,15 +58,15 @@ void htable_fprint(HTable *ht, FILE *f) {
     assert(ht);
     assert(f);
     fprintf(f, "-----\n");
-    for (int i = 0; i < ht->cap; i++) {
+    for (size_t i = 0; i < ht->cap; i++) {
         if (ht->arr[i])
             fprintf(
-                f, "[%.3d] %10.10s = %10d, hash mod cap = %.3zu\n",
+                f, "[%.3zu] %10.10s = %10d, hash mod cap = %.3zu\n",
                 i, (char*)get_key(ht->arr[i]), *((int*)get_value(ht->arr[i])),
                 ht->arr[i]->hash % ht->cap
             );
         else
-            fprintf(f, "[%.3d]\n", i);
+            fprintf(f, "[%.3zu]\n", i);
     }
     fprintf(f, "-----\n");
 }
@@ -94,7 +91,7 @@ void htable_extend(HTable *ht) {
     tmp.taken = 0;
 
     assert(ht->arr);
-    for (int j = 0; j < ht->cap; j++) {
+    for (size_t j = 0; j < ht->cap; j++) {
         if (ht->arr[j]) {
             ht->arr[j]->hash = ht->hash_func(
                 get_key(ht->arr[j]), ht->arr[j]->key_len
@@ -146,9 +143,9 @@ void *htable_add(
 
     //print_table(ht);
 
-    int index = _htable_get(ht, key, key_len, NULL);
+    size_t index = _htable_get(ht, key, key_len, NULL);
 
-    if (index != -1) {
+    if (index != SIZE_MAX) {
         if (value_len != ht->arr[index]->value_len) {
             bucket_free(ht, index);
             ht->arr[index] = bucket_alloc(key_len, value_len);
@@ -187,7 +184,7 @@ void *htable_add_s(HTable *ht, const char *key, void *value, int value_len) {
 }
 
 void htable_clear(HTable *ht) {
-    for (int k = 0; k < ht->cap; k++) {
+    for (size_t k = 0; k < ht->cap; k++) {
         bucket_free(ht, k);
     }
     ht->taken = 0;
@@ -197,7 +194,7 @@ void htable_each(HTable *ht, HTableEachCallback cb, void *udata) {
     assert(ht);
     if (!cb)
         return;
-    for (int j = 0; j < ht->cap; j++) {
+    for (size_t j = 0; j < ht->cap; j++) {
         Bucket *b = ht->arr[j];
         if (b) {
             HTableAction action = cb(
@@ -222,11 +219,11 @@ void htable_free(HTable *ht) {
     free(ht);
 }
 
-int _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
+size_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     assert(ht);
 
     int index = ht->hash_func(key, key_len) % ht->cap;
-    for (int i = 0; i < ht->cap; i++) {
+    for (size_t i = 0; i < ht->cap; i++) {
         if (!ht->arr[index]) break;
         if (memcmp(get_key(ht->arr[index]), key, key_len) == 0)
             break;
@@ -239,12 +236,12 @@ int _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
         return index;
     }
 
-    return -1;
+    return SIZE_MAX;
 }
 
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
-    int index = _htable_get(ht, key, key_len, value_len);
-    if (index != -1 ) {
+    size_t index = _htable_get(ht, key, key_len, value_len);
+    if (index != SIZE_MAX) {
         return get_value(ht->arr[index]);
     }
     return NULL;
@@ -277,7 +274,7 @@ HTable *htable_new(struct HTableSetup *setup) {
 static void rec_shift(HTable *ht, int index, int hashi) {
     int initial_index = index;
     index = (index + 1) % ht->cap;
-    for (int i = 0; i < ht->cap; i++) {
+    for (size_t i = 0; i < ht->cap; i++) {
         if (!ht->arr[index]) {
             break;
         }
@@ -316,8 +313,8 @@ void _htable_remove(HTable *ht, int remove_index) {
 
 void htable_remove(HTable *ht, const void *key, int key_len) {
     assert(ht);
-    int index = _htable_get(ht, key, key_len, NULL);
-    if (index != -1) {
+    size_t index = _htable_get(ht, key, key_len, NULL);
+    if (index != SIZE_MAX) {
         _htable_remove(ht, index);
     }
 }
@@ -326,7 +323,7 @@ void htable_remove_s(HTable *ht, const char *key) {
     htable_remove(ht, key, strlen(key) + 1);
 }
 
-int htable_count(HTable *ht) {
+size_t htable_count(HTable *ht) {
     assert(ht);
     return ht->taken;
 }

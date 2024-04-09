@@ -1,18 +1,16 @@
 #include "koh_strset.h"
 
 #include "koh_hashers.h"
-#include "koh_logger.h"
-#include "koh_paragraph.h"
+#include "koh_common.h"
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <stdint.h>
 
 struct Bucket {
     char   *key;
-    bool   taken;
     Hash_t hash;
+    bool   taken;
 };
 
 typedef struct StrSet {
@@ -39,15 +37,15 @@ StrSet *strset_new(struct StrSetSetup *setup) {
     return set;
 }
 
-static int _strset_get(const StrSet *set, const char *key) {
+static size_t _strset_get(const StrSet *set, const char *key) {
     assert(set);
 
     if (!key)
-        return -1;
+        return SIZE_MAX;
 
     // XXX: Не хранится длина ключа, может понадобиться для длинных ключей
     int index = set->hasher(key, strlen(key)) % set->cap;
-    for (int i = 0; i < set->cap; i++) {
+    for (size_t i = 0; i < set->cap; i++) {
         if (!set->arr[index].taken)
             break;
         if (!strcmp(set->arr[index].key, key))
@@ -58,11 +56,11 @@ static int _strset_get(const StrSet *set, const char *key) {
     if (set->arr[index].taken && !strcmp(set->arr[index].key, key))
         return index;
 
-    return -1;
+    return SIZE_MAX;
 }
 
 bool strset_exist(const StrSet *set, const char *key) {
-    return _strset_get(set, key) != -1;
+    return _strset_get(set, key) != SIZE_MAX;
 }
 
 void strset_extend(StrSet *set) {
@@ -75,7 +73,7 @@ void strset_extend(StrSet *set) {
     set->arr = calloc(set->cap, sizeof(set->arr[0]));
     assert(set->arr);
     set->taken = 0;
-    for (int j = 0; j < old_cap; j++) {
+    for (size_t j = 0; j < old_cap; j++) {
         if (old_arr[j].taken) {
             strset_add(set, old_arr[j].key);
             free(old_arr[j].key);
@@ -115,7 +113,7 @@ void strset_addn(StrSet *set, const char *key, size_t key_len) {
 }
 
 void strset_clear(StrSet *set) {
-    for (int k = 0; k < set->cap; k++) {
+    for (size_t k = 0; k < set->cap; k++) {
         if (set->arr[k].taken) {
             set->arr[k].taken = false;
             if (set->arr[k].key)
@@ -128,7 +126,7 @@ void strset_clear(StrSet *set) {
 
 void strset_free(StrSet *set) {
     assert(set);
-    for (int k = 0; k < set->cap; k++)
+    for (size_t k = 0; k < set->cap; k++)
         if (set->arr[k].taken)
             free(set->arr[k].key);
     if (set->arr)
@@ -140,7 +138,7 @@ static void rec_shift(StrSet *set, int index, int hashi) {
     int initial_index = index;
 
     index = (index + 1) % set->cap;
-    for (int i = 0; i < set->cap; i++) {
+    for (size_t i = 0; i < set->cap; i++) {
         if (!set->arr[index].taken) {
             break;
         }
@@ -172,36 +170,16 @@ void _strset_remove(StrSet *set, int remove_index) {
 
 void strset_remove(StrSet *set, const char *key) {
     assert(set);
-
-    int index = _strset_get(set, key);
-    if (index != -1)
+    size_t index = _strset_get(set, key);
+    if (index != SIZE_MAX)
         _strset_remove(set, index);
-
-    /*
-    if (!key) return;
-
-    int index = hasher_djb2(key) % set->cap;
-    for (int i = 0; i < set->cap; i++) {
-        if (!set->arr[index].taken)
-            break;
-        if (!strcmp(set->arr[index].key, key))
-            break;
-        index = (index + 1) % set->cap;
-    }
-
-    if (set->arr[index].taken && !strcmp(set->arr[index].key, key)) {
-        free(set->arr[index].key);
-        set->arr[index].taken = false;
-        set->taken--;
-    }
-    */
 }
 
 void strset_each(StrSet *set, StrSetEachCallback cb, void *udata) {
     assert(set);
     if (!cb) return;
 
-    for (int i = 0; i < set->cap; i++) {
+    for (size_t i = 0; i < set->cap; i++) {
         if (set->arr[i].taken) {
                 StrSetAction action = cb(set->arr[i].key, udata);
                 switch (action) {
@@ -253,7 +231,7 @@ struct PrintCtx {
 
 static StrSetAction iter_print(const char *key, void *udata) {
     struct PrintCtx *ctx = udata;
-    fprintf(ctx->f, "%s\n", key);
+    fprintf(ctx->f, "%s", key);
     return SSA_next;
 }
 
@@ -305,4 +283,60 @@ bool strset_compare_strs(const StrSet *s1, char **lines, size_t lines_num) {
 size_t strset_count(const StrSet *set) {
     assert(set);
     return set->taken;
+}
+
+struct StrSetIter strset_iter_new(StrSet *set) {
+    assert(set);
+    struct StrSetIter iter = {
+        .i = 0,
+        .set = set,
+    };
+
+    for (size_t i = 0; i < set->cap; i++) {
+        if (set->arr[i].taken) {
+            iter.i = i;
+            return iter;
+        }
+    }
+
+    iter.i = set->cap;
+    return iter;
+}
+
+KOH_FORCE_INLINE bool strset_iter_valid(struct StrSetIter *iter) {
+    assert(iter);
+    assert(iter->set);
+    printf("strset_iter_valid: %zu %zu\n", iter->i, iter->set->cap);
+    return iter->i < iter->set->cap;
+}
+
+KOH_FORCE_INLINE void strset_iter_next(struct StrSetIter *iter) {
+    assert(iter);
+    assert(iter->set);
+
+    if (iter->i == iter->set->cap) {
+        const char *msg = "strset_iter_next: iterator reached end\n";
+        fprintf(stderr, "%s", msg);
+        fprintf(stdout, "%s", msg);
+        abort();
+    }
+
+    if (iter->set->arr[iter->i + 1].taken) {
+        iter->i++;
+        return;
+    } else {
+        for (size_t i = iter->i + 1; i < iter->set->cap; i++) {
+            if (iter->set->arr[i].taken) {
+                iter->i = i;
+                return;
+            }
+        }
+    }
+    iter->i = iter->set->cap;
+}
+
+KOH_FORCE_INLINE const char *strset_iter_get(struct StrSetIter *iter) {
+    assert(iter);
+    assert(iter->set);
+    return iter->set->arr[iter->i].key;
 }

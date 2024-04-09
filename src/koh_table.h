@@ -29,8 +29,7 @@ void *htable_add(
 );
 void *htable_add_s(HTable *ht, const char *key, void *value, int value_len);
 void htable_clear(HTable *ht);
-// TODO: Заменить int на size_t
-int htable_count(HTable *ht);
+size_t htable_count(HTable *ht);
 void htable_each(HTable *ht, HTableEachCallback cb, void *udata);
 void htable_free(HTable *ht);
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len);

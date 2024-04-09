@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include "koh_common.h"
 #include "koh_hashers.h"
 
 typedef enum StrSetAction {
@@ -35,3 +36,20 @@ StrSet *strset_difference(const StrSet *s1, const StrSet *s2);
 void strset_extend(StrSet *set);
 void strset_print(StrSet *set, FILE *f);
 size_t strset_count(const StrSet *set);
+
+struct StrSetIter {
+    size_t  i;
+    StrSet  *set;
+};
+
+struct StrSetIter strset_iter_new(StrSet *set);
+bool strset_iter_valid(struct StrSetIter *iter);
+void strset_iter_next(struct StrSetIter *iter);
+const char *strset_iter_get(struct StrSetIter *iter);
+
+/*
+KOH_FORCE_INLINE struct StrSetIter strset_iter_new(StrSet *set);
+KOH_FORCE_INLINE bool strset_iter_valid(struct StrSetIter *iter);
+KOH_FORCE_INLINE void strset_iter_next(struct StrSetIter *iter);
+KOH_FORCE_INLINE const char *strset_iter_get(struct StrSetIter *iter);
+*/
