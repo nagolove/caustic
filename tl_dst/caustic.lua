@@ -753,6 +753,20 @@ dependencies = {
 
    {
       disabled = false,
+      url_action = "git",
+      name = "uthash",
+      url = "https://github.com/troydhanson/uthash.git",
+      build = nil,
+      description = "C routines(hash containers etc)",
+      dir = "uthash",
+      includes = { "uthash/include" },
+      libdirs = {},
+      links = {},
+      links_internal = {},
+   },
+
+   {
+      disabled = false,
       build = nil,
       description = "mum hash functions",
       dir = "mum-hash",
