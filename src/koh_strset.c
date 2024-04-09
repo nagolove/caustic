@@ -314,7 +314,7 @@ KOH_FORCE_INLINE void strset_iter_next(struct StrSetIter *iter) {
     assert(iter);
     assert(iter->set);
 
-    if (iter->i == iter->set->cap) {
+    if (iter->i >= iter->set->cap) {
         const char *msg = "strset_iter_next: iterator reached end\n";
         fprintf(stderr, "%s", msg);
         fprintf(stdout, "%s", msg);
