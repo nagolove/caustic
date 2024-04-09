@@ -11,20 +11,15 @@
 #include "koh_metaloader.h"
 #include "koh_visual_tools.h"
 
-#include <string.h>
-#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
 #include "chipmunk/chipmunk.h"
-#include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
 
-#include "utf8proc.h"
 #include "raylib.h"
-#include "raymath.h"
 
 #ifndef M_PI
 # define M_PI		3.14159265358979323846	/* pi */
@@ -256,5 +251,4 @@ Rectangle rect_by_texture(Texture2D tex);
 // Принимает массив строк завершающийся NULL. Возвращает указатель на
 // склеенные строки. Нужно вызывать free()
 char *concat_iter_to_allocated_str(char **lines);
-
 
