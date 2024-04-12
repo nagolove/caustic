@@ -30,3 +30,5 @@ void render_v3_with_tex(
 );
 void render_verts4(Vector2 verts[4], Color tint);
 void render_verts3(Vector2 verts[3], Color tint);
+
+extern bool render_verbose;
