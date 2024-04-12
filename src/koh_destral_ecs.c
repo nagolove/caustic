@@ -784,7 +784,7 @@ void de_destroy(de_ecs* r, de_entity e) {
     //de_ecs_print(r);
 }
 
-bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type) {
+bool de_has(de_ecs* r, de_entity e, const de_cp_type cp_type) {
     assert(r);
 
     // Для релиза проверку можно убрать?

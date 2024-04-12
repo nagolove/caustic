@@ -15,6 +15,7 @@
 #include "raylib.h"
 #include "raymath.h"
 
+#include "utf8proc.h"
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>

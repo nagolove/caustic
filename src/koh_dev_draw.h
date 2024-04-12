@@ -35,9 +35,10 @@ void dev_draw_draw(void);
 bool dev_draw_is_enabled(void);
 void dev_draw_enable(bool state);
 
+/*
 void dev_draw_label(Font fnt, Vector2 pos, char *msg, Color color);
 void dev_label_group_open();
 void dev_label_group_close();
 void dev_label_group_push();
 void dev_label_group_pop();
-
+*/

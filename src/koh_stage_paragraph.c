@@ -2,6 +2,7 @@
 #include "koh_stage_paragraph.h"
 
 #include "chipmunk/chipmunk.h"
+#include <string.h>
 #include "koh_common.h"
 #include "koh_paragraph.h"
 #include "koh_routine.h"

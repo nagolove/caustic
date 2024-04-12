@@ -1,8 +1,8 @@
 #include "koh_dev_draw.h"
 
-#include "chipmunk/chipmunk.h"
-#include "chipmunk/chipmunk_types.h"
-#include "chipmunk/cpVect.h"
+//#include "chipmunk/chipmunk.h"
+//#include "chipmunk/chipmunk_types.h"
+//#include "chipmunk/cpVect.h"
 #include "koh_common.h"
 #include "koh_hashers.h"
 #include "koh_logger.h"
@@ -397,7 +397,7 @@ void dev_draw_label(Font fnt, Vector2 pos, char *msg, Color color) {
     l->text_size = text_size;
     l->msg = strdup(msg);
     l->pos = pos;
-    b->userData = l;
+    //b->userData = l;
 }
 
 void dev_label_group_open() {
@@ -407,6 +407,7 @@ void dev_label_group_open() {
     //cpSpaceSetGravity(dev.space, (cpVect) { 0.1, 0. });
 }
 
+/*
 static void iter_shape(cpShape *shape, void *data) {
     struct Label *l = shape->body->userData;
     cpBody *b = shape->body;
@@ -421,7 +422,9 @@ static void iter_shape(cpShape *shape, void *data) {
     free(l->msg);
     free(l);
 }
+*/
 
+/*
 void dev_label_group_close() {
     if (dev.space) {
         for (int k = 0; k < 100; ++k) {
@@ -439,22 +442,28 @@ void dev_label_group_close() {
         dev.space = NULL;
     }
 }
+*/
 
 static void dev_label_group_push_func(void *ptr) {
     dev_label_group_open();
 }
 
+/*
 static void dev_label_group_pop_func(void *ptr) {
     dev_label_group_close();
 }
+*/
 
 void dev_label_group_push() {
     dev_draw_push(dev_label_group_push_func, NULL, 0);
 }
 
+/*
 void dev_label_group_pop() {
     dev_draw_push(dev_label_group_pop_func, NULL, 0);
 }
+*/
+
 
 void dev_draw_trace_enable(const char *key, bool state) {
     if (!key) return;

@@ -167,7 +167,7 @@ void de_remove(de_ecs* r, de_entity e, de_cp_type cp_type);
 
     Warning: using an invalid entity results in undefined behavior.
 */
-bool de_has(de_ecs* r, de_entity e, de_cp_type cp_type);
+bool de_has(de_ecs* r, de_entity e, const de_cp_type cp_type);
 
 /*
     Returns the pointer to the given component type data for the entity
