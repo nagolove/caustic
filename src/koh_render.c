@@ -9,6 +9,8 @@
 #include "koh_routine.h"
 #include "koh_common.h"
 
+bool render_verbose = false;
+
 void render_texture(
     Texture2D texture,
     Rectangle source,
@@ -225,11 +227,11 @@ void koh_render_shutdown() {
 }
 
 void render_verts3(Vector2 verts[3], Color tint) {
-    /*
-    char *str = Vector2_tostr_alloc(verts, 4);
-    trace("render_verts: verts %s, color %s\n", str, Color_to_str(tint));
-    free(str);
-    */
+    if (render_verbose) {
+        char *str = Vector2_tostr_alloc(verts, 4);
+        trace("render_verts3: verts %s, color %s\n", str, Color_to_str(tint));
+        free(str);
+    }
 
     assert(verts);
 
@@ -255,11 +257,11 @@ void render_verts3(Vector2 verts[3], Color tint) {
 }
 
 void render_verts4(Vector2 verts[4], Color tint) {
-    /*
-    char *str = Vector2_tostr_alloc(verts, 4);
-    trace("render_verts: verts %s, color %s\n", str, Color_to_str(tint));
-    free(str);
-    */
+    if (render_verbose) {
+        char *str = Vector2_tostr_alloc(verts, 4);
+        trace("render_verts4: verts %s, color %s\n", str, Color_to_str(tint));
+        free(str);
+    }
 
     rlSetTexture(0);
     rlBegin(RL_QUADS);
