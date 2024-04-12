@@ -135,9 +135,7 @@ static inline void b2Shape_SetUserData(b2ShapeId shapeId, void *udata) {
     shape->userData = udata;
 }
 
-inline static void b2Body_user_data_reset(
-    struct WorldCtx *wctx, b2BodyId body_id, void *user_data
-) {
+inline static void b2Body_user_data_reset(b2BodyId body_id, void *user_data) {
     b2ShapeId shape_id = b2Body_GetFirstShape(body_id);
     while (!B2_IS_NULL(shape_id)) {
         b2Shape_SetUserData(shape_id, user_data);
@@ -145,9 +143,7 @@ inline static void b2Body_user_data_reset(
     }
 }
 
-inline static bool b2Body_has_shape(
-    struct WorldCtx *wctx, b2BodyId body_id, b2ShapeId target_shape
-) {
+inline static bool b2Body_has_shape(b2BodyId body_id, b2ShapeId target_shape) {
     b2ShapeId cur_shape = b2Body_GetFirstShape(body_id);
     while (!B2_IS_NULL(cur_shape)) {
         if (B2_ID_EQUALS(cur_shape, target_shape)) {
