@@ -1374,13 +1374,15 @@ static void entity_print(de_ecs *r) {
                 void *payload = de_view_single_get(&v);
                 de_entity e = de_view_single_entity(&v);
                 trace("entity_print: name %s\n", r->selected_type.name);
-                char **lines = r->selected_type.str_repr(payload, e);
-                trace("entity_print: lines %p\n", lines);
+                if (r->selected_type.str_repr(payload, e)) {
+                    char **lines = r->selected_type.str_repr(payload, e);
+                    trace("entity_print: lines %p\n", lines);
 
-                if (r->l && r->ref_filter_func)
-                    lines_print_filter(r, lines);
-                else
-                    lines_print(lines);
+                    if (r->l && r->ref_filter_func)
+                        lines_print_filter(r, lines);
+                    else
+                        lines_print(lines);
+                }
                 igTreePop();
             }
         }
