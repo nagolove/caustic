@@ -26,6 +26,7 @@ static inline uint32_t xorshift32_rand(xorshift32_state *state)
 	return state->a = x;
 }
 
+// От 0. до 1.
 static inline double xorshift32_rand1(xorshift32_state *state) {
     return xorshift32_rand(state) / (double)UINT32_MAX;
 }
