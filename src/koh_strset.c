@@ -44,7 +44,7 @@ static size_t _strset_get(const StrSet *set, const char *key) {
         return SIZE_MAX;
 
     // XXX: Не хранится длина ключа, может понадобиться для длинных ключей
-    int index = set->hasher(key, strlen(key)) % set->cap;
+    Hash_t index = set->hasher(key, strlen(key)) % set->cap;
     for (size_t i = 0; i < set->cap; i++) {
         if (!set->arr[index].taken)
             break;
@@ -67,7 +67,7 @@ void strset_extend(StrSet *set) {
     /*trace("strset_extend:\n");*/
     assert(set);
     struct Bucket *old_arr = set->arr;
-    int old_cap = set->cap;
+    size_t old_cap = set->cap;
 
     set->cap = set->cap * 2 + 1;
     set->arr = calloc(set->cap, sizeof(set->arr[0]));
@@ -101,7 +101,7 @@ void strset_addn(StrSet *set, const char *key, size_t key_len) {
 
     Hash_t hash = set->hasher(key, key_len); 
     /*printf("strset_addn: hash %lu\n", hash);*/
-    int index = hash % set->cap;
+    Hash_t index = hash % set->cap;
 
     while (set->arr[index].taken)
         index = (index + 1) % set->cap;
@@ -134,8 +134,8 @@ void strset_free(StrSet *set) {
     free(set);
 }
 
-static void rec_shift(StrSet *set, int index, int hashi) {
-    int initial_index = index;
+static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
+    Hash_t initial_index = index;
 
     index = (index + 1) % set->cap;
     for (size_t i = 0; i < set->cap; i++) {
@@ -153,11 +153,11 @@ static void rec_shift(StrSet *set, int index, int hashi) {
     }
 }
 
-void _strset_remove(StrSet *set, int remove_index) {
+void _strset_remove(StrSet *set, Hash_t remove_index) {
     assert(set);
     assert(remove_index >= 0 && remove_index < set->cap);
 
-    int hashi = set->arr[remove_index].hash % set->cap;
+    Hash_t hashi = set->arr[remove_index].hash % set->cap;
     if (set->arr[remove_index].key) {
         free(set->arr[remove_index].key);
         //set->arr[remove_index].key = NULL;
