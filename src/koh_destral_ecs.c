@@ -1363,13 +1363,19 @@ static void lines_print(char **lines) {
 static void entity_print(de_ecs *r) {
     /*trace("de_gui: explore table\n");*/
     if (igTreeNode_Str("explore")) {
+        assert(r->selected_type.name);
+        assert(r->selected_type.cp_sizeof);
+        assert(r->selected_type.str_repr);
+
         de_view_single v = de_create_view_single(r, r->selected_type);
         int i = 0;
         for (; de_view_single_valid(&v); de_view_single_next(&v), i++) {
             if (igTreeNode_Ptr((void*)(uintptr_t)i, "%d", i)) {
                 void *payload = de_view_single_get(&v);
                 de_entity e = de_view_single_entity(&v);
+                trace("entity_print: name %s\n", r->selected_type.name);
                 char **lines = r->selected_type.str_repr(payload, e);
+                trace("entity_print: lines %p\n", lines);
 
                 if (r->l && r->ref_filter_func)
                     lines_print_filter(r, lines);
@@ -1419,6 +1425,7 @@ void de_gui(de_ecs *r, de_entity highlight ) {
 
     if (use_lua_filter) {
         static char buf[512] = {};
+        // XXX: Как пользоваться запросом?
         if (igInputText("query", buf, sizeof(buf) - 1, 0, NULL, NULL)) {
             lua_settop(r->l, 0);
             if (luaL_loadstring(r->l, buf) == LUA_OK) {
