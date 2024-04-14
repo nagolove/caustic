@@ -7,8 +7,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+bool strset_verbose = true;
+
 struct Bucket {
     char   *key;
+    size_t key_len;
     Hash_t hash;
     bool   taken;
 };
@@ -27,7 +30,7 @@ StrSet *strset_new(struct StrSetSetup *setup) {
         set->cap = 11;
         set->hasher = koh_hasher_mum;
     } else {
-        set->cap = setup->capacity;
+        set->cap = setup->capacity ? setup->capacity : 1;
         set->hasher = setup->hasher;
     }
     /*set->hasher = koh_hasher_fnv64;*/
@@ -45,6 +48,7 @@ static size_t _strset_get(const StrSet *set, const char *key) {
 
     // XXX: Не хранится длина ключа, может понадобиться для длинных ключей
     Hash_t index = set->hasher(key, strlen(key)) % set->cap;
+    assert(index < set->cap);
     for (size_t i = 0; i < set->cap; i++) {
         if (!set->arr[index].taken)
             break;
@@ -60,7 +64,7 @@ static size_t _strset_get(const StrSet *set, const char *key) {
 }
 
 bool strset_exist(const StrSet *set, const char *key) {
-    return _strset_get(set, key) != SIZE_MAX;
+    return strset_existn(set, key, strlen(key));
 }
 
 void strset_extend(StrSet *set) {
@@ -70,7 +74,16 @@ void strset_extend(StrSet *set) {
     size_t old_cap = set->cap;
 
     set->cap = set->cap * 2 + 1;
-    set->arr = calloc(set->cap, sizeof(set->arr[0]));
+
+    size_t sz = sizeof(set->arr[0]);
+
+    if (strset_verbose)
+        printf(
+            "strset_extend: old_cap %zu, cap %zu, sz %zu\n",
+            old_cap, set->cap, sz
+        );
+
+    set->arr = calloc(set->cap, sz);
     assert(set->arr);
     set->taken = 0;
     for (size_t j = 0; j < old_cap; j++) {
@@ -138,7 +151,25 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
     Hash_t initial_index = index;
 
     index = (index + 1) % set->cap;
+
+    if (true) {
+        printf(
+            "rec_shift: index %lu, hashi %lu\n",
+            index, hashi
+        );
+    }
+
     for (size_t i = 0; i < set->cap; i++) {
+
+        if (true) {
+            printf(
+                "rec_shift: index %lu, taken %s, key '%s'\n",
+                index, 
+                set->arr[index].taken ? "true" : "false",
+                set->arr[index].key
+            );
+        }
+
         if (!set->arr[index].taken) {
             break;
         }
@@ -146,7 +177,10 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
         if (set->arr[index].hash % set->cap <= hashi) {
             set->arr[initial_index] = set->arr[index];
             set->arr[index].taken = false;
-            rec_shift(set, index, hashi + 1);
+            set->arr[index].key_len = 0;
+            set->arr[index].key = NULL;
+            if (hashi + 1 < set->cap)
+                rec_shift(set, index, hashi + 1);
         }
 
         index = (index + 1) % set->cap;
@@ -160,7 +194,7 @@ void _strset_remove(StrSet *set, Hash_t remove_index) {
     Hash_t hashi = set->arr[remove_index].hash % set->cap;
     if (set->arr[remove_index].key) {
         free(set->arr[remove_index].key);
-        //set->arr[remove_index].key = NULL;
+        set->arr[remove_index].key = NULL;
         memset(&set->arr[remove_index], 0, sizeof(set->arr[0]));
     }
 
@@ -169,10 +203,7 @@ void _strset_remove(StrSet *set, Hash_t remove_index) {
 }
 
 void strset_remove(StrSet *set, const char *key) {
-    assert(set);
-    size_t index = _strset_get(set, key);
-    if (index != SIZE_MAX)
-        _strset_remove(set, index);
+    strset_removen(set, key, strlen(key));
 }
 
 void strset_each(StrSet *set, StrSetEachCallback cb, void *udata) {
@@ -227,11 +258,12 @@ bool strset_compare(const StrSet *s1, const StrSet *s2) {
 
 struct PrintCtx {
     FILE *f;
+    const char *fmt;
 };
 
 static StrSetAction iter_print(const char *key, void *udata) {
     struct PrintCtx *ctx = udata;
-    fprintf(ctx->f, "%s", key);
+    fprintf(ctx->f, ctx->fmt, key);
     return SSA_next;
 }
 
@@ -241,6 +273,7 @@ void strset_print(StrSet *set, FILE *f) {
 
     strset_each(set, iter_print, &(struct PrintCtx) {
         .f = f,
+        .fmt = "%s",
     });
 }
 
@@ -339,4 +372,27 @@ KOH_FORCE_INLINE const char *strset_iter_get(struct StrSetIter *iter) {
     assert(iter);
     assert(iter->set);
     return iter->set->arr[iter->i].key;
+}
+
+void strset_removen(StrSet *set, const char *key, size_t key_len) {
+    assert(set);
+    size_t index = _strset_get(set, key);
+    if (index != SIZE_MAX)
+        _strset_remove(set, index);
+}
+
+bool strset_existn(const StrSet *set, const char *key, size_t key_len) {
+    return _strset_get(set, key) != SIZE_MAX;
+}
+
+void strset_print_f(StrSet *set, FILE *f, const char *fmt) {
+    assert(set);
+    assert(f);
+    assert(fmt);
+    assert(strstr(fmt, "%s"));
+
+    strset_each(set, iter_print, &(struct PrintCtx) {
+        .f = f,
+        .fmt = fmt,
+    });
 }
