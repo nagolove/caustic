@@ -301,6 +301,7 @@ static void update_scripts_list(dotool_ctx_t *ctx) {
     ctx->fsr_scripts = koh_search_files(&(struct FilesSearchSetup) {
         .path =".",
         .regex_pattern = "^dotool.*\\.txt$",
+        .engine_pcre2 = true,
         .deep = 0
     });
     if (ctx->selected_scripts) {
