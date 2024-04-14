@@ -517,7 +517,40 @@ TypeEntry *types_getlist() {
     return typelist;
 }
 
+//#include "koh_lua_serpent.inc"
+#include "serpent.lua.h"
 char *table_dump2allocated_str(lua_State *l) {
+    // TODO:
+    // Проверить, модуль serpent загружен
+    // Если модуль отсутствует, то загрузить его из строки
+
+    int top = lua_gettop(l);
+
+    lua_getglobal(l, "package");
+    printf("table_dump2allocated_str: 0 [%s]\n", stack_dump(l));
+    lua_getfield(l, -1, "preload");
+    printf("table_dump2allocated_str: 1 [%s]\n", stack_dump(l));
+
+    /*
+    printf(
+        "table_dump2allocated_str: strlen(serpent_lua) == %zu\n",
+        strlen(serpent_lua)
+    );
+    */
+
+    if (luaL_loadstring(l, (char*)serpent_lua) != LUA_OK) {
+        printf(
+            "table_dump2allocated_str: luaL_loadstring error '%s'\n",
+            lua_tostring(l, -1)
+        );
+    }
+
+    printf("table_dump2allocated_str: 2 [%s]\n", stack_dump(l));
+    lua_setfield(l, -2, "serpent");
+    printf("table_dump2allocated_str: 3 [%s]\n", stack_dump(l));
+
+    lua_settop(l, top);
+
     const char *code =  "local function DUMP(tbl)\n"
                         "   local serpent\n"
                         "   local ok, errmsg = pcall(function()\n"
@@ -528,13 +561,13 @@ char *table_dump2allocated_str(lua_State *l) {
                         "   else\n"
                         // XXX: Отдадочная печать!
                         "       --print(errmsg)\n"
-                        "       return nil\n"
+                        "       return 171\n"
                         "   end\n"
                         "end\n"
                         "return DUMP";
 
     //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
-    int top = lua_gettop(l);
+    //int top = lua_gettop(l);
 
     // XXX: Что делать с принудительной загрузкой библиотек?
     // Кажется, что загрузка может занимать время и не всегда желательно
@@ -549,6 +582,7 @@ char *table_dump2allocated_str(lua_State *l) {
     lua_call(l, 1, LUA_MULTRET);
 
     if (lua_type(l, -1) != LUA_TSTRING) {
+        lua_pop(l, 1);
         return NULL;
     }
     const char *dumped_data = lua_tostring(l, -1);
@@ -556,10 +590,12 @@ char *table_dump2allocated_str(lua_State *l) {
     if (dumped_data) {
         lua_pop(l, 1);
         //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
-        assert(lua_gettop(l) == top);
+        /*assert(lua_gettop(l) == top);*/
+        /*lua_pop(l, 1);*/
         return strdup(dumped_data);
     }
 
+    lua_pop(l, 1);
     return NULL;
 }
 

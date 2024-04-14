@@ -46,6 +46,7 @@ TypeEntry *types_getlist();
 DocArray doc_init(lua_State *lua, const char *mtname);
 void doc_shutdown(DocArray *docarr);
 
+// Возвращает указатель на статический буфер.
 const char *stack_dump(lua_State *lua);
 void table_print(lua_State *lua, int idx);
 
@@ -59,6 +60,6 @@ char *table_get_print(
 // На вершине стека должна лежать таблица которая будет записана модулем
 // serpent в строку. Возвращаемая память выделяется через alloc()
 // Стандартные библиотеки Луа принудительно загружаются.
-// Луа стек не изменяется
+// Луа стек не изменяется.
 char *table_dump2allocated_str(lua_State *l);
 void table_push_rect_as_arr(lua_State *l, Rectangle rect);
