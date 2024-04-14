@@ -38,12 +38,22 @@ static bool _metaloader_load(
         );
 
     //////////// DEBUG
+    trace(
+        "_metaloader_load: before table_dump2allocated_str [%s]\n",
+        stack_dump(l)
+    );
     str = table_dump2allocated_str(l);
+    trace(
+        "_metaloader_load: before table_dump2allocated_str [%s]\n",
+        stack_dump(l)
+    );
     if (ml->verbose)
         trace("_metaloader_load: dump '%s'\n", str);
     if (str)
         free(str);
     //////////// DEBUG
+
+    trace("_metaloader_load: [%s]\n", stack_dump(l));
 
     assert(lua_type(l, -1) == LUA_TFUNCTION);
     //trace("_metaloader_load: [%s]\n", stack_dump(l));
