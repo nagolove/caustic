@@ -520,6 +520,16 @@ const char *b2BodyId_id_to_str(b2BodyId id) {
     return buf;
 }
 
+const char *b2ShapeId_id_to_str(b2ShapeId id) {
+    static char buf[128];
+    sprintf(
+        buf, "{ index = %d, world = %hd, revision = %hu }",
+        id.index, id.world, id.revision
+    );
+    return buf;
+}
+
+
 const char *b2Polygon_to_str(const b2Polygon *poly) {
     static char buf[256];
     char *pbuf = buf;
