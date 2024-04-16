@@ -1213,6 +1213,7 @@ void parse_bracketed_string(
 
 static bool match(struct FilesSearchResult *fsr, const char *str) {
     int found = -1;
+    trace("match: str '%s'\n", str);
 
     switch (fsr->internal->regex_engine) {
         case RE_PCRE2: {
@@ -1225,6 +1226,7 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
                 strlen(str), 
                 0, 0, fsr->internal->regex.pcre.match_data, NULL
             );
+            trace("match: found %d\n", found);
             if (found < 0)
                 return false;
             break;
@@ -1237,6 +1239,7 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
                 return false;
         }
         default:
+            trace("match: unknow regex engine\n");
             return false;
     }
 
@@ -1432,7 +1435,7 @@ bool koh_search_files_pcre2(
     int errnumner;
     size_t erroffset;
     fsr->internal->regex_engine = RE_PCRE2;
-    uint32_t flags = 
+    uint32_t flags = 0
         //PCRE2_ANCHORED           | //Force pattern anchoring
         //PCRE2_ALLOW_EMPTY_CLASS  | //Allow empty classes
         //PCRE2_ALT_BSUX           | //Alternative handling of \u, \U, and \x
@@ -1441,7 +1444,7 @@ bool koh_search_files_pcre2(
         //PCRE2_AUTO_CALLOUT       | //Compile automatic callouts
         //PCRE2_CASELESS           | //Do caseless matching
         //PCRE2_DOLLAR_ENDONLY     | //$ not to match newline at end
-        PCRE2_DOTALL             | //. matches anything including NL
+        //PCRE2_DOTALL             | //. matches anything including NL
         //PCRE2_DUPNAMES           | //Allow duplicate names for subpatterns
         //PCRE2_ENDANCHORED        | //Pattern can match only at end of subject
         //PCRE2_EXTENDED           | //Ignore white space and # comments
@@ -1449,7 +1452,7 @@ bool koh_search_files_pcre2(
         //PCRE2_LITERAL            | //Pattern characters are all literal
         //PCRE2_MATCH_INVALID_UTF  | //Enable support for matching invalid UTF
         //PCRE2_MATCH_UNSET_BACKREF  | //Match unset backreferences
-        PCRE2_MULTILINE          | //^ and $ match newlines within data
+        //PCRE2_MULTILINE          | //^ and $ match newlines within data
         //PCRE2_NEVER_BACKSLASH_C  | //Lock out the use of \C in patterns
         //PCRE2_NEVER_UCP          | //Lock out PCRE2_UCP, e.g. via (*UCP)
         //PCRE2_NEVER_UTF          | //Lock out PCRE2_UTF, e.g. via (*UTF)
@@ -1458,10 +1461,10 @@ bool koh_search_files_pcre2(
         //PCRE2_NO_DOTSTAR_ANCHOR  | //Disable automatic anchoring for .*
         //PCRE2_NO_START_OPTIMIZE  | //Disable match-time start optimizations
         //PCRE2_NO_UTF_CHECK       | //Do not check the pattern for UTF validity (only relevant if PCRE2_UTF is set)
-        PCRE2_UCP                | //Use Unicode properties for \d, \w, etc.
+        //PCRE2_UCP                | //Use Unicode properties for \d, \w, etc.
         //PCRE2_UNGREEDY           | //Invert greediness of quantifiers
         //PCRE2_USE_OFFSET_LIMIT   | //Enable offset limit for unanchored matching
-        PCRE2_UTF                //Treat pattern and subjects as UTF strings
+        //PCRE2_UTF                //Treat pattern and subjects as UTF strings
         ;
 
 
@@ -1472,7 +1475,7 @@ bool koh_search_files_pcre2(
 
     if (!fsr->internal->regex.pcre.r) {
         trace(
-            "koh_search_files: could not compile regex '%s' with '%s'\n",
+            "koh_search_files_pcre2: could not compile regex '%s' with '%s'\n",
             fsr->regex_pattern, pcre_code_str(errnumner)
         );
         koh_search_files_shutdown(fsr);
@@ -1484,7 +1487,6 @@ bool koh_search_files_pcre2(
     );
     assert(md);
     fsr->internal->regex.pcre.match_data = md;
-    printf("search_files_rec: pcre2_match_data %p\n", md);
 
     return true;
 }
