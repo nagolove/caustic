@@ -337,6 +337,12 @@ static Stage2 *get_selected_stage(Stage2 *ss) {
     return NULL;
 }
 
+static void switch2selected(Stage2 *ss) {
+    const Stage2 *selected = get_selected_stage(ss);
+    if (selected)
+        stage2_active_set(ss, selected->name, NULL);
+}
+
 void stage2_gui_window(Stage2 *ss) {
     assert(ss);
     bool opened = true;
@@ -351,11 +357,14 @@ void stage2_gui_window(Stage2 *ss) {
         ImGuiTableFlags_BordersOuter |
         ImGuiTableFlags_BordersV |
         ImGuiTableFlags_ContextMenuInBody;
+    ImGuiSelectableFlags sel_flags = 
+        ImGuiSelectableFlags_SpanAllColumns | 
+        ImGuiSelectableFlags_AllowDoubleClick;
 
     ImGuiInputTextFlags input_flags = 0;
-
-    ImVec2 outer_size = {0., 0.};
     const int columns_num = 8;
+    ImVec2 outer_size = {0., 0.}, zero = {0, 0};
+
     if (igBeginTable("stage", columns_num, table_flags, outer_size, 0.)) {
 
         igTableSetupColumn("name", 0, 0, 0);
@@ -375,13 +384,17 @@ void stage2_gui_window(Stage2 *ss) {
             char name_label[64] = {};
             sprintf(name_label, "%s", ss->store->stages[i]->name);
             igTableSetColumnIndex(0);
-            if (igSelectable_BoolPtr(
-                name_label, &ss->store->selected[i],
-                ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
-            )) {
+            bool *sel = &ss->store->selected[i];
+            if (igSelectable_BoolPtr(name_label, sel, sel_flags, zero)) {
                 for (int j = 0; j < ss->store->num; ++j) {
                     if (j != i)
                         ss->store->selected[j] = false;
+                }
+
+                // TODO: Двойной клик мышью не работает
+                if (igIsMouseDoubleClicked_Nil(ImGuiMouseButton_Left)) {
+                    trace("stage2_gui_window: double clicked\n");
+                    switch2selected(ss);
                 }
             }
 
@@ -416,10 +429,8 @@ void stage2_gui_window(Stage2 *ss) {
         stage_str_argument, sizeof(stage_str_argument), input_flags, 0, NULL
     );
 
-    if (igButton("switch to selected stage", (ImVec2) {0, 0})) {
-        const Stage2 *selected = get_selected_stage(ss);
-        if (selected)
-            stage2_active_set(ss, selected->name, NULL);
+    if (igButton("switch to selected stage", zero)) {
+        switch2selected(ss);
     }
 
     koh_window_post();
