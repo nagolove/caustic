@@ -42,7 +42,7 @@ void shapes_store_shutdown(struct ShapesStore *ss);
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id);
 inline static void shapes_store_clear(struct ShapesStore *ss);
 
-struct WorldCtx {
+typedef struct WorldCtx {
     // Настройка шага симуляции
     int32_t             velocity_iteratioins, relax_iterations;
 
@@ -57,7 +57,7 @@ struct WorldCtx {
     uint32_t            width, height; // размеры карты в пикселях?
     b2WorldId           world;
     xorshift32_state    *xrng; // TODO Заменить на prng (64 бита)
-};
+} WorldCtx;
 
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id) {
     assert(ss);
