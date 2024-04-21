@@ -157,3 +157,27 @@ inline static bool b2Body_has_shape(b2BodyId body_id, b2ShapeId target_shape) {
 
 const char *b2Polygon_to_str(const b2Polygon *poly);
 void box2d_gui(struct WorldCtx *wctx);
+
+static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
+    float zoom = 1. / cam->zoom;
+    float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;
+    // Границы запроса раздвигаются на gap_radius что-бы было видно 
+    // объекты частично попавшие в прямоугольник запроса.
+    struct b2AABB aabb;
+
+    if (cam) {
+        aabb.lowerBound.x = -cam->offset.x * zoom - gap_radius;
+        aabb.lowerBound.y = -cam->offset.y * zoom - gap_radius;
+        aabb.upperBound.x = -cam->offset.x * zoom + w + gap_radius;
+        aabb.upperBound.y = -cam->offset.y * zoom + h + gap_radius;
+    } else {
+        aabb.lowerBound.x = gap_radius;
+        aabb.lowerBound.y = gap_radius;
+        aabb.upperBound.x = w + gap_radius;
+        aabb.upperBound.y = h + gap_radius;
+    }
+
+    return aabb;
+}
+
+

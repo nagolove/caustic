@@ -178,4 +178,3 @@ void sector_draw(
     struct ToolSector *sec, struct ToolSectorDrawOpts *opts,
     const Camera2D *cam
 );
-
