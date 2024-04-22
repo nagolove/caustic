@@ -1609,6 +1609,8 @@ end
 
 
 
+
+
 local parser_setup = {
 
    luainit = {
@@ -1686,6 +1688,9 @@ local parser_setup = {
    },
    selftest_status = {
       summary = "print git status for selftest.lua entries",
+   },
+   selftest_push = {
+      summary = "call git push for selftest.lua entries",
    },
    selftest_lg = {
       summary = "call lazygit for dirty selftest.lua entries",
@@ -2073,6 +2078,26 @@ function actions.selftest_lg(_args)
             cmd_do("lazygit")
             cmd_do("git push origin master")
          end
+      end
+      ut.pop_dir()
+   end)
+   if not ok then
+      print(format("Could not load %s with %s", selftest_fname, errmsg))
+      os.exit(1)
+   end
+end
+
+function actions.selftest_push(_args)
+
+   local selftest_fname = path_caustic .. "/selftest.lua"
+   local ok, errmsg = pcall(function()
+      local test_dirs = loadfile(selftest_fname)()
+
+      ut.push_current_dir()
+      for _, dir in ipairs(test_dirs) do
+         chdir(dir)
+         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+         cmd_do("git push")
       end
       ut.pop_dir()
    end)

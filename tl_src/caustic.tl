@@ -1555,6 +1555,7 @@ local record Actions
     init_add: function(Args)
     selftest: function(Args)
     selftest_status: function(Args)
+    selftest_push: function(Args)
     selftest_lg: function(Args)
     
     -- новая версия init, которая работает с таблицей dependencies через
@@ -1594,6 +1595,7 @@ local enum ActionsEnum
     "selftest"
     "selftest_lg"
     "selftest_status"
+    "selftest_push"
     "test"
     "update"
     "verbose"
@@ -1686,6 +1688,9 @@ local parser_setup: {string:ParserSetup} = {
     },
     selftest_status = {
         summary = "print git status for selftest.lua entries",
+    },
+    selftest_push = {
+        summary = "call git push for selftest.lua entries",
     },
     selftest_lg = {
         summary = "call lazygit for dirty selftest.lua entries",
@@ -2073,6 +2078,26 @@ function actions.selftest_lg(_args: Args)
                 cmd_do("lazygit")
                 cmd_do("git push origin master")
             end
+        end
+        ut.pop_dir()
+    end)
+    if not ok then
+        print(format("Could not load %s with %s", selftest_fname, errmsg))
+        os.exit(1)
+    end
+end
+
+function actions.selftest_push(_args: Args)
+    --print('selftest')
+    local selftest_fname = path_caustic .. "/selftest.lua"
+    local ok, errmsg: boolean, string = pcall(function()
+        local test_dirs = loadfile(selftest_fname)() as {string}
+        --print('test_dirs', inspect(test_dirs))
+        ut.push_current_dir()
+        for _, dir in ipairs(test_dirs) do
+            chdir(dir)
+            print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+            cmd_do("git push")
         end
         ut.pop_dir()
     end)
