@@ -256,6 +256,18 @@ EASEDEF float EaseElasticInOut(float t, float b, float c, float d) // Ease: Elas
     return (postFix*sinf((t*d-s)*(2.0f*PI)/p)*0.5f + c + b);
 }
 
+////////////////////////////////////////////////////
+
+typedef float (*EaseFunc)(float t, float b, float c, float d);
+
+struct EaseTuple {
+    char     *name;
+    EaseFunc func;
+};
+
+extern struct EaseTuple easings[];
+////////////////////////////////////////////////////
+
 #if defined(__cplusplus)
 }
 #endif

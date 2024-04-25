@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-bool strset_verbose = true;
+bool strset_verbose = false;
 
 struct Bucket {
     char   *key;

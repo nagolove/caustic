@@ -1,0 +1,35 @@
+#include "koh_reasings.h"
+
+#include <stdlib.h>
+
+struct EaseTuple easings[] = {
+    { "EaseLinearNone", EaseLinearNone },
+    { "EaseLinearIn", EaseLinearIn },
+    { "EaseLinearOut", EaseLinearOut },
+    { "EaseLinearInOut", EaseLinearInOut },
+    { "EaseSineIn", EaseSineIn },
+    { "EaseSineOut", EaseSineOut },
+    { "EaseSineInOut", EaseSineInOut },
+    { "EaseCircIn", EaseCircIn },
+    { "EaseCircOut", EaseCircOut },
+    { "EaseCircInOut", EaseCircInOut },
+    { "EaseCubicIn", EaseCubicIn },
+    { "EaseCubicOut", EaseCubicOut },
+    { "EaseCubicInOut", EaseCubicInOut },
+    { "EaseQuadIn", EaseQuadIn },
+    { "EaseQuadOut", EaseQuadOut },
+    { "EaseQuadInOut", EaseQuadInOut },
+    { "EaseExpoIn", EaseExpoIn },
+    { "EaseExpoOut", EaseExpoOut },
+    { "EaseExpoInOut", EaseExpoInOut },
+    { "EaseBackIn", EaseBackIn },
+    { "EaseBackOut", EaseBackOut },
+    { "EaseBackInOut", EaseBackInOut },
+    { "EaseBounceOut", EaseBounceOut },
+    { "EaseBounceIn", EaseBounceIn },
+    { "EaseBounceInOut", EaseBounceInOut },
+    { "EaseElasticIn", EaseElasticIn },
+    { "EaseElasticOut", EaseElasticOut },
+    { "EaseElasticInOut", EaseElasticInOut },
+    { NULL, NULL },
+};
