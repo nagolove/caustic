@@ -42,3 +42,18 @@ void dev_label_group_close();
 void dev_label_group_push();
 void dev_label_group_pop();
 */
+
+typedef struct DevDraw DevDraw;
+
+struct DevDrawTrace {
+    void   *data;
+    size_t data_sz;
+    void (*on_init)(void *data);
+    void (*on_free)(void *data);
+    // Если вовзращает ложь, то объект трассы уничтожается
+    bool (*on_draw)(void *data); 
+};
+
+DevDraw *dd_new();
+void dd_free(DevDraw* dd);
+void dd_draw(DevDraw *dd);

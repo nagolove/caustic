@@ -168,10 +168,11 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     struct b2AABB aabb;
     assert(cam);
 
-    trace(
-        "camera2aabb: zoom %f, cam->offset %s\n",
-        zoom, Vector2_tostr(cam->offset)
-    );
+    if (false) 
+        trace(
+            "camera2aabb: zoom %f, cam->offset %s\n",
+            zoom, Vector2_tostr(cam->offset)
+        );
 
     /*
     aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
@@ -187,7 +188,8 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
 
     b2AABB a = aabb;
 	b2Vec2 d = b2Sub(a.upperBound, a.lowerBound);
-    trace("camera2aabb: d %s\n", b2Vec2_to_str(d));
+    if (false)
+        trace("camera2aabb: d %s\n", b2Vec2_to_str(d));
 	//bool valid = d.x >= 0.0f && d.y >= 0.0f;
 
     /*
