@@ -33,7 +33,7 @@ _Static_assert(
 );  
 
 static const float line_thick = 3.;
-static bool verbose = false;
+static bool verbose_b2 = false;
 
 /// Draw a closed polygon provided in CCW order.
 static void draw_polygon(
@@ -61,7 +61,7 @@ static void draw_polygon(
 static void draw_solid_polygon(
     const b2Vec2* vertices, int vertexCount, b2Color color, void* context
 ) {
-    if (verbose) {
+    if (verbose_b2) {
         char *str = b2Vec2_tostr_alloc(vertices, vertexCount);
         assert(str);
         trace("draw_solid_polygon: %s\n", str);
@@ -91,7 +91,7 @@ static void draw_rounded_polygon(
     const b2Vec2* vertices, int vertexCount, 
     float radius, b2Color lineColor, b2Color fillColor, void* context
 ) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_rounded_polygon:\n");
 
     Vector2 *verts = (Vector2*)vertices;
@@ -111,7 +111,7 @@ static void draw_rounded_polygon(
 static void draw_circle(
     b2Vec2 center, float radius, b2Color color, void* context
 ) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_circle:\n");
     DrawCircleLinesV(
         (Vector2) { center.x, center.y },
@@ -124,7 +124,7 @@ static void draw_circle(
 static void draw_solid_circle(
     b2Vec2 center, float radius, b2Vec2 axis, b2Color color, void* context
 ) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_solid_circle:\n");
     DrawCircleV(
         (Vector2) { center.x, center.y },
@@ -137,7 +137,7 @@ static void draw_solid_circle(
 static void draw_capsule(
     b2Vec2 p1, b2Vec2 p2, float radius, b2Color color, void* context
 ) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_capsule:\n");
     DrawCircleLinesV(
         (Vector2) { p1.x, p1.y },
@@ -159,7 +159,7 @@ static void draw_capsule(
 static void draw_solid_capsule(
     b2Vec2 p1, b2Vec2 p2, float radius, b2Color color, void* context
 ) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_solid_capsule:\n");
     DrawCircleV(
         (Vector2) { p1.x, p1.y },
@@ -179,7 +179,7 @@ static void draw_solid_capsule(
 
 /// Draw a line segment.
 static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2Color color, void* context) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_segment:\n");
     DrawLineEx(
         b2Vec2_to_Vector2(p1),
@@ -191,21 +191,21 @@ static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2Color color, void* context) {
 
 /// Draw a transform. Choose your own length scale. @param xf a transform.
 static void draw_transform(b2Transform xf, void* context) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_transform:\n");
     DrawCircleV(b2Vec2_to_Vector2(xf.p), 5., BLUE);
 }
 
 /// Draw a point.
 static void draw_point(b2Vec2 p, float size, b2Color color, void* context) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_point:\n");
     DrawCircle(p.x, p.y, size, b2Color_to_Color(color));
 }
 
 /// Draw a string.
 static void draw_string(b2Vec2 p, const char* s, void* context) {
-    if (verbose)
+    if (verbose_b2)
         trace("draw_string:\n");
     DrawText(s, p.x, p.y, 20, BLACK);
 }

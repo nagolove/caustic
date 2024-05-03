@@ -6,7 +6,6 @@
 #include "cimgui_impl.h"
 
 #include "koh_common.h"
-#include "koh_logger.h"
 #include "chipmunk/cpBB.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -14,7 +13,7 @@
 #include <assert.h>
 #include <float.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include "box2d/aabb.h"
 
 static inline void vec4_from_color(float vec[4], Color c) {
     assert(vec);
@@ -201,4 +200,25 @@ static KOH_FORCE_INLINE bool koh_color_eq(Color c1, Color c2) {
     return  c1.a == c2.a && c1.r == c2.r && c1.g == c2.g && c1.b == c2.b;
 }
 
+inline static char *b2AABB_to_str(struct b2AABB aabb) {
+    static char buf[128];
+    sprintf(
+        buf, "{ lowerBound = {%f, %f}, upperBound = {%f, %f}}", 
+        aabb.lowerBound.x,
+        aabb.lowerBound.y,
+        aabb.upperBound.x,
+        aabb.upperBound.y
+    );
+    return buf;
+}
+
+static inline Rectangle b2AABB_to_rect(b2AABB bb) {
+    assert(b2AABB_IsValid(bb));
+    return (Rectangle) { 
+        .x = bb.lowerBound.x,
+        .y = bb.upperBound.y,
+        .width = bb.upperBound.x - bb.lowerBound.x,
+        .height = bb.upperBound.y - bb.lowerBound.y,
+    };
+}
 

@@ -9,6 +9,7 @@
 #include "TaskScheduler_c.h"
 #include "box2d/id.h"
 #include "box2d/types.h"
+#include "box2d/aabb.h"
 #include "contact.h"
 #include "world.h"
 #include "shape.h"
@@ -158,25 +159,47 @@ inline static bool b2Body_has_shape(b2BodyId body_id, b2ShapeId target_shape) {
 const char *b2Polygon_to_str(const b2Polygon *poly);
 void box2d_gui(struct WorldCtx *wctx);
 
+// Границы запроса раздвигаются на gap_radius что-бы было видно объекты 
+// частично попавшие в прямоугольник запроса.
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     float zoom = 1. / cam->zoom;
     float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;
-    // Границы запроса раздвигаются на gap_radius что-бы было видно 
-    // объекты частично попавшие в прямоугольник запроса.
+    Vector2 offset = Vector2Scale(cam->offset, zoom);
     struct b2AABB aabb;
+    assert(cam);
 
-    if (cam) {
-        aabb.lowerBound.x = -cam->offset.x * zoom - gap_radius;
-        aabb.lowerBound.y = -cam->offset.y * zoom - gap_radius;
-        aabb.upperBound.x = -cam->offset.x * zoom + w + gap_radius;
-        aabb.upperBound.y = -cam->offset.y * zoom + h + gap_radius;
-    } else {
-        aabb.lowerBound.x = gap_radius;
-        aabb.lowerBound.y = gap_radius;
-        aabb.upperBound.x = w + gap_radius;
-        aabb.upperBound.y = h + gap_radius;
-    }
+    trace(
+        "camera2aabb: zoom %f, cam->offset %s\n",
+        zoom, Vector2_tostr(cam->offset)
+    );
 
+    /*
+    aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
+    aabb.upperBound.y = cam->offset.y * zoom - gap_radius;
+    aabb.lowerBound.x = cam->offset.x * zoom + w - gap_radius;
+    aabb.lowerBound.y = cam->offset.y * zoom + h - gap_radius;
+*/
+
+    aabb.lowerBound.x = offset.x + gap_radius;
+    aabb.lowerBound.y = offset.y - gap_radius;
+    aabb.upperBound.x = offset.x + w - gap_radius;
+    aabb.upperBound.y = offset.y + h - gap_radius;
+
+    b2AABB a = aabb;
+	b2Vec2 d = b2Sub(a.upperBound, a.lowerBound);
+    trace("camera2aabb: d %s\n", b2Vec2_to_str(d));
+	//bool valid = d.x >= 0.0f && d.y >= 0.0f;
+
+    /*
+    struct b2AABB t1, t2;
+    t1.lowerBound.x = 0;
+    t1.lowerBound.y = 0;
+    t1.upperBound.x = 10;
+    t1.upperBound.y = 10;
+    trace("camera2aabb: t1 is valid %d\n", (int)b2AABB_IsValid(t1));
+    */
+
+    assert(b2AABB_IsValid(aabb));
     return aabb;
 }
 

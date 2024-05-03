@@ -1,13 +1,12 @@
 #include "koh_render.h"
 
-#include <assert.h>
-#include <math.h>
-
+#include "koh_common.h"
+#include "koh_logger.h"
+#include "koh_routine.h"
 #include "raylib.h"
 #include "rlgl.h"               
-
-#include "koh_routine.h"
-#include "koh_common.h"
+#include <assert.h>
+#include <math.h>
 
 bool render_verbose = false;
 
