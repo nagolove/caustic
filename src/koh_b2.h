@@ -174,17 +174,18 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
             zoom, Vector2_tostr(cam->offset)
         );
 
-    /*
     aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
     aabb.upperBound.y = cam->offset.y * zoom - gap_radius;
     aabb.lowerBound.x = cam->offset.x * zoom + w - gap_radius;
     aabb.lowerBound.y = cam->offset.y * zoom + h - gap_radius;
-*/
+// */
 
+    /*
     aabb.lowerBound.x = offset.x + gap_radius;
     aabb.lowerBound.y = offset.y - gap_radius;
     aabb.upperBound.x = offset.x + w - gap_radius;
     aabb.upperBound.y = offset.y + h - gap_radius;
+*/
 
     b2AABB a = aabb;
 	b2Vec2 d = b2Sub(a.upperBound, a.lowerBound);

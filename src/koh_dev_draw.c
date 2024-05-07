@@ -504,3 +504,37 @@ void dev_draw_traces_clear() {
     traces_shutdown();
     traces_init();
 }
+
+struct DevDraw {
+    struct DevDrawTrace *traces;
+    size_t cap, num;
+};
+
+DevDraw *dd_new() {
+    DevDraw *dd = calloc(1, sizeof(*dd));
+    dd->cap = 2048;
+    dd->traces = calloc(dd->cap, sizeof(dd->traces[0]));
+    return dd;
+}
+
+void dd_free(DevDraw* dd) {
+    assert(dd);
+    if (dd->traces) {
+        for (size_t i = 0; i < dd->num; i++) {
+            if (dd->traces[i].data) {
+                free(dd->traces[i].data);
+                dd->traces[i].data = NULL;
+            }
+        }
+
+        free(dd->traces);
+        dd->traces = NULL;
+    }
+}
+
+void dd_draw(DevDraw *dd) {
+}
+
+void dd_attach(DevDraw *dd) {
+}
+

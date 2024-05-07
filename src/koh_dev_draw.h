@@ -57,3 +57,4 @@ struct DevDrawTrace {
 DevDraw *dd_new();
 void dd_free(DevDraw* dd);
 void dd_draw(DevDraw *dd);
+void dd_attach(DevDraw *dd);
