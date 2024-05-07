@@ -635,11 +635,13 @@ end
 
 local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
-    -- Любые сборки которые попадают в сеть должны быть без отладочной 
-    -- информации, с максимальной оптимизацией. В целях безопасности
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
     cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
     cmd_do("make clean && make -j")
+end
+
+local function build_rlwr(_: Dependency)
+    cmd_do("build.sh")
 end
 
 local function utf8proc_after_build(_: Dependency)
@@ -992,6 +994,22 @@ dependencies = {
         url_action = "git",
         --url = "https://gitlab.com/relkom/small-regex.git",
         url = "git@github.com:nagolove/small-regex-c.git",
+    },
+
+    {
+        --depends = {'smallregex', "wfc"},
+        build = build_rlwr,
+        after_build = nil,
+        copy_for_wasm = true,
+        description = "Обертка для raylib-lua-sol",
+        dir = "rlwr",
+        includes = { "rlwr" },
+        libdirs = { "rlwr" },
+        links = { "rlwr:static" },
+        links_internal = { "rlwr:static" },
+        name = 'rlwr',
+        url = "git@github.com:nagolove/rlwr.git",
+        url_action = "git",
     },
 
     {

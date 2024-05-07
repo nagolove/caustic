@@ -642,6 +642,10 @@ local function build_box2c(_)
    cmd_do("make clean && make -j")
 end
 
+local function build_rlwr(_)
+   cmd_do("build.sh")
+end
+
 local function utf8proc_after_build(_)
    cmd_do("rm libutf8proc.so")
 end
@@ -992,6 +996,22 @@ dependencies = {
       url_action = "git",
 
       url = "git@github.com:nagolove/small-regex-c.git",
+   },
+
+   {
+
+      build = build_rlwr,
+      after_build = nil,
+      copy_for_wasm = true,
+      description = "Обертка для raylib-lua-sol",
+      dir = "rlwr",
+      includes = { "rlwr" },
+      libdirs = { "rlwr" },
+      links = { "rlwr:static" },
+      links_internal = { "rlwr:static" },
+      name = 'rlwr',
+      url = "https://github.com/nagolove/rlwr",
+      url_action = "git",
    },
 
    {
