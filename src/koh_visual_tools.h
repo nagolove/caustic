@@ -178,3 +178,6 @@ void sector_draw(
     struct ToolSector *sec, struct ToolSectorDrawOpts *opts,
     const Camera2D *cam
 );
+
+
+extern struct ToolCommonOpts visual_tool_commont_default_opts;

@@ -1244,3 +1244,14 @@ void rectangle_draw(
 
 }
 
+struct ToolCommonOpts visual_tool_commont_default_opts = {
+    .mouse_button_bind = MOUSE_BUTTON_RIGHT,
+    .handle_color = BLUE,
+    .handle_color_alternative = GREEN,
+    .line_color = BLACK,
+    .line_thick = 3.,
+    .handle_color_selected = RED,
+    .snap = false,
+    .snap_size = 1,
+};
+
