@@ -506,7 +506,7 @@ local function build_cimgui(dep)
 
    print("current dir", lfs.currentdir())
    cmd_do("make clean")
-   cmd_do("make -j")
+   cmd_do("make -j CFLAGS=\"-g3\"")
 end
 
 local function get_additional_includes()
@@ -634,8 +634,6 @@ local function build_raylib(_)
 end
 
 local function build_box2c(_)
-
-
 
    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
    cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
@@ -1010,7 +1008,7 @@ dependencies = {
       links = { "rlwr:static" },
       links_internal = { "rlwr:static" },
       name = 'rlwr',
-      url = "https://github.com/nagolove/rlwr",
+      url = "git@github.com:nagolove/rlwr.git",
       url_action = "git",
    },
 

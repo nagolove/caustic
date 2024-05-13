@@ -506,7 +506,7 @@ local function build_cimgui(dep: Dependency)
 
     print("current dir", lfs.currentdir())
     cmd_do("make clean")
-    cmd_do("make -j")
+    cmd_do("make -j CFLAGS=\"-g3\"")
 end
 
 local function get_additional_includes(): string
