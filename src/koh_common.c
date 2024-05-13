@@ -1943,3 +1943,11 @@ char *koh_files_search_setup_2str(struct FilesSearchSetup *setup) {
     );
     return buf;
 }
+
+bool koh_file_exist(const char *fname) {
+    FILE *f = fopen(fname, "r");
+    bool ret = f;
+    if (f)
+        fclose(f);
+    return ret;
+}

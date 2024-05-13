@@ -251,4 +251,4 @@ Rectangle rect_by_texture(Texture2D tex);
 // Принимает массив строк завершающийся NULL. Возвращает указатель на
 // склеенные строки. Нужно вызывать free()
 char *concat_iter_to_allocated_str(char **lines);
-
+bool koh_file_exist(const char *fname);
