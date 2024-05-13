@@ -314,10 +314,24 @@ static Stage *get_selected_stage(StagesStore *ss) {
     return NULL;
 }
 
+void sort_table_specs(ImGuiTableSortSpecs *specs) {
+    assert(specs);
+    trace("sort_table_specs: SpecsCount %d\n", specs->SpecsCount);
+    for (int i = 0; i < specs->SpecsCount; i++) {
+        trace(
+            "ColumnUserID %u ColumnIndex %d SortOrder %d SortDirection %d\n",
+            specs->Specs[i].ColumnUserID,
+            specs->Specs[i].ColumnIndex,
+            specs->Specs[i].SortOrder,
+            specs->Specs[i].SortDirection
+        );
+    }
+}
+
 void stages_gui_window(StagesStore *ss) {
     assert(ss);
     bool opened = true;
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize |
+    ImGuiWindowFlags flags = //ImGuiWindowFlags_NoResize |
                              ImGuiWindowFlags_AlwaysAutoResize; 
     igBegin("stages window", &opened, flags);
 
@@ -328,7 +342,9 @@ void stages_gui_window(StagesStore *ss) {
         ImGuiTableFlags_Resizable |
         ImGuiTableFlags_BordersOuter |
         ImGuiTableFlags_BordersV |
-        ImGuiTableFlags_ContextMenuInBody;
+        ImGuiTableFlags_ContextMenuInBody |
+        ImGuiTableFlags_Sortable |
+        ImGuiTableFlags_SortMulti ;
 
     ImGuiInputTextFlags input_flags = 0;
 
@@ -345,6 +361,26 @@ void stages_gui_window(StagesStore *ss) {
         igTableSetupColumn("leave", 0, 0, 6);
         igTableSetupColumn("data", 0, 0, 7);
         igTableHeadersRow();
+
+        ImGuiTableSortSpecs* sort_specs = igTableGetSortSpecs();
+        if (sort_specs->SpecsDirty) {
+            sort_table_specs(sort_specs);
+            sort_specs->SpecsDirty = false;
+        }
+
+        // TODO: Доделать вывод через клиппер
+        /*
+        ImGuiListClipper *clipper = ImGuiListClipper_ImGuiListClipper();
+        assert(clipper);
+        while (ImGuiListClipper_Step(clipper)) {
+            int start = clipper->DisplayStart, end = clipper->DisplayEnd;
+            for (int row_n = start; row_n < end; row_n++) {
+                trace("stages_gui_window: row_n %d\n", row_n);
+            }
+            trace("stages_gui_window:\n\n");
+        }
+        ImGuiListClipper_destroy(clipper);
+        // */
 
         for (int i = 0; i < ss->num; ++i) {
             ImGuiTableFlags row_flags = 0;
