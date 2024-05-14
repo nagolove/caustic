@@ -161,18 +161,18 @@ void box2d_gui(struct WorldCtx *wctx);
 
 // Границы запроса раздвигаются на gap_radius что-бы было видно объекты 
 // частично попавшие в прямоугольник запроса.
+// TODO: Учесть cam->origin и cam->rotation
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
-    float zoom = 1. / cam->zoom;
-    float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;
-    Vector2 offset = Vector2Scale(cam->offset, zoom);
-    struct b2AABB aabb;
     assert(cam);
+    float zoom = 1. / cam->zoom;
+    /*float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;*/
+    /*Vector2 offset = Vector2Scale(cam->offset, zoom);*/
+    float w = GetScreenWidth(), h = GetScreenHeight();
+    Vector2 offset = Vector2Scale(cam->offset, cam->zoom);
+    /*offset = Vector2Add(offset, cam->target);*/
+    struct b2AABB aabb;
 
-    if (false) 
-        trace(
-            "camera2aabb: zoom %f, cam->offset %s\n",
-            zoom, Vector2_tostr(cam->offset)
-        );
+    trace("camera2aabb: %s\n", camera2str(*cam, false));
 
     /*
     aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
