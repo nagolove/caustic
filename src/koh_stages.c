@@ -153,7 +153,7 @@ Stage *stage_find(StagesStore *ss, const char *name) {
     return NULL;
 }
 
-void stage_active_set(StagesStore *ss, const char *name, void *data) {
+void stage_active_set(StagesStore *ss, const char *name) {
     Stage *st = stage_find(ss, name);
     //assert(st);
 
@@ -166,14 +166,14 @@ void stage_active_set(StagesStore *ss, const char *name, void *data) {
             "stage_set_active: leave from '%s'\n",
             ss->cur->name
         );
-        ss->cur->leave(ss->cur, data);
+        ss->cur->leave(ss->cur);
     }
 
     ss->cur = st;
 
     if (st && st->enter) {
         trace("stage_set_active: enter to '%s'\n", st->name);
-        st->enter(st, data);
+        st->enter(st);
     }
 }
 

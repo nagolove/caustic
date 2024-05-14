@@ -44,7 +44,7 @@ void stage_init(StagesStore *ss);
 void stage_shutdown(StagesStore *ss);
 void stage_free(StagesStore *ss);
 // Установить текущую сцену
-void stage_active_set(StagesStore *ss, const char *name, void *data);
+void stage_active_set(StagesStore *ss, const char *name);
 // Обработать сцену
 void stage_active_update(StagesStore *ss);
 // Получить имя текущей сцены
