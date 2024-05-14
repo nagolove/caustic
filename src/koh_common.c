@@ -1037,13 +1037,13 @@ const char *camera2str(Camera2D cam, bool multiline) {
     static char mt[4] = {};
     memset(mt, 0, sizeof(mt));
     if (multiline)
-        strcat(mt, "\n");
+        strcat(mt, ",\n");
     else
         strcat(mt, ",");
     snprintf(
         buf,
         sizeof(buf) - 1,
-        "offset: %s%s target: %s%s rotation: %f%s zoom: %f", 
+        "offset = %s%s target = %s%s rotation = %f%s zoom = %f", 
         Vector2_tostr(cam.offset), mt,
         Vector2_tostr(cam.target), mt,
         cam.rotation, mt,
