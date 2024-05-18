@@ -66,11 +66,11 @@ static int particle_counter = 0;
 
 static Camera2D cam = {0};
 
-void stage_ecs_init(Stage_ECS *st, void *data);
+void stage_ecs_init(Stage_ECS *st);
 void stage_ecs_update(Stage_ECS *st);
 void stage_ecs_draw(Stage_ECS *st);
 void stage_ecs_shutdown(Stage_ECS *st);
-void stage_ecs_enter(Stage_ECS *st, void *data);
+void stage_ecs_enter(Stage_ECS *st);
 
 static void camera_process_mouse_wheel(Camera2D *cam) {
 
@@ -262,15 +262,15 @@ void particles_draw() {
 
 Stage *stage_ecs_new(void) {
     Stage_ECS *st = calloc(1, sizeof(Stage_ECS));
-    st->parent.init = (Stage_data_callback)stage_ecs_init;
+    st->parent.init = (Stage_callback)stage_ecs_init;
     st->parent.update = (Stage_callback)stage_ecs_update;
     st->parent.shutdown = (Stage_callback)stage_ecs_shutdown;
     st->parent.draw = (Stage_callback)stage_ecs_draw;
-    st->parent.enter = (Stage_data_callback)stage_ecs_enter;
+    st->parent.enter = (Stage_callback)stage_ecs_enter;
     return (Stage*)st;
 }
 
-void stage_ecs_init(Stage_ECS *st, void *data) {
+void stage_ecs_init(Stage_ECS *st) {
     SetTargetFPS(6000);
     cam.zoom = 1;
     r = de_ecs_make();

@@ -164,7 +164,7 @@ void box2d_gui(struct WorldCtx *wctx);
 // TODO: Учесть cam->origin и cam->rotation
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     assert(cam);
-    float zoom = 1. / cam->zoom;
+    /*float zoom = 1. / cam->zoom;*/
     /*float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;*/
     /*Vector2 offset = Vector2Scale(cam->offset, zoom);*/
     float w = GetScreenWidth(), h = GetScreenHeight();

@@ -48,14 +48,14 @@ bool ui_button(struct UI *ui, const char *caption) {
 
 Stage *stage_immediate_new(void) {
     Stage_immediate *st = calloc(1, sizeof(Stage_immediate));
-    st->parent.init = (Stage_data_callback)stage_immediate_init;
+    st->parent.init = (Stage_callback)stage_immediate_init;
     st->parent.update = (Stage_callback)stage_immediate_update;
     st->parent.shutdown = (Stage_callback)stage_immediate_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_immediate_enter;*/
     return (Stage*)st;
 }
 
-void stage_immediate_init(Stage_immediate *st, void *data) {
+void stage_immediate_init(Stage_immediate *st) {
     printf("stage_immediate_init\n");
     ui.font = load_font_unicode("assets/dejavusansmono.ttf", 40);
     ui.color_font = BLACK;

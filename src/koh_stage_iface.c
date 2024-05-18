@@ -23,17 +23,17 @@ typedef struct Stage_iface {
     Font fnt;
 } Stage_iface;
 
-void stage_iface_init(Stage_iface *st, void *data);
+void stage_iface_init(Stage_iface *st);
 void stage_iface_update(Stage_iface *st);
 void stage_iface_shutdown(Stage_iface *st);
-void stage_iface_enter(Stage_iface *st, void *data);
+void stage_iface_enter(Stage_iface *st);
 
 Stage *stage_iface_new(void) {
     Stage_iface *st = calloc(1, sizeof(Stage_iface));
-    st->parent.init = (Stage_data_callback)stage_iface_init;
+    st->parent.init = (Stage_callback)stage_iface_init;
     st->parent.update = (Stage_callback)stage_iface_update;
     st->parent.shutdown = (Stage_callback)stage_iface_shutdown;
-    st->parent.enter = (Stage_data_callback)stage_iface_enter;
+    st->parent.enter = (Stage_callback)stage_iface_enter;
     return (Stage*)st;
 }
 
@@ -160,7 +160,7 @@ VContainer *menu1_init(Stage_iface *st) {
     return mnu;
 }
 
-void stage_iface_init(Stage_iface *st, void *data) {
+void stage_iface_init(Stage_iface *st) {
     printf("stage_iface_init\n");
 
     st->fnt = load_font_unicode("assets/dejavusansmono.ttf", 30);
@@ -229,7 +229,7 @@ void stage_iface_shutdown(Stage_iface *st) {
     //free(st->mnu2);
 }
 
-void stage_iface_enter(Stage_iface *st, void *data) {
+void stage_iface_enter(Stage_iface *st) {
     printf("stage_iface_enter\n");
 }
 

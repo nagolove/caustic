@@ -15,21 +15,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-void stage_path_init(Stage_Path *st, void *data);
+void stage_path_init(Stage_Path *st);
 void stage_path_update(Stage_Path *st);
 void stage_path_shutdown(Stage_Path *st);
 
 Stage *stage_path_new(void) {
     Stage_Path *st = calloc(1, sizeof(Stage_Path));
-    st->parent.init = (Stage_data_callback)stage_path_init;
+    st->parent.init = (Stage_callback)stage_path_init;
     st->parent.update = (Stage_callback)stage_path_update;
     st->parent.shutdown = (Stage_callback)stage_path_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_path_enter;*/
     return (Stage*)st;
 }
 
-void stage_path_init(Stage_Path *st, void *data) {
-    printf("stage_path_init\n");
+void stage_path_init(Stage_Path *st) {
+    printf("stage_path_init:\n");
     path_init(&st->path);
 }
 

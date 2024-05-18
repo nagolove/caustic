@@ -26,14 +26,14 @@ typedef struct Stage_BzrCurve {
     Font          fnt;
 } Stage_BzrCurve;
 
-void stage_bzr_curve_init(Stage_BzrCurve *st, void *data);
+void stage_bzr_curve_init(Stage_BzrCurve *st);
 void stage_bzr_curve_update(Stage_BzrCurve *st);
 void stage_bzr_curve_shutdown(Stage_BzrCurve *st);
 
 Stage *stage_bzr_curve_new(HotkeyStorage *hk_store) {
     Stage_BzrCurve *st = calloc(1, sizeof(Stage_BzrCurve));
     st->hk_store = hk_store;
-    st->parent.init = (Stage_data_callback)stage_bzr_curve_init;
+    st->parent.init = (Stage_callback)stage_bzr_curve_init;
     st->parent.update = (Stage_callback)stage_bzr_curve_update;
     st->parent.shutdown = (Stage_callback)stage_bzr_curve_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_bzr_curve_enter;*/
@@ -42,7 +42,7 @@ Stage *stage_bzr_curve_new(HotkeyStorage *hk_store) {
 
 static const float CIRCLE_RADIUS = 40;
 
-void stage_bzr_curve_init(Stage_BzrCurve *st, void *data) {
+void stage_bzr_curve_init(Stage_BzrCurve *st) {
     printf("stage_bzr_curve_init\n");
     st->drag_index = -1;
 

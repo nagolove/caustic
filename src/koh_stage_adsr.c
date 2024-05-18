@@ -26,7 +26,7 @@ static Font fnt;
 Stage *stage_adsr_new(HotkeyStorage *hk_store) {
     Stage_ADSR *st = calloc(1, sizeof(Stage_ADSR));
     st->hk_store = hk_store;
-    st->parent.init = (Stage_data_callback)stage_adsr_init;
+    st->parent.init = (Stage_callback)stage_adsr_init;
     st->parent.update = (Stage_callback)stage_adsr_update;
     st->parent.shutdown = (Stage_callback)stage_adsr_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_adsr_enter;*/
@@ -204,8 +204,8 @@ void push_adsr(
 };
 
 
-void stage_adsr_init(Stage_ADSR *st, void *data) {
-    printf("stage_adsr_init\n");
+void stage_adsr_init(Stage_ADSR *st) {
+    printf("stage_adsr_init:\n");
 
     fnt = load_font_unicode("assets/dejavusansmono.ttf", 23);
     cam.zoom = 1;

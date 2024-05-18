@@ -23,7 +23,7 @@ typedef struct StagesStore StagesStore;
 // StagesStore
 typedef struct Stage {
     StagesStore         *store;
-    Stage_data_callback init, enter, leave;
+    Stage_callback      init, enter, leave;
     Stage_callback      shutdown, draw, update, gui;
     void                *data;
     char                name[MAX_STAGE_NAME];

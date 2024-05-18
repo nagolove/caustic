@@ -434,7 +434,7 @@ void stages_gui_window(StagesStore *ss) {
     if (igButton("switch to selected stage", (ImVec2) {0, 0})) {
         const Stage *selected = get_selected_stage(ss);
         if (selected)
-            stage_active_set(ss, selected->name, NULL);
+            stage_active_set(ss, selected->name);
     }
 
     igSameLine(0., 5.);

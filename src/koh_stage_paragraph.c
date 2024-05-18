@@ -10,7 +10,7 @@
 #include "raylib.h"
 #include <stdlib.h>
 
-void stage_paragraph_init(Stage_paragraph *st, void *data) {
+void stage_paragraph_init(Stage_paragraph *st) {
     st->fnt = load_font_unicode("assets/dejavusansmono.ttf", 40);
 
     printf("lines len:\n");
@@ -69,7 +69,7 @@ void stage_paragraph_update(Stage_paragraph *st) {
 
 Stage *stage_paragraph_new(void) {
     Stage_paragraph *st = calloc(1, sizeof(Stage_paragraph));
-    st->parent.init = (Stage_data_callback)stage_paragraph_init;
+    st->parent.init = (Stage_callback)stage_paragraph_init;
     st->parent.update = (Stage_callback)stage_paragraph_update;
     st->parent.shutdown = (Stage_callback)stage_paragraph_shutdown;
     return (Stage*)st;

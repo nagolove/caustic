@@ -13,7 +13,7 @@ typedef struct Stage_rand {
     RenderTexture2D tex_rand, tex_xorshift;
 } Stage_rand;
 
-void stage_rand_init(Stage_rand *st, void *data);
+void stage_rand_init(Stage_rand *st);
 void stage_rand_update(Stage_rand *st);
 void stage_rand_shutdown(Stage_rand *st);
 
@@ -21,13 +21,13 @@ const int size = 4096 * 3;
 
 Stage *stage_rand_new(void) {
     Stage_rand *st = calloc(1, sizeof(*st));
-    st->parent.init = (Stage_data_callback)stage_rand_init;
+    st->parent.init = (Stage_callback)stage_rand_init;
     st->parent.update = (Stage_callback)stage_rand_update;
     st->parent.shutdown = (Stage_callback)stage_rand_shutdown;
     return (Stage*)st;
 }
 
-void stage_rand_init(Stage_rand *st, void *data) {
+void stage_rand_init(Stage_rand *st) {
     st->tex_rand = LoadRenderTexture(size, size);
     st->tex_xorshift = LoadRenderTexture(size, size);
 
