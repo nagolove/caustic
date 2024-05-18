@@ -314,7 +314,7 @@ void stage_ecs_shutdown(Stage_ECS *st) {
     trace("stage_ecs_shutdown:\n");
 }
 
-void stage_ecs_enter(Stage_ECS *st, void *data) {
+void stage_ecs_enter(Stage_ECS *st) {
     trace("stage_ecs_enter:\n");
     SetTargetFPS(6000);
 }

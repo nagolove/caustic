@@ -15,16 +15,20 @@
 
 const char *rules = "'R' - перезапустить";
 
+void stage_orandom_init(Stage_OuterRandom *st);
+void stage_orandom_update(Stage_OuterRandom *st);
+void stage_orandom_shutdown(Stage_OuterRandom *st);
+
 Stage *stage_orandom_new(void) {
     Stage_OuterRandom *st = calloc(1, sizeof(Stage_OuterRandom));
-    st->parent.init = (Stage_data_callback)stage_orandom_init;
+    st->parent.init = (Stage_callback)stage_orandom_init;
     st->parent.update = (Stage_callback)stage_orandom_update;
     st->parent.shutdown = (Stage_callback)stage_orandom_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_orandom_enter;*/
     return (Stage*)st;
 }
 
-void stage_orandom_init(Stage_OuterRandom *st, void *data) {
+void stage_orandom_init(Stage_OuterRandom *st) {
     printf("stage_orandom_init\n");
     st->fnt = load_font_unicode("assets/dejavusansmono.ttf", 40);
     st->rng = xorshift32_init();
@@ -81,7 +85,7 @@ void stage_orandom_update(Stage_OuterRandom *st) {
 
     if (IsKeyPressed(KEY_R)) {
         stage_orandom_shutdown(st);
-        stage_orandom_init(st, NULL);
+        stage_orandom_init(st);
     }
 
     DrawCircle(0, 0, 20, BLACK);

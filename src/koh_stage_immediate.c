@@ -15,9 +15,13 @@
 /*#define RAYGUI_IMPLEMENTATION*/
 /*#include "raygui.h"*/
 
-void stage_immediate_init(Stage_immediate *st, void *data);
-void stage_immediate_update(Stage_immediate *st);
-void stage_immediate_shutdown(Stage_immediate *st);
+typedef struct Stage_immediate {
+    Stage parent;
+} Stage_immediate;
+
+static void stage_immediate_init(Stage_immediate *st);
+static void stage_immediate_update(Stage_immediate *st);
+static void stage_immediate_shutdown(Stage_immediate *st);
 
 enum UI_LAYOUT {
     UI_LAYOUT_VERTICAL,
@@ -46,16 +50,7 @@ bool ui_button(struct UI *ui, const char *caption) {
     return false;
 }
 
-Stage *stage_immediate_new(void) {
-    Stage_immediate *st = calloc(1, sizeof(Stage_immediate));
-    st->parent.init = (Stage_callback)stage_immediate_init;
-    st->parent.update = (Stage_callback)stage_immediate_update;
-    st->parent.shutdown = (Stage_callback)stage_immediate_shutdown;
-    /*st->parent.enter = (Stage_data_callback)stage_immediate_enter;*/
-    return (Stage*)st;
-}
-
-void stage_immediate_init(Stage_immediate *st) {
+static void stage_immediate_init(Stage_immediate *st) {
     printf("stage_immediate_init\n");
     ui.font = load_font_unicode("assets/dejavusansmono.ttf", 40);
     ui.color_font = BLACK;
@@ -84,10 +79,21 @@ void stage_immediate_update(Stage_immediate *st) {
     ui_end(&ui);
 }
 
-void stage_immediate_shutdown(Stage_immediate *st) {
-    printf("stage_immediate_shutdown\n");
+static void stage_immediate_shutdown(Stage_immediate *st) {
+    printf("stage_immediate_shutdown:\n");
 }
 
-void stage_immediate_enter(Stage_immediate *st, void *data) {
-    printf("stage_immediate_enter\n");
+/*
+static void stage_immediate_enter(Stage_immediate *st) {
+    printf("stage_immediate_enter:\n");
 }
+*/
+
+Stage *stage_immediate_new(void) {
+    Stage_immediate *st = calloc(1, sizeof(Stage_immediate));
+    st->parent.init = (Stage_callback)stage_immediate_init;
+    st->parent.update = (Stage_callback)stage_immediate_update;
+    st->parent.shutdown = (Stage_callback)stage_immediate_shutdown;
+    return (Stage*)st;
+}
+

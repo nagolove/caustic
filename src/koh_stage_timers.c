@@ -13,13 +13,18 @@
 #include <string.h>
 #include <time.h>
 
-void stage_timers_init(Stage_Timers *st, void *data);
+typedef struct Stage_Timers {
+    Stage      parent;
+    koh_TimerStore ts;
+} Stage_Timers;
+
+void stage_timers_init(Stage_Timers *st);
 void stage_timers_update(Stage_Timers *st);
 void stage_timers_shutdown(Stage_Timers *st);
 
 Stage *stage_timers_new(void) {
     Stage_Timers *st = calloc(1, sizeof(Stage_Timers));
-    st->parent.init = (Stage_data_callback)stage_timers_init;
+    st->parent.init = (Stage_callback)stage_timers_init;
     st->parent.update = (Stage_callback)stage_timers_update;
     st->parent.shutdown = (Stage_callback)stage_timers_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_timers_enter;*/
@@ -62,7 +67,7 @@ bool click(Timer *tm) {
     return true;
 }
 
-void stage_timers_init(Stage_Timers *st, void *data) {
+void stage_timers_init(Stage_Timers *st) {
     //printf("stage_menu_init\n");
     srand(time(NULL));
     koh_timerstore_init(&st->ts, 0);

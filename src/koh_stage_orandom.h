@@ -15,9 +15,5 @@ typedef struct Stage_OuterRandom {
 } Stage_OuterRandom;
 
 Stage *stage_orandom_new(void);
-void stage_orandom_init(Stage_OuterRandom *st, void *data);
-void stage_orandom_update(Stage_OuterRandom *st);
-void stage_orandom_shutdown(Stage_OuterRandom *st);
-
 
 

@@ -15,7 +15,7 @@ void stage_empty_shutdown(Stage_Empty *st);
 
 Stage *stage_empty_new(void) {
     Stage_Empty *st = calloc(1, sizeof(Stage_Empty));
-    st->parent.init = (Stage_data_callback)stage_empty_init;
+    st->parent.init = (Stage_callback)stage_empty_init;
     st->parent.update = (Stage_callback)stage_empty_update;
     st->parent.shutdown = (Stage_callback)stage_empty_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_empty_enter;*/

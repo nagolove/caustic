@@ -143,7 +143,7 @@ cpSpaceDebugColor from_Color(Color c);
 
 struct CameraProcessScale {
     Camera2D    *cam;
-    float       dscale_value;       // XXX: За что отвечает dscale_value?
+    float       dscale_value;       // Приращение масштаба
     KeyboardKey modifier_key_down;
 };
 

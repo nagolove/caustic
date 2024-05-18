@@ -73,7 +73,7 @@ void stage_init(StagesStore *ss) {
     for(int i = 0; i < ss->num; i++) {
         Stage *st = ss->stages[i];
         if (st->init) {
-            st->init(st, NULL);
+            st->init(st);
         }
     }
 
@@ -444,7 +444,7 @@ void stages_gui_window(StagesStore *ss) {
         if (selected) {
             if (selected->shutdown && selected->init) {
                 selected->shutdown(selected);
-                selected->init(selected, NULL);
+                selected->init(selected);
             }
             //stage_active_set(ss, selected->name, NULL);
         }

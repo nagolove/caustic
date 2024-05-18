@@ -131,6 +131,15 @@ static inline b2AABB rect2aabb(Rectangle r) {
     };
 }
 
+static inline Rectangle aabb2rect(b2AABB aabb) {
+    return (Rectangle) {
+        .x = aabb.lowerBound.x,
+        .y = aabb.lowerBound.y,
+        .width = fabs(aabb.lowerBound.x - aabb.upperBound.x),
+        .height = fabs(aabb.lowerBound.y - aabb.upperBound.y),
+    };
+}
+
 static inline void b2Shape_SetUserData(b2ShapeId shapeId, void *udata) {
     b2World* world = b2GetWorldFromIndex(shapeId.world);
     b2Shape* shape = b2GetShape(world, shapeId);
@@ -168,27 +177,45 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     /*float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;*/
     /*Vector2 offset = Vector2Scale(cam->offset, zoom);*/
     float w = GetScreenWidth(), h = GetScreenHeight();
-    Vector2 offset = Vector2Scale(cam->offset, cam->zoom);
+    /*Vector2 offset = Vector2Scale(cam->offset, cam->zoom);*/
+    Vector2 offset = Vector2Scale(cam->offset, 1.);
     /*offset = Vector2Add(offset, cam->target);*/
     struct b2AABB aabb;
 
-    trace("camera2aabb: %s\n", camera2str(*cam, false));
+    if (false)
+        trace("camera2aabb: %s\n", camera2str(*cam, false));
 
+   
     /*
-    aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
-    aabb.upperBound.y = cam->offset.y * zoom - gap_radius;
+    const float zoom = 1.;
     aabb.lowerBound.x = cam->offset.x * zoom + w - gap_radius;
     aabb.lowerBound.y = cam->offset.y * zoom + h - gap_radius;
+    aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
+    aabb.upperBound.y = cam->offset.y * zoom - gap_radius;
 // */
 
+    gap_radius = 0.;
     aabb.lowerBound.x = offset.x + gap_radius;
     aabb.lowerBound.y = offset.y - gap_radius;
     aabb.upperBound.x = offset.x + w - gap_radius;
     aabb.upperBound.y = offset.y + h - gap_radius;
 // */
 
+    /*
+    aabb = rect2aabb((Rectangle) { 
+        .x = 0,
+        .y = 0,
+        .width = GetScreenWidth(),
+        .height = GetScreenHeight(),
+    });
+// */
+
     b2AABB a = aabb;
 	b2Vec2 d = b2Sub(a.upperBound, a.lowerBound);
+
+    if (false)
+        trace("camera2aabb: %s\n", rect2str(aabb2rect(aabb)));
+
     if (false)
         trace("camera2aabb: d %s\n", b2Vec2_to_str(d));
 	//bool valid = d.x >= 0.0f && d.y >= 0.0f;

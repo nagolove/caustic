@@ -25,7 +25,7 @@ void stage_tstmenu_shutdown(Stage_TestMenu *st);
 Stage *stage_tstmenu_new(HotkeyStorage *hk_store) {
     Stage_TestMenu *st = calloc(1, sizeof(Stage_TestMenu));
     st->hk_store = hk_store;
-    st->parent.init = (Stage_data_callback)stage_tstmenu_init;
+    st->parent.init = (Stage_callback)stage_tstmenu_init;
     st->parent.update = (Stage_callback)stage_tstmenu_update;
     st->parent.shutdown = (Stage_callback)stage_tstmenu_shutdown;
     /*st->parent.enter = (Stage_data_callback)stage_tstmenu_enter;*/

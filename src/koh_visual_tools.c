@@ -113,9 +113,8 @@ static Vector2 mouse_delta_with_cam(const Camera2D *cam) {
 
 static Vector2 mouse_with_cam(const Camera2D *cam) {
     assert(cam);
-    Vector2 cam_offset = cam ? cam->offset : Vector2Zero();
     float scale = cam ? cam->zoom : 1.;
-    Vector2 mp = Vector2Subtract(GetMousePosition(), cam_offset);
+    Vector2 mp = Vector2Subtract(GetMousePosition(), cam->offset);
     return Vector2Scale(mp, 1. / scale);
 }
 

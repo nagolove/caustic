@@ -45,7 +45,7 @@ typedef struct Stage_ADSR {
 } Stage_ADSR;
 
 Stage *stage_adsr_new(HotkeyStorage *hk_store);
-void stage_adsr_init(Stage_ADSR *st, void *data);
+void stage_adsr_init(Stage_ADSR *st);
 void stage_adsr_update(Stage_ADSR *st);
 void stage_adsr_shutdown(Stage_ADSR *st);
 
