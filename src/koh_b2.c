@@ -4,7 +4,6 @@
 #include "box2d/box2d.h"
 #include "box2d/geometry.h"
 #include "box2d/id.h"
-#include "box2d/timer.h"
 #include "box2d/types.h"
 #include "box2d/debug_draw.h"
 #include "koh_common.h"
@@ -37,7 +36,7 @@ static bool verbose_b2 = false;
 
 /// Draw a closed polygon provided in CCW order.
 static void draw_polygon(
-    const b2Vec2* vertices, int vertexCount, b2Color color, void* context
+    const b2Vec2* vertices, int vertexCount, b2HexColor color, void* context
 ) {
     /*
     char *str = b2Vec2_tostr_alloc(vertices, vertexCount);
@@ -59,7 +58,8 @@ static void draw_polygon(
 
 /// Draw a solid closed polygon provided in CCW order.
 static void draw_solid_polygon(
-    const b2Vec2* vertices, int vertexCount, b2Color color, void* context
+        b2Transform transform, const b2Vec2* vertices, 
+        int vertexCount, float radius, b2HexColor color, void* context
 ) {
     if (verbose_b2) {
         char *str = b2Vec2_tostr_alloc(vertices, vertexCount);
@@ -87,9 +87,10 @@ static void draw_solid_polygon(
 }
 
 /// Draw a rounded polygon provided in CCW order.
+/*
 static void draw_rounded_polygon(
     const b2Vec2* vertices, int vertexCount, 
-    float radius, b2Color lineColor, b2Color fillColor, void* context
+    float radius, b2HexColor lineColor, b2HexColor fillColor, void* context
 ) {
     if (verbose_b2)
         trace("draw_rounded_polygon:\n");
@@ -106,10 +107,11 @@ static void draw_rounded_polygon(
         b2Color_to_Color(lineColor)
     );
 }
+*/
 
 /// Draw a circle.
 static void draw_circle(
-    b2Vec2 center, float radius, b2Color color, void* context
+    b2Vec2 center, float radius, b2HexColor color, void* context
 ) {
     if (verbose_b2)
         trace("draw_circle:\n");
@@ -121,13 +123,19 @@ static void draw_circle(
 }
 
 /// Draw a solid circle.
-static void draw_solid_circle(
-    b2Vec2 center, float radius, b2Vec2 axis, b2Color color, void* context
+static	void draw_solid_circle(
+    b2Transform transform, float radius, b2HexColor color, void* context
 ) {
+/*
+static void draw_solid_circle(
+    b2Transform transform, b2Vec2 center, float radius, 
+    b2Vec2 axis, float radius, b2HexColor color, void* context
+) {
+*/
     if (verbose_b2)
         trace("draw_solid_circle:\n");
     DrawCircleV(
-        (Vector2) { center.x, center.y },
+        (Vector2) { transform.p.x, transform.p.y, },
         radius, 
         b2Color_to_Color(color)
     );
@@ -135,7 +143,7 @@ static void draw_solid_circle(
 
 /// Draw a capsule.
 static void draw_capsule(
-    b2Vec2 p1, b2Vec2 p2, float radius, b2Color color, void* context
+    b2Vec2 p1, b2Vec2 p2, float radius, b2HexColor color, void* context
 ) {
     if (verbose_b2)
         trace("draw_capsule:\n");
@@ -157,7 +165,7 @@ static void draw_capsule(
 
 /// Draw a solid capsule.
 static void draw_solid_capsule(
-    b2Vec2 p1, b2Vec2 p2, float radius, b2Color color, void* context
+    b2Vec2 p1, b2Vec2 p2, float radius, b2HexColor color, void* context
 ) {
     if (verbose_b2)
         trace("draw_solid_capsule:\n");
@@ -178,7 +186,7 @@ static void draw_solid_capsule(
 }
 
 /// Draw a line segment.
-static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2Color color, void* context) {
+static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* context) {
     if (verbose_b2)
         trace("draw_segment:\n");
     DrawLineEx(
@@ -197,7 +205,7 @@ static void draw_transform(b2Transform xf, void* context) {
 }
 
 /// Draw a point.
-static void draw_point(b2Vec2 p, float size, b2Color color, void* context) {
+static void draw_point(b2Vec2 p, float size, b2HexColor color, void* context) {
     if (verbose_b2)
         trace("draw_point:\n");
     DrawCircle(p.x, p.y, size, b2Color_to_Color(color));
@@ -214,7 +222,7 @@ b2DebugDraw b2_world_dbg_draw_create() {
     return (struct b2DebugDraw) {
         .DrawPolygon = draw_polygon,
         .DrawSolidPolygon = draw_solid_polygon,
-        .DrawRoundedPolygon = draw_rounded_polygon,
+        //.DrawRoundedPolygon = draw_rounded_polygon,
         .DrawCircle = draw_circle,
         .DrawSolidCircle = draw_solid_circle,
         .DrawCapsule = draw_capsule,
@@ -269,7 +277,7 @@ static const char *bodytype2str[] = {
     [b2_staticBody] = "b2_staticBody",
     [b2_kinematicBody] = "b2_kinematicBody",
     [b2_dynamicBody] = "b2_dynamicBody",
-    [b2_bodyTypeCount] = "b2_bodyTypeCount",
+    //[b2_bodyTypeCount] = "b2_bodyTypeCount",
 };
 
 const char *b2BodyType_to_str(b2BodyType bt) {
@@ -289,11 +297,12 @@ static void _b2WorldDef_to_str_lua(char *buf[], int *i, b2WorldDef *def) {
     p(buf[(*i)++], "contactHertz = %f,", def->contactHertz);
     p(buf[(*i)++], "contactDampingRatio = %f,", def->contactDampingRatio);
     p(buf[(*i)++], "enableSleep = %s,", def->enableSleep ? "true" : "false");
-    p(buf[(*i)++], "bodyCapacity = %d,", def->bodyCapacity);
-    p(buf[(*i)++], "shapeCapacity = %d,", def->shapeCapacity);
-    p(buf[(*i)++], "contactCapacity = %d,", def->contactCapacity);
-    p(buf[(*i)++], "jointCapacity = %d,", def->jointCapacity);
-    p(buf[(*i)++], "stackAllocatorCapacity = %d,", def->stackAllocatorCapacity);
+    p(buf[(*i)++], "enableCotinuos = %s,", def->enableContinous ? "true" : "false");
+    //p(buf[(*i)++], "bodyCapacity = %d,", def->bodyCapacity);
+    //p(buf[(*i)++], "shapeCapacity = %d,", def->shapeCapacity);
+    //p(buf[(*i)++], "contactCapacity = %d,", def->contactCapacity);
+    //p(buf[(*i)++], "jointCapacity = %d,", def->jointCapacity);
+    //p(buf[(*i)++], "stackAllocatorCapacity = %d,", def->stackAllocatorCapacity);
     p(buf[(*i)++], "workerCount = %d,", def->workerCount);
     p(buf[(*i)++], " }");
 }
@@ -310,11 +319,13 @@ static void _b2WorldDef_to_str_pure(char *buf[], int *i, b2WorldDef *def) {
     p(buf[(*i)++], "contactHertz %f", def->contactHertz);
     p(buf[(*i)++], "contactDampingRatio %f", def->contactDampingRatio);
     p(buf[(*i)++], "enableSleep %s", def->enableSleep ? "true" : "false");
+    /*
     p(buf[(*i)++], "bodyCapacity %d", def->bodyCapacity);
     p(buf[(*i)++], "shapeCapacity %d", def->shapeCapacity);
     p(buf[(*i)++], "contactCapacity %d", def->contactCapacity);
     p(buf[(*i)++], "jointCapacity %d", def->jointCapacity);
     p(buf[(*i)++], "stackAllocatorCapacity %d", def->stackAllocatorCapacity);
+    */
     p(buf[(*i)++], "workerCount %d", def->workerCount);
 }
 
@@ -424,7 +435,7 @@ char **b2ShapeDef_to_str(b2ShapeDef sd) {
     return (char**)lines;
 }
 
-char ** b2Statistics_to_str(b2WorldId world, bool lua) {
+char ** b2Counters_to_str(b2WorldId world, bool lua) {
     static char (buf[STR_LEN])[STR_NUM];
     static char *lines[STR_NUM];
     for (int i = 0; i < STR_NUM; i++) {
@@ -433,7 +444,7 @@ char ** b2Statistics_to_str(b2WorldId world, bool lua) {
 
     int i = 0;
     int (*p)(char *s, const char *format, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
-    b2Statistics stat = b2World_GetStatistics(world);
+    b2Counters stat = b2World_GetCounters(world);
 
     if (lua) {
         p(lines[i++], "{ ");
@@ -441,9 +452,9 @@ char ** b2Statistics_to_str(b2WorldId world, bool lua) {
         p(lines[i++], "bodyCount = %d,", stat.bodyCount);
         p(lines[i++], "contactCount = %d,", stat.contactCount);
         p(lines[i++], "jointCount = %d,", stat.jointCount);
-        p(lines[i++], "proxyCount = %d,", stat.proxyCount);
+        //p(lines[i++], "proxyCount = %d,", stat.proxyCount);
         p(lines[i++], "treeHeight = %d,", stat.treeHeight);
-        p(lines[i++], "stackCapacity = %d,", stat.stackCapacity);
+        //p(lines[i++], "stackCapacity = %d,", stat.stackCapacity);
         p(lines[i++], "stackUsed = %d,", stat.stackUsed);
         p(lines[i++], "byteCount = %d,", stat.byteCount);
         p(lines[i++], " }");
@@ -452,9 +463,9 @@ char ** b2Statistics_to_str(b2WorldId world, bool lua) {
         p(lines[i++], "bodyCount %d", stat.bodyCount);
         p(lines[i++], "contactCount %d", stat.contactCount);
         p(lines[i++], "jointCount %d", stat.jointCount);
-        p(lines[i++], "proxyCount %d", stat.proxyCount);
+        //p(lines[i++], "proxyCount %d", stat.proxyCount);
         p(lines[i++], "treeHeight %d", stat.treeHeight);
-        p(lines[i++], "stackCapacity %d", stat.stackCapacity);
+        //p(lines[i++], "stackCapacity %d", stat.stackCapacity);
         p(lines[i++], "stackUsed %d", stat.stackUsed);
         p(lines[i++], "byteCount %d", stat.byteCount);
     }
@@ -515,7 +526,7 @@ const char *b2BodyId_id_to_str(b2BodyId id) {
     static char buf[128];
     sprintf(
         buf, "{ index = %d, world = %hd, revision = %hu }",
-        id.index, id.world, id.revision
+        id.index1, id.world0, id.revision
     );
     return buf;
 }
@@ -524,7 +535,7 @@ const char *b2ShapeId_id_to_str(b2ShapeId id) {
     static char buf[128];
     sprintf(
         buf, "{ index = %d, world = %hd, revision = %hu }",
-        id.index, id.world, id.revision
+        id.index1, id.world0, id.revision
     );
     return buf;
 }
@@ -546,7 +557,7 @@ static void stat_gui(struct WorldCtx *ctx) {
     static bool tree_open = false;
     igSetNextItemOpen(tree_open, ImGuiCond_Once);
     if (igTreeNode_Str("stat")) {
-        char **lines = b2Statistics_to_str(ctx->world, false);
+        char **lines = b2Counters_to_str(ctx->world, false);
         while (*lines) {
             igText("%s", *lines);
             lines++;
@@ -559,11 +570,7 @@ static void box2d_setup_gui(struct WorldCtx *wctx) {
     assert(wctx);
     ImGuiSliderFlags slider_flags = 0;
     igSliderInt(
-        "velocity iterations", &wctx->velocity_iteratioins,
-        3, 10, "%d", slider_flags
-    );
-    igSliderInt(
-        "relax iterations", &wctx->relax_iterations,
+        "substeps", &wctx->substeps,
         3, 10, "%d", slider_flags
     );
 }

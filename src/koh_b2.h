@@ -9,7 +9,7 @@
 #include "TaskScheduler_c.h"
 #include "box2d/id.h"
 #include "box2d/types.h"
-#include "box2d/aabb.h"
+#include "box2d/math_types.h"
 #include "contact.h"
 #include "world.h"
 #include "shape.h"
@@ -18,14 +18,18 @@
 #include "koh.h"
 #include <assert.h>
 
-inline static Color b2Color_to_Color(b2Color c) {
+inline static Color b2Color_to_Color(b2HexColor c) {
     // {{{
+    // XXX: Заглушка
+    /*
     return (Color) {
         .r = c.r * 255.,
         .g = c.g * 255.,
         .b = c.b * 255.,
         .a = c.a * 255.,
     };
+    */
+    return BROWN;
     // }}}
 }
 
@@ -45,7 +49,7 @@ inline static void shapes_store_clear(struct ShapesStore *ss);
 
 typedef struct WorldCtx {
     // Настройка шага симуляции
-    int32_t             velocity_iteratioins, relax_iterations;
+    int32_t             substeps;
 
     // Пулы задач и распределитель времени
     enkiTaskSet         *task_set;
@@ -81,7 +85,7 @@ inline static void shapes_store_clear(struct ShapesStore *ss) {
 // Возвращает буфер в статической памяти.
 // Последний элемент массива - NULL
 char **b2WorldDef_to_str(b2WorldDef wdef, bool lua);
-char **b2Statistics_to_str(b2WorldId world, bool lua);
+char ** b2Counters_to_str(b2WorldId world, bool lua);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
 char **b2BodyDef_to_str(b2BodyDef bd);
 char **b2BodyId_to_str(b2BodyId id);
@@ -106,10 +110,13 @@ KOH_FORCE_INLINE b2Shape *b2Shape_get(b2WorldId world_id, b2ShapeId id) {
 }
 */
 
+/*
+// XXX: Функция могла перестать работать после обновления физического движка.
 KOH_FORCE_INLINE b2Body *b2Body_get(b2WorldId world_id, b2BodyId id) {
     const b2World* world = b2GetWorldFromId(world_id);
-    return world->bodies + id.index;
+    return world->bodyArray + id.index1;
 }
+*/
 
 static inline const char *b2Vec2_to_str(b2Vec2 v) {
     static char buf[64] = {0};
@@ -140,27 +147,23 @@ static inline Rectangle aabb2rect(b2AABB aabb) {
     };
 }
 
-static inline void b2Shape_SetUserData(b2ShapeId shapeId, void *udata) {
-    b2World* world = b2GetWorldFromIndex(shapeId.world);
-    b2Shape* shape = b2GetShape(world, shapeId);
-    shape->userData = udata;
-}
-
 inline static void b2Body_user_data_reset(b2BodyId body_id, void *user_data) {
-    b2ShapeId shape_id = b2Body_GetFirstShape(body_id);
-    while (!B2_IS_NULL(shape_id)) {
-        b2Shape_SetUserData(shape_id, user_data);
-        shape_id = b2Body_GetNextShape(shape_id);
+    int num = b2Body_GetShapeCount(body_id);
+    b2ShapeId shapes[num];
+    b2Body_GetShapes(body_id, shapes, num);
+    for (int i = 0; i < num; i++) {
+        b2Shape_SetUserData(shapes[i], user_data);
     }
 }
 
 inline static bool b2Body_has_shape(b2BodyId body_id, b2ShapeId target_shape) {
-    b2ShapeId cur_shape = b2Body_GetFirstShape(body_id);
-    while (!B2_IS_NULL(cur_shape)) {
-        if (B2_ID_EQUALS(cur_shape, target_shape)) {
+    int num = b2Body_GetShapeCount(body_id);
+    b2ShapeId shapes[num];
+    b2Body_GetShapes(body_id, shapes, num);
+    for (int i = 0; i < num; i++) {
+        if (B2_ID_EQUALS(shapes[i], target_shape)) {
             return true;
         }
-        cur_shape = b2Body_GetNextShape(cur_shape);
     }
     return false;
 }

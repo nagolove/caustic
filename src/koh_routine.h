@@ -13,7 +13,7 @@
 #include <assert.h>
 #include <float.h>
 #include <stdio.h>
-#include "box2d/aabb.h"
+#include "box2d/math_types.h"
 
 static inline void vec4_from_color(float vec[4], Color c) {
     assert(vec);
@@ -212,6 +212,7 @@ inline static char *b2AABB_to_str(struct b2AABB aabb) {
     return buf;
 }
 
+/*
 static inline Rectangle b2AABB_to_rect(b2AABB bb) {
     assert(b2AABB_IsValid(bb));
     return (Rectangle) { 
@@ -221,4 +222,4 @@ static inline Rectangle b2AABB_to_rect(b2AABB bb) {
         .height = bb.upperBound.y - bb.lowerBound.y,
     };
 }
-
+*/

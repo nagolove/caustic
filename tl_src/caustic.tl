@@ -854,6 +854,7 @@ dependencies = {
     },
 --]]
 
+    -- TODO: обновить зависимость
     {
         -- компилировать не нужно
         after_init = rlimgui_after_init,
@@ -923,7 +924,7 @@ dependencies = {
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
-        git_branch = "linux-gcc",
+        --git_branch = "main",
         includes = { 
             "box2c/include",
             "box2c/src",
@@ -933,7 +934,9 @@ dependencies = {
         links = { "box2d:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
-        url = "https://github.com/nagolove/box2c.git",
+        --url = "https://github.com/nagolove/box2c.git",
+        --url = "https://github.com/nagolove/box2c.git",
+        url = "https://github.com/erincatto/box2c.git",
         url_action = 'git',
     },
 
