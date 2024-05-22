@@ -166,7 +166,7 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
 */
 }
 
-void timerman_window(struct TimerMan *tm) {
+void timerman_window_gui(struct TimerMan *tm) {
     bool open = true;
     ImGuiWindowFlags flags = 0;
     igBegin("timers", &open, flags);
