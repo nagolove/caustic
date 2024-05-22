@@ -62,6 +62,7 @@ typedef struct WorldCtx {
     uint32_t            width, height; // размеры карты в пикселях?
     b2WorldId           world;
     xorshift32_state    *xrng; // TODO Заменить на prng (64 бита)
+    float               timestep; // 1. / fps
 } WorldCtx;
 
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id) {
@@ -171,48 +172,44 @@ inline static bool b2Body_has_shape(b2BodyId body_id, b2ShapeId target_shape) {
 const char *b2Polygon_to_str(const b2Polygon *poly);
 void box2d_gui(struct WorldCtx *wctx);
 
+static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
+    assert(cam);
+    float zoom = 1. / cam->zoom;
+    float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;
+    Vector2 offset = cam->offset;
+    struct b2AABB aabb;
+
+    if (false)
+        trace("camera2aabb: %s\n", camera2str(*cam, false));
+   
+    gap_radius = 0.;
+    aabb.lowerBound.x = - zoom * offset.x + gap_radius;
+    aabb.lowerBound.y = - zoom * offset.y - gap_radius;
+    aabb.upperBound.x = - zoom * offset.x + w - gap_radius;
+    aabb.upperBound.y = - zoom * offset.y + h - gap_radius;
+    assert(b2AABB_IsValid(aabb));
+    return aabb;
+}
+
 // Границы запроса раздвигаются на gap_radius что-бы было видно объекты 
 // частично попавшие в прямоугольник запроса.
 // TODO: Учесть cam->origin и cam->rotation
+/*
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     assert(cam);
-    /*float zoom = 1. / cam->zoom;*/
-    /*float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;*/
-    /*Vector2 offset = Vector2Scale(cam->offset, zoom);*/
     float w = GetScreenWidth(), h = GetScreenHeight();
-    /*Vector2 offset = Vector2Scale(cam->offset, cam->zoom);*/
     Vector2 offset = Vector2Scale(cam->offset, 1.);
-    /*offset = Vector2Add(offset, cam->target);*/
     struct b2AABB aabb;
 
     if (false)
         trace("camera2aabb: %s\n", camera2str(*cam, false));
 
    
-    /*
-    const float zoom = 1.;
-    aabb.lowerBound.x = cam->offset.x * zoom + w - gap_radius;
-    aabb.lowerBound.y = cam->offset.y * zoom + h - gap_radius;
-    aabb.upperBound.x = cam->offset.x * zoom - gap_radius;
-    aabb.upperBound.y = cam->offset.y * zoom - gap_radius;
-// */
-
     gap_radius = 0.;
     aabb.lowerBound.x = offset.x + gap_radius;
     aabb.lowerBound.y = offset.y - gap_radius;
     aabb.upperBound.x = offset.x + w - gap_radius;
     aabb.upperBound.y = offset.y + h - gap_radius;
-// */
-
-    /*
-    aabb = rect2aabb((Rectangle) { 
-        .x = 0,
-        .y = 0,
-        .width = GetScreenWidth(),
-        .height = GetScreenHeight(),
-    });
-// */
-
     b2AABB a = aabb;
 	b2Vec2 d = b2Sub(a.upperBound, a.lowerBound);
 
@@ -223,17 +220,9 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
         trace("camera2aabb: d %s\n", b2Vec2_to_str(d));
 	//bool valid = d.x >= 0.0f && d.y >= 0.0f;
 
-    /*
-    struct b2AABB t1, t2;
-    t1.lowerBound.x = 0;
-    t1.lowerBound.y = 0;
-    t1.upperBound.x = 10;
-    t1.upperBound.y = 10;
-    trace("camera2aabb: t1 is valid %d\n", (int)b2AABB_IsValid(t1));
-    */
-
     assert(b2AABB_IsValid(aabb));
     return aabb;
 }
+*/
 
 
