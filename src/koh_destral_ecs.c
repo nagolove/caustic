@@ -441,6 +441,7 @@ static void de_storage_remove(de_storage* s, de_entity e) {
     assert(s);
     size_t pos_to_remove = de_sparse_remove(&s->sparse, e);
 
+    /*if (s->on_destroy && *(s->callbacks_flags) & DE_CB_ON_DESTROY) {*/
     if (s->on_destroy) {
         void *payload = &((char*)s->cp_data)[pos_to_remove * s->cp_sizeof];
         s->on_destroy(payload, e);
@@ -521,10 +522,6 @@ inline static bool de_storage_contains(de_storage* s, de_entity e) {
     return de_sparse_contains(&s->sparse, e);
 }
 
-#define DE_REGISTRY_MAX 256
-
-
-/*
 void de_ecs_register(de_ecs *r, de_cp_type comp) {
     de_trace("de_ecs_register: ecs %p, type %s\n", r, de_cp_type2str(comp));
     for (int i = 0; i < r->registry_num; i++) {
@@ -538,7 +535,6 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
     }
     r->registry[r->registry_num++] = comp;
 }
-*/
 
 de_ecs* de_ecs_make() {
     de_trace("de_ecs_make:\n");
@@ -692,6 +688,13 @@ static de_storage* de_assure(de_ecs* r, de_cp_type cp_type) {
     if (!storage) {
         // Стоит-ли поместить регистрацию типа сюда, из de_emplace()?
         storage = de_storage_new(cp_type.cp_sizeof, cp_type);
+
+        storage->on_destroy = cp_type.on_destroy;
+        storage->on_destroy = cp_type.on_emplace;
+        /*storage->callbacks_flags = &cp_type.callbacks_flags;*/
+
+        /*trace("de_assure: callbacks_flags %u\n", cp_type.callbacks_flags);*/
+
         //r->storages = realloc(r->storages, (r->storages_size + 1) * sizeof * r->storages);
         r->storages_size++;
         size_t sz = r->storages_size * sizeof(r->storages[0]);
@@ -853,9 +856,15 @@ void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
         "de_emplace: ecs %p, e %u, type %s\n", 
         r, e, de_cp_type2str(cp_type)
     );
-    void *ret = de_storage_emplace(de_assure(r, cp_type), e);
+    de_storage *storage = de_assure(r, cp_type);
+    void *ret = de_storage_emplace(storage, e);
     assert(ret);
     memset(ret, 0, cp_type.cp_sizeof);
+
+    /*if (storage->on_emplace && *(storage->callbacks_flags) & DE_CB_ON_EMPLACE)*/
+    if (storage->on_emplace)
+        storage->on_emplace(ret, e);
+
     return ret;
 }
 
@@ -1233,6 +1242,7 @@ static de_storage *de_storage_clone(const de_storage *in) {
     memcpy(out->cp_data, in->cp_data, in->cp_data_size * in->cp_sizeof);
 
     out->on_destroy = in->on_destroy;
+    out->on_emplace = in->on_emplace;
 
     return out;
 }
@@ -1313,7 +1323,25 @@ HTableAction iter_type(
     igTableSetColumnIndex(4);
     igText("%zu", type->initial_cap);
 
+    /*
     igTableSetColumnIndex(5);
+    bool use_on_destroy = type->callbacks_flags & DE_CB_ON_DESTROY;
+    igCheckbox("", &use_on_destroy);
+    if (use_on_destroy)
+        type->callbacks_flags |= DE_CB_ON_DESTROY;
+    else
+        type->callbacks_flags &=  ~DE_CB_ON_DESTROY;
+
+    igTableSetColumnIndex(6);
+    bool use_on_emplace = type->callbacks_flags & DE_CB_ON_EMPLACE;
+    igCheckbox("", &use_on_emplace);
+    if (use_on_emplace)
+        type->callbacks_flags |= DE_CB_ON_EMPLACE;
+    else
+        type->callbacks_flags &=  ~DE_CB_ON_EMPLACE;
+        */
+
+    igTableSetColumnIndex(7);
     igText("%s", type->description);
 
     return HTABLE_ACTION_NEXT;
@@ -1443,7 +1471,7 @@ void de_gui(de_ecs *r, de_entity highlight ) {
     igText("r->ref_filter_func %d\n", r->ref_filter_func);
 
     ImVec2 outer_size = {0., 0.};
-    const int columns_num = 6;
+    const int columns_num = 8;
     if (igBeginTable("components", columns_num, table_flags, outer_size, 0.)) {
 
         igTableSetupColumn("cp_id", 0, 0, 0);
@@ -1451,8 +1479,9 @@ void de_gui(de_ecs *r, de_entity highlight ) {
         igTableSetupColumn("name", 0, 0, 2);
         igTableSetupColumn("num", 0, 0, 3);
         igTableSetupColumn("initial_cap", 0, 0, 4);
-        //igTableSetupColumn("on_destroy", 0, 0, 5);
-        igTableSetupColumn("description", 0, 0, 5);
+        igTableSetupColumn("on_destroy", 0, 0, 5);
+        igTableSetupColumn("on_emplace", 0, 0, 6);
+        igTableSetupColumn("description", 0, 0, 7);
         igTableHeadersRow();
 
         struct TypeCtx ctx = {

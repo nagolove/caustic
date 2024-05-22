@@ -49,13 +49,18 @@ typedef uint32_t de_entity;
 #define DE_ENTITY_VERSION_MASK  ((uint32_t)0xFFF)   /* Mask to use to get the version out of an identifier. */
 #define DE_ENTITY_SHIFT         ((size_t)20)        /* Extent of the entity number within an identifier. */   
 
+/*#define DE_CB_ON_EMPLACE    0b0000001*/
+/*#define DE_CB_ON_DESTROY    0b0000010*/
+
 /*  de_cp_type:
     Component Type identifier information.
 */
 typedef struct de_cp_type {
     size_t      cp_id; // component unique id
     size_t      cp_sizeof; // component sizeof
-                           //
+                          
+    /*uint32_t    callbacks_flags;*/
+    void        (*on_emplace)(void *payload, de_entity e); 
     void        (*on_destroy)(void *payload, de_entity e);
     //void        (*on_create)(void *payload, de_entity e);
     // Для компонентного проводника
