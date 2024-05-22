@@ -127,7 +127,7 @@ typedef struct de_ecs {
     size_t          storages_size, storages_cap; /* size of the storages array */
     size_t          entities_size, entitities_cap;
     de_entity*      entities; /* contains all the created entities */
-    de_entity_id    available_id; /* first index in the list to recycle */
+    uint32_t        available_id; /* first index in the list to recycle */
 
     //de_cp_type      registry[DE_REGISTRY_MAX];
     //int             registry_num;

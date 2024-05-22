@@ -41,8 +41,8 @@ typedef struct de_ecs de_ecs;
 
 /* Typedef for the entity type */
 typedef uint32_t de_entity;
-typedef struct de_entity_ver { uint32_t ver; } de_entity_ver;
-typedef struct de_entity_id { uint32_t id; } de_entity_id;
+/*typedef struct de_entity_ver { uint32_t ver; } de_entity_ver;*/
+/*typedef struct de_entity_id { uint32_t id; } de_entity_id;*/
 
 /* Masks for retrieving the id and the version of an entity */
 #define DE_ENTITY_ID_MASK       ((uint32_t)0xFFFFF) /* Mask to use to get the entity number out of an identifier.*/  
@@ -80,14 +80,17 @@ extern const de_entity de_null;
 /* de_entity utilities */
 
 /* Returns the version part of the entity */
-de_entity_ver de_entity_version(de_entity e);
+uint32_t de_entity_version(de_entity e);
 
 /* Returns the id part of the entity */
-de_entity_id de_entity_identifier(de_entity e);
+uint32_t de_entity_identifier(de_entity e);
+
+#define de_entity_ver   de_entity_version
+#define de_entity_id    de_entity_identifier
 
 /* Makes a de_entity from entity_id and entity_version */
 // FIXME de_make_entity -> de_entity_make
-de_entity de_make_entity(de_entity_id id, de_entity_ver version);
+de_entity de_make_entity(uint32_t id, uint32_t version);
 
 
 /* de_ecs functions */

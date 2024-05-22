@@ -69,21 +69,21 @@ static struct de_storage* de_assure(de_ecs* r, de_cp_type cp_type);
 const de_entity de_null = (de_entity)DE_ENTITY_ID_MASK;
 
 /* Returns the version part of the entity */
-de_entity_ver de_entity_version(de_entity e) {
-    de_entity_ver ver = { .ver = e >> DE_ENTITY_SHIFT }; 
-    de_trace("de_entity_version: en %u, ver %u\n", e, ver.ver);
+uint32_t de_entity_version(de_entity e) {
+    uint32_t ver = e >> DE_ENTITY_SHIFT; 
+    de_trace("de_entity_version: en %u, ver %u\n", e, ver);
     return ver;
 }
 /* Returns the id part of the entity */
-de_entity_id de_entity_identifier(de_entity e) {
-    de_entity_id id = { .id = e & DE_ENTITY_ID_MASK }; 
-    de_trace("de_entity_identifier: en %u, id %u\n", e, id.id);
+uint32_t de_entity_identifier(de_entity e) {
+    uint32_t id = e & DE_ENTITY_ID_MASK; 
+    de_trace("de_entity_identifier: en %u, id %u\n", e, id);
     return id;
 }
 /* Makes a de_entity from entity_id and entity_version */
-de_entity de_make_entity(de_entity_id id, de_entity_ver version) {
-    de_entity e = id.id | (version.ver << DE_ENTITY_SHIFT); 
-    de_trace("de_make_entity: id %u, ver %u, e %u\n", id.id, version.ver, e);
+de_entity de_make_entity(uint32_t id, uint32_t version) {
+    de_entity e = id | (version << DE_ENTITY_SHIFT); 
+    de_trace("de_make_entity: id %u, ver %u, e %u\n", id, version, e);
     return e;
 }
 
@@ -114,8 +114,8 @@ bool de_sparse_contains(de_sparse* s, de_entity e) {
     assert(s);
     assert(e != de_null);
     de_trace("de_sparse_contains: de_sparse %p, e %u\n", s, e);
-    const de_entity_id eid = de_entity_identifier(e);
-    return (eid.id < s->sparse_size) && (s->sparse[eid.id] != de_null);
+    const uint32_t eid = de_entity_identifier(e);
+    return (eid < s->sparse_size) && (s->sparse[eid] != de_null);
     //return (eid.id < s->sparse_size) && (s->dense[s->sparse[eid.id]] == e);
 }
 
@@ -123,7 +123,7 @@ size_t de_sparse_index(de_sparse* s, de_entity e) {
     assert(s);
     assert(de_sparse_contains(s, e));
     de_trace("de_sparse_index: de_sparse %p, e %u\n", s, e);
-    return s->sparse[de_entity_identifier(e).id];
+    return s->sparse[de_entity_identifier(e)];
 }
 
 void de_sparse_emplace(de_sparse* s, de_entity e) {
@@ -131,8 +131,8 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
     assert(e != de_null);
     de_trace("de_sparse_emplace: de_sparse %p, e %u\n", s, e);
 #ifdef DE_USE_SPARSE_CAPACITY
-    const de_entity_id eid = de_entity_identifier(e);
-    if (eid.id >= s->sparse_size) { // check if we need to realloc
+    const uint32_t eid = de_entity_identifier(e);
+    if (eid >= s->sparse_size) { // check if we need to realloc
 
         // первоначальное выделение
         if (s->sparse_size == 0 && !s->sparse) {
@@ -141,7 +141,7 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
         }
 
         // TODO: Добавить проверку на максимальное значение сущности
-        const size_t new_sparse_size = eid.id + 1;
+        const size_t new_sparse_size = eid + 1;
 
         // расширение выделения
         if (new_sparse_size >= s->sparse_cap) {
@@ -167,7 +167,7 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
     }
 
     // set this eid index to the last dense index (dense_size)
-    s->sparse[eid.id] = (de_entity)s->dense_size;
+    s->sparse[eid] = (de_entity)s->dense_size;
     //trace("s->dense_size: %d\n", s->dense_size);
 
     // первоначальное выделение
@@ -220,15 +220,15 @@ size_t de_sparse_remove(de_sparse* s, de_entity e) {
 #ifdef DE_USE_SPARSE_CAPACITY
 
      // roig
-    de_entity_id eid = de_entity_identifier(e);
-    const size_t pos = s->sparse[eid.id];
+    uint32_t eid = de_entity_identifier(e);
+    const size_t pos = s->sparse[eid];
     const de_entity other = s->dense[s->dense_size - 1];
-    const de_entity_id other_eid = de_entity_identifier(other);
+    const uint32_t other_eid = de_entity_identifier(other);
 
-    s->sparse[other_eid.id] = (de_entity)pos;
+    s->sparse[other_eid] = (de_entity)pos;
     s->dense[pos] = other;
     //s->sparse[pos] = de_null;
-    s->sparse[eid.id] = de_null;
+    s->sparse[eid] = de_null;
     s->dense_size--;
     
     return pos;
@@ -546,7 +546,7 @@ de_ecs* de_ecs_make() {
     assert(r);
     r->storages = 0;
     r->storages_size = 0;
-    r->available_id.id = de_null;
+    r->available_id = de_null;
     r->entities_size = 0;
     r->entities = 0;
     //r->registry_num = 0;
@@ -596,8 +596,8 @@ static void dump_entities(de_ecs *r) {
 bool de_valid(de_ecs* r, de_entity e) {
     assert(r);
     de_trace("de_valid: ecs %p, e %u\n", r, e);
-    const de_entity_id id = de_entity_identifier(e);
-    bool ret = id.id < r->entities_size && r->entities[id.id] == e;
+    const uint32_t id = de_entity_identifier(e);
+    bool ret = id < r->entities_size && r->entities[id] == e;
     /*
      *if (!ret) {
      *    printf("de_valid: invalid\n");
@@ -621,7 +621,7 @@ inline static de_entity _de_generate_entity(de_ecs* r) {
     r->entities = realloc(r->entities, sz);
 
     // create new entity and add it to the array
-    const de_entity e = de_make_entity((de_entity_id) {(uint32_t)r->entities_size}, (de_entity_ver) { 0 });
+    const de_entity e = de_make_entity((uint32_t)r->entities_size, 0);
     r->entities[r->entities_size] = e;
     r->entities_size++;
     
@@ -630,37 +630,37 @@ inline static de_entity _de_generate_entity(de_ecs* r) {
 
 /* internal function to recycle a non used entity from the linked list */
 inline static de_entity _de_recycle_entity(de_ecs* r) {
-    assert(r->available_id.id != de_null);
+    assert(r->available_id != de_null);
     de_trace("_de_recycle_entity: ecs %p\n", r);
     // get the first available entity id
-    const de_entity_id curr_id = r->available_id;
+    const uint32_t curr_id = r->available_id;
     // retrieve the version
-    const de_entity_ver curr_ver = de_entity_version(r->entities[curr_id.id]);
+    const uint32_t curr_ver = de_entity_version(r->entities[curr_id]);
     // point the available_id to the "next" id
-    r->available_id = de_entity_identifier(r->entities[curr_id.id]);
+    r->available_id = de_entity_identifier(r->entities[curr_id]);
     // now join the id and version to create the new entity
     const de_entity recycled_e = de_make_entity(curr_id, curr_ver);
     // assign it to the entities array
-    r->entities[curr_id.id] = recycled_e;
+    r->entities[curr_id] = recycled_e;
     return recycled_e;
 }
 
 inline static void _de_release_entity(
-    de_ecs* r, de_entity e, de_entity_ver desired_version
+    de_ecs* r, de_entity e, uint32_t desired_version
 ) {
     de_trace(
         "_de_release_entity: ecs %p, e %u, desired_version %u\n",
-        r, e, desired_version.ver
+        r, e, desired_version
     );
-    const de_entity_id e_id = de_entity_identifier(e);
-    r->entities[e_id.id] = de_make_entity(r->available_id, desired_version);
+    const uint32_t e_id = de_entity_identifier(e);
+    r->entities[e_id] = de_make_entity(r->available_id, desired_version);
     r->available_id = e_id;
 }
 
 de_entity de_create(de_ecs* r) {
     assert(r);
     de_trace("de_create: ecs %p\n", r);
-    if (r->available_id.id == de_null) {
+    if (r->available_id == de_null) {
         return _de_generate_entity(r);
     } else {
         return _de_recycle_entity(r);
@@ -776,8 +776,8 @@ void de_destroy(de_ecs* r, de_entity e) {
     //de_ecs_print(r);
 
     // 2) release_entity with a desired new version
-    de_entity_ver new_version = de_entity_version(e);
-    new_version.ver++;
+    uint32_t new_version = de_entity_version(e);
+    new_version++;
     _de_release_entity(r, e, new_version);
 
     //printf("de_destroy: 3\n");
@@ -886,7 +886,7 @@ void de_each(de_ecs* r, de_function fun, void* udata) {
         return;
     }
 
-    if (r->available_id.id == de_null) {
+    if (r->available_id == de_null) {
         for (size_t i = r->entities_size; i; --i) {
             if (fun(r, r->entities[i - 1], udata)) 
                 return;
@@ -895,7 +895,7 @@ void de_each(de_ecs* r, de_function fun, void* udata) {
         for (size_t i = r->entities_size; i; --i) {
             const de_entity e = r->entities[i - 1];
             // Что за проверка de_entity_identifier()?
-            if (de_entity_identifier(e).id == (i - 1)) {
+            if (de_entity_identifier(e) == (i - 1)) {
                 if (fun(r, e, udata))
                     return;
             }
