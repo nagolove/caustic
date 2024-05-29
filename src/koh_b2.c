@@ -2,10 +2,17 @@
 
 #include "body.h"
 #include "box2d/box2d.h"
+
+#ifndef BOX2C_SENSOR_SLEEP
+#include "box2d/math_functions.h"
+#else
+#include "box2d/math_types.h"
 #include "box2d/geometry.h"
+#include "box2d/debug_draw.h"
+#endif
+
 #include "box2d/id.h"
 #include "box2d/types.h"
-#include "box2d/debug_draw.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "raylib.h"

@@ -2,17 +2,21 @@
 // vim: fdm=marker
 #pragma once
 
-#include "body.h"
+/*#include "body.h"*/
 #include "box2d/box2d.h"
-#include "box2d/color.h"
-#include "box2d/debug_draw.h"
 #include "TaskScheduler_c.h"
-#include "box2d/id.h"
+
+#ifdef BOX2C_SENSOR_SLEEP
 #include "box2d/types.h"
-#include "box2d/math_types.h"
+#include "box2d/id.h"
+/*#include "box2d/math.h"*/
+/*#include "box2d/color.h"*/
+#endif
+
 #include "contact.h"
 #include "world.h"
 #include "shape.h"
+
 #include "koh_common.h"
 #include "raylib.h"
 #include "koh.h"

@@ -13,7 +13,12 @@
 #include <assert.h>
 #include <float.h>
 #include <stdio.h>
+
+#ifndef BOX2C_SENSOR_SLEEP
+#include "box2d/math_functions.h"
+#else
 #include "box2d/math_types.h"
+#endif
 
 static inline void vec4_from_color(float vec[4], Color c) {
     assert(vec);
