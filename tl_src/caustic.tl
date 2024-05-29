@@ -636,7 +636,7 @@ end
 local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-    cmd_do("cmake . -DCMAKE_BUILD_TYPE=Debug")
+    cmd_do("cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
     cmd_do("make clean && make -j")
 end
 
@@ -924,7 +924,7 @@ dependencies = {
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
-        --git_branch = "main",
+        git_branch = "sensor_sleep", -- XXX: Когда переходить на main?
         includes = { 
             "box2c/include",
             "box2c/src",
@@ -934,8 +934,6 @@ dependencies = {
         links = { "box2d:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
-        --url = "https://github.com/nagolove/box2c.git",
-        --url = "https://github.com/nagolove/box2c.git",
         url = "https://github.com/erincatto/box2c.git",
         url_action = 'git',
     },
@@ -1353,7 +1351,7 @@ local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
         end
     end
 
-    cmd_do("git clone " .. dep.url .. " " ..dst)
+    cmd_do("git clone --depth=1" .. dep.url .. " " ..dst)
     if dep.dir then
         chdir(dep.dir)
     else
