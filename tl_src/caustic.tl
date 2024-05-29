@@ -100,6 +100,8 @@ local record Cfg
     -- Пары -Dключ=значение будут поданы компилятору
     -- Позволяет отключить DEBUG режим
     release_define: {string: string}
+    -- Дефайны препроцессора, применяемые только к отладочной сборке
+    debug_define: {string: string}
     record Codegen
         file_in: string
         file_out: string
@@ -2557,12 +2559,21 @@ function actions.compile_flags(_: Args)
         print(s)
     end
 
-    -- TODO: Пробовать загрузить конфиг, но только из текущего каталога
     for _, v in ipairs(get_ready_includes()) do
         put("-I" .. v)
     end
     put("-Isrc")
     put("-I.")
+
+    -- TODO: Предусмотреть флаги для релизной сборки
+    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    if cfgs and cfgs[0] and cfgs[0].debug_define then
+        for define, value in pairs(cfgs[0].debug_define) do
+            assert(type(define) == 'string');
+            assert(type(value) == 'string');
+            put(format("-D%s=%s", string.upper(define), string.upper(value)))
+        end
+    end
 end
 
 local function buildw_chipmunk()
@@ -3566,6 +3577,20 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
             "-DDEBUG",
             "-g3",
         }, " ")
+        if cfg.debug_define then
+            print("sub_make: appling debug defines")
+            for define, value in pairs(cfg.debug_define) do
+                assert(type(define) == 'string');
+                assert(type(value) == 'string');
+                table.insert(
+                    flags, 
+                    format(
+                        "-D%s=%s", 
+                        string.upper(define), string.upper(value)
+                    )
+                );
+            end
+        end
     else
         table.insert(flags, "-O3")
         if cfg.release_define then
@@ -3573,7 +3598,14 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
             for define, value in pairs(cfg.release_define) do
                 assert(type(define) == 'string');
                 assert(type(value) == 'string');
-                table.insert(flags, format("-D%s=%s", define, value));
+                table.insert(
+                    flags, 
+                    format(
+                        "-D%s=%s",
+                        string.upper(define),
+                        string.upper(value)
+                    )
+                );
             end
         end
     end
