@@ -149,6 +149,8 @@ local cache
 
 
 
+
+
 local function cmd_do(_cmd)
    if verbose then
       os.execute("echo `pwd`")
@@ -3566,6 +3568,14 @@ local function sub_make(_args, cfg, push_num)
          "-DDEBUG",
          "-g3",
       }, " ")
+      if cfg.debug_define then
+         print("sub_make: appling debug defines")
+         for define, value in pairs(cfg.debug_define) do
+            assert(type(define) == 'string');
+            assert(type(value) == 'string');
+            table.insert(flags, format("-D%s=%s", define, value));
+         end
+      end
    else
       table.insert(flags, "-O3")
       if cfg.release_define then
