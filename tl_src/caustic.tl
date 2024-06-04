@@ -926,7 +926,7 @@ dependencies = {
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
-        git_branch = "sensor_sleep", -- XXX: Когда переходить на main?
+        --git_branch = "main", -- XXX: Когда переходить на main?
         includes = { 
             "box2c/include",
             "box2c/src",
