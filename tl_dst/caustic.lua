@@ -926,7 +926,7 @@ dependencies = {
       copy_for_wasm = true,
       description = "box2c - плоский игровой физический движок",
       dir = "box2c",
-      git_branch = "sensor_sleep",
+
       includes = {
          "box2c/include",
          "box2c/src",
@@ -2559,12 +2559,21 @@ function actions.compile_flags(_)
       print(s)
    end
 
-
    for _, v in ipairs(get_ready_includes()) do
       put("-I" .. v)
    end
    put("-Isrc")
    put("-I.")
+
+
+   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
+   if cfgs and cfgs[0] and cfgs[0].debug_define then
+      for define, value in pairs(cfgs[0].debug_define) do
+         assert(type(define) == 'string');
+         assert(type(value) == 'string');
+         put(format("-D%s=%s", string.upper(define), string.upper(value)))
+      end
+   end
 end
 
 local function buildw_chipmunk()
@@ -3573,7 +3582,13 @@ local function sub_make(_args, cfg, push_num)
          for define, value in pairs(cfg.debug_define) do
             assert(type(define) == 'string');
             assert(type(value) == 'string');
-            table.insert(flags, format("-D%s=%s", define, value));
+            table.insert(
+            flags,
+            format(
+            "-D%s=%s",
+            string.upper(define), string.upper(value)));
+
+
          end
       end
    else
@@ -3583,7 +3598,14 @@ local function sub_make(_args, cfg, push_num)
          for define, value in pairs(cfg.release_define) do
             assert(type(define) == 'string');
             assert(type(value) == 'string');
-            table.insert(flags, format("-D%s=%s", define, value));
+            table.insert(
+            flags,
+            format(
+            "-D%s=%s",
+            string.upper(define),
+            string.upper(value)));
+
+
          end
       end
    end
