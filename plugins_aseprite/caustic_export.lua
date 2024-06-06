@@ -85,7 +85,11 @@ local spr = app.activeSprite
 
 if Sprite == nil then
    -- Show error, no sprite active.
-   local dlg = MsgDialog("Error", "No sprite is currently active. Please, open a sprite first and run again.")
+   local dlg = MsgDialog(
+        "Error",
+        "No sprite is currently active." ..
+        "Please, open a sprite first and run again."
+   )
    dlg:show()
    return 1
 end
@@ -175,8 +179,20 @@ function export_layers(output_path)
 [[return {
     -- версия формата экспорта
     caustic_aseprite_export_ver = 2, 
+$TEMPLATE$
     layers = {
 ]]
+
+    local lines = {};
+
+    table.insert(lines, format("    width = %d,", active_sprite.width))
+    table.insert(lines, format("    height = %d,", active_sprite.height))
+    table.insert(lines, format("    frames = %d,", #active_sprite.frames))
+
+    desc_code = string.gsub(
+        desc_code, "%$TEMPLATE%$",
+        table.concat(lines, "\n")
+    )
 
     local title = app.fs.fileTitle(app.activeSprite.filename) 
 
