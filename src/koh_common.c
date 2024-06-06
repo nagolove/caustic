@@ -1951,3 +1951,9 @@ bool koh_file_exist(const char *fname) {
         fclose(f);
     return ret;
 }
+
+reg_expr_match
+rgexp_match
+
+bool regex_match(const char *str, const char *pattern) {
+}

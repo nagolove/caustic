@@ -11,6 +11,7 @@
 #include "koh_metaloader.h"
 #include "koh_visual_tools.h"
 
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -252,3 +253,21 @@ Rectangle rect_by_texture(Texture2D tex);
 // склеенные строки. Нужно вызывать free()
 char *concat_iter_to_allocated_str(char **lines);
 bool koh_file_exist(const char *fname);
+
+static inline char *r_sprintf(char* buffer, const char* format, ...) {
+    assert(buffer);
+    assert(format);
+
+    va_list args1;
+    va_start(args1, format);
+    va_list args2;
+    va_copy(args2, args1);
+    va_end(args1);
+    /*vsnprintf(buf, sizeof buf, fmt, args2);*/
+    vsprintf(buffer, format, args2);
+    va_end(args2);
+
+    return buffer;
+}
+
+bool regex_match(const char *str, const char *pattern);
