@@ -207,7 +207,7 @@ struct FilesSearchSetup {
     const char  *path,          // относительный или абсолютный?
                 *regex_pattern;
     int     deep; // глубина поиска, -1 - неограниченная
-    bool    engine_pcre2;
+    /*bool    engine_pcre2;*/
 };
 
 // Возвращает указатель на статискую строчку
@@ -270,4 +270,4 @@ static inline char *r_sprintf(char* buffer, const char* format, ...) {
     return buffer;
 }
 
-bool regex_match(const char *str, const char *pattern);
+bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);

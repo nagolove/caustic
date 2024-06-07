@@ -3,7 +3,6 @@
 
 #define PCRE2_CODE_UNIT_WIDTH   8
 
-
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
@@ -11,7 +10,7 @@
 #include "koh_logger.h"
 #include "koh_rand.h"
 #include "koh_routine.h"
-#include "libsmallregex.h"
+/*#include "libsmallregex.h"*/
 #include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -36,7 +35,7 @@
 #endif
 
 enum RegexEngine {
-    RE_SMALL,
+    /*RE_SMALL,*/
     RE_PCRE2,
 };
 
@@ -51,10 +50,13 @@ struct FilesSearchResultInternal {
     } regex;
 };
 
-static struct IgWindowState wnd_state = {};
+struct CommonInternal {
+    struct IgWindowState wnd_state;
+    int cpu_count;
+} cmn_internal = {};
+
 static bool verbose_search_files_rec = false;
 static struct Common cmn;
-static int cpu_count = 0;
 
 static inline Color DebugColor2Color(cpSpaceDebugColor dc);
 static void add_chars_range(int first, int last);
@@ -528,10 +530,7 @@ static inline Color DebugColor2Color(cpSpaceDebugColor dc) {
 
 int u8_codeptlen(const char *str) {
     const char *pstr = str;
-    int len = strlen(str);
-    int totalread = 0;
-    int i = 0;
-    int cdp;
+    int len = strlen(str), totalread = 0, i = 0, cdp;
 
     do {
         int bytesread = utf8proc_iterate((utf8proc_uint8_t*)pstr, -1, &cdp);
@@ -1231,6 +1230,7 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
                 return false;
             break;
         }
+        /*
         case RE_SMALL: {
             assert(fsr->internal->regex.small);
             trace("match: regex engine small_regex\n");
@@ -1238,6 +1238,7 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
             if (found == -1)
                 return false;
         }
+        */
         default:
             trace("match: unknow regex engine\n");
             return false;
@@ -1282,10 +1283,12 @@ static void search_files_rec(
             printf("search_files_rec: regex engine pcre2\n");
             break;
         }
+       /*
         case RE_SMALL: {
             printf("search_files_rec: regex engine small_regex\n");
             break;
         }
+        */
         default: {
             printf("search_files_rec: no regex engine allocated\n");
             return;
@@ -1361,9 +1364,11 @@ __break:
             */
             break;
         }
+       /*
         case RE_SMALL: {
             break;
         }
+        */
     }
 
     closedir(dir);
@@ -1394,12 +1399,13 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
         fsr.path, fsr.regex_pattern
     );
 
-    if (setup->engine_pcre2) {
-        fsr.internal->regex_engine = RE_PCRE2;
-        if (!koh_search_files_pcre2(setup, &fsr)) {
-            trace("koh_search_files: could not create 'pcre2' regex engine\n");
-            return fsr;
-        }
+    /*if (setup->engine_pcre2) {*/
+    fsr.internal->regex_engine = RE_PCRE2;
+    if (!koh_search_files_pcre2(setup, &fsr)) {
+        trace("koh_search_files: could not create 'pcre2' regex engine\n");
+        return fsr;
+    }
+    /*
     } else {
         trace("koh_search_files: RE_SMALL is unsupported\n");
         abort();
@@ -1413,6 +1419,7 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
             return fsr;
         }
     }
+    */
 
     int deep_counter = setup->deep;
     if (setup->deep < 0)
@@ -1491,6 +1498,7 @@ bool koh_search_files_pcre2(
     return true;
 }
 
+/*
 bool koh_search_files_small(
         struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
 ) {
@@ -1512,6 +1520,7 @@ bool koh_search_files_small(
 
     return true;
 }
+*/
 
 void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
     if (!fsr)
@@ -1522,9 +1531,11 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
 
     if (fsr->internal) {
         switch (fsr->internal->regex_engine) {
+            /*
             case RE_SMALL:
                 regex_free(fsr->internal->regex.small);
                 break;
+                */
             case RE_PCRE2: {
                 pcre2_match_data **md = &fsr->internal->regex.pcre.match_data;
                 if (*md) {
@@ -1700,7 +1711,7 @@ void koh_search_files_exclude_pcre(
             0, 0, match_data, NULL
         );
 
-        if (rc < 0) {
+        if (rc > 0) {
             alive_names[alive_num] = fsr->names[i];
             alive_num++;
         } else {
@@ -1736,9 +1747,9 @@ const char *koh_extract_path(const char *fname) {
 }
 
 int koh_cpu_count() {
-    if (!cpu_count)
-        cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
-    return cpu_count;
+    if (!cmn_internal.cpu_count)
+        cmn_internal.cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    return cmn_internal.cpu_count;
 }
 
 bool koh_is_pow2(int n) {
@@ -1769,21 +1780,21 @@ void koh_window_post() {
     ImVec2 wnd_pos, wnd_size;
     igGetWindowPos(&wnd_pos);
     igGetWindowSize(&wnd_size);
-    wnd_state.wnd_pos = ImVec2_to_Vector2(wnd_pos);
-    wnd_state.wnd_size = ImVec2_to_Vector2(wnd_size);
+    cmn_internal.wnd_state.wnd_pos = ImVec2_to_Vector2(wnd_pos);
+    cmn_internal.wnd_state.wnd_size = ImVec2_to_Vector2(wnd_size);
 }
 
 const struct IgWindowState *koh_window_state() {
-    return &wnd_state;
+    return &cmn_internal.wnd_state;
 }
 
 bool koh_window_is_point_in(Vector2 point, Camera2D *cam) {
     //Camera2D _cam = cam ? *cam : (Camera2D) { .zoom = 1., };
     Rectangle wnd_rect = {
-        .x = wnd_state.wnd_pos.x,
-        .y = wnd_state.wnd_pos.y,
-        .width = wnd_state.wnd_size.x,
-        .height = wnd_state.wnd_size.y,
+        .x = cmn_internal.wnd_state.wnd_pos.x,
+        .y = cmn_internal.wnd_state.wnd_pos.y,
+        .width = cmn_internal.wnd_state.wnd_size.x,
+        .height = cmn_internal.wnd_state.wnd_size.y,
     };
     return CheckCollisionPointRec(point, wnd_rect);
 }
@@ -1791,11 +1802,11 @@ bool koh_window_is_point_in(Vector2 point, Camera2D *cam) {
 void koh_window_state_print() {
     trace(
         "koh_window_state_print: wnd_pos %s\n",
-        Vector2_tostr(wnd_state.wnd_pos)
+        Vector2_tostr(cmn_internal.wnd_state.wnd_pos)
     );
     trace(
         "koh_window_state_print: wnd_size %s\n",
-        Vector2_tostr(wnd_state.wnd_size)
+        Vector2_tostr(cmn_internal.wnd_state.wnd_size)
     );
 }
 
@@ -1919,13 +1930,15 @@ char *concat_iter_to_allocated_str(char **lines) {
     return merged;
 }
 
+/*
 static const char *engine_type2str(enum RegexEngine e) {
     switch(e) {
         case RE_PCRE2: return "RE_PCRE2";
-        case RE_SMALL: return "RE_SMALL";
+        //case RE_SMALL: return "RE_SMALL";
     }
     return NULL;
 }
+*/
 
 char *koh_files_search_setup_2str(struct FilesSearchSetup *setup) {
     static char buf[512] = {};
@@ -1936,10 +1949,9 @@ char *koh_files_search_setup_2str(struct FilesSearchSetup *setup) {
         "   path = '%s',\n"
         "   regex_pattern = '%s',\n"
         "   deep = %d,\n"
-        "   engine_pcre2 = '%s',\n"
+        /*"   engine_pcre2 = '%s',\n"*/
         "}", 
-        setup->path, setup->regex_pattern, setup->deep, 
-        engine_type2str(setup->engine_pcre2)
+        setup->path, setup->regex_pattern, setup->deep 
     );
     return buf;
 }
@@ -1952,8 +1964,46 @@ bool koh_file_exist(const char *fname) {
     return ret;
 }
 
-reg_expr_match
-rgexp_match
+bool rgexpr_match(const char *str, size_t *str_len, const char *pattern) {
+    assert(str);
+    assert(pattern);
 
-bool regex_match(const char *str, const char *pattern) {
+    pcre2_code          *r = NULL;
+    pcre2_match_data    *match_data = NULL;
+    int    errnumner = 0;
+    size_t erroffset = 0;
+    uint32_t flags = 0;
+
+    r = pcre2_compile(
+        (unsigned char*)pattern, 
+        PCRE2_ZERO_TERMINATED, flags, 
+        &errnumner, &erroffset, 
+        NULL
+    );
+
+    if (!r) {
+        printf(
+            "rgexpr_match: could not compile pattern '%s' with '%s'\n",
+            pattern, pcre_code_str(errnumner)
+        );
+        return false;
+    }
+
+    //printf("rgexpr_match: compiled\n");
+
+    match_data = pcre2_match_data_create_from_pattern(r, NULL);
+    assert(match_data);
+
+    int rc = pcre2_match(
+        r, (unsigned char*)str, str_len ? *str_len : strlen(str), 
+        0, 0, match_data, NULL
+    );
+    //printf("rc %d\n", rc);
+
+    if (match_data)
+        pcre2_match_data_free(match_data);
+    if (r)
+        pcre2_code_free(r);
+
+    return rc > 0;
 }
