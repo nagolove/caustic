@@ -1211,40 +1211,22 @@ void parse_bracketed_string(
 }
 
 static bool match(struct FilesSearchResult *fsr, const char *str) {
-    int found = -1;
+    int found;
     trace("match: str '%s'\n", str);
 
-    switch (fsr->internal->regex_engine) {
-        case RE_PCRE2: {
-            assert(fsr->internal->regex.pcre.r);
-            assert(fsr->internal->regex.pcre.match_data);
-            trace("match: regex engine pcre2\n");
-            found = pcre2_match(
-                fsr->internal->regex.pcre.r,
-                (unsigned char*)str,
-                strlen(str), 
-                0, 0, fsr->internal->regex.pcre.match_data, NULL
-            );
-            trace("match: found %d\n", found);
-            if (found < 0)
-                return false;
-            break;
-        }
-        /*
-        case RE_SMALL: {
-            assert(fsr->internal->regex.small);
-            trace("match: regex engine small_regex\n");
-            found = regex_matchp(fsr->internal->regex.small, str);
-            if (found == -1)
-                return false;
-        }
-        */
-        default:
-            trace("match: unknow regex engine\n");
-            return false;
-    }
+    assert(fsr->internal->regex_engine == RE_PCRE2);
 
-    return true;
+    assert(fsr->internal->regex.pcre.r);
+    assert(fsr->internal->regex.pcre.match_data);
+    trace("match: regex engine pcre2\n");
+    found = pcre2_match(
+        fsr->internal->regex.pcre.r,
+        (unsigned char*)str,
+        strlen(str), 
+        0, 0, fsr->internal->regex.pcre.match_data, NULL
+    );
+    trace("match: found %d\n", found);
+    return found > 0;
 }
 
 static void search_files_rec(
@@ -1343,6 +1325,11 @@ static void search_files_rec(
                     size_t size = fsr->capacity * sizeof(fsr->names[0]);
                     fsr->names = realloc(fsr->names, size);
                 }
+
+                trace(
+                    "search_files_rec: found '%s'\n",
+                    fsr->names[fsr->num]
+                );
 
                 fsr->names[fsr->num] = strdup(fname);
                 fsr->num++;
