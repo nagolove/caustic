@@ -11,7 +11,10 @@
 #include "koh_logger.h"
 #include "koh_lua_tools.h"
 #include "raylib.h"
+
+#ifndef KOH_DEP_NO_RLWR
 #include "rlwr.h"
+#endif
 
 /*
 #if __linux__ && KOH_DEP_NO_LFS
@@ -24,7 +27,10 @@ typedef struct Script {
     struct Script *next;
 } Script;
 
-static rlwr_t *rlwl;
+#ifdef KOH_DEP_RLWR
+static rlwr_t *rlwr;
+#endif
+
 static ScriptFunc *script_funcs = NULL;
 static lua_State *lua = NULL;
 static Script *scripts = NULL;
@@ -369,9 +375,12 @@ static int open_types(lua_State *lua) {
 }
 
 void sc_init(void) {
+#ifdef KOH_DEP_RLWR
     rlwl = rlwr_new();
-    lua = rlwr_state(rlwl);
+    lua = rlwr_state(rlwr);
+#else
     lua = luaL_newstate();
+#endif
     trace("sc_init: lua version %f\n", lua_version(lua));
     luaL_openlibs(lua);
 
@@ -418,8 +427,10 @@ void sc_shutdown() {
     cur = NULL;
 
     if (lua) {
-        //lua_close(lua);
-        rlwr_free(rlwl);
+        /*lua_close(lua);*/
+#ifdef KOH_DEP_RLWR
+        rlwr_free(rlwr);
+#endif
         lua = NULL;
     }
 }
