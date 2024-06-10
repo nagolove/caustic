@@ -1474,5 +1474,92 @@ void metaloader_set_fmt2_polyline(
 ) {
     if (ml->verbose)
         trace("metaloader_set_fmt2_polyline:\n");
+
+    assert(ml);
+    assert(fname_noext);
+    assert(objname);
+
+    lua_State *l = ml->lua;
+    lua_settop(l, 0);
+
+    int type;
+    type = lua_rawgeti(l, LUA_REGISTRYINDEX, ml->ref_tbl_root);
+    assert(type == LUA_TTABLE);
+
+    char obj_name[64] = {};
+    sprintf(obj_name, "%s", objname);
+    /*
+    va_list args;
+    va_start(args, obj_name_fmt);
+    vsnprintf(obj_name, sizeof(obj_name) - 1, obj_name_fmt, args);
+    va_end(args);
+    */
+
+    if (ml->verbose) 
+        trace("metaloader_set_fmt: [%s]\n", stack_dump(l));
+
+    /*
+    char *dump;
+    dump = table_dump2allocated_str(l);
+    if (dump) {
+        trace("metaloader_set_fmt: dump '%s'\n", dump);
+        free(dump);
+    }
+    trace("metaloader_set_fmt: [%s]\n", stack_dump(l));
+    */
+
+    lua_pushstring(l, fname_noext);
+    type = lua_gettable(l, -2);
+    //assert(type == LUA_TTABLE);
+    if (type != LUA_TTABLE) {
+        if (ml->verbose)
+            trace(
+                "metaloader_get_fmt: no such fname name '%s' in table, "
+                "instead type is %s\n",
+                fname_noext,
+                lua_typename(l, lua_type(l, -1))
+            );
+        lua_settop(l, 0);
+        return;
+    }
+
+    //lua_pushstring(l, fname_noext);
+    lua_pushstring(l, obj_name);
+    table_push_points_as_arr(l, points, num);
+    lua_settable(l, -3);
+
+    lua_settop(l, 0);
+    /*
+    lua_pushstring(l, obj_name);
+    type = lua_gettable(l, -2);
+    if (type != LUA_TTABLE) {
+        trace(
+            "metaloader_get_fmt: no such object '%s' in table %s",
+            obj_name, fname_noext
+        );
+        lua_settop(l, 0);
+        return;
+    }
+
+    // TODO: На вершине стека лежит таблица, все элементы которой нужно
+    // поменять на другие.
+    // Или просто заменить таблицу новой.
+
+    */
+
+    /*
+    lua_pushnil(l);
+    int top = lua_gettop(l) - 1, i = 0;
+    float values[4] = {};
+    while (lua_next(l, top)) {
+        values[i++] = lua_tonumber(l, -1);
+        lua_pop(l, 1);
+    }
+    assert(i == 4);
+    lua_settop(l, 0);
+    static Rectangle rect = {};
+    rect = rect_from_arr(values);
+    */
+
 }
 
