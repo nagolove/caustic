@@ -206,8 +206,8 @@ struct FilesSearchResult {
 struct FilesSearchSetup {
     const char  *path,          // относительный или абсолютный?
                 *regex_pattern;
-    int     deep; // глубина поиска, -1 - неограниченная
-    /*bool    engine_pcre2;*/
+    int     deep; // глубина поиска
+                  // -1 - неограниченная, 0 - без захода в подкаталоги
 };
 
 // Возвращает указатель на статискую строчку
@@ -271,3 +271,4 @@ static inline char *r_sprintf(char* buffer, const char* format, ...) {
 }
 
 bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);
+bool koh_check_fname(const char *fname);

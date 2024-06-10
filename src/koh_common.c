@@ -1229,6 +1229,34 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
     return found > 0;
 }
 
+static void check_for_realloc(struct FilesSearchResult *fsr) {
+    assert(fsr);
+    // выделить памяти если недостаточно
+    if (fsr->num + 1 == fsr->capacity) {
+        /*trace("check_for_realloc: realloc %p\n", fsr->names);*/
+        if (verbose_search_files_rec)
+            trace(
+                "check_for_realloc: realloc num %d, capacity %d\n",
+                fsr->num, fsr->capacity
+            );
+        size_t prev_size = fsr->capacity * sizeof(fsr->names[0]);
+        size_t prev_cap = fsr->capacity;
+        fsr->capacity *= 2;
+        fsr->capacity += 2;
+        size_t new_size = fsr->capacity * sizeof(fsr->names[0]);
+        fsr->names = realloc(fsr->names, new_size);
+        // записать нули в пока неиспользуемую часть памяти
+        size_t diff_size = new_size - prev_size;
+        /*
+        trace(
+            "check_for_realloc: prev_size %zu, new_size %zu diff_size %zu\n",
+            prev_size, new_size, diff_size
+        );
+        */
+        memset(fsr->names + prev_cap, 0, diff_size);
+    }
+}
+
 static void search_files_rec(
     struct FilesSearchResult *fsr, const char *path, int deep_counter
 ) {
@@ -1305,31 +1333,26 @@ static void search_files_rec(
                     trace("search_files_rec: regular %s\n", entry->d_name);
 
                 if (!match(fsr, entry->d_name))
-                    goto __break;   // XXX: Нужно идти по метке?
+                    goto __break; 
 
                 char fname[1024] = {};
-                strcat(fname, path);
-                strcat(fname, "/");
-                strcat(fname, entry->d_name);
 
-                /*trace("search_files_rec: fname %s\n", fname);*/
+                snprintf(fname, sizeof(fname), "%s/%s", path, entry->d_name);
+                /*strcat(fname, path);*/
+                /*strcat(fname, "/");*/
+                /*strcat(fname, entry->d_name);*/
 
-                if (fsr->num + 1 == fsr->capacity) {
-                    if (verbose_search_files_rec)
-                        trace(
-                            "search_files_rec: realloc num %d, capacity %d\n",
-                            fsr->num, fsr->capacity
-                        );
-                    fsr->capacity *= 2;
-                    fsr->capacity += 2;
-                    size_t size = fsr->capacity * sizeof(fsr->names[0]);
-                    fsr->names = realloc(fsr->names, size);
-                }
+                /*trace("search_files_rec: fname '%s'\n", fname);*/
 
+                check_for_realloc(fsr);
+
+                /*
+                trace("search_files_rec: fsr->num %d\n", fsr->num);
                 trace(
                     "search_files_rec: found '%s'\n",
                     fsr->names[fsr->num]
                 );
+                */
 
                 fsr->names[fsr->num] = strdup(fname);
                 fsr->num++;
@@ -1994,3 +2017,30 @@ bool rgexpr_match(const char *str, size_t *str_len, const char *pattern) {
 
     return rc > 0;
 }
+
+static const char *extensions[] = {
+    ".png",
+    ".jpg",
+    ".tga",
+    ".PNG",
+    ".JPG",
+    ".TGA",
+    NULL,
+};
+
+bool koh_check_fname(const char *fname) {
+    for (const char **ext = extensions; *ext; ext++) {
+        // printf("*ext '%s'\n", *ext);
+        char *pos = strstr(fname, *ext);
+        // printf("pos '%s'\n", pos);
+        if (pos && strlen(*ext) == strlen(pos) && strcmp(*ext, pos) == 0) {
+            //printf("found '%s'\n", *ext);
+            //printf("found '%s'\n", *line);
+            return true;
+            break;
+        }
+        
+    }
+    return false;
+}
+
