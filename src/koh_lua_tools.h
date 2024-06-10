@@ -63,3 +63,5 @@ char *table_get_print(
 // Луа стек не изменяется.
 char *table_dump2allocated_str(lua_State *l);
 void table_push_rect_as_arr(lua_State *l, Rectangle rect);
+// { x0, y0, x1, y1, x2, y2, ... }
+void table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num);

@@ -599,6 +599,23 @@ char *table_dump2allocated_str(lua_State *l) {
     return NULL;
 }
 
+void table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
+    assert(l);
+    assert(points);
+    assert(points_num >= 0);
+
+    lua_createtable(l, points_num, 0);
+
+    int j = 1;
+    for (int i = 0; i < points_num; i++) {
+        lua_pushnumber(l, points[i].x);
+        lua_rawseti(l, -2, j++);
+
+        lua_pushnumber(l, points[i].y);
+        lua_rawseti(l, -2, j++);
+    }
+}
+
 void table_push_rect_as_arr(lua_State *l, Rectangle rect) {
     assert(l);
     lua_createtable(l, 0, 0);
