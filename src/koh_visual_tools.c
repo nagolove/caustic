@@ -39,7 +39,8 @@ struct ToolPolylineInternal {
     Vector2                     *points;
     int                         points_cap, points_num;
     int                         selected_point_index;
-    bool                        drag;
+    //bool                        drag;
+    int                         drag_index;
 };
 
 struct ToolRectangleAlignedInternal {
@@ -657,7 +658,7 @@ void polyline_init(
     assert(internal->points);
 
     internal->selected_point_index = -1;
-    internal->drag = false;
+    internal->drag_index = -1;
 }
 
 static void common_trace(const char *prefix, struct ToolCommonOpts *cmn) {
@@ -780,34 +781,47 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
     assert(internal);
     Vector2 mp = mouse_with_cam(cam);
     internal->selected_point_index = -1;
-    internal->drag = false;
     bool removed = false;
-    for (int j = 0; j < internal->points_num; j++) {
-        Vector2 point = internal->points[j];
-        float radius = internal->cmn.handle_circle_radius;
-        if (CheckCollisionPointCircle(mp, point, radius)) {
-            //trace("polyline_update: j = %d\n", j);
-            internal->selected_point_index = j;
-            if (IsKeyDown(KEY_LEFT_SHIFT) && 
-                IsMouseButtonPressed(internal->cmn.mouse_button_bind)
-            ) {
-                polyline_remove(plt, j);
-                removed = true;
-                break;
-            } else {
-                if (IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
-                    internal->drag = true;
-                    internal->points[j] = mp;
+
+    bool has_drag = internal->drag_index != -1;
+    if (has_drag && IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
+        trace("polyline_update: use previous drag point\n");
+        internal->points[internal->drag_index] = mp;
+    } else {
+
+        internal->drag_index = -1;
+        // TODO: Не проверять для каждой точки, использовать какую-то 
+        // продвинутую структуру данных
+        for (int j = 0; j < internal->points_num; j++) {
+            Vector2 point = internal->points[j];
+            float radius = internal->cmn.handle_circle_radius;
+            if (CheckCollisionPointCircle(mp, point, radius)) {
+                //trace("polyline_update: j = %d\n", j);
+                internal->selected_point_index = j;
+                if (IsKeyDown(KEY_LEFT_SHIFT) && 
+                    IsMouseButtonPressed(internal->cmn.mouse_button_bind)
+                ) {
+                    polyline_remove(plt, j);
+                    removed = true;
                     break;
+                } else {
+                    if (IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
+                        //internal->drag = true;
+                        internal->drag_index = j;
+                        internal->points[j] = mp;
+                        break;
+                    }
                 }
             }
         }
+
+        if (internal->drag_index == -1 && !removed && 
+            IsMouseButtonPressed(internal->cmn.mouse_button_bind)) {
+            point_add(plt, mp, IsMouseButtonDown(KEY_LEFT_CONTROL));
+        }
+
     }
 
-    if (!internal->drag && !removed && 
-        IsMouseButtonPressed(internal->cmn.mouse_button_bind)) {
-        point_add(plt, mp, IsMouseButtonDown(KEY_LEFT_CONTROL));
-    }
 }
 
 void polyline_draw(
