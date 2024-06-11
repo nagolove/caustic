@@ -233,8 +233,9 @@ static void rectangle_handles_check(
     int points_num, Vector2 mp
 ) {
     assert(internal);
+    trace("rectangle_handles_check:\n");
     float radius = internal->cmn.handle_circle_radius;
-    //internal->corner_index = -1;
+    internal->corner_index = -1;
     for (int i = 0; i < internal->points_num; ++i) {
         if (CheckCollisionPointCircle(mp, points[i], radius)) {
             internal->corner_index = i;
@@ -536,7 +537,8 @@ void rectanglea_update(struct ToolRectangleAligned *rf, const Camera2D *cam) {
     internal->corner_index = -1;
 
     // Проверка радиуса попадания в ручку управления
-    rectanglea_handles_check(internal, points, points_num, mp);
+    //if (internal->corner_index == -1)
+        rectanglea_handles_check(internal, points, points_num, mp);
    
     /*
     if ((internal->corner_index == 1 || internal->corner_index == 3) &&
@@ -555,6 +557,7 @@ void rectanglea_update(struct ToolRectangleAligned *rf, const Camera2D *cam) {
         internal->state = S_NONE;
         //rf->exist = false;
         SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+        //internal->corner_index = -1;
     }
 
     //trace("rectanglea_update: state %s\n", state2str(internal->state));
@@ -594,6 +597,7 @@ static void rectanglea_draw_axises(
     }
 }
 
+// TODO: Кружки вращения, как добавить?
 void rectanglea_draw(
     struct ToolRectangleAligned *rf,
     const struct ToolRectangleAlignedDrawOpts *opts
@@ -725,6 +729,8 @@ static void point_add(
 ) {
     assert(plt);
     struct ToolPolylineInternal *internal = plt->internal;
+
+    // перевыделение памяти
     if (internal->points_cap == internal->points_num + 1) {
         internal->points_cap += 1;
         internal->points_cap *= 2;
@@ -746,6 +752,7 @@ static void point_add(
         internal->points[internal->points_num++] = internal->points[0];
     } else
         internal->points[internal->points_num++] = point;
+
 }
 
 static void polyline_remove(struct ToolPolyline *plt, int index) {
@@ -785,7 +792,7 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
 
     bool has_drag = internal->drag_index != -1;
     if (has_drag && IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
-        trace("polyline_update: use previous drag point\n");
+        //trace("polyline_update: use previous drag point\n");
         internal->points[internal->drag_index] = mp;
     } else {
 
@@ -822,6 +829,15 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
 
     }
 
+    plt->exist = !!internal->points_num;
+
+    if (plt->exist) {
+        plt->points = internal->points;
+        plt->points_num = internal->points_num;
+    } else {
+        plt->points_num = 0;
+        plt->points = NULL;
+    }
 }
 
 void polyline_draw(
@@ -962,8 +978,7 @@ void visual_tool_shutdown(struct VisualTool *vt) {
     sector_shutdown(&vt->t_sector);
 }
 
-/*
-static const char *mode2str(enum VisualToolMode mode) {
+const char *visual_mode2str(enum VisualToolMode mode) {
     switch (mode) {
         case VIS_TOOL_RECTANGLE: return "RECTANGLE";  
         case VIS_TOOL_RECTANGLE_ORIENTED: return "RECTANGLE_ORIENTED"; 
@@ -972,7 +987,6 @@ static const char *mode2str(enum VisualToolMode mode) {
     }
     return NULL;
 }
-// */
 
 void visual_tool_update(struct VisualTool *vt, const Camera2D *cam) {
     assert(vt);
@@ -1198,11 +1212,8 @@ void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam) {
 
     rectangle_update_verts(rf);
 
-    internal->corner_index = -1;
+    //internal->corner_index = -1;
 
-    // Проверка радиуса попадания в ручку управления
-    rectangle_handles_check(internal, rf->points, 4, mp);
-   
     /*
     if ((internal->corner_index == 1 || internal->corner_index == 3) &&
         IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
@@ -1210,6 +1221,9 @@ void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam) {
     */
 
     if (IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
+        // Проверка радиуса попадания в ручку управления
+        if (internal->corner_index == -1)
+            rectangle_handles_check(internal, rf->points, 4, mp);
 
         if (internal->state == S_NONE) {
             rectangle_set_state_by_corner_index(internal);
@@ -1220,10 +1234,11 @@ void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam) {
         internal->state = S_NONE;
         //rf->exist = false;
         SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+        internal->corner_index = -1;
     }
 
-    trace("rectangle_update: state %s\n", state2str(internal->state));
-    trace("rectangle_update: angle %f\n", rf->angle);
+    //trace("rectangle_update: state %s\n", state2str(internal->state));
+    //trace("rectangle_update: angle %f\n", rf->angle);
 }
 
 void rectangle_draw(
@@ -1240,7 +1255,6 @@ void rectangle_draw(
     DrawLineStrip(rf->points, 5, color);
     DrawCircleV(rf->center, 15, BLACK);
 
-    // TODO: Кружки вращения, как добавить?
     if (internal->corner_index == 0 || internal->corner_index == 2) {
         DrawCircleV(
             internal->corner_point,

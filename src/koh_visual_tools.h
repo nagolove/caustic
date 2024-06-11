@@ -5,6 +5,8 @@
 struct ToolPolyline {
     void    *internal;
     bool    exist;
+    Vector2 *points;    // данные только для чтения, не ссылаться на них
+    int     points_num;
 };
 
 struct ToolRectangleAligned {
@@ -179,5 +181,5 @@ void sector_draw(
     const Camera2D *cam
 );
 
-
 extern struct ToolCommonOpts visual_tool_commont_default_opts;
+const char *visual_mode2str(enum VisualToolMode mode);
