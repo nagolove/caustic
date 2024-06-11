@@ -1,6 +1,7 @@
 // vim: fdm=marker
 #include "koh_lua_tools.h"
 
+#include "koh_common.h"
 #include "koh_logger.h"
 #include "lauxlib.h"
 #include "lua.h"
@@ -607,6 +608,11 @@ void table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
     lua_createtable(l, points_num, 0);
 
     int j = 1;
+
+    char *buf = points2table_allocated(points, points_num);
+    trace("table_push_points_as_arr: %s\n", buf);
+    free(buf);
+
     for (int i = 0; i < points_num; i++) {
         lua_pushnumber(l, points[i].x);
         lua_rawseti(l, -2, j++);
