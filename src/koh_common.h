@@ -272,3 +272,5 @@ static inline char *r_sprintf(char* buffer, const char* format, ...) {
 
 bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);
 bool koh_check_fname(const char *fname);
+
+char *points2table_allocated(const Vector2 *points, int points_num);

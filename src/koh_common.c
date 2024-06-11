@@ -2044,3 +2044,14 @@ bool koh_check_fname(const char *fname) {
     return false;
 }
 
+char *points2table_allocated(const Vector2 *points, int points_num) {
+    char *buf = calloc(points_num * 32, sizeof(buf[0])), *pbuf = buf;
+    assert(buf);
+    pbuf += sprintf(pbuf, "{ ");
+    for (int i = 0; i < points_num; i++) {
+         pbuf += sprintf(pbuf, "{%f, %f},", points[i].x, points[i].y);
+    }
+    pbuf += sprintf(pbuf, "} ");
+    //trace("table_push_points_as_arr: %s\n", buf);
+    return buf;
+}
