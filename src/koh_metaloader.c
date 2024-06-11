@@ -1496,7 +1496,7 @@ void metaloader_set_fmt2_polyline(
     */
 
     if (ml->verbose) 
-        trace("metaloader_set_fmt: [%s]\n", stack_dump(l));
+        trace("metaloader_set_fmt2_polyline: [%s]\n", stack_dump(l));
 
     /*
     char *dump;
