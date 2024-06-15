@@ -24,7 +24,7 @@
 #define MAX_TRACE_GROUPS    40
 #define MAX_TRACE_LEN       120
 
-LogPoints logger;
+//LogPoints logger;
 static StrSet *traces_set = NULL;
 static bool is_trace_enabled = true;
 
@@ -102,14 +102,16 @@ void filter_free() {
 
 void logger_init(void) {
     //memset(&logger, 0, sizeof(LogPoints));
+    /*
     logger = (LogPoints) {
         .hangar = false,
         .tank_new = false,
         .check_position = true,
-        /*.tank_moment = false,*/
+        .tank_moment = false,
         .console_write = true,
         .tree_new = false,
     };
+*/
 
     log_stream = fopen(log_fname, "w");
     if (!log_stream)

@@ -220,43 +220,56 @@ void hotkey_init(HotkeyStorage *storage) {
 void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
     assert(storage);
 
-    trace_push_group("hotkey_register");
+    /*trace_push_group("hotkey_register");*/
 
     if (storage->keysnum + 1 == MAX_HOTKEYS) {
-        traceg("hotkeys limit are reached\n");
+        //traceg("hotkeys limit are reached\n");
+        trace("hotkey_register: hotkeys number limit are reached\n");
         exit(EXIT_FAILURE);
     }
 
     if (!hk.name) {
-        traceg("unnamed combination\n");
+        //traceg("unnamed combination\n");
+        trace("hotkey_register: unnamed combination\n");
         exit(EXIT_FAILURE);
     }
 
     if (!hk.data)
-        traceg("combination '%s' without custom data\n", hk.name);
+        //traceg("combination '%s' without custom data\n", hk.name);
+        trace(
+            "hotkey_register: combination '%s' without custom data\n",
+            hk.name
+        );
 
     if (!hk.groups) {
-        traceg("combination '%s' without group\n", hk.name);
+        //traceg("combination '%s' without group\n", hk.name);
+        trace("hotkey_register: combination '%s' without group\n", hk.name);
     }
 
     if (!hk.func) {
-        traceg("combination without func pointer\n");
+        //traceg("combination without func pointer\n");
+        trace("hotkey_register: combination without func pointer\n");
         exit(EXIT_FAILURE);
     }
     if (!hk.description) {
-        traceg("combination without description\n");
+        //traceg("combination without description\n");
+        trace("hotkey_register: combination without description\n");
         exit(EXIT_FAILURE);
     }
-    if (hk.combo.mode < HM_MODE_RESERVED_FIRST || 
-        hk.combo.mode > HM_MODE_RESERVED_LAST) {
-        traceg("combination without proper mode\n");
+
+    int mode = hk.combo.mode;
+    if (mode < HM_MODE_RESERVED_FIRST || mode > HM_MODE_RESERVED_LAST) {
+        //traceg("combination without proper mode\n");
+        trace("hotkey_register: combination has bad mode\n");
         exit(EXIT_FAILURE);
     }
 
     Hotkey existing = {0};
     if (hotkey_exists(storage, hk, &existing)) {
-        traceg(
-            "combination duplicated:"
+        //traceg(
+        trace(
+            "hotkey_register: "
+            "combination duplicated "
             "'%s'[%s] overlapped existing '%s'[%s]\n",
             hk.name, hk.description, 
             existing.name, existing.description
@@ -269,7 +282,7 @@ void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
     with_strings.name = strdup(hk.name);
     storage->keys[storage->keysnum++] = with_strings;
 
-    trace_pop_group();
+    //trace_pop_group();
 }
 
 void hotkey_shutdown(HotkeyStorage *storage) {

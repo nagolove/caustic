@@ -464,8 +464,10 @@ static void console_buf_write2_internal(Color color, char *s) {
     assert(s);
     strncpy(con.buf[con.i].l, s, MAX_LINE);
     con.buf[con.i].c = color;
+    /*
     if (logger.console_write)
         printf("%s\n", s);
+        */
     con.i = (con.i + 1) % con.buf_maxlen;
     con.buf_len++;
     if (con.buf_len == con.buf_maxlen) {
