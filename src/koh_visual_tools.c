@@ -40,6 +40,7 @@ struct ToolPolylineInternal {
     int                         points_cap, points_num;
     int                         selected_point_index;
     //bool                        drag;
+    bool                        moving;
     int                         drag_index;
 };
 
@@ -112,11 +113,19 @@ static Vector2 mouse_delta_with_cam(const Camera2D *cam) {
     return Vector2Scale(GetMouseDelta(), 1. / scale);
 }
 
-static Vector2 mouse_with_cam(const Camera2D *cam) {
+static Vector2 _mouse_with_cam(const Camera2D *cam, Vector2 mouse) {
     assert(cam);
     float scale = cam ? cam->zoom : 1.;
-    Vector2 mp = Vector2Subtract(GetMousePosition(), cam->offset);
+    Vector2 mp = Vector2Subtract(mouse, cam->offset);
     return Vector2Scale(mp, 1. / scale);
+}
+
+static Vector2 mouse_with_cam_delta(const Camera2D *cam) {
+    return _mouse_with_cam(cam, GetMouseDelta());
+}
+
+static Vector2 mouse_with_cam(const Camera2D *cam) {
+    return _mouse_with_cam(cam, GetMousePosition());
 }
 
 /*
@@ -706,6 +715,8 @@ void polyline_update_opts(
     cmn->handle_color_selected = new_opts->common.handle_color_selected;
     cmn->line_thick = new_opts->common.line_thick;
     cmn->mouse_button_bind = new_opts->common.mouse_button_bind;
+    cmn->snap = new_opts->common.snap;
+    cmn->snap_size = new_opts->common.snap_size;
 
     common_trace("polyline_update_opts:", cmn);
 }
@@ -781,6 +792,15 @@ static void polyline_remove(struct ToolPolyline *plt, int index) {
     );
 }
 
+static void polyline_move(struct ToolPolyline *plt, Vector2 delta) {
+    assert(plt);
+
+    trace("polyline_move: delta %s\n", Vector2_tostr(delta));
+    for (int i = 0; i < plt->points_num; i++) {
+        plt->points[i] = Vector2Add(plt->points[i], delta);
+    }
+}
+
 void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
     //trace("polyline_update\n");
     assert(plt);
@@ -791,9 +811,24 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
     bool removed = false;
 
     bool has_drag = internal->drag_index != -1;
+    Vector2 *points = internal->points;
+
+    // TODO: Доделать передвижение полилинии
+    internal->moving = false;
+
     if (has_drag && IsMouseButtonDown(internal->cmn.mouse_button_bind)) {
         //trace("polyline_update: use previous drag point\n");
-        internal->points[internal->drag_index] = mp;
+        if (internal->cmn.snap) {
+            trace("polyline_update: cmp.snap == true\n");
+            int snap_size = internal->cmn.snap_size;
+            Vector2 mp_snapped = {
+                .x = (int)mp.x % snap_size,
+                .y = (int)mp.y % snap_size,
+            };
+            points[internal->drag_index] = Vector2Subtract(mp, mp_snapped);
+        } else {
+            points[internal->drag_index] = mp;
+        }
     } else {
 
         internal->drag_index = -1;
@@ -806,6 +841,10 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
                 //trace("polyline_update: j = %d\n", j);
                 internal->selected_point_index = j;
                 if (IsKeyDown(KEY_LEFT_SHIFT) && 
+                    IsMouseButtonDown(MOUSE_BUTTON_LEFT)
+                ) {
+                    internal->moving = true;
+                } else if (IsKeyDown(KEY_LEFT_SHIFT) && 
                     IsMouseButtonPressed(internal->cmn.mouse_button_bind)
                 ) {
                     polyline_remove(plt, j);
@@ -828,6 +867,9 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
         }
 
     }
+
+    if (internal->moving)
+        polyline_move(plt, mouse_with_cam_delta(cam));
 
     plt->exist = !!internal->points_num;
 
