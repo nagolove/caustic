@@ -102,6 +102,8 @@ local record Cfg
     release_define: {string: string}
     -- Дефайны препроцессора, применяемые только к отладочной сборке
     debug_define: {string: string}
+    -- шаблоны файлов, которые исключаются из процесса сборки
+    exclude: {string}
     record Codegen
         file_in: string
         file_out: string
@@ -1068,6 +1070,7 @@ end
 -- }}}
 --]]
 
+--[[
 local function get_urls(deps: {Dependency}): {string}
     local urls = {}
     for _, dep in ipairs(deps) do
@@ -1076,6 +1079,7 @@ local function get_urls(deps: {Dependency}): {string}
     end
     return urls
 end
+--]]
 
 local function get_include_dirs(deps: {Dependency}): {string}
 
@@ -1182,6 +1186,7 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
     return ready_deps
 end
 
+--[[
 local function get_ready_links_internal(): {string}
     local links_internal = ut.merge_tables(
         gather_links(dependencies, "links_internal"),
@@ -1189,6 +1194,7 @@ local function get_ready_links_internal(): {string}
     )
     return links_internal
 end
+--]]
 
 local function get_ready_links(cfg: Cfg): {string}
     local ready_deps = get_ready_deps(cfg)
@@ -2566,7 +2572,7 @@ function actions.compile_flags(_: Args)
     put("-I.")
 
     -- TODO: Предусмотреть флаги для релизной сборки
-    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     if cfgs and cfgs[0] and cfgs[0].debug_define then
         for define, value in pairs(cfgs[0].debug_define) do
             assert(type(define) == 'string');
@@ -3541,6 +3547,13 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     -- Почему?
     cache = Cache.new(cache_name)
     local exclude = {}
+
+    if cfg.exclude then
+        for _, v in ipairs(cfg.exclude) do
+            table.insert(exclude, v)
+        end
+    end
+
     local output_dir = "."
     local objfiles: {string} = {}
 

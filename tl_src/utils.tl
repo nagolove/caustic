@@ -101,6 +101,7 @@ local function cat_file(fname: string)
 end
 
 -- TODO: {exclude} may be a map, not a array
+-- XXX: В таблице исключаемых имен могут быть части имен?
 local function filter_sources(
     pattern: string, path: string, cb: function(string), exclude: {string}
 )
@@ -117,6 +118,12 @@ local function filter_sources(
             local found = false
             for _, pat in ipairs(exclude) do
                 if string.match(file, pat) then
+                    --[[
+                    print(string.format(
+                        "filter_sources: excluded file '%s' by pattern '%s'",
+                        file, pat
+                    ))
+                    --]]
                     found = true
                     break
                 end
