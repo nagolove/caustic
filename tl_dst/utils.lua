@@ -101,6 +101,7 @@ local function cat_file(fname)
 end
 
 
+
 local function filter_sources(
    pattern, path, cb, exclude)
 
@@ -117,6 +118,12 @@ local function filter_sources(
          local found = false
          for _, pat in ipairs(exclude) do
             if string.match(file, pat) then
+
+
+
+
+
+
                found = true
                break
             end

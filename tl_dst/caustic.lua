@@ -151,6 +151,8 @@ local cache
 
 
 
+
+
 local function cmd_do(_cmd)
    if verbose then
       os.execute("echo `pwd`")
@@ -1068,14 +1070,16 @@ dependencies = {
 
 
 
-local function get_urls(deps)
-   local urls = {}
-   for _, dep in ipairs(deps) do
-      assert(type(dep.url) == 'string')
-      table.insert(urls, dep.url)
-   end
-   return urls
-end
+
+
+
+
+
+
+
+
+
+
 
 local function get_include_dirs(deps)
 
@@ -1182,13 +1186,15 @@ local function get_ready_deps(cfg)
    return ready_deps
 end
 
-local function get_ready_links_internal()
-   local links_internal = ut.merge_tables(
-   gather_links(dependencies, "links_internal"),
-   { "stdc++", "m" })
 
-   return links_internal
-end
+
+
+
+
+
+
+
+
 
 local function get_ready_links(cfg)
    local ready_deps = get_ready_deps(cfg)
@@ -2566,7 +2572,7 @@ function actions.compile_flags(_)
    put("-I.")
 
 
-   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    if cfgs and cfgs[0] and cfgs[0].debug_define then
       for define, value in pairs(cfgs[0].debug_define) do
          assert(type(define) == 'string');
@@ -3541,6 +3547,13 @@ local function sub_make(_args, cfg, push_num)
 
    cache = Cache.new(cache_name)
    local exclude = {}
+
+   if cfg.exclude then
+      for _, v in ipairs(cfg.exclude) do
+         table.insert(exclude, v)
+      end
+   end
+
    local output_dir = "."
    local objfiles = {}
 
