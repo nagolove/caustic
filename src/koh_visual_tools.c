@@ -706,10 +706,14 @@ void polyline_update_opts(
     }
 
     internal->cmn.line_color = new_opts->common.line_color;
+
+    /*
     trace(
         "polyline_update_opts: line_color %s\n",
         color2str(new_opts->common.line_color)
     );
+    */
+
     struct ToolCommonOpts *cmn = &internal->cmn;
     cmn->handle_color = new_opts->common.handle_color;
     cmn->handle_color_selected = new_opts->common.handle_color_selected;
