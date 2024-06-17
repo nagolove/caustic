@@ -801,6 +801,20 @@ dependencies = {
 
    {
       disabled = false,
+
+      description = "сетевая библиотека с гарантией доставки поверх UDP",
+      dir = "enet",
+      includes = { "enet/include" },
+
+
+
+      name = "enet",
+      url_action = "git",
+      url = "https://github.com/zpl-c/enet.git",
+   },
+
+   {
+      disabled = false,
       build = build_pcre2,
       description = "регулярные выражения с обработкой ошибок и группами захвата",
       dir = "pcre2",
