@@ -1,8 +1,11 @@
 #pragma once
 
-#include "raylib.h"
+/*
+    Originally coded by ImagicTheCat(imagicthecat@gmail.com) as Lua module.
+    https://github.com/ImagicTheCat/love-experiments.git
+*/
 
-typedef struct QTree QTree;
+#include "raylib.h"
 
 typedef struct QTreeNode {
     struct QTreeNode *nodes[4];
