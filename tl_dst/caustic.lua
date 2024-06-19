@@ -754,7 +754,7 @@ dependencies = {
       links_internal = {},
       name = "munit",
       url_action = "git",
-      url = "https://github.com/nemequ/munit",
+      url = "git@github.com:nagolove/munit.git",
    },
 
    {
