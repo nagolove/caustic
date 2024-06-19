@@ -22,8 +22,8 @@ typedef struct HTable {
 static size_t _htable_get(
     HTable *ht, const void *key, int key_len, int *value_len
 );
-static void _htable_remove(HTable *ht, int index);
-static void bucket_free(HTable *ht, int index);
+static void _htable_remove(HTable *ht, int64_t index);
+static void bucket_free(HTable *ht, int64_t index);
 static void _htable_add_uniq(HTable *ht, Bucket *bucket);
 
 _Static_assert(
@@ -36,9 +36,10 @@ _Static_assert(
     "Only 64 bit size_t supported"
 );
 
-
 static inline uint32_t get_aligned_size(uint32_t size) {
     int mod = size % 16;
+    // Написать что значит в понятном виде
+    // Выравнивание на 32?
     return size - mod + (((mod + 15) >> 4) << 4);
 }
 
@@ -104,7 +105,7 @@ void htable_extend(HTable *ht) {
     *ht = tmp;
 }
 
-static void bucket_free(HTable *ht, int index) {
+static void bucket_free(HTable *ht, int64_t index) {
     assert(ht);
     if (ht->arr[index]) {
         if (ht->on_remove)
@@ -222,7 +223,7 @@ void htable_free(HTable *ht) {
 size_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     assert(ht);
 
-    int index = ht->hash_func(key, key_len) % ht->cap;
+    int64_t index = ht->hash_func(key, key_len) % ht->cap;
     for (size_t i = 0; i < ht->cap; i++) {
         if (!ht->arr[index]) break;
         if (memcmp(get_key(ht->arr[index]), key, key_len) == 0)
@@ -271,8 +272,8 @@ HTable *htable_new(struct HTableSetup *setup) {
     return ht;
 }
 
-static void rec_shift(HTable *ht, int index, int hashi) {
-    int initial_index = index;
+static void rec_shift(HTable *ht, int64_t index, int hashi) {
+    int64_t initial_index = index;
     index = (index + 1) % ht->cap;
     for (size_t i = 0; i < ht->cap; i++) {
         if (!ht->arr[index]) {
@@ -299,7 +300,7 @@ static void rec_shift(HTable *ht, int index, int hashi) {
     }
 }
 
-void _htable_remove(HTable *ht, int remove_index) {
+void _htable_remove(HTable *ht, int64_t remove_index) {
     assert(ht);
     assert(remove_index >= 0 && remove_index < ht->cap);
 
