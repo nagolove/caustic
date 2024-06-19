@@ -19,7 +19,7 @@
 
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_types.h"
-
+/*#include "enet.h"*/
 #include "raylib.h"
 
 #ifndef M_PI
@@ -274,3 +274,4 @@ bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);
 bool koh_check_fname(const char *fname);
 
 char *points2table_allocated(const Vector2 *points, int points_num);
+const char *koh_str_gen_aA(size_t len);

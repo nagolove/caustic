@@ -34,6 +34,9 @@
 #include <execinfo.h>
 #endif
 
+/*#define ENET_IMPLEMENTATION*/
+#include "enet.h"
+
 enum RegexEngine {
     /*RE_SMALL,*/
     RE_PCRE2,
@@ -2055,3 +2058,18 @@ char *points2table_allocated(const Vector2 *points, int points_num) {
     //trace("table_push_points_as_arr: %s\n", buf);
     return buf;
 }
+
+const char *koh_str_gen_aA(size_t len) {
+    static char buf[1024 * 4];
+    char *pbuf = buf;
+    size_t buf_len = sizeof(buf) / sizeof(buf[0]);
+    assert(buf_len > len);
+
+    for (size_t i = 0; i < len; i++)
+        *pbuf++ = rand() % 2 ? 'a' : 'A' + rand() % 26;
+    
+    *pbuf = 0;
+
+    return buf;
+}
+
