@@ -1,18 +1,20 @@
 #include "koh_qtree.h"
 
-#include <stdlib.h>
-#include <stdio.h>
+#include "koh_logger.h"
+#include "raymath.h"
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "raymath.h"
-
+/*
 typedef struct QTreeQueryState {
     Rectangle r;
     float     min_size;
     QTreeIter func;
     void      *data;
 } QTreeQueryState;
+*/
 
 struct QTreeState {
     Rectangle r;
@@ -20,7 +22,7 @@ struct QTreeState {
 };
 
 void qtree_node_clear(struct QTreeNode *node) {
-    //assert(node);
+    trace("qtree_node_clear: node %p\n", node);
     if (!node)
         return;
 
@@ -34,6 +36,7 @@ void qtree_node_clear(struct QTreeNode *node) {
 }
 
 void qtree_node_split(struct QTreeNode *node) {
+    trace("qtree_node_split:\n");
     assert(node);
 
     node->nodes[0]->value =  node->value;
@@ -54,6 +57,7 @@ int qtree_node_num(struct QTreeNode *node) {
 
 bool qtree_node_canmerge(struct QTreeNode *node) {
     assert(node);
+    trace("qtree_node_canmerge:\n");
     bool has_nodes = (node->nodes[0] && qtree_node_num(node->nodes[0]) == 0) &&
                      (node->nodes[1] && qtree_node_num(node->nodes[1]) == 0) &&
                      (node->nodes[2] && qtree_node_num(node->nodes[2]) == 0) &&
@@ -98,6 +102,7 @@ static void qtree_rec_fill(
     float x, float y, float size
 ) {
     assert(node);
+    trace("qtree_rec_fill:\n");
 
     Vector2 i = qtree_intersect(
         (Rectangle) { state.r.x, state.r.y, state.r.width, state.r.height, },
@@ -132,6 +137,7 @@ static void qtree_rec_fill(
 void qtree_init(struct QTree *qt) {
     assert(qt);
     memset(qt, 0, sizeof(*qt));
+    trace("qtree_init:\n");
 }
 
 void qtree_shutdown(struct QTree *qt) {
@@ -141,9 +147,11 @@ void qtree_shutdown(struct QTree *qt) {
             qtree_node_clear(qt->root->nodes[i]);
         }
     memset(qt, 0, sizeof(*qt));
+    trace("qtree_shutdown:\n");
 }
 
 void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
+    trace("qtree_fill:\n");
     if (!qt->root) {
         qt->root = calloc(1, sizeof(*qt->root));
         qt->size = 1;
@@ -197,6 +205,7 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
 // Check if a root node is useless (3/4 children are empty).
 // return new root index or -1
 int qtree_node_canshrink(struct QTreeNode *node) {
+    trace("qtree_node_canshrink:\n");
     int index = -1, count = 0;
     if (!qtree_node_num(node))
         return index;
@@ -215,6 +224,7 @@ int qtree_node_canshrink(struct QTreeNode *node) {
 }
 
 void qtree_shrink(struct QTree *qt) {
+    trace("qtree_shrink:\n");
     assert(qt);
     assert(qt->root);
 
@@ -236,8 +246,9 @@ void qtree_shrink(struct QTree *qt) {
 }
 
 static void qtree_query_rec(
-    QTreeQueryState state, QTreeNode *node, float x, float y, float size
+    struct QTreeQuery state, QTreeNode *node, float x, float y, float size
 ) {
+    trace("qtree_query_rec:\n");
     // view check
     Vector2 i = qtree_intersect(state.r, (Rectangle) { x, y, size, size });
     if (i.x <= 0 || i.y <= 0)
@@ -245,7 +256,9 @@ static void qtree_query_rec(
     if (size < state.min_size)
         return;
 
-    state.func(node, (Vector2) { x, y }, size, state.data);
+    if (!state.func(node, (Vector2) { x, y }, size, state.data))
+        return;
+
     // recursion
     if (qtree_node_num(node) > 0) {
         int hsize = size / 2.;
@@ -256,14 +269,14 @@ static void qtree_query_rec(
     }
 }
 
-void qtree_query(
-    struct QTree *qt, Rectangle r, float min_node_size, QTreeIter func
-) {
+void qtree_query(struct QTree *qt, struct QTreeQuery q) {
     assert(qt);
-    assert(min_node_size >= 0);
-    assert(func);
+    assert(q.min_size >= 0);
+    assert(q.func);
 
+    trace("qtree_query:\n");
     if (qt->root) {
+        qtree_query_rec(q, qt->root, qt->r.x, qt->r.y, qt->size);
     }
 }
 
