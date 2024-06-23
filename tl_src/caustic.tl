@@ -680,10 +680,6 @@ local function update_box2c(dep: Dependency)
 end
 
 local function defines_luafun(_: Dependency): {string}
-    -- XXX: Пустая строка приводит к такой ошибке компилятора
-    --<command-line>: error: macro names must be identifiers                                         /
-    --return { "" }
-    return {}
 end
 
 local function lualibrary_install_luafun(
@@ -1588,6 +1584,7 @@ function Toposorter:sort(): {Node}
 end
 
 local record Actions
+    stage: function(Args)
     --anim_convert: function(Args)
     build: function(Args)
     compile_flags: function(Args)
@@ -1648,12 +1645,25 @@ local record ParserSetup
     summary: string
     options: {string}
     flags: {{string}}
-    arguments: {{string}}
+    arguments: {{string|integer}}
 end
 
 -- TODO: комментарии на русском?
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    stage = {
+        options = { "-n --name", },
+        summary = [[Work with stages.
+    list - get list of all avaible stages
+    new - create header and source from template
+    copy - copy stage from other project here]],
+        arguments = { 
+            { "new", 1, },
+            { "copy", 1, },
+            { "list", 1, },
+        },
+    },
     luainit = {
         summary = "create 'assets' directory and copy there lua libraries",
         --options = { "-n --name", },
@@ -1944,6 +1954,12 @@ local enum MakeAction
 end
 
 local record Args
+    -- {{{
+    stage: boolean
+    new: string
+    list: string
+    copy: string
+
     cpp: string
     nocodegen: string
     release: string
@@ -1957,6 +1973,27 @@ local record Args
     make_type: MakeAction
     full: string
     flags: {string}
+    -- }}}
+end
+
+local function stage_new(_: string) 
+    -- Составить путь назначения
+    -- Составить имена файлов источника
+
+    -- Проверить наличие файлов с именем источника в пути назначения.
+    -- Если такие есть, то переименовать их в bla_bla_bla.h.bak
+
+    -- Скопировать файлы шаблонной сцены
+    -- Сделать замену по $PREFIX$ на имя
+end
+
+function actions.stage(_args: Args)
+    print("actions.stage")
+
+    -- TODO: Проверить, что пользователь находится в каталоге с проектом
+    if _args.new == "new" and type(_args.name) == "string" then
+        stage_new(_args.name)
+    end
 end
 
 function actions.rmdirs(_args: Args)
@@ -3509,8 +3546,12 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
     for _, dep in ipairs(ready_deps) do
         table.insert(flags, format("-DKOH_%s", dep.name:upper()))
         if dep.custom_defines then
-            for define in ipairs(dep.custom_defines()) do
-                table.insert(flags, format("-D%s", define))
+            -- Функция может ничего не вернуть(вернуть nil)
+            local defines = dep.custom_defines()
+            if defines then
+                for define in ipairs(defines) do
+                    table.insert(flags, format("-D%s", define))
+                end
             end
         end
     end
@@ -3876,6 +3917,12 @@ local function do_parser_setup(
     parser: argparse.Parser, setup: {string:ParserSetup}
 )
     for cmd_name, setup_tbl in pairs(setup) do
+
+        --if  not setup_tbl.summary and
+            --not setup_tbl.options and
+            --not setup_tbl.flags and
+            --not setup_tbl.arguments then
+
         local p = parser:command(cmd_name)
         if setup_tbl.summary then
             p:summary(setup_tbl.summary)
@@ -3895,12 +3942,26 @@ local function do_parser_setup(
         if setup_tbl.arguments then
             for _, argument_tbl in ipairs(setup_tbl.arguments) do
                 assert(type(argument_tbl[1]) == "string")
-                assert(type(argument_tbl[2]) == "string")
-                p:argument(argument_tbl[1]):args(argument_tbl[2])
+                assert(type(argument_tbl[2]) == "string" or
+                       type(argument_tbl[2]) == "number")
+                p:argument(argument_tbl[1] as string):args(argument_tbl[2])
             end
         end
     end
 end
+
+--[[
+-- TODO: Система обработки сцен
+-- Создаем основной парсер
+local parser = argparse("example", "Пример использования вложенных команд с argparse")
+
+local list_cmd = parser:command("list", "Вывести список")
+list_cmd:argument("new"):args("?")
+list_cmd:option("-n --name")
+
+list_cmd:argument("move"):args("?")
+list_cmd:argument("copy"):args("?")
+--]]
 
 local function main()
     local parser = argparse()
@@ -3938,8 +3999,10 @@ local function main()
             print("CAUSTIC_PATH", path_caustic)
         end
 
+        print("_args", inspect(_args))
         for k, v in pairs(_args) do
             local can_call = type(v) == 'boolean' and v == true 
+            print("k, v", k, v)
             if actions[k as ActionsEnum] and can_call then
                 actions[k as ActionsEnum](_args as Args)
                 has_command = true
@@ -3948,6 +4011,7 @@ local function main()
     end
 
     if not has_command then
+        print("not has_command")
         actions.make(_args as Args)
     end
 end
