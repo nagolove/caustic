@@ -21,8 +21,8 @@ local record argparse
 		get_usage: function(self: Parser): string
 		get_help: function(self: Parser): string
 
-		option: function(self: Parser, name: string, description: string, default: string, convert: function | {function}, args: {string}, count: number | string): Option
-		option: function(self: Parser, name: string, description: string, default: string, convert: {string:string}, args: {string}, count: number | string): Option
+		option: function(self: Parser, name: string, description: string, default: string, convert: function | {function}, args: {string}, count: integer | string): Option
+		option: function(self: Parser, name: string, description: string, default: string, convert: {string:string}, args: {string}, count: integer | string): Option
 
 		require_command: function(self: Parser, require_command: boolean): Parser
 		command_target: function(self: Parser, command_target: string): Parser
@@ -51,7 +51,7 @@ local record argparse
 		convert: function(self: Argument, convert: function | {function}): Argument
 		convert: function(self: Argument, convert: {string:string}): Argument
 
-		args: function(self: Argument, args: string | number): Argument
+		args: function(self: Argument, args: string | integer): Argument
 
 		action: function(self: Argument, cb: ActionCallback)
 	end
@@ -62,7 +62,7 @@ local record argparse
 
 		argname: function(self: Option, argname: string | {string}): Option
 
-		count: function(self: Option, count: number | string): Option
+		count: function(self: Option, count: integer | string): Option
 
 		choices: function(self: Option, {string}): Option
 
@@ -72,7 +72,7 @@ local record argparse
 
 		target: function(self: Option, target: string): Option
 
-		args: function(self: Option, args: string|number): Option
+		args: function(self: Option, args: string|integer): Option
 
 		action: function(self: Option, cb: ActionCallback)
 	end
