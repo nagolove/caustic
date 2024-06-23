@@ -5,6 +5,10 @@ return {
         },
         artifact = nil,
         src = 'src',
+        exclude = {
+            "stage_template.h",
+            "stage_template.c",
+        }
     },
 }
 
