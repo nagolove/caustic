@@ -680,10 +680,6 @@ local function update_box2c(dep)
 end
 
 local function defines_luafun(_)
-
-
-
-   return {}
 end
 
 local function lualibrary_install_luafun(
@@ -1652,8 +1648,22 @@ end
 
 
 
+
 local parser_setup = {
 
+
+   stage = {
+      options = { "-n --name" },
+      summary = [[Work with stages.
+    list - get list of all avaible stages
+    new - create header and source from template
+    copy - copy stage from other project here]],
+      arguments = {
+         { "new", 1 },
+         { "copy", 1 },
+         { "list", 1 },
+      },
+   },
    luainit = {
       summary = "create 'assets' directory and copy there lua libraries",
 
@@ -1958,6 +1968,33 @@ end
 
 
 
+
+
+
+
+
+
+
+
+local function stage_new(_)
+
+
+
+
+
+
+
+
+end
+
+function actions.stage(_args)
+   print("actions.stage")
+
+
+   if _args.new == "new" and type(_args.name) == "string" then
+      stage_new(_args.name)
+   end
+end
 
 function actions.rmdirs(_args)
    for _, dep in ipairs(dependencies) do
@@ -3509,8 +3546,12 @@ local function get_ready_deps_defines(cfg)
    for _, dep in ipairs(ready_deps) do
       table.insert(flags, format("-DKOH_%s", dep.name:upper()))
       if dep.custom_defines then
-         for define in ipairs(dep.custom_defines()) do
-            table.insert(flags, format("-D%s", define))
+
+         local defines = dep.custom_defines()
+         if defines then
+            for define in ipairs(defines) do
+               table.insert(flags, format("-D%s", define))
+            end
          end
       end
    end
@@ -3876,6 +3917,12 @@ local function do_parser_setup(
    parser, setup)
 
    for cmd_name, setup_tbl in pairs(setup) do
+
+
+
+
+
+
       local p = parser:command(cmd_name)
       if setup_tbl.summary then
          p:summary(setup_tbl.summary)
@@ -3895,12 +3942,26 @@ local function do_parser_setup(
       if setup_tbl.arguments then
          for _, argument_tbl in ipairs(setup_tbl.arguments) do
             assert(type(argument_tbl[1]) == "string")
-            assert(type(argument_tbl[2]) == "string")
+            assert(type(argument_tbl[2]) == "string" or
+            type(argument_tbl[2]) == "number")
             p:argument(argument_tbl[1]):args(argument_tbl[2])
          end
       end
    end
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function main()
    local parser = argparse()
@@ -3938,8 +3999,10 @@ local function main()
          print("CAUSTIC_PATH", path_caustic)
       end
 
+      print("_args", inspect(_args))
       for k, v in pairs(_args) do
          local can_call = type(v) == 'boolean' and v == true
+         print("k, v", k, v)
          if actions[k] and can_call then
             actions[k](_args)
             has_command = true
@@ -3948,6 +4011,7 @@ local function main()
    end
 
    if not has_command then
+      print("not has_command")
       actions.make(_args)
    end
 end
