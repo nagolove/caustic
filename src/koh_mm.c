@@ -7,11 +7,11 @@
 struct MMArenaOpts mm_arena_opts_default = {
     .block_sz = 0,
     .initial_capacity = 1000,
-    .threshold1 = 2000,
+    .threshold1 = 1000,
     .mult1 = 1.5,
-    .threshold2 = 2000,
+    .threshold2 = 10000,
     .mult2 = 1.5,
-    .threshold3 = 2000,
+    .threshold3 = 100000,
     .mult3 = 1.5,
 };
 
@@ -59,6 +59,9 @@ void mm_arena_shutdown(MMArena *mm) {
 void *mm_arena_alloc(MMArena *mm) {
     assert(mm);
     
+    // TODO: Проверить указатель на 
+    //mm->arena >= ptr >= mm->arena + mm->cap * mm->blocks_allocated
+
     if (mm->num_a + 1 == mm->cap) {
         // realloc here please
     }
@@ -75,6 +78,12 @@ void *mm_arena_alloc(MMArena *mm) {
 void mm_arena_free(MMArena *mm, void *ptr) {
     assert(mm);
     assert(ptr);
+
+    // TODO: Проверить указатель на 
+    //mm->arena >= ptr >= mm->arena + mm->cap * mm->blocks_allocated
+    
+    // TODO: Проверить указатель на гранулярность блок
+    // (ptr - mm->arena) % mm->opts.block_sz == 0
 
     mm->blocks_free[mm->num_f++] = ptr;
 }

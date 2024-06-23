@@ -7,7 +7,7 @@
  */
 
 struct MMArenaOpts {
-    // Начальный запас блоков, размер блоков
+    // Начальный запас блоков, размер блока
     size_t initial_capacity, block_sz;
     // Порог количества элементов, после которого будет вызов realloc()
     size_t threshold1, threshold2, threshold3;
@@ -21,7 +21,8 @@ typedef struct MMArena {
                        num_a, // количество выделенных
                        num_f; // количество свободных
     struct MMArenaOpts opts;
-    void               **blocks_allocated, **blocks_free;
+    void               **blocks_allocated, //
+                       **blocks_free;
 } MMArena;
 
 extern struct MMArenaOpts mm_arena_opts_default;
