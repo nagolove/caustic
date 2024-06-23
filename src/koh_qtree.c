@@ -1,20 +1,12 @@
 #include "koh_qtree.h"
 
+#include "koh_common.h"
 #include "koh_logger.h"
 #include "raymath.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/*
-typedef struct QTreeQueryState {
-    Rectangle r;
-    float     min_size;
-    QTreeIter func;
-    void      *data;
-} QTreeQueryState;
-*/
 
 struct QTreeState {
     Rectangle r;
@@ -245,10 +237,35 @@ void qtree_shrink(struct QTree *qt) {
     }
 }
 
+static const char *qtree_query2str(struct QTreeQuery q) {
+
+    /*
+    Rectangle    r;
+    float        min_size;
+    QTreeIter    func;
+    void         *data;
+    */
+
+    static char buf[1024] = {}, *pbuf = buf;
+    pbuf += sprintf(pbuf, "{ depth = %d,\n", q.depth);
+    pbuf += sprintf(pbuf, "  r = %s,\n", rect2str(q.r));
+    pbuf += sprintf(pbuf, "  min_size = %f,\n", q.min_size);
+    pbuf += sprintf(pbuf, "  func = %p,\n", q.func);
+    pbuf += sprintf(pbuf, "  data = %p, }\n", q.data);
+
+    trace("qtree_query2str: buf '%s'\n", buf);
+    abort();
+
+    return buf;
+}
+
+
 static void qtree_query_rec(
     struct QTreeQuery state, QTreeNode *node, float x, float y, float size
 ) {
-    trace("qtree_query_rec:\n");
+    trace("qtree_query_rec: %s\n", qtree_query2str(state));
+    state.depth++;
+
     // view check
     Vector2 i = qtree_intersect(state.r, (Rectangle) { x, y, size, size });
     if (i.x <= 0 || i.y <= 0)
@@ -274,8 +291,9 @@ void qtree_query(struct QTree *qt, struct QTreeQuery q) {
     assert(q.min_size >= 0);
     assert(q.func);
 
-    trace("qtree_query:\n");
+    //trace("qtree_query:\n");
     if (qt->root) {
+        q.depth = 0;
         qtree_query_rec(q, qt->root, qt->r.x, qt->r.y, qt->size);
     }
 }
