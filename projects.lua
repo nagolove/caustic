@@ -5,4 +5,5 @@
 return {
     "/home/nagolove/koh-async-loader",
     "/home/nagolove/koh-t80",
+    "/home/nagolove/koh-svg",
 }
