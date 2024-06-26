@@ -1,11 +1,13 @@
 #include "koh_resource.h"
 
+#include <stdatomic.h>
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "raylib.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <threads.h>
 
 Resource *res_add(
     Resource *res_list, 
@@ -137,5 +139,56 @@ void res_font_load2(
 void res_shader_load2(
     Resource *res_list, Shader **dest, const char *vertex_fname
 ) {
+}
+
+enum AsyncLoaderState {
+    ALS_TERMINATE,  // поток обязан завершить работу
+    ALS_WORK,       // потом ждет данных для загрузки
+};
+
+struct ResAsyncLoader {
+    thrd_t                         thread_worker;
+    _Atomic(enum AsyncLoaderState) state;
+};
+
+int worker_loader(void *arg) {
+    ResAsyncLoader *loader = arg;
+
+    while (true) {
+        enum AsyncLoaderState state = atomic_load(&loader->state);
+        switch (state) {
+            case ALS_TERMINATE:
+                return 0;
+                break;
+            case ALS_WORK:
+                break;
+        }
+    }
+
+    return 0;
+}
+
+ResAsyncLoader *res_async_loader_new(ResAsyncLoaderOpts *opts) {
+    ResAsyncLoader *al = calloc(1, sizeof(*al));
+    assert(al);
+
+    thrd_create(&al->thread_worker, worker_loader, al);
+
+    return al;
+}
+
+void res_async_loader_free(ResAsyncLoader *al) {
+    assert(al);
+    free(al);
+}
+
+// Асинхронная загрузка. Сразу возвращает управление. Только загружает битмап
+// в память.
+Texture2D res_tex_load_async(
+    ResAsyncLoader *al, Res *res_list, const char *fname
+);
+// Вызывает из основного потока, где работает OpenGL. Копирует данные битмапа
+// в память.
+void res_async_loader_pump(ResAsyncLoader *al, Res *res_list) {
 }
 

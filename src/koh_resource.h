@@ -3,6 +3,7 @@
 #include "raylib.h"
 
 enum ResourceType {
+    RT_LIST_ROOT,
     RT_TEXTURE,
     RT_TEXTURE_RT,
     RT_FONT,
@@ -28,9 +29,38 @@ RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h);
 void res_reload_all(Resource *res_list);
 void res_unload_all(Resource *res_list);
 
+// Добавить ресурс в список
 Resource *res_add(
     Resource *res_list, 
     enum ResourceType type,
-    const void *data, int data_size,
+    // копируется в выделенную внутри память
+    const void *data, int data_size,        
+    // копируется в выделенную внутри память
     const void *source_data, int source_size
 );
+
+
+typedef struct ResAsyncLoader ResAsyncLoader;
+typedef struct ResAsyncLoaderOpts ResAsyncLoaderOpts;
+
+ResAsyncLoader *res_async_loader_new(ResAsyncLoaderOpts *opts);
+void res_async_loader_free(ResAsyncLoader *al);
+
+// Заголовок структуры ресурса, данные хранятся за ним
+typedef struct Res {
+    struct Resource     *next;
+    enum ResourceType   type;
+} Res;
+
+// Асинхронная загрузка. 
+// Сразу возвращает управление. 
+// Только загружает битмап в память.
+Texture2D res_tex_load_async(
+    ResAsyncLoader *al, Res *res_list, const char *fname
+);
+
+// Вызывает из основного потока, где работает OpenGL. Копирует данные битмапа
+// в память.
+void res_async_loader_pump(ResAsyncLoader *al, Res *res_list);
+
+
