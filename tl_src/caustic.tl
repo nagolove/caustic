@@ -714,6 +714,15 @@ local function lualibrary_install_luafun(
 
 end
 
+local function build_resvg(_: Dependency)
+    print('build_resvg')
+    ut.push_current_dir()
+    cmd_do("cargo build --release")
+    lfs.chdir("crates/c-api")
+    cmd_do("cargo build --release")
+    ut.pop_dir()
+end
+
 -- Любые сборки которые попадают в сеть должны быть без отладочной 
 -- информации, с максимальной оптимизацией. В целях безопасности
 dependencies = {
@@ -738,6 +747,43 @@ dependencies = {
         url_action = "git",
         url = "https://github.com/luafun/luafun.git",
     },
+
+    {
+        disabled = false,
+        build = build_with_cmake,
+        description = "svg parsing library",
+        dir = "nanosvg",
+        includes = { 
+            "nanosvg",
+        },
+        libdirs = { "nanosvg/src" },
+        links = { "nanosvg", },
+        links_internal = {},
+        name = "nanosvg",
+        url_action = "git",
+        url = "https://github.com/memononen/nanosvg.git",
+    },
+
+    {
+        disabled = false,
+        build = build_resvg,
+        description = "svg rendering library",
+        dir = "resvg",
+        includes = { 
+            --"resvg" 
+            "resvg/crates/c-api"
+        },
+        libdirs = { 
+            --"resvg" 
+            "resvg/target/release"
+        },
+        links = { "resvg", },
+        links_internal = {},
+        name = "resvg",
+        url_action = "git",
+        url = "https://github.com/RazrFalcon/resvg.git",
+    },
+
 
     {
         disabled = false,
@@ -1584,6 +1630,8 @@ function Toposorter:sort(): {Node}
 end
 
 local record Actions
+    -- {{{
+    project: function(Args)
     stage: function(Args)
     --anim_convert: function(Args)
     build: function(Args)
@@ -1614,9 +1662,13 @@ local record Actions
     --updates: function(Args)
     update: function(Args)
     rmdirs: function(Args)
+    -- }}}
 end
 
 local enum ActionsEnum
+    -- {{{
+    "stage"
+    "project"
     "build"
     "build_smart"
     "compile_flags"
@@ -1639,6 +1691,7 @@ local enum ActionsEnum
     "verbose"
     --"updates"
     --"wbuild"
+    -- }}}
 end
 
 local record ParserSetup
@@ -1985,6 +2038,10 @@ local function stage_new(_: string)
 
     -- Скопировать файлы шаблонной сцены
     -- Сделать замену по $PREFIX$ на имя
+end
+
+function actions.project(_args: Args)
+    print("actions.project");
 end
 
 function actions.stage(_args: Args)
