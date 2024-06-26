@@ -714,6 +714,15 @@ local function lualibrary_install_luafun(
 
 end
 
+local function build_resvg(_)
+   print('build_resvg')
+   ut.push_current_dir()
+   cmd_do("cargo build --release")
+   lfs.chdir("crates/c-api")
+   cmd_do("cargo build --release")
+   ut.pop_dir()
+end
+
 
 
 dependencies = {
@@ -738,6 +747,43 @@ dependencies = {
       url_action = "git",
       url = "https://github.com/luafun/luafun.git",
    },
+
+   {
+      disabled = false,
+      build = build_with_cmake,
+      description = "svg parsing library",
+      dir = "nanosvg",
+      includes = {
+         "nanosvg",
+      },
+      libdirs = { "nanosvg/src" },
+      links = { "nanosvg" },
+      links_internal = {},
+      name = "nanosvg",
+      url_action = "git",
+      url = "https://github.com/memononen/nanosvg.git",
+   },
+
+   {
+      disabled = false,
+      build = build_resvg,
+      description = "svg rendering library",
+      dir = "resvg",
+      includes = {
+
+         "resvg/crates/c-api",
+      },
+      libdirs = {
+
+         "resvg/target/release",
+      },
+      links = { "resvg" },
+      links_internal = {},
+      name = "resvg",
+      url_action = "git",
+      url = "https://github.com/RazrFalcon/resvg.git",
+   },
+
 
    {
       disabled = false,
@@ -1649,6 +1695,13 @@ end
 
 
 
+
+
+
+
+
+
+
 local parser_setup = {
 
 
@@ -1985,6 +2038,10 @@ local function stage_new(_)
 
 
 
+end
+
+function actions.project(_args)
+   print("actions.project");
 end
 
 function actions.stage(_args)
