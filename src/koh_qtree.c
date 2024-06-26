@@ -25,6 +25,7 @@ void qtree_node_clear(struct QTreeNode *node) {
         if (node->nodes[i])
             free(node->nodes[i]);
     }
+    memset(node, 0, sizeof(*node));
 }
 
 void qtree_node_split(struct QTreeNode *node) {
@@ -47,8 +48,12 @@ int qtree_node_num(struct QTreeNode *node) {
         !!node->nodes[3];
 }
 
+// TODO: Сделать слияние опциональным
 bool qtree_node_canmerge(struct QTreeNode *node) {
     assert(node);
+
+    return false;
+
     trace("qtree_node_canmerge:\n");
     bool has_nodes = (node->nodes[0] && qtree_node_num(node->nodes[0]) == 0) &&
                      (node->nodes[1] && qtree_node_num(node->nodes[1]) == 0) &&
@@ -83,10 +88,20 @@ static float max(float a, float b) {
 }
 
 static Vector2 qtree_intersect(Rectangle r1, Rectangle r2) {
+    trace("qtree_intersect: %s | %s\n", rect2str(r1), rect2str(r2));
     return (Vector2) {
         .x = min(r1.x + r1.width, r2.x + r2.width) - max(r1.x, r2.x),
         .y = min(r1.y + r1.height, r2.y + r2.height) - max(r1.y, r2.y), 
     };
+}
+
+static const char *state2str(struct QTreeState s) {
+  static char buf[128] = {};
+  sprintf(
+    buf, "{ r = %s, value = %p }",
+    rect2str(s.r), s.value
+  );
+  return buf;
 }
 
 static void qtree_rec_fill(
@@ -94,19 +109,26 @@ static void qtree_rec_fill(
     float x, float y, float size
 ) {
     assert(node);
-    trace("qtree_rec_fill:\n");
+    trace(
+        "qtree_rec_fill: state %s, x %f, y %f, size %f\n",
+        state2str(state), x, y, size
+    );
 
     Vector2 i = qtree_intersect(
-        (Rectangle) { state.r.x, state.r.y, state.r.width, state.r.height, },
+        //(Rectangle) { state.r.x, state.r.y, state.r.width, state.r.height, },
+        state.r,
         (Rectangle) { x, y, size, size, }
     );
 
+    // no intersection
     if (i.x <= 0. || i.y <= 0.)
         return;
 
     // TODO: Использовать сравнения разности с эпсилон для чисел с 
     // плавающией запятой
-    if (i.x == size && i.y == size) {
+    if (i.x - size <= FLT_EPSILON && 
+        i.y - size <= FLT_EPSILON) {
+        // full
         qtree_node_clear(node);
         node->value = state.value;
     } else {
@@ -114,9 +136,9 @@ static void qtree_rec_fill(
             qtree_node_split(node);
         float hsize = size / 2.;
         qtree_rec_fill(qt, state, node->nodes[0], x, y, hsize);
-        qtree_rec_fill(qt, state, node->nodes[1], x, y, hsize);
-        qtree_rec_fill(qt, state, node->nodes[2], x, y, hsize);
-        qtree_rec_fill(qt, state, node->nodes[3], x, y, hsize);
+        qtree_rec_fill(qt, state, node->nodes[1], x + hsize, y, hsize);
+        qtree_rec_fill(qt, state, node->nodes[2], x, y + hsize, hsize);
+        qtree_rec_fill(qt, state, node->nodes[3], x + hsize, y + hsize, hsize);
 
         if (qtree_node_canmerge(node)) {
             void *value = node[0].value;
@@ -144,7 +166,9 @@ void qtree_shutdown(struct QTree *qt) {
 
 void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
     trace("qtree_fill:\n");
+
     if (!qt->root) {
+        trace("qtree_fill: allocating root\n");
         qt->root = calloc(1, sizeof(*qt->root));
         qt->size = 1;
         qt->r.x = r.x;
@@ -156,8 +180,14 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
         r, (Rectangle) { qt->r.x, qt->r.y, qt->size, qt->size }
     );
     while (i.x < r.width || i.y < r.height) { // no intersection
-        int quadrant = 1;
-        float sx = 0, sy = 0; // shifts
+
+        trace(
+            "qtree_fill: iw %f, ih %f, w %f, h %f\n",
+            i.x, i.y, r.width, r.height
+        );
+
+        int quadrant = 0;
+        float sx = 0., sy = 0.; // shifts
 
         // expand left/right
         if (r.x < qt->r.x) {
@@ -185,7 +215,7 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
 
         // next
         i = qtree_intersect(
-                r, (Rectangle) { qt->r.x, qt->r.y, qt->size, qt->size }
+            r, (Rectangle) { qt->r.x, qt->r.y, qt->size, qt->size }
         );
     }
 
@@ -253,8 +283,8 @@ static const char *qtree_query2str(struct QTreeQuery q) {
     pbuf += sprintf(pbuf, "  func = %p,\n", q.func);
     pbuf += sprintf(pbuf, "  data = %p, }\n", q.data);
 
-    trace("qtree_query2str: buf '%s'\n", buf);
-    abort();
+    /*trace("qtree_query2str: buf '%s'\n", buf);*/
+    /*abort();*/
 
     return buf;
 }
@@ -263,7 +293,7 @@ static const char *qtree_query2str(struct QTreeQuery q) {
 static void qtree_query_rec(
     struct QTreeQuery state, QTreeNode *node, float x, float y, float size
 ) {
-    trace("qtree_query_rec: %s\n", qtree_query2str(state));
+    //trace("qtree_query_rec: %s\n", qtree_query2str(state));
     state.depth++;
 
     // view check
