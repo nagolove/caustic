@@ -190,25 +190,26 @@ void koh_term_color_reset();
    Разбирает строчку вида " [5 6]    [ 1  2][0  3 ] [ 7 8 ]"
    Не больше 128 пробелов между цифрами.
    Возвращает количество найденных пар и два указателя на массивы с первыми 
-   числами и вторыми числами.
+   числами и вторыми числами. 
+   Память по указателям first и seconf требует освобождения.
 */
 void parse_bracketed_string(
     const char *str, int **first, int **second, int *len
 );
 
-struct FilesSearchResult {
+typedef struct FilesSearchResult {
     struct FilesSearchResultInternal    *internal;
     char                                *path, *regex_pattern;
     char                                **names;
     int                                 num, capacity;
-};
+} FilesSearchResult;
 
-struct FilesSearchSetup {
+typedef struct FilesSearchSetup {
     const char  *path,          // относительный или абсолютный?
                 *regex_pattern;
     int     deep; // глубина поиска
                   // -1 - неограниченная, 0 - без захода в подкаталоги
-};
+} FilesSearchSetup;
 
 // Возвращает указатель на статискую строчку
 char *koh_files_search_setup_2str(struct FilesSearchSetup *setup);
