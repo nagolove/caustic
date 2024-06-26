@@ -754,9 +754,9 @@ dependencies = {
       description = "svg parsing library",
       dir = "nanosvg",
       includes = {
-         "nanosvg",
+         "nanosvg/src",
       },
-      libdirs = { "nanosvg/src" },
+      libdirs = { "nanosvg" },
       links = { "nanosvg" },
       links_internal = {},
       name = "nanosvg",
@@ -1705,6 +1705,17 @@ end
 local parser_setup = {
 
 
+   project = {
+      options = { "-n --name" },
+      summary = [[Work with projects
+    new - create new project from template
+    list - list of all registed projects in CAUSTIC_PATH/projects.lua
+]],
+      arguments = {
+         { "new", 1 },
+         { "list", 1 },
+      },
+   },
    stage = {
       options = { "-n --name" },
       summary = [[Work with stages.
@@ -3973,7 +3984,16 @@ end
 local function do_parser_setup(
    parser, setup)
 
+   local prnt = function(...)
+   end
+
+
+
+   prnt("do_parser_setup:")
    for cmd_name, setup_tbl in pairs(setup) do
+
+      prnt("cmd_name", cmd_name)
+      prnt("setup_tbl", inspect(setup_tbl))
 
 
 
@@ -3982,10 +4002,12 @@ local function do_parser_setup(
 
       local p = parser:command(cmd_name)
       if setup_tbl.summary then
+         prnt("add summary", setup_tbl.summary)
          p:summary(setup_tbl.summary)
       end
       if setup_tbl.options then
          for _, option in ipairs(setup_tbl.options) do
+            prnt("add option", option)
             p:option(option)
          end
       end
@@ -3993,6 +4015,7 @@ local function do_parser_setup(
          for _, flag_tbl in ipairs(setup_tbl.flags) do
             assert(type(flag_tbl[1]) == "string")
             assert(type(flag_tbl[2]) == "string")
+            prnt("add flag", flag_tbl[1], flag_tbl[2])
             p:flag(flag_tbl[1], flag_tbl[2])
          end
       end
@@ -4001,6 +4024,10 @@ local function do_parser_setup(
             assert(type(argument_tbl[1]) == "string")
             assert(type(argument_tbl[2]) == "string" or
             type(argument_tbl[2]) == "number")
+            prnt(
+            "add argument",
+            argument_tbl[1], argument_tbl[2])
+
             p:argument(argument_tbl[1]):args(argument_tbl[2])
          end
       end
@@ -4039,7 +4066,7 @@ local function main()
 
    parser:add_complete()
    local ok, _args = parser:pparse()
-   local has_command = false
+
 
    if ok then
 
@@ -4062,15 +4089,19 @@ local function main()
          print("k, v", k, v)
          if actions[k] and can_call then
             actions[k](_args)
-            has_command = true
+
          end
       end
+   else
+      print("bad args")
    end
 
-   if not has_command then
-      print("not has_command")
-      actions.make(_args)
-   end
+
+
+
+
+
+
 end
 
 if arg then
