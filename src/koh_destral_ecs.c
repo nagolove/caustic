@@ -44,6 +44,7 @@ static de_options _options = {
 };
 
 #ifdef DE_NO_TRACE
+__attribute__((__format__ (__printf__, 1, 2)))
 static void void_printf(const char *s, ...) {
     (void)s;
 }
@@ -523,7 +524,13 @@ inline static bool de_storage_contains(de_storage* s, de_entity e) {
 }
 
 void de_ecs_register(de_ecs *r, de_cp_type comp) {
-    de_trace("de_ecs_register: ecs %p, type %s\n", r, de_cp_type2str(comp));
+    comp.cp_id = r->registry_num;
+    de_trace(
+        "de_ecs_register: ecs %p, type %s, cp_id %zu\n",
+        r, de_cp_type2str(comp), comp.cp_id
+    );
+
+    /*
     for (int i = 0; i < r->registry_num; i++) {
         if (comp.cp_id == r->registry[i].cp_id) {
             trace(
@@ -533,6 +540,18 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
             exit(EXIT_FAILURE);
         }
     }
+    r->registry[r->registry_num++] = comp;
+    */
+
+    for (int i = 0; i < r->registry_num; i++) {
+        if (strcmp(comp.name, r->registry[i].name) == 0) {
+            trace(
+                "de_ecs_register: component '%s' has duplicated name\n",
+                comp.name
+            );
+        }
+    }
+
     r->registry[r->registry_num++] = comp;
 }
 
