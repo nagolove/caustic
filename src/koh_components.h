@@ -13,7 +13,6 @@ extern const de_cp_type cp_type_shape_render_opts;
 extern const de_cp_type cp_type_testing;
 extern const de_cp_type cp_type_texture;
 
-
 // Кто владеет текстурой?
 struct ShapeRenderOpts {
     Texture     *tex;
