@@ -114,6 +114,8 @@ void res_unload_all(Resource *res_list) {
                     trace("res_unload_all: RT_TEXTURE_RT\n");
                     break;
                 }
+                default:
+                    break;
             }
             free(cur->data);
         }
