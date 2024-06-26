@@ -1,4 +1,6 @@
 return {
+    "/home/nagolove/caustic-test-mm_arena",
+    "/home/nagolove/caustic-test-qtree",
     "/home/nagolove/caustic-test-b2",
     "/home/nagolove/caustic-test-common",
     "/home/nagolove/caustic-test-ecs",
