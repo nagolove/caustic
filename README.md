@@ -1,4 +1,14 @@
 # caustic
+Игровой фреймворк разъедающий отложения накипи.
 
-## Requiments
-Only Linux platform supported. Supported compiler - gcc. Lua interpreter should be in PATH, luarocks were installed.
+## Требования
+Luarocks
+Teal
+gcc
+git
+
+# Структура каталогов
+```
+    koh-project_prefix      - каталог проекта
+    caustic-test            - тест системы
+```
