@@ -202,6 +202,10 @@ typedef struct FilesSearchResult {
     char                                *path, *regex_pattern;
     char                                **names;
     int                                 num, capacity;
+    void                                *udata;
+    void (*on_search_begin)(struct FilesSearchResult *fsr);
+    void (*on_search_end)(struct FilesSearchResult *fsr);
+    void (*on_shutdown)(struct FilesSearchResult *fsr);
 } FilesSearchResult;
 
 typedef struct FilesSearchSetup {
@@ -209,11 +213,21 @@ typedef struct FilesSearchSetup {
                 *regex_pattern;
     int     deep; // глубина поиска
                   // -1 - неограниченная, 0 - без захода в подкаталоги
+    void    *udata; // Данные пользователя
+    // Вызывается в начале поиска
+    void (*on_search_begin)(struct FilesSearchResult *fsr);
+    // Вызывается после завершения поиска
+    void (*on_search_end)(struct FilesSearchResult *fsr);
+    // Вызывается при удалении структуры поиск(koh_search_files_shutdown)
+    void (*on_shutdown)(struct FilesSearchResult *fsr);
 } FilesSearchSetup;
 
 // Возвращает указатель на статискую строчку
-char *koh_files_search_setup_2str(struct FilesSearchSetup *setup);
-struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup);
+char *koh_files_search_setup_2str(FilesSearchSetup *setup);
+// Заполняет структуру.
+struct FilesSearchResult koh_search_files(FilesSearchSetup *setup);
+// Освобождает память, зануляет содержимое структуры. 
+// Можно вызывать несколько раз.
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 void koh_search_files_print(struct FilesSearchResult *fsr);
 void koh_search_files_exclude_pcre(

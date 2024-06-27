@@ -1397,9 +1397,16 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
     if (!setup->path || !setup->regex_pattern)
         return fsr;
 
+    fsr.udata = setup->udata;
+    fsr.on_search_begin = setup->on_search_begin;
+    fsr.on_search_end = setup->on_search_end;
+    fsr.on_shutdown = setup->on_shutdown;
+
     fsr.path = strdup(setup->path);
     assert(fsr.path);
     size_t path_len = strlen(fsr.path);
+
+    // TODO: Убирать любое количество последний слешей
     if (fsr.path[path_len - 1] == '/') {
         fsr.path[path_len - 1] = 0;
     }
@@ -1437,7 +1444,12 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
     int deep_counter = setup->deep;
     if (setup->deep < 0)
         deep_counter = 9999;
+
+    if (fsr.on_search_begin)
+        fsr.on_search_begin(&fsr);
     search_files_rec(&fsr, fsr.path, deep_counter);
+    if (fsr.on_search_end)
+        fsr.on_search_end(&fsr);
 
     return fsr;
 
@@ -1538,6 +1550,9 @@ bool koh_search_files_small(
 void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
     if (!fsr)
         return;
+
+    if (fsr->on_shutdown)
+        fsr->on_shutdown(fsr);
 
     for (int i = 0; i < fsr->num; ++i)
         free(fsr->names[i]);
