@@ -14,12 +14,12 @@ extern const de_cp_type cp_type_testing;
 extern const de_cp_type cp_type_texture;
 
 // Кто владеет текстурой?
-struct ShapeRenderOpts {
+typedef struct ShapeRenderOpts {
     Texture     *tex;
     float       thick;
     Rectangle   src;
     Color       color;
-};
+} ShapeRenderOpts;
 
 enum SegmentType {
     ST_POLYGON,
