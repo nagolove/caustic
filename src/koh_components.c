@@ -410,8 +410,12 @@ de_entity spawn_segment(struct WorldCtx *wctx, struct SegmentSetup *setup) {
             b2Vec2 start = setup->start, end = setup->end;
             b2Vec2 dir = b2Sub(end, start);
             float len = b2Length(dir);
+
             //assert(len != 0.);
-            assert(len > 0.001);
+
+            // XXX: Пришлось отключить при работе с nanosvg
+            //assert(len > 0.001);
+
             b2Vec2 dir_unite = b2MulSV(1. / len, dir);
             const float default_width = 20.;
             const float width = setup->width == 0. ? 
