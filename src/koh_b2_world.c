@@ -1,5 +1,7 @@
 #include "koh_b2_world.h"
 
+#include "koh_common.h"
+
 extern bool b2_parallel;
 
 void world_step(struct WorldCtx *wctx) {
@@ -80,8 +82,11 @@ void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
 
     trace(
         "world_init: width %u, height %u, "
-        "xorshift32_state seed %u\n",
-        setup->width, setup->height, setup->xrng->a
+        "xorshift32_state seed %u,"
+        "gravity %s\n",
+        setup->width, setup->height, 
+        setup->xrng->a,
+        b2Vec2_to_str(b2World_GetGravity(wctx->world))
     );
 }
 
