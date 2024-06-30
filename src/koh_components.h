@@ -7,6 +7,8 @@
 #include "koh_destral_ecs.h"
 #include "raylib.h"
 
+extern bool koh_components_verbose;
+
 extern const de_cp_type cp_type_body;
 extern const de_cp_type cp_type_border_sensor;
 extern const de_cp_type cp_type_shape_render_opts;
@@ -159,7 +161,19 @@ inline static void world_shape_render_circle(
     b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
 ) {
     struct ShapeRenderOpts *r_opts = render_opts_get(shape_id, r);
-    shape_render_poly(shape_id, wctx, r_opts);
+
+    b2Circle circle = b2Shape_GetCircle(shape_id);
+    b2BodyId body_id = b2Shape_GetBody(shape_id);
+
+    b2ShapeType shape_type = b2Shape_GetType(shape_id);
+    assert(shape_type == b2_circleShape);
+
+    // Преобразования координаты из локальных в глобальные
+    Vector2 center = b2Vec2_to_Vector2(
+        b2Body_GetWorldPoint(body_id, circle.center)
+    );
+
+    DrawCircleV(center, circle.radius, r_opts->color);
 }
 
 inline static void world_shape_render_poly(
