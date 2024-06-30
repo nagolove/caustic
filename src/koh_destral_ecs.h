@@ -301,3 +301,5 @@ void de_ecs_print(de_ecs *r);
 
 void de_gui(de_ecs *r, de_entity e);
 void de_storage_print(de_ecs *r, de_cp_type cp_type);
+
+extern bool de_ecs_verbose;

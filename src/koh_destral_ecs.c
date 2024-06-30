@@ -43,6 +43,8 @@ static de_options _options = {
     .tracing = false,
 };
 
+bool de_ecs_verbose = false;
+
 #ifdef DE_NO_TRACE
 __attribute__((__format__ (__printf__, 1, 2)))
 static void void_printf(const char *s, ...) {
@@ -1420,10 +1422,15 @@ static void entity_print(de_ecs *r) {
             if (igTreeNode_Ptr((void*)(uintptr_t)i, "%d", i)) {
                 void *payload = de_view_single_get(&v);
                 de_entity e = de_view_single_entity(&v);
-                trace("entity_print: name %s\n", r->selected_type.name);
+
+                if (de_ecs_verbose)
+                    trace("entity_print: name %s\n", r->selected_type.name);
+
                 if (r->selected_type.str_repr(payload, e)) {
                     char **lines = r->selected_type.str_repr(payload, e);
-                    trace("entity_print: lines %p\n", lines);
+
+                    if (de_ecs_verbose)
+                        trace("entity_print: lines %p\n", lines);
 
                     if (r->l && r->ref_filter_func)
                         lines_print_filter(r, lines);
