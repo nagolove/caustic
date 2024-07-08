@@ -112,6 +112,8 @@ int timerman_update(struct TimerMan *tm) {
 
     for (int i = 0; i < tm->timers_size; i++) {
         struct Timer *timer = &tm->timers[i];
+
+        // XXX: Почему такой таймер не удаляется?
         if (timer->duration < 0) continue;
 
         double now = GetTime();
@@ -128,7 +130,10 @@ int timerman_update(struct TimerMan *tm) {
                     timer_shutdown(timer);
                 } else
                     // оставить таймер в менеджере
+                    // XXX: Как перезапустить таймер 
+                    // после достижения его длительности?
                     tmp[tmp_size++] = tm->timers[i];
+                timer->last_now = now;
             }
         };
     }
