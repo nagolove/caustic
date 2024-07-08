@@ -280,7 +280,9 @@ typedef struct de_view {
 } de_view;
 
 
+__attribute_deprecated__
 de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type* cp_types);
+de_view de_view_create(de_ecs* r, size_t cp_count, de_cp_type* cp_types);
 bool de_view_valid(de_view* v);
 de_entity de_view_entity(de_view* v);
 void* de_view_get(de_view* v, de_cp_type cp_type);

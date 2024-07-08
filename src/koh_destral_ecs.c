@@ -1097,8 +1097,8 @@ void de_view_next(de_view* v) {
     } while ((v->current_entity != de_null) && !de_view_entity_contained(v, v->current_entity));
 }
 
-
-de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
+de_view de_view_create(de_ecs* r, size_t cp_count, de_cp_type* cp_types) {
+    // {{{
     assert(r);
     assert(cp_count < DE_MAX_VIEW_COMPONENTS);
    
@@ -1147,6 +1147,11 @@ de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
         v.current_entity = de_null;
     }
     return v;
+    // }}}
+}
+
+de_view de_create_view(de_ecs* r, size_t cp_count, de_cp_type *cp_types) {
+    return de_view_create(r, cp_count, cp_types);
 }
 
 bool de_view_valid(de_view* v) {
