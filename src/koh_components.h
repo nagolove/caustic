@@ -206,7 +206,9 @@ inline static void world_shape_render_poly(
 
 
     // Получить компонент без проверки
-    struct ShapeRenderOpts *r_opts = de_get(r, e, cp_type_shape_render_opts);
+    struct ShapeRenderOpts *r_opts = de_try_get(
+        r, e, cp_type_shape_render_opts
+    );
 
     /*
     char **lines = cp_type_shape_render_opts.str_repr(r_opts, de_null);
@@ -216,7 +218,8 @@ inline static void world_shape_render_poly(
     }
     */
 
-    shape_render_poly(shape_id, wctx, r_opts);
+    if (r_opts)
+        shape_render_poly(shape_id, wctx, r_opts);
     // }}}
 
 }
@@ -251,7 +254,9 @@ inline static void world_shape_render_segment(
 
 
     // Получить компонент без проверки
-    struct ShapeRenderOpts *r_opts = de_get(r, e, cp_type_shape_render_opts);
+    struct ShapeRenderOpts *r_opts = de_try_get(
+        r, e, cp_type_shape_render_opts
+    );
 
     /*
     char **lines = cp_type_shape_render_opts.str_repr(r_opts, de_null);
@@ -261,7 +266,8 @@ inline static void world_shape_render_segment(
     }
     */
 
-    shape_render_segment(shape_id, wctx, r_opts);
+    if (r_opts)
+        shape_render_segment(shape_id, wctx, r_opts);
     // }}}
 }
 
