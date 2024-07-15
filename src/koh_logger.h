@@ -23,7 +23,8 @@ void logger_register_functions();
 void logger_shutdown();
 
 __attribute__((__format__ (__printf__, 1, 2)))
-void trace(const char *format, ...);
+// Возвращает результат внутреннего printf()
+int trace(const char *format, ...);
 
 /*
 void trace_enable(bool state);

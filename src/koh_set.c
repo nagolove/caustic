@@ -25,6 +25,8 @@ typedef struct koh_Set {
     HashFunction    hash_func;
     struct Bucket   *arr;
     size_t          cap, taken;
+
+    void (*on_key_free)(const void *key, int key_len);
 } koh_Set;
 
 koh_Set *set_new(struct koh_SetSetup *setup) {
@@ -34,6 +36,7 @@ koh_Set *set_new(struct koh_SetSetup *setup) {
     set->arr = calloc(set->cap, sizeof(set->arr[0]));
     if (setup) {
         set->hash_func = setup->hash_func;
+        set->on_key_free = setup->on_key_free;
     }
 
     // Установка функции хэширования по умолчанию
@@ -134,9 +137,19 @@ void set_clear(koh_Set *set) {
 
 void set_free(koh_Set *set) {
     assert(set);
-    for (int k = 0; k < set->cap; k++)
-        if (set->arr[k].taken)
-            free(set->arr[k].key);
+
+    if (set->on_key_free) {
+        for (int k = 0; k < set->cap; k++)
+            if (set->arr[k].taken) {
+                set->on_key_free(set->arr[k].key, set->arr[k].key_len);
+                free(set->arr[k].key);
+            }
+    } else {
+        for (int k = 0; k < set->cap; k++)
+            if (set->arr[k].taken)
+                free(set->arr[k].key);
+    }
+
     if (set->arr)
         free(set->arr);
     free(set);
@@ -167,6 +180,12 @@ void _set_remove(koh_Set *set, int remove_index) {
 
     int hashi = set->arr[remove_index].hash % set->cap;
     if (set->arr[remove_index].key) {
+        if (set->on_key_free)
+            set->on_key_free(
+                set->arr[remove_index].key,
+                set->arr[remove_index].key_len
+            );
+
         free(set->arr[remove_index].key);
         //set->arr[remove_index].key = NULL;
         memset(&set->arr[remove_index], 0, sizeof(set->arr[0]));

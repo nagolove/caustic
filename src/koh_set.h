@@ -30,10 +30,16 @@ typedef enum koh_SetResult {
 
 struct koh_SetSetup {
     HashFunction hash_func;
+    // TODO: Добавить функцию обратного вызова используюмую 
+    // при удалении элемента.
+    void (*on_key_free)(const void *key, int key_len);
 };
+
+// TODO: Заменить int на size_t в key_len
 
 koh_Set *set_new(struct koh_SetSetup *setup);
 bool set_exist(koh_Set *set, const void *key, int key_len);
+// Данные копируются в множество.
 koh_SetResult set_add(koh_Set *set, const void *key, int key_len);
 void set_clear(koh_Set *set);
 void set_free(koh_Set *set);

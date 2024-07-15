@@ -144,14 +144,14 @@ void logger_shutdown() {
 
 FILE *tmp_file = NULL;
 
-void trace(const char * format, ...) {
+int trace(const char * format, ...) {
     if (!is_trace_enabled)
-        return;
+        return 0;
 
     char buf[512] = {};
     va_list args;
     va_start(args, format);
-    vsnprintf(buf, sizeof(buf) - 1, format, args);
+    int ret = vsnprintf(buf, sizeof(buf) - 1, format, args);
     va_end(args);
 
 /*
@@ -172,6 +172,8 @@ void trace(const char * format, ...) {
             fflush(log_stream);
         }
     }
+
+    return ret;
 }
 
 int l_filter(lua_State *lua) {

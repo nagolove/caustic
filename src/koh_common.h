@@ -230,6 +230,12 @@ struct FilesSearchResult koh_search_files(FilesSearchSetup *setup);
 // Можно вызывать несколько раз.
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 void koh_search_files_print(struct FilesSearchResult *fsr);
+
+void koh_search_files_print2(
+    struct FilesSearchResult *fsr,
+    int (*print_fnc)(const char *fmt, ...)
+);
+
 void koh_search_files_exclude_pcre(
     struct FilesSearchResult *fsr, const char *exclude_pattern
 );

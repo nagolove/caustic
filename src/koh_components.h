@@ -234,7 +234,7 @@ inline static void world_shape_render_segment(
     // {{{
     de_entity e = (uintptr_t)b2Shape_GetUserData(shape_id);
     if (!de_valid(r, e)) {
-        //trace("world_shape_render_segment: invalid entity\n");
+        trace("world_shape_render_segment: invalid entity\n");
         return;
     }
 

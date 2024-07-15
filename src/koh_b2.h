@@ -190,7 +190,7 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     if (false)
         trace("camera2aabb: %s\n", camera2str(*cam, false));
    
-    gap_radius = 0.;
+    /*gap_radius = 0.;*/
     aabb.lowerBound.x = - zoom * offset.x + gap_radius;
     aabb.lowerBound.y = - zoom * offset.y - gap_radius;
     aabb.upperBound.x = - zoom * offset.x + w - gap_radius;

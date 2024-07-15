@@ -1215,20 +1215,22 @@ void parse_bracketed_string(
 
 static bool match(struct FilesSearchResult *fsr, const char *str) {
     int found;
-    trace("match: str '%s'\n", str);
+    /*trace("match: str '%s'\n", str);*/
 
     assert(fsr->internal->regex_engine == RE_PCRE2);
 
     assert(fsr->internal->regex.pcre.r);
     assert(fsr->internal->regex.pcre.match_data);
-    trace("match: regex engine pcre2\n");
+
+    /*trace("match: regex engine pcre2\n");*/
+
     found = pcre2_match(
         fsr->internal->regex.pcre.r,
         (unsigned char*)str,
         strlen(str), 
         0, 0, fsr->internal->regex.pcre.match_data, NULL
     );
-    trace("match: found %d\n", found);
+    trace("match: str '%s', found %d\n", str, found);
     return found > 0;
 }
 
@@ -1292,26 +1294,27 @@ static void search_files_rec(
     );
 
     switch (fsr->internal->regex_engine) {
+        // {{{
         case RE_PCRE2: {
             printf("search_files_rec: regex engine pcre2\n");
             break;
         }
-       /*
-        case RE_SMALL: {
-            printf("search_files_rec: regex engine small_regex\n");
-            break;
-        }
-        */
         default: {
             printf("search_files_rec: no regex engine allocated\n");
             return;
         }
+        // }}}
     }
 
     struct dirent *entry = NULL;
+
     while ((entry = readdir(dir))) {
+        trace("search_files_rec: '%s'\n", entry->d_name);
+
+        /*
         switch (entry->d_type) {
             case DT_DIR: {
+                // {{{
                 if (!strcmp(entry->d_name, ".") || 
                     !strcmp(entry->d_name, ".."))
                     break;
@@ -1330,8 +1333,10 @@ static void search_files_rec(
 
                 search_files_rec(fsr, new_path, deep_counter - 1);
                 break;
+                // }}}
             }
             case DT_REG: {
+                // {{{
                 if (verbose_search_files_rec)
                     trace("search_files_rec: regular %s\n", entry->d_name);
 
@@ -1341,27 +1346,18 @@ static void search_files_rec(
                 char fname[1024] = {};
 
                 snprintf(fname, sizeof(fname), "%s/%s", path, entry->d_name);
-                /*strcat(fname, path);*/
-                /*strcat(fname, "/");*/
-                /*strcat(fname, entry->d_name);*/
-
-                /*trace("search_files_rec: fname '%s'\n", fname);*/
 
                 check_for_realloc(fsr);
-
-                /*
-                trace("search_files_rec: fsr->num %d\n", fsr->num);
-                trace(
-                    "search_files_rec: found '%s'\n",
-                    fsr->names[fsr->num]
-                );
-                */
 
                 fsr->names[fsr->num] = strdup(fname);
                 fsr->num++;
                 break;
             }
+            // }}}
+            default:
+                trace("search_files_rec: entry->d_type %d\n", entry->d_type);
         }
+        */
 
     }
 
@@ -1586,6 +1582,16 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
         free(fsr->regex_pattern);
 
     memset(fsr, 0, sizeof(*fsr));
+}
+
+void koh_search_files_print2(
+    struct FilesSearchResult *fsr,
+    int (*print_fnc)(const char *fmt, ...)
+) {
+    assert(fsr);
+    for (int i = 0; i < fsr->num; ++i) {
+        trace("koh_search_files_print: '%s'\n", fsr->names[i]);
+    }
 }
 
 void koh_search_files_print(struct FilesSearchResult *fsr) {

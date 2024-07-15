@@ -554,7 +554,7 @@ de_entity *bodies_filter(
 
     trace("bodies_filter:\n");
     int num = 0;
-    de_view v = de_create_view(r, 1, (de_cp_type[]){ cp_type });
+    de_view v = de_view_create(r, 1, (de_cp_type[]){ cp_type });
     for (; de_view_valid(&v); de_view_next(&v)) {
         b2BodyId *body_id = de_view_get(&v, cp_type);
 
@@ -629,7 +629,7 @@ void e_reset_all_velocities(de_ecs *r) {
     assert(r);
     de_cp_type types[] = { cp_type_body };
     for (
-        de_view i = de_create_view(r, 1, types);
+        de_view i = de_view_create(r, 1, types);
         de_view_valid(&i); de_view_next(&i)
     ) {
         b2BodyId *body_id = de_view_get(&i, types[0]);
@@ -647,7 +647,7 @@ void e_draw_box2d_bodies_positions(
     assert(setup);
     de_cp_type types[1] = { cp_type_body };
     size_t types_num = sizeof(types) / sizeof(types[0]);
-    de_view v = de_create_view(r, types_num, types);
+    de_view v = de_view_create(r, types_num, types);
     for(; de_view_valid(&v); de_view_next(&v)) {
         struct b2BodyId *body_id = de_view_get_safe(&v, types[0]);
         if (!body_id)
@@ -664,7 +664,7 @@ void e_apply_random_impulse_to_bodies(de_ecs *r, WorldCtx *wctx) {
 
     de_cp_type types[] = { cp_type_body };
     for (
-        de_view i = de_create_view(r, 1, types);
+        de_view i = de_view_create(r, 1, types);
         de_view_valid(&i); de_view_next(&i)
     ) {
         b2BodyId *body_id = de_view_get(&i, types[0]);
@@ -693,7 +693,7 @@ void e_apply_random_impulse_to_bodies(de_ecs *r, WorldCtx *wctx) {
 void e_cp_body_draw(de_ecs *r, WorldCtx *wctx) {
     assert(wctx);
     assert(r);
-    de_view v = de_create_view(r, 1, (de_cp_type[]) { cp_type_body });
+    de_view v = de_view_create(r, 1, (de_cp_type[]) { cp_type_body });
     for (; de_view_valid(&v); de_view_next(&v)) {
         b2BodyId *bid = de_view_get(&v, cp_type_body);
 

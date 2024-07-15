@@ -183,7 +183,7 @@ void particle_build(de_ecs *r) {
 void particles_update() {
     float dt = GetFrameTime() * 100.;
     //trace("particles_update: dt %f\n", dt);
-    for (de_view v = de_create_view(r, 3, (de_cp_type[3]) {
+    for (de_view v = de_view_create(r, 3, (de_cp_type[3]) {
         component_position, component_velocity, component_angular_velocity,
     }); de_view_valid(&v); de_view_next(&v)) {
         Vector2 *velocity = de_view_get(&v, component_velocity);
@@ -196,8 +196,11 @@ void particles_update() {
         pos->angle = pos->angle + *angular_velocity * dt;
     }
 
-    for (de_view v = de_create_view(r, 1, (de_cp_type[1]){ component_lifetime});
-            de_view_valid(&v); de_view_next(&v)) {
+    for (
+        de_view v = de_view_create(r, 1, (de_cp_type[1]){ component_lifetime});
+        de_view_valid(&v);
+        de_view_next(&v)
+    ) {
         double *lifetime = de_view_get(&v, component_lifetime);
         *lifetime -= dt;
         if (*lifetime < 0) {
@@ -210,9 +213,13 @@ void particles_update() {
 
 void particles_draw() {
 
-    for (de_view v = de_create_view(r, 2, (de_cp_type[2]) { 
-                component_position, component_color
-        }); de_view_valid(&v); de_view_next(&v)) {
+    de_cp_type types[2] =  { component_position, component_color };
+    size_t types_num = sizeof(types) / sizeof(types[0]);
+    for (
+        de_view v = de_view_create(r, types_num, types);
+        de_view_valid(&v); 
+        de_view_next(&v)
+    ) {
 
         //de_entity e = de_view_entity(&v);
         struct Component_Position* p = de_view_get(&v, component_position);
