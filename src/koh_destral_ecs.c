@@ -565,12 +565,25 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
     r->registry[r->registry_num++] = comp;
     */
 
+    // Проверка дубликата имени
     for (int i = 0; i < r->registry_num; i++) {
-        if (strcmp(comp.name, r->registry[i].name) == 0) {
+        if (!strcmp(comp.name, r->registry[i].name)) {
             trace(
                 "de_ecs_register: component '%s' has duplicated name\n",
                 comp.name
             );
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Проверка дублика по идентификатору
+    for (int i = 0; i < r->registry_num; i++) {
+        if (r->registry[i].cp_id == comp.cp_id) {
+            trace(
+                "de_ecs_register: component '%s' has duplicated cp_id %zu\n",
+                comp.name, comp.cp_id
+            );
+            exit(EXIT_FAILURE);
         }
     }
 
