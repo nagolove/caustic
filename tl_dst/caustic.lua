@@ -234,7 +234,14 @@ local function search_and_load_cfgs_up(fname)
    end)
 
    if not ok then
-      print("search_and_load_cfgs_up: loadfile() failed with", errmsg)
+
+      print(format(
+      "search_and_load_cfgs_up: could not load config in " ..
+      "'%s' with '%s', aborting",
+      lfs.currentdir(),
+      errmsg))
+
+      os.exit(1)
    end
 
 
