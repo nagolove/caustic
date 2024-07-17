@@ -995,7 +995,7 @@ void de_orphans_each(de_ecs* r, void (*fun)(de_ecs*, de_entity, void*), void* ud
 
 // VIEW SINGLE COMPONENT
 
-de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type) {
+de_view_single de_view_single_create(de_ecs* r, de_cp_type cp_type) {
     assert(r);
     de_trace(
         "de_create_view_single: ecs %p, type %s\n", 
@@ -1017,6 +1017,10 @@ de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type) {
     return v;
 }
 
+de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type) {
+    return de_view_single_create(r, cp_type);
+}
+
 bool de_view_single_valid(de_view_single* v) {
     assert(v);
     de_trace("de_view_single_valid: view %p\n", v);
@@ -1033,6 +1037,26 @@ void* de_view_single_get(de_view_single* v) {
     assert(v);
     de_trace("de_view_single_get: view %p\n", v);
     return de_storage_get_by_index(v->pool, v->current_entity_index);
+}
+
+/*void* de_view_get_safe(de_view *v, de_cp_type cp_type);*/
+
+int de_view_single_get_index_safe(de_view_single *v, de_cp_type cp_type) {
+    assert(v);
+    de_trace(
+        "de_view_single_get_index_safe: view %p, type %s\n", 
+        v, de_cp_type2str(cp_type)
+    );
+    return (v->pool[0].cp_id == cp_type.cp_id) ? 1 : -1;
+}
+
+void* de_view_single_get_safe(de_view_single *v, de_cp_type cp_type) {
+    de_trace(
+        "de_view_single_get_safe: view %p, type %s\n", 
+        v, de_cp_type2str(cp_type)
+    );
+    int index = de_view_single_get_index_safe(v, cp_type);
+    return index != -1 ? de_storage_get_by_index(v->pool, index) : NULL;
 }
 
 void de_view_single_next(de_view_single* v) {
@@ -1453,7 +1477,7 @@ static void entity_print(de_ecs *r) {
         assert(r->selected_type.cp_sizeof);
         assert(r->selected_type.str_repr);
 
-        de_view_single v = de_create_view_single(r, r->selected_type);
+        de_view_single v = de_view_single_create(r, r->selected_type);
         int i = 0;
         for (; de_view_single_valid(&v); de_view_single_next(&v), i++) {
             if (igTreeNode_Ptr((void*)(uintptr_t)i, "%d", i)) {
