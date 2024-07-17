@@ -229,11 +229,18 @@ struct FilesSearchResult koh_search_files(FilesSearchSetup *setup);
 // Освобождает память, зануляет содержимое структуры. 
 // Можно вызывать несколько раз.
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
+
+__attribute_deprecated__
 void koh_search_files_print(struct FilesSearchResult *fsr);
 
 void koh_search_files_print2(
     struct FilesSearchResult *fsr,
     int (*print_fnc)(const char *fmt, ...)
+);
+void koh_search_files_print3(
+    struct FilesSearchResult *fsr,
+    int (*print_fnc)(void *udata, const char *fmt, ...),
+    void *udata
 );
 
 void koh_search_files_exclude_pcre(

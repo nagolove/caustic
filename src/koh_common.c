@@ -1230,7 +1230,7 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
         strlen(str), 
         0, 0, fsr->internal->regex.pcre.match_data, NULL
     );
-    trace("match: str '%s', found %d\n", str, found);
+    /*trace("match: str '%s', found %d\n", str, found);*/
     return found > 0;
 }
 
@@ -1265,6 +1265,7 @@ static void check_for_realloc(struct FilesSearchResult *fsr) {
 static void search_files_rec(
     struct FilesSearchResult *fsr, const char *path, int deep_counter
 ) {
+    trace("search_files_rec:\n");
 
     if (!fsr->names) {
         fsr->capacity = 100;
@@ -1278,20 +1279,7 @@ static void search_files_rec(
         );
 
     assert(path);
-    DIR *dir = opendir(path);
-
-    if (!dir) 
-        return;
-
     assert(fsr->internal);
-
-    /*struct small_regex *regex_small = NULL;*/
-    /*pcre2_code *regex_pcre = NULL;*/
-
-    trace(
-        "search_files_rec: regex_engine %d\n",
-        fsr->internal->regex_engine
-    );
 
     switch (fsr->internal->regex_engine) {
         // {{{
@@ -1306,81 +1294,28 @@ static void search_files_rec(
         // }}}
     }
 
-    struct dirent *entry = NULL;
+    FilePathList fl = LoadDirectoryFilesEx(path, NULL, true);
+    /*trace("search_files_rec: fl.count %d\n", fl.count);*/
 
-    while ((entry = readdir(dir))) {
-        trace("search_files_rec: '%s'\n", entry->d_name);
+    for (int j = 0; j < fl.count; j++) {
+        const char *name = fl.paths[j];
+        /*trace("search_files_rec: name '%s'\n", name);*/
 
-        /*
-        switch (entry->d_type) {
-            case DT_DIR: {
-                // {{{
-                if (!strcmp(entry->d_name, ".") || 
-                    !strcmp(entry->d_name, ".."))
-                    break;
+        if (verbose_search_files_rec)
+            trace("search_files_rec: regular %s\n", name);
 
-                if (deep_counter == 0)
-                    break;
+        if (match(fsr, name)) {
+            char fname[1024] = {};
+            snprintf(fname, sizeof(fname), "%s/%s", path, name);
 
-                if (verbose_search_files_rec)
-                    trace("search_files_rec: directory %s\n", entry->d_name);
+            check_for_realloc(fsr);
 
-                char new_path[1024] = {};
-
-                strcat(new_path, path);
-                strcat(new_path, "/");
-                strcat(new_path, entry->d_name);
-
-                search_files_rec(fsr, new_path, deep_counter - 1);
-                break;
-                // }}}
-            }
-            case DT_REG: {
-                // {{{
-                if (verbose_search_files_rec)
-                    trace("search_files_rec: regular %s\n", entry->d_name);
-
-                if (!match(fsr, entry->d_name))
-                    goto __break; 
-
-                char fname[1024] = {};
-
-                snprintf(fname, sizeof(fname), "%s/%s", path, entry->d_name);
-
-                check_for_realloc(fsr);
-
-                fsr->names[fsr->num] = strdup(fname);
-                fsr->num++;
-                break;
-            }
-            // }}}
-            default:
-                trace("search_files_rec: entry->d_type %d\n", entry->d_type);
+            fsr->names[fsr->num] = strdup(fname);
+            fsr->num++;
         }
-        */
-
     }
 
-__break:
-
-    switch (fsr->internal->regex_engine) {
-        case RE_PCRE2: {
-            /*
-            if (fsr->internal->regex.pcre.match_data) {
-                pcre2_match_data_free(fsr->internal->regex.pcre.match_data);
-                fsr->internal->regex.pcre.match_data = NULL;
-            }
-            */
-            break;
-        }
-       /*
-        case RE_SMALL: {
-            break;
-        }
-        */
-    }
-
-    closedir(dir);
+    UnloadDirectoryFiles(fl);
 }
 
 struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
@@ -1584,13 +1519,26 @@ void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
     memset(fsr, 0, sizeof(*fsr));
 }
 
+// Совместимость с printf()
 void koh_search_files_print2(
     struct FilesSearchResult *fsr,
-    int (*print_fnc)(const char *fmt, ...)
+    int (*print_fnc)(const char *fmt, ...) 
 ) {
     assert(fsr);
     for (int i = 0; i < fsr->num; ++i) {
-        trace("koh_search_files_print: '%s'\n", fsr->names[i]);
+        print_fnc("'%s'\n", fsr->names[i]);
+    }
+}
+
+// Совместимость с printf()
+void koh_search_files_print3(
+    struct FilesSearchResult *fsr,
+    int (*print_fnc)(void *udata, const char *fmt, ...),
+    void *udata
+) {
+    assert(fsr);
+    for (int i = 0; i < fsr->num; ++i) {
+        print_fnc(udata, "'%s'\n", fsr->names[i]);
     }
 }
 
