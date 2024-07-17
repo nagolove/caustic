@@ -9,11 +9,13 @@
 
 extern bool koh_components_verbose;
 
-extern const de_cp_type cp_type_body;
-extern const de_cp_type cp_type_border_sensor;
-extern const de_cp_type cp_type_shape_render_opts;
-extern const de_cp_type cp_type_testing;
-extern const de_cp_type cp_type_texture;
+// XXX: Убрал модификатор константности для правки типов на лету.
+// В частности правится cp_type_body.initial_cap = 10000;
+extern de_cp_type cp_type_body;
+extern de_cp_type cp_type_border_sensor;
+extern de_cp_type cp_type_shape_render_opts;
+extern de_cp_type cp_type_testing;
+extern de_cp_type cp_type_texture;
 
 // Кто владеет текстурой?
 typedef struct ShapeRenderOpts {
@@ -64,7 +66,7 @@ struct VelRot {
     b2Vec2  vel;
 };
 
-void koh_cp_types_init(de_ecs *r);
+void koh_cp_types_register(de_ecs *r);
 
 char **str_repr_body(void *payload, de_entity e);
 

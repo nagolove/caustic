@@ -60,7 +60,7 @@ static char **str_repr_shape_render_opts(void *payload, de_entity e) {
 #undef STR_NUM
 
 // Физическое тело
-const de_cp_type cp_type_body = {
+de_cp_type cp_type_body = {
     .cp_id = 0,
     .cp_sizeof = sizeof(b2BodyId),
     .name = "body",
@@ -73,7 +73,7 @@ const de_cp_type cp_type_body = {
     /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
 };
 
-const de_cp_type cp_type_shape_render_opts = {
+de_cp_type cp_type_shape_render_opts = {
     .cp_id = 1,
     .cp_sizeof = sizeof(struct ShapeRenderOpts),
     .str_repr = str_repr_shape_render_opts,
@@ -85,7 +85,7 @@ const de_cp_type cp_type_shape_render_opts = {
     /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
 };
 
-const de_cp_type cp_type_texture = {
+de_cp_type cp_type_texture = {
     .cp_id = 4,
     .cp_sizeof = sizeof(Texture2D*),
     .name = "texture",
@@ -96,7 +96,7 @@ const de_cp_type cp_type_texture = {
     /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
 };
 
-const de_cp_type cp_type_border_sensor = {
+de_cp_type cp_type_border_sensor = {
     .cp_id = 5,
     .cp_sizeof = sizeof(char),
     .name = "border_sensor",
@@ -107,7 +107,7 @@ const de_cp_type cp_type_border_sensor = {
     /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
 };
 
-void koh_cp_types_init(de_ecs *r) {
+void koh_cp_types_register(de_ecs *r) {
     de_ecs_register(r, cp_type_body);
     de_ecs_register(r, cp_type_shape_render_opts);
     /*de_ecs_register(r, cp_type_hero);*/
