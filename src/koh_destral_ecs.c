@@ -408,6 +408,15 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
 
     if (s->cp_data_size >= s->cp_data_cap) {
     if (s->cp_data_size + 1 >= s->cp_data_cap) {
+
+        if (de_ecs_verbose)
+            trace(
+                "de_storage_emplace: realloc '%s' storage, "
+                "cp_data_size %zu, cp_data_cap %zu\n",
+                s->name, 
+                s->cp_data_size, s->cp_data_cap
+            );
+
         s->cp_data_cap *= 2;
         //trace("de_storage_emplace: additional allocating for type %d\n", s->cp_id);
         s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
@@ -528,10 +537,20 @@ inline static bool de_storage_contains(de_storage* s, de_entity e) {
 
 void de_ecs_register(de_ecs *r, de_cp_type comp) {
     comp.cp_id = r->registry_num;
+
+    if (de_ecs_verbose)
+        trace(
+            "de_ecs_register: ecs %p, type %s, cp_id %zu\n",
+            r, de_cp_type2str(comp), comp.cp_id
+        );
+
+
+        /*
     de_trace(
         "de_ecs_register: ecs %p, type %s, cp_id %zu\n",
         r, de_cp_type2str(comp), comp.cp_id
     );
+*/
 
     /*
     for (int i = 0; i < r->registry_num; i++) {
