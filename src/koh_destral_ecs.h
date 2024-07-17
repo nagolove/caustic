@@ -240,10 +240,14 @@ typedef struct de_view_single {
     de_entity entity;
 } de_view_single;
 
+__attribute_deprecated__
 de_view_single de_create_view_single(de_ecs* r, de_cp_type cp_type);
+
+de_view_single de_view_single_create(de_ecs* r, de_cp_type cp_type);
 bool de_view_single_valid(de_view_single* v);
 de_entity de_view_single_entity(de_view_single* v);
 void* de_view_single_get(de_view_single* v);
+/*void* de_view_single_get_safe(de_view_single *v, de_cp_type cp_type);*/
 void de_view_single_next(de_view_single* v);
 
 
