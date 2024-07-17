@@ -406,7 +406,6 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
     //s->cp_data = realloc(s->cp_data, (s->cp_data_size + 1) * sizeof(char) * s->cp_sizeof);
     s->cp_data_size++;
 
-    if (s->cp_data_size >= s->cp_data_cap) {
     if (s->cp_data_size + 1 >= s->cp_data_cap) {
 
         if (de_ecs_verbose)
