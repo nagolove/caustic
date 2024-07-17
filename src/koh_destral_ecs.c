@@ -407,6 +407,7 @@ static void* de_storage_emplace(de_storage* s, de_entity e) {
     s->cp_data_size++;
 
     if (s->cp_data_size >= s->cp_data_cap) {
+    if (s->cp_data_size + 1 >= s->cp_data_cap) {
         s->cp_data_cap *= 2;
         //trace("de_storage_emplace: additional allocating for type %d\n", s->cp_id);
         s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
