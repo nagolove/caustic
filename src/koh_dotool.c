@@ -312,8 +312,10 @@ static void update_scripts_list(dotool_ctx_t *ctx) {
     );
     ctx->selected_scripts[0] = true;
 
+    //char buf[1024] = {};
     if (verbose)
-        koh_search_files_print(&ctx->fsr_scripts);
+        //koh_search_files_print(&ctx->fsr_scripts);
+        koh_search_files_print2(&ctx->fsr_scripts, trace);
 }
 
 static const char *get_key(int key) {
