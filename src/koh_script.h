@@ -1,5 +1,7 @@
 #pragma once
 
+// TODO: Совместить в koh_lua_tools.h
+
 #include "koh_object.h"
 #include "lauxlib.h"
 #include "lua.h"
