@@ -877,6 +877,7 @@ dependencies = {
    },
 
    {
+      disabled = false,
       name = "imgui",
       dir = "imgui",
       url_action = "git",
@@ -1065,7 +1066,7 @@ dependencies = {
    },
 
    {
-
+      disabled = false,
       build = build_rlwr,
       after_build = nil,
       copy_for_wasm = true,

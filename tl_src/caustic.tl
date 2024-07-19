@@ -877,6 +877,7 @@ dependencies = {
     },
 
     {
+        disabled = false,
         name = "imgui",
         dir = "imgui",
         url_action = "git",
@@ -1065,7 +1066,7 @@ dependencies = {
     },
 
     {
-        --depends = {'smallregex', "wfc"},
+        disabled = false,
         build = build_rlwr,
         after_build = nil,
         copy_for_wasm = true,
@@ -3733,6 +3734,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
                     )
                 );
             end
+
         end
     else
         table.insert(flags, "-O3")
@@ -3752,6 +3754,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
             end
         end
     end
+
+    --print("sub_make: flags", inspect(flags))
 
     if not _args.noasan then
         --table.insert(flags, "-fsanitize=address")
