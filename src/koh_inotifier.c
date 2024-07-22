@@ -267,7 +267,7 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     in.watched_num++;
 }
 
-void inotifier_remove_watch(const char *fname) {
+void inotifier_watch_remove(const char *fname) {
     // Система не инициализирована
     if (!in.tbl) return;
 
