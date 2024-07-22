@@ -36,6 +36,8 @@ enum TimerManAction {
     TMA_REMOVE_BREAK,
 };
 
+extern bool timerman_verbose;
+
 struct TimerMan *timerman_new(int cap, const char *name);
 void timerman_free(struct TimerMan *tm);
 

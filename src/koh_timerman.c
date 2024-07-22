@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool timerman_verbose = false;
+
 struct TimerMan {
     struct Timer        *timers;
     int                 timers_cap, timers_size;
@@ -31,8 +33,11 @@ struct TimerMan *timerman_new(int cap, const char *name) {
 void timerman_free(struct TimerMan *tm) {
     assert(tm);
 
+    if (timerman_verbose)
+        trace("timerman_free: '%s'\n", tm->name);
+
     for (int i = 0; i < tm->timers_size; ++i) {
-        if (tm->timers[i].data) {
+        if (tm->timers[i].sz == 0 && tm->timers[i].data) {
             free(tm->timers[i].data);
             tm->timers[i].data = NULL;
         }
