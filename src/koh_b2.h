@@ -191,10 +191,20 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
         trace("camera2aabb: %s\n", camera2str(*cam, false));
    
     /*gap_radius = 0.;*/
+
     aabb.lowerBound.x = - zoom * offset.x + gap_radius;
     aabb.lowerBound.y = - zoom * offset.y - gap_radius;
-    aabb.upperBound.x = - zoom * offset.x + w - gap_radius;
-    aabb.upperBound.y = - zoom * offset.y + h - gap_radius;
+    aabb.upperBound.x = - zoom * offset.x + w * zoom - gap_radius;
+    aabb.upperBound.y = - zoom * offset.y + h  * zoom - gap_radius;
+//    */
+
+    /*
+    aabb.lowerBound.x = - 1. * offset.x + gap_radius;
+    aabb.lowerBound.y = - 1. * offset.y - gap_radius;
+    aabb.upperBound.x = - 1. * offset.x + w - gap_radius;
+    aabb.upperBound.y = - 1. * offset.y + h - gap_radius;
+    // */
+
     assert(b2AABB_IsValid(aabb));
     return aabb;
 }
