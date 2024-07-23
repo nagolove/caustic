@@ -149,6 +149,7 @@ const char *get_key2str(int key) {
     return NULL;
 }
 
+// TODO: Сделать вывод в консоль через tabular()
 void hotkeys_enumerate(HotkeyStorage *storage) {
     assert(storage);
 
