@@ -15,6 +15,4 @@ typedef enum koh_CamMode {
 Camera2D *koh_cam_get();
 const char *koh_cam_get_mode(enum koh_CamMode cm);
 void koh_cam_init();
-void koh_cam_mode_next(enum koh_CamMode *camera_mode);
-void koh_cam_shutdown();
-void koh_cam_reset();
+void koh_cam_reset(Camera2D *cam);

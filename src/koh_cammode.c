@@ -2,6 +2,7 @@
 
 #include "koh_logger.h"
 #include "raylib.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,7 +53,8 @@ void koh_cam_shutdown() {
     trace("koh_cam_shutdown:\n");
 }
 
-void camera_reset() {
-    memset(&cam, 0, sizeof(cam));
-    cam.zoom = 1.;
+void koh_cam_reset(Camera2D *cam) {
+    assert(cam);
+    memset(cam, 0, sizeof(*cam));
+    cam->zoom = 1.;
 }
