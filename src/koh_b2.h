@@ -180,10 +180,12 @@ inline static bool b2Body_has_shape(b2BodyId body_id, b2ShapeId target_shape) {
 const char *b2Polygon_to_str(const b2Polygon *poly);
 void box2d_gui(struct WorldCtx *wctx);
 
+// TODO: Область камеры не должна превышать область экран, то есть
+// GetScreenWidth(), GetScreenHeight()
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     assert(cam);
     float zoom = 1. / cam->zoom;
-    float w = GetScreenWidth() * zoom, h = GetScreenHeight() * zoom;
+    float w = GetScreenWidth(), h = GetScreenHeight();
     Vector2 offset = cam->offset;
     struct b2AABB aabb;
 
@@ -192,10 +194,12 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
    
     /*gap_radius = 0.;*/
 
-    aabb.lowerBound.x = - zoom * offset.x + gap_radius;
-    aabb.lowerBound.y = - zoom * offset.y - gap_radius;
-    aabb.upperBound.x = - zoom * offset.x + w * zoom - gap_radius;
-    aabb.upperBound.y = - zoom * offset.y + h  * zoom - gap_radius;
+    aabb.lowerBound.x = - zoom * offset.x + zoom * gap_radius;
+    aabb.lowerBound.y = - zoom * offset.y + zoom * gap_radius;
+    //aabb.upperBound.x = - zoom * offset.x + w * zoom - zoom * gap_radius;
+    //aabb.upperBound.y = - zoom * offset.y + h  * zoom - zoom * gap_radius;
+    aabb.upperBound.x = - zoom * offset.x + zoom * w - zoom * gap_radius;
+    aabb.upperBound.y = - zoom * offset.y + zoom * h - zoom * gap_radius;
 //    */
 
     /*
