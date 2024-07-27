@@ -34,6 +34,8 @@
 #include <execinfo.h>
 #endif
 
+#include <execinfo.h>
+
 /*#define ENET_IMPLEMENTATION*/
 #include "enet.h"
 
@@ -1398,7 +1400,10 @@ bool koh_search_files_pcre2(
     int errnumner;
     size_t erroffset;
     fsr->internal->regex_engine = RE_PCRE2;
-    uint32_t flags = 0
+    uint32_t flags = 0;
+
+    /*
+    // {{{sizeof(result)
         //PCRE2_ANCHORED           | //Force pattern anchoring
         //PCRE2_ALLOW_EMPTY_CLASS  | //Allow empty classes
         //PCRE2_ALT_BSUX           | //Alternative handling of \u, \U, and \x
@@ -1429,6 +1434,8 @@ bool koh_search_files_pcre2(
         //PCRE2_USE_OFFSET_LIMIT   | //Enable offset limit for unanchored matching
         //PCRE2_UTF                //Treat pattern and subjects as UTF strings
         ;
+    // }}}
+    */
 
 
     fsr->internal->regex.pcre.r = pcre2_compile(
@@ -1799,6 +1806,30 @@ void koh_backtrace_print() {
     backtrace_symbols_fd(trace, size, STDOUT_FILENO);
 }
 
+const char * koh_backtrace_get() {
+    void *array[100];
+    static char buf[4096] = {}, *pbuf = buf;
+
+    size_t frames;
+    char **symbols;
+    
+    // Получаем указатели на адреса функций в стеке вызовов
+    frames = backtrace(array, 100);
+    
+    // Получаем символы (строки) для каждого адреса
+    symbols = backtrace_symbols(array, frames);
+    if (!symbols)
+        return NULL;
+
+    while (*symbols) {
+        pbuf += sprintf(pbuf, "%s\n", *symbols);
+        symbols++;
+    }
+
+    free(symbols);
+    return buf;
+}
+
 char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
     assert(verts);
     assert(num >= 0);
@@ -2042,3 +2073,72 @@ const char *koh_str_gen_aA(size_t len) {
     return buf;
 }
 
+char *koh_str_sub_alloc(
+    const char *subject, const char* pattern, const char *replacement
+) {
+    int errnumner;
+    size_t erroffset;
+
+    // Длина исходной строки
+    PCRE2_SIZE subject_length = strlen((char *)subject);
+    // Длина строки замены
+    PCRE2_SIZE replacement_length = strlen((char *)replacement);
+
+    // Создание компилятора регулярных выражений
+    pcre2_code *re = pcre2_compile(
+        (const unsigned char*)pattern,  // Шаблон регулярного выражения
+        PCRE2_ZERO_TERMINATED,          // Длина шаблона (нулевой терминатор)
+        0,                              // Флаги
+        &errnumner,                     // Код ошибки
+        &erroffset,                     // Позиция ошибки
+        NULL                            // Параметры компиляции
+    );                          
+
+    if (re == NULL) {
+        trace(
+            "koh_str_sub: could not compile regex '%s' with '%s'\n",
+            pattern, pcre_code_str(errnumner)
+        );
+        return NULL;
+    }
+
+    size_t result_len = 1024;
+    // Буфер для результата
+    PCRE2_UCHAR *result = calloc(result_len, sizeof(result[0]));
+    PCRE2_SIZE result_length = result_len;
+
+    // Замена всех вхождений шаблона на подстроку
+    int rc = pcre2_substitute(
+        re,                             // Скомпилированное регулярное выражение
+        (PCRE2_SPTR)subject,            // Исходная строка
+        subject_length,                 // Длина исходной строки
+        0,                              // Начальная позиция поиска
+        PCRE2_SUBSTITUTE_GLOBAL,        // Флаги замены (глобальная замена)
+        NULL,                           // Набор совпадений
+        NULL,                           // Память для набора совпадений
+        (unsigned char*)replacement,    // Строка замены
+        replacement_length,             // Длина строки замены
+        result,                         // Буфер для результата
+        &result_length                  // Длина буфера результата
+    );                
+
+    if (rc < 0) {
+        trace("koh_str_sub: substitution error\n");
+        free(result);
+        pcre2_code_free(re);
+        return NULL;
+    }
+
+    trace(
+        "koh_str_sub_alloc: "
+        "subject '%s',"
+        "pattern '%s',"
+        "replacement '%s'," 
+        "result '%s'\n",
+        subject, pattern, replacement, (char*)result
+    );
+
+    // Освобождение ресурсов
+    pcre2_code_free(re);
+    return (char*)result;
+}

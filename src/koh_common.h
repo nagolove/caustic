@@ -254,7 +254,9 @@ void koh_try_ray_cursor();
 // Возвращает указатель на статический внутренний буфер
 const char *koh_incremental_fname(const char *fname, const char *ext);
 
-// Возвращает указатель на статический буффер.
+// Возвращает указатель на статический буффер с путем до файла, без имени.
+// Путь может содержать '/' в конце. 
+// [XXX: Может-ли? При fname = "/text.txt"]
 const char *koh_extract_path(const char *fname);
 
 int koh_cpu_count();
@@ -271,6 +273,7 @@ void koh_window_state_print();
 bool koh_window_is_point_in(Vector2 point, Camera2D *cam);
 
 void koh_backtrace_print();
+const char * koh_backtrace_get();
 
 char *Vector2_tostr_alloc(const Vector2 *verts, int num);
 
@@ -303,3 +306,7 @@ bool koh_check_fname(const char *fname);
 
 char *points2table_allocated(const Vector2 *points, int points_num);
 const char *koh_str_gen_aA(size_t len);
+
+char *koh_str_sub_alloc(
+    const char *subject, const char* pattern, const char *replacement
+);
