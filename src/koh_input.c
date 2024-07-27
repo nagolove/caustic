@@ -26,7 +26,8 @@ struct BtnRow {
     struct Btn *btns;
 };
 
-const static float scale_mouse = 0.3;
+bool koh_verbose_input = false;
+const static float scale_mouse = 0.10;
 
 static struct Btn row1[] = {
     // {{{
@@ -291,7 +292,9 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     kbm->font_size = 23;
     kbm->line_thick = 3;
 
-    //trace("input_kb_new: kb_size %s\n", Vector2_tostr(size));
+    if (koh_verbose_input)
+        trace("input_kb_new: btn_width %d\n", setup->btn_width);
+
     return kbm;
 }
 
@@ -314,8 +317,27 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
         kb->kb_size.y, kb->tex_mouse.height
     );
     */
+
+    // Вручную подобранное смещение для scale_mouse = 0.95
+    float manual_shift = 0;
+
+    /*
+    if (kb->btn_width == 70 && scale_mouse - 0.95 < FLT_EPSILON) {
+
+        if (koh_verbose_input) {
+            trace(
+                "input_kb_gui_update: manual_shift %f\n",
+                manual_shift
+            );
+        }
+
+        manual_shift = 200.f;
+    }
+    // */
+    manual_shift = 200.f;
+
     const Vector2 pos = {
-        kb->kb_size.x,
+        kb->kb_size.x - manual_shift,
         (kb->kb_size.y - kb->tex_mouse.height * scale_mouse) / 2.,
     };
     DrawTextureEx(kb->tex_mouse, pos, 0., scale_mouse, color);
@@ -352,16 +374,20 @@ InputGamepadDrawer *input_gp_new() {
     gp->tex_xbox = res_tex_load(rl, "assets/gfx/xbox.png");
     gp->rt = res_tex_load_rt(rl, gp->tex_xbox.width, gp->tex_xbox.height);
 
-    int i = 10;
-    while (i > 0) {
-        trace(
-            "gput_init: gamepad %d was detected %s, name '%s' \n",
-            i, IsGamepadAvailable(i) ? "true" : "false", GetGamepadName(i));
-        const char *gp_name = GetGamepadName(i);
-        if (strstr(gp_name, "X-Box")) {
-            gp->active_gp = i;
+    if (koh_verbose_input) {
+        int i = 10;
+        while (i > 0) {
+            trace(
+                "input_gp_new: gamepad %d was detected %s, name '%s' \n",
+                i,
+                IsGamepadAvailable(i) ? "true" : "false", GetGamepadName(i)
+            );
+            const char *gp_name = GetGamepadName(i);
+            if (strstr(gp_name, "X-Box")) {
+                gp->active_gp = i;
+            }
+            i--;
         }
-        i--;
     }
 
     return gp;

@@ -2,8 +2,9 @@
 // vim: fdm=marker
 #pragma once
 
-#include "raylib.h"
-#include "koh_resource.h"
+#include <stdbool.h>
+
+extern bool koh_verbose_input;
 
 typedef struct InputKbMouseDrawer InputKbMouseDrawer;
 
