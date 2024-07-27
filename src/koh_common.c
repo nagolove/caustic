@@ -1307,12 +1307,12 @@ static void search_files_rec(
             trace("search_files_rec: regular %s\n", name);
 
         if (match(fsr, name)) {
-            char fname[1024] = {};
-            snprintf(fname, sizeof(fname), "%s/%s", path, name);
+            //char fname[1024] = {};
+            //snprintf(fname, sizeof(fname), "%s/%s", path, name);
 
             check_for_realloc(fsr);
 
-            fsr->names[fsr->num] = strdup(fname);
+            fsr->names[fsr->num] = strdup(name);
             fsr->num++;
         }
     }
