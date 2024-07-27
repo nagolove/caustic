@@ -295,3 +295,20 @@ void trace_enable(bool state) {
 #undef MAX_TRACE_GROUPS
 
 #undef USE_REGEX
+
+// Custom logging function
+// TODO: Использовать trace() внутри или нет?
+void koh_log_custom(int msgType, const char *text, va_list args) {
+    printf("[%.4f] ", GetTime());
+
+    switch (msgType) {
+        case LOG_INFO: printf("[\033[1;32mINFO] : \033[0m"); break;
+        case LOG_ERROR: printf("[\033[1;31mERROR] : \033[0m"); break;
+        case LOG_WARNING: printf("[\033[1;33mWARN] : \033[0m"); break;
+        case LOG_DEBUG: printf("[\033[1;34mDEBUG] : \033[0m"); break;
+        default: break;
+    }
+
+    vprintf(text, args);
+    printf("\n");
+}

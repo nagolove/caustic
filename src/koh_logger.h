@@ -2,6 +2,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdarg.h>
 
 /*
 typedef struct LogPoints {
@@ -39,3 +40,4 @@ void trace_pop_group();
 void trace_push_group(const char *group_name);
 void traceg(const char *format, ...);
 */
+void koh_log_custom(int msgType, const char *text, va_list args);
