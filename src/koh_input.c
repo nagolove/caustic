@@ -271,9 +271,12 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     assert(kbm);
 
     Resource *rl = &kbm->reslist;
+
     // TODO: Как и где хранить текстуры если вынести t80_input_kb.c в
     // отдельный проект? Как собирать ресурсы и не делать этого повторно
     // каждый раз при запуске проекта?
+
+    SetTraceLogLevel(LOG_ERROR);
     kbm->tex_mouse = res_tex_load(rl, "assets/gfx/mouse/mouse.png");
     kbm->tex_mouse_rb = res_tex_load(rl, "assets/gfx/mouse/rb.png");
     kbm->tex_mouse_lb = res_tex_load(rl, "assets/gfx/mouse/lb.png");
@@ -285,6 +288,7 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     size.x += kbm->tex_mouse.width * scale_mouse;
 
     kbm->rt = res_tex_load_rt(rl, size.x, size.y);
+    SetTraceLogLevel(LOG_INFO);
 
     kbm->color_text = BLACK;
     kbm->color_btn_pressed = RED;
@@ -371,8 +375,11 @@ InputGamepadDrawer *input_gp_new() {
     assert(gp);
 
     Resource *rl = &gp->reslist;
+
+    SetTraceLogLevel(LOG_ERROR);
     gp->tex_xbox = res_tex_load(rl, "assets/gfx/xbox.png");
     gp->rt = res_tex_load_rt(rl, gp->tex_xbox.width, gp->tex_xbox.height);
+    SetTraceLogLevel(LOG_INFO);
 
     if (koh_verbose_input) {
         int i = 10;
