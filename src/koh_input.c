@@ -464,7 +464,8 @@ void input_gp_update(InputGamepadDrawer *gp) {
     EndTextureMode();
 
     bool wnd = true;
-    int flags = 0;
+    //int flags = ImGuiWindowFlags_AlwaysAutoResize;
+    int flags = ImGuiWindowFlags_NoResize;
     igBegin("input - gamepad", &wnd, flags);
 
     rlImGuiImageRenderTexture(&gp->rt);
