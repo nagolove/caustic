@@ -310,3 +310,4 @@ const char *koh_str_gen_aA(size_t len);
 char *koh_str_sub_alloc(
     const char *subject, const char* pattern, const char *replacement
 );
+extern bool common_verbose;

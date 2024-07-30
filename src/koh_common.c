@@ -3,6 +3,7 @@
 
 #define PCRE2_CODE_UNIT_WIDTH   8
 
+// {{{ include
 #include "chipmunk/chipmunk.h"
 #include "chipmunk/chipmunk_structs.h"
 #include "chipmunk/chipmunk_types.h"
@@ -38,6 +39,7 @@
 
 /*#define ENET_IMPLEMENTATION*/
 #include "enet.h"
+// }}}
 
 enum RegexEngine {
     /*RE_SMALL,*/
@@ -60,6 +62,7 @@ struct CommonInternal {
     int cpu_count;
 } cmn_internal = {};
 
+bool common_verbose = false;
 static bool verbose_search_files_rec = false;
 static struct Common cmn;
 
@@ -175,21 +178,20 @@ const char *color2str(Color c) {
 static void add_chars_range(int first, int last) {
     assert(first < last);
     int range = last - first;
-    printf("add_chars_range: [%x, %x] with %d chars\n", first, last, range);
+    size_t sz = sizeof(cmn.font_chars[0]) * cmn.font_chars_cap;
+
+    if (common_verbose)
+        trace("add_chars_range: [%x, %x] with %d chars\n", first, last, range);
 
     if (cmn.font_chars_num + range >= cmn.font_chars_cap) {
         cmn.font_chars_cap += range;
-        cmn.font_chars = realloc(
-            cmn.font_chars,
-            sizeof(cmn.font_chars[0]) * cmn.font_chars_cap
-        );
+        cmn.font_chars = realloc(cmn.font_chars, sz);
     }
 
-    //for (int i = 0; i < range; ++i) {
-    for (int i = 0; i <= range; ++i) {
+    for (int i = 0; i <= range; ++i) 
         cmn.font_chars[cmn.font_chars_num++] = first + i;
-    }
 }
+
 Font load_font_unicode(const char *fname, int size) {
     return LoadFontEx(fname, size, cmn.font_chars, cmn.font_chars_num);
 }
