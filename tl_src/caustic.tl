@@ -3254,7 +3254,7 @@ local function get_cores_num(): integer
     return num
 end
 
-local function parallel_run(queue: {string})
+local function run_parallel(queue: {string})
     local cores_num = get_cores_num() * 2
     if verbose then
         print('parallel_run:', #queue)
@@ -3312,7 +3312,7 @@ local function parallel_run(queue: {string})
     until stop
 end
 
-local function serial_run(queue: {string})
+local function run_serial(queue: {string})
     for _, cmd in ipairs(queue) do
         cmd_do(cmd)
     end
@@ -3861,9 +3861,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     end
 
     if not _args.j then
-        serial_run(queue)
+        run_serial(queue)
     else
-        parallel_run(queue)
+        run_parallel(queue)
     end
 
     cache:save()
@@ -3885,6 +3885,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
     -- скрипте.
     if cfg.artifact then
+        -- Сборка проекта
         ut.push_current_dir()
         chdir(path_caustic)
         if verbose then
@@ -3921,6 +3922,9 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         --cp(cfg.artifact, dst)
         --set_executable_bit(dst)
     else
+        -- Сборка библиотеки "Щелочь"
+
+        -- TODO: Связывать в каустику imgui, для сборки koh_imgui.h
         koh_link(objfiles_str, _args)
         cmd_do("mv libcaustic.a ../libcaustic.a")
     end
