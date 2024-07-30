@@ -42,7 +42,7 @@ int l_sounds(lua_State *lua) {
 }
 
 int l_sound_play(lua_State *lua) {
-    trace("l_sound_play: [%s]\n", stack_dump(lua));
+    trace("l_sound_play: [%s]\n", L_stack_dump(lua));
     if (lua_isstring(lua, 1)) {
         sfx_play(lua_tostring(lua, 1));
     }

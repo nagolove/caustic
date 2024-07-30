@@ -45,20 +45,20 @@ koh_Animator *koh_animator_new(koh_Animator_Def *def) {
         exit(EXIT_FAILURE);
     }
 
-    trace("koh_animator_new: [%s]\n", stack_dump(lua));
+    trace("koh_animator_new: [%s]\n", L_stack_dump(lua));
     lua_getglobal(lua, "anim");
-    trace("koh_animator_new: [%s]\n", stack_dump(lua));
+    trace("koh_animator_new: [%s]\n", L_stack_dump(lua));
     lua_pushstring(lua, "meta");
-    trace("koh_animator_new: [%s]\n", stack_dump(lua));
+    trace("koh_animator_new: [%s]\n", L_stack_dump(lua));
     lua_gettable(lua, -2);
-    trace("koh_animator_new: [%s]\n", stack_dump(lua));
+    trace("koh_animator_new: [%s]\n", L_stack_dump(lua));
 
     lua_pushstring(lua, "image");
     lua_gettable(lua, -2);
-    trace("koh_animator_new: [%s]\n", stack_dump(lua));
+    trace("koh_animator_new: [%s]\n", L_stack_dump(lua));
 
     const char *image_fname = lua_tostring(lua, -1);
-    trace("koh_animator_new: [%s]\n", stack_dump(lua));
+    trace("koh_animator_new: [%s]\n", L_stack_dump(lua));
 
     char fname[512] = {0};
     snprintf(fname, sizeof(fname), "%s/%s", def->assets_dir, image_fname);

@@ -38,7 +38,7 @@ const char* tabe_tab(TabEngine *te, const char *line) {
             te->state = TAB_STATE_NEXT;
 
             lua_State *lua = te->lua;
-            trace("tabe_tab: [%s]\n", stack_dump(lua));
+            trace("tabe_tab: [%s]\n", L_stack_dump(lua));
 
             lua_getglobal(lua, "_G");
             int table_index = lua_gettop(lua);

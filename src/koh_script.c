@@ -80,14 +80,14 @@ void sc_register_function(lua_CFunction f, const char *fname, const char *desc) 
 
     assert(ref_types_table);
     if (verbose)
-        trace("register_function: '%s' [%s]\n", fname, stack_dump(lua));
+        trace("register_function: '%s' [%s]\n", fname, L_stack_dump(lua));
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_types_table);
     lua_pushstring(lua, fname);
     lua_pushcclosure(lua, f, 0);
     lua_settable(lua, -3);
     lua_pop(lua, 1);
     if (verbose)
-        trace("register_function: [%s]\n", stack_dump(lua));
+        trace("register_function: [%s]\n", L_stack_dump(lua));
 
     /*lua_register(lua, fname, f);*/
     sc_register_func_desc(fname, desc);
@@ -154,7 +154,7 @@ void print_type_methods(lua_State *lua, const char *type) {
 }
 
 void print_avaible_types(lua_State *lua) {
-    printf("print_avaible_types: [%s]\n", stack_dump(lua));
+    printf("print_avaible_types: [%s]\n", L_stack_dump(lua));
 
     TypeEntry *curr = types_getlist();
     while (curr) {
@@ -164,7 +164,7 @@ void print_avaible_types(lua_State *lua) {
 }
 
 int l_help(lua_State *lua) {
-    printf("[%s]\n", stack_dump(lua));
+    printf("[%s]\n", L_stack_dump(lua));
 
     int argsnum = lua_gettop(lua);
 
@@ -194,7 +194,7 @@ int l_help(lua_State *lua) {
         /*console_buf_write_c(BLUE, "help('Tank')");*/
     }
 
-    printf("[%s]\n", stack_dump(lua));
+    printf("[%s]\n", L_stack_dump(lua));
     return 0;
 }
 
@@ -390,7 +390,7 @@ void sc_init(void) {
 #endif
 */
 
-    printf("[%s]\n", stack_dump(lua));
+    printf("[%s]\n", L_stack_dump(lua));
     lua_createtable(lua, 0, 0);
     ref_functions_desc = luaL_ref(lua, LUA_REGISTRYINDEX);
 
@@ -406,7 +406,7 @@ void sc_init(void) {
 
     print_redefine();
     require_redefine();
-    printf("sc_init [%s]\n", stack_dump(lua));
+    printf("sc_init [%s]\n", L_stack_dump(lua));
 }
 
 void sc_shutdown() {
@@ -673,7 +673,7 @@ int new_fullud_ref(Stage *st, Object *obj, const char *tname) {
     lua_setmetatable(lua, -2);
     lua_settop(lua, 0);
     if (verbose)
-        trace("new_fullud_ref: [%s]\n", stack_dump(lua));
+        trace("new_fullud_ref: [%s]\n", L_stack_dump(lua));
 
     return ref;
 }
@@ -682,7 +682,7 @@ int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
     assert(obj);
     assert(tname);
 
-    trace("new_fullud_get_ref: [%s]\n", stack_dump(lua));
+    trace("new_fullud_get_ref: [%s]\n", L_stack_dump(lua));
 
     lua_settop(lua, 0);
     Object_ud *oud = lua_newuserdata(lua, sizeof(Object_ud));
@@ -701,7 +701,7 @@ int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
         trace("new_fullud_get_ref: there is no such metatable '%s'\n", tname);
     }
 
-    trace("new_fullud_get_ref: [%s]\n", stack_dump(lua));
+    trace("new_fullud_get_ref: [%s]\n", L_stack_dump(lua));
 
     return ref;
 }
@@ -753,11 +753,11 @@ void sc_dostring(const char *str) {
     if (!lua) return;
 
     printf("dostring: %s\n", str);
-    printf("dostring: 1 [%s]\n", stack_dump(lua));
+    printf("dostring: 1 [%s]\n", L_stack_dump(lua));
     if (luaL_dostring(lua, str) != LUA_OK) {
         //const char *err_msg = lua_tostring(lua, lua_gettop(lua));
         const char *err_msg = lua_tostring(lua, -1);
-        printf("dostring: 2 [%s]\n", stack_dump(lua));
+        printf("dostring: 2 [%s]\n", L_stack_dump(lua));
 
         const char *last = err_msg + strlen(err_msg);
         char line[MAX_LINE] = {0}, *line_ptr = line;
@@ -821,8 +821,8 @@ static void hook(lua_State *lua, lua_Debug *ar) {
     printf("short_src %s\n", ar->short_src);
 }
 
-const char * sc_stack_dump() {
-    return stack_dump(lua);
+const char *sc_stack_dump() {
+    return L_stack_dump(lua);
 }
 
 int make_ret_table(int num, void**arr, size_t offset) {

@@ -41,7 +41,7 @@ DocArray doc_init(lua_State *lua, const char *mtname) {
 
     lua_pushnil(lua);  /* first key */
 
-    printf("doc_get: [%s]\n", stack_dump(lua));
+    printf("doc_get: [%s]\n", L_stack_dump(lua));
     while (lua_next(lua, table_index) != 0) {
         /* uses 'key' (at index -2) and 'value' (at index -1) */
         int key_index = -2;
@@ -412,7 +412,7 @@ void sc_register_methods_and_doc(
 ) {
     if (verbose)
         trace(
-            "register_methods_and_doc: '%s' [%s]\n", mtname, stack_dump(lua)
+            "register_methods_and_doc: '%s' [%s]\n", mtname, L_stack_dump(lua)
         );
 
     /*
@@ -446,38 +446,7 @@ void sc_register_methods_and_doc(
 }
 
 const char *stack_dump(lua_State *lua) {
-    if (!lua) 
-        return NULL;
-
-    static char ret[1024] = {0, };
-    memset(ret, 0, sizeof(ret));
-    char *ptr = ret;
-    int top = lua_gettop(lua);
-    for (int i = 1; i <= top; i++) {
-        int t = lua_type(lua, i);
-        int max_chars = sizeof(ret) - (ptr - ret) - 1; // -1 is random value
-        switch (t) {
-            case LUA_TUSERDATA: 
-                ptr += snprintf(
-                    ptr, max_chars, "userdata %p", lua_topointer(lua, i)
-                );
-                break;
-            case LUA_TSTRING: 
-                ptr += snprintf(ptr, max_chars, "’%s’", lua_tostring(lua, i));
-                break;
-            case LUA_TBOOLEAN: 
-                ptr += snprintf(ptr, max_chars, lua_toboolean(lua, i) ? "true" : "false");
-                break;
-            case LUA_TNUMBER: 
-                ptr += snprintf(ptr, max_chars, "%g", lua_tonumber(lua, i));
-                break;
-            default: 
-                ptr += snprintf(ptr, max_chars, "%s", lua_typename(lua, t));
-                break;
-        }
-        ptr += snprintf(ptr, max_chars, " "); 
-    }
-    return ret;
+    return L_stack_dump(lua);
 }
 
 void types_init() {
@@ -528,9 +497,9 @@ char *table_dump2allocated_str(lua_State *l) {
     int top = lua_gettop(l);
 
     lua_getglobal(l, "package");
-    printf("table_dump2allocated_str: 0 [%s]\n", stack_dump(l));
+    printf("table_dump2allocated_str: 0 [%s]\n", L_stack_dump(l));
     lua_getfield(l, -1, "preload");
-    printf("table_dump2allocated_str: 1 [%s]\n", stack_dump(l));
+    printf("table_dump2allocated_str: 1 [%s]\n", L_stack_dump(l));
 
     /*
     printf(
@@ -546,9 +515,9 @@ char *table_dump2allocated_str(lua_State *l) {
         );
     }
 
-    printf("table_dump2allocated_str: 2 [%s]\n", stack_dump(l));
+    printf("table_dump2allocated_str: 2 [%s]\n", L_stack_dump(l));
     lua_setfield(l, -2, "serpent");
-    printf("table_dump2allocated_str: 3 [%s]\n", stack_dump(l));
+    printf("table_dump2allocated_str: 3 [%s]\n", L_stack_dump(l));
 
     lua_settop(l, top);
 
@@ -639,3 +608,38 @@ void table_push_rect_as_arr(lua_State *l, Rectangle rect) {
     lua_rawseti(l, -2, 4);
 }
 
+const char *L_stack_dump(lua_State *lua) {
+    if (!lua) 
+        return NULL;
+    
+    // TODO: Проверка на вместимость во внутреннего буфера
+    static char ret[1024] = {0, };
+    memset(ret, 0, sizeof(ret));
+    char *ptr = ret;
+    int top = lua_gettop(lua);
+    for (int i = 1; i <= top; i++) {
+        int t = lua_type(lua, i);
+        int max_chars = sizeof(ret) - (ptr - ret) - 1; // -1 is random value
+        switch (t) {
+            case LUA_TUSERDATA: 
+                ptr += snprintf(
+                    ptr, max_chars, "userdata %p", lua_topointer(lua, i)
+                );
+                break;
+            case LUA_TSTRING: 
+                ptr += snprintf(ptr, max_chars, "’%s’", lua_tostring(lua, i));
+                break;
+            case LUA_TBOOLEAN: 
+                ptr += snprintf(ptr, max_chars, lua_toboolean(lua, i) ? "true" : "false");
+                break;
+            case LUA_TNUMBER: 
+                ptr += snprintf(ptr, max_chars, "%g", lua_tonumber(lua, i));
+                break;
+            default: 
+                ptr += snprintf(ptr, max_chars, "%s", lua_typename(lua, t));
+                break;
+        }
+        ptr += snprintf(ptr, max_chars, " "); 
+    }
+    return ret;
+}

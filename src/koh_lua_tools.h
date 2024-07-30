@@ -46,8 +46,12 @@ TypeEntry *types_getlist();
 DocArray doc_init(lua_State *lua, const char *mtname);
 void doc_shutdown(DocArray *docarr);
 
+__attribute_deprecated__
 // Возвращает указатель на статический буфер.
 const char *stack_dump(lua_State *lua);
+// Возвращает указатель на статический буфер.
+const char *L_stack_dump(lua_State *lua);
+
 void table_print(lua_State *lua, int idx);
 
 struct TablePrintOpts {
