@@ -4,7 +4,7 @@
 #pragma once
 
 #include <stdbool.h>
-
+#include "raylib.h"
 #include "koh_hotkey.h"
 
 enum {
