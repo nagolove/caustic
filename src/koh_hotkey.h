@@ -3,8 +3,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "raylib.h"
-
 /*
     Хоткеи должны переключаться в зависимости от активной сцены. Если сцена
     не активна, то ее хоткеи не обрабатываются.
@@ -60,3 +58,5 @@ void hotkeys_enumerate(HotkeyStorage *storage);
 
 void hotkey_state_push(HotkeyStorage *storage);
 void hotkey_state_pop(HotkeyStorage *storage);
+
+extern bool hotkey_verbose;

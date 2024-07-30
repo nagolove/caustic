@@ -18,6 +18,7 @@
 static HotkeyStorage    state_stack[8] = {0};
 static int              state_sz = 0;
 static HotkeyStorage *last_storage = NULL;
+bool hotkey_verbose = false;
 
 struct Key2Str {
     int key;
@@ -236,15 +237,16 @@ void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
     }
 
     if (!hk.data)
-        //traceg("combination '%s' without custom data\n", hk.name);
-        trace(
-            "hotkey_register: combination '%s' without custom data\n",
-            hk.name
-        );
+        if (hotkey_verbose)
+            trace(
+                "hotkey_register: combination '%s' without custom data\n",
+                hk.name
+            );
 
     if (!hk.groups) {
         //traceg("combination '%s' without group\n", hk.name);
-        trace("hotkey_register: combination '%s' without group\n", hk.name);
+        if (hotkey_verbose)
+            trace("hotkey_register: combination '%s' without group\n", hk.name);
     }
 
     if (!hk.func) {
