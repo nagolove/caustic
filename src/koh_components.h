@@ -297,11 +297,12 @@ void e_cp_body_draw(de_ecs *r, WorldCtx *wctx);
 struct CheckUnderMouseOpts {
     de_ecs *r;
     WorldCtx *wctx;
-    Camera2D cam;
+    Camera2D cam;        // XXX: Почему не указатель на камеру?
     struct TimerMan *tm;
     float duration;
 };
 
+// behaviour
 void beh_check_under_mouse(struct CheckUnderMouseOpts *opts);
 /*void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx);*/
 void e_destroy_border_sensors(de_ecs *r, WorldCtx *wctx);
