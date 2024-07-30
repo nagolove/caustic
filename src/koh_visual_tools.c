@@ -1328,3 +1328,53 @@ struct ToolCommonOpts visual_tool_commont_default_opts = {
     .snap_size = 1,
 };
 
+void visual_tool_init(struct VisualTool *tool_visual) {
+    assert(tool_visual);
+    struct ToolCommonOpts common_opts = {
+        .mouse_button_bind = MOUSE_BUTTON_RIGHT,
+        .handle_color = BLUE,
+        .handle_color_alternative = GREEN,
+        .line_color = BLACK,
+        .line_thick = 3.,
+        .handle_color_selected = RED,
+        .snap = false,
+        .snap_size = 1,
+    };
+
+    tool_visual->t_pl_opts = (struct ToolPolylineOpts) {
+        .common = common_opts,
+    };
+    tool_visual->t_pl_draw_opts = (struct ToolPolylineDrawOpts) {
+    };
+    polyline_init(&tool_visual->t_pl, &tool_visual->t_pl_opts);
+
+    /*
+    Vector2 points[] = {
+        { 0., 0. },
+        { 2000., 100. },
+        { 2000., 2000. },
+        { 100., 2000. },
+    };
+    int points_num = sizeof(points) / sizeof(points[0]);
+    polyline_points_set(&tool_visual.t_pl, points, points_num);
+    */
+
+    tool_visual->t_rect_opts = (struct ToolRectangleOpts) {
+        .common = common_opts,
+        //.is_oriented = false,
+    };
+    tool_visual->t_rect_draw_opts.draw_axises = false;
+    rectangle_init(&tool_visual->t_rect, &tool_visual->t_rect_opts);
+
+    tool_visual->t_recta_opts = (struct ToolRectangleAlignedOpts) {
+        .common = common_opts,
+    };
+    tool_visual->t_recta_draw_opts.draw_axises = false;
+    rectanglea_init(&tool_visual->t_recta, &tool_visual->t_recta_opts);
+
+    tool_visual->t_sector_opts = (struct ToolSectorOpts){
+        .common = common_opts,
+    };
+    sector_init(&tool_visual->t_sector, &tool_visual->t_sector_opts);
+}
+

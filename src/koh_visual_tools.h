@@ -183,3 +183,5 @@ void sector_draw(
 
 extern struct ToolCommonOpts visual_tool_commont_default_opts;
 const char *visual_mode2str(enum VisualToolMode mode);
+
+void visual_tool_init(struct VisualTool *tool_visual);
