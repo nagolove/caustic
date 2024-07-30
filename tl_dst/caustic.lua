@@ -3254,7 +3254,7 @@ local function get_cores_num()
    return num
 end
 
-local function parallel_run(queue)
+local function run_parallel(queue)
    local cores_num = get_cores_num() * 2
    if verbose then
       print('parallel_run:', #queue)
@@ -3312,7 +3312,7 @@ local function parallel_run(queue)
    until stop
 end
 
-local function serial_run(queue)
+local function run_serial(queue)
    for _, cmd in ipairs(queue) do
       cmd_do(cmd)
    end
@@ -3734,6 +3734,7 @@ local function sub_make(_args, cfg, push_num)
 
 
          end
+
       end
    else
       table.insert(flags, "-O3")
@@ -3753,6 +3754,8 @@ local function sub_make(_args, cfg, push_num)
          end
       end
    end
+
+
 
    if not _args.noasan then
 
@@ -3858,9 +3861,9 @@ local function sub_make(_args, cfg, push_num)
    end
 
    if not _args.j then
-      serial_run(queue)
+      run_serial(queue)
    else
-      parallel_run(queue)
+      run_parallel(queue)
    end
 
    cache:save()
@@ -3882,6 +3885,7 @@ local function sub_make(_args, cfg, push_num)
 
 
    if cfg.artifact then
+
       ut.push_current_dir()
       chdir(path_caustic)
       if verbose then
@@ -3918,6 +3922,9 @@ local function sub_make(_args, cfg, push_num)
 
 
    else
+
+
+
       koh_link(objfiles_str, _args)
       cmd_do("mv libcaustic.a ../libcaustic.a")
    end
