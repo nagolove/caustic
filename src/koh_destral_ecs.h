@@ -309,4 +309,10 @@ void de_ecs_print(de_ecs *r);
 void de_gui(de_ecs *r, de_entity e);
 void de_storage_print(de_ecs *r, de_cp_type cp_type);
 
+// Возвращет статический массив с NULL элементов в конце со списком типов 
+// компонент присоединенных к сущности. Типы компонентов должны быть 
+// предварительтно указаны через de_ecs_register()
+// В num возвращает количество типов
+de_cp_type **de_types(de_ecs *r, de_entity e, int *num);
+
 extern bool de_ecs_verbose;

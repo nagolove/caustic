@@ -1640,3 +1640,27 @@ void de_storage_print(de_ecs *r, de_cp_type cp_type) {
     */
 }
 
+de_cp_type **de_types(de_ecs *r, de_entity e, int *num) {
+    assert(r);
+    if (e == de_null || !de_valid(r, e))
+        return NULL;
+
+    static de_cp_type *types[32];
+
+    memset(types, 0, sizeof(types));
+
+    // Убедиться что хватит места на все типы компонент.
+    assert(r->registry_num < sizeof(types) / sizeof(types[0]));
+
+    int types_num = 0;
+    for (int i = 0; i < r->registry_num; i++) {
+        if (de_has(r, e, r->registry[i])) {
+            types[types_num++] = &r->registry[i];
+        }
+    }
+
+    if (num)
+        *num = types_num;
+
+    return types;
+}
