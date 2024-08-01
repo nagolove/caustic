@@ -212,6 +212,8 @@ void render_circle(Vector2 center, float radius, Color color) {
     SetShaderValue(shdr_circle, loc_pos, pos, SHADER_UNIFORM_VEC2);
     SetShaderValue(shdr_circle, loc_radius, &radius, SHADER_UNIFORM_FLOAT);
     BeginShaderMode(shdr_circle);
+    // XXX: Нужно ли здесь рисовать прямоугольник для отображения действия
+    // фрагментой программы?
     EndShaderMode();
 }
 
