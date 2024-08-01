@@ -38,8 +38,10 @@ void shadertoy_pass(ShadertoyCtx *ctx, int rt_width, int rt_height) {
     assert(rt_width > 0);
     assert(rt_height > 0);
 
-    if (!ctx->shader.id)
+    if (!ctx->shader.id) {
+        trace("shadertoy_pass: empty shader program\n");
         return;
+    }
 
     /*
     // {{{
@@ -70,7 +72,8 @@ uniform float iSampleRate: Частота сэмплирования для ау
 // }}}
      */
 
-    float time = GetTime();
+    //float time = GetTime();
+    float time = 1.f;
     SetShaderValue(ctx->shader, ctx->loc_iTime, &time, SHADER_UNIFORM_FLOAT);
 
     float resolution[3] = { rt_width, rt_height, 1. };
@@ -82,4 +85,13 @@ uniform float iSampleRate: Частота сэмплирования для ау
     SetShaderValue(
         ctx->shader, ctx->loc_iTimeDelta, &time_delta, SHADER_UNIFORM_FLOAT
     );
+}
+
+void shadertoy_pass_custom(
+    ShadertoyCtx *ctx, Shader shader, int rt_width, int rt_height
+) {
+    assert(ctx);
+    Shader prev = ctx->shader;
+    shadertoy_pass(ctx, rt_width, rt_height);
+    ctx->shader = prev;
 }

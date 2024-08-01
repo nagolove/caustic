@@ -19,3 +19,6 @@ typedef struct ShadertoyCtx {
 
 void shadertoy_init(ShadertoyCtx *ctx, Shader shader);
 void shadertoy_pass(ShadertoyCtx *ctx, int rt_width, int rt_height);
+void shadertoy_pass_custom(
+    ShadertoyCtx *ctx, Shader shader, int rt_width, int rt_height
+);
