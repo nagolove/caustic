@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 typedef void (*WatchCallback)(const char *fname, void *data);
 
 void inotifier_init();
@@ -9,3 +11,6 @@ void inotifier_shutdown();
 void inotifier_watch(const char *fname, WatchCallback cb, void *data);
 void inotifier_watch_remove(const char *fname);
 void inotifier_update();
+void inotifier_list();
+
+extern bool inotifier_verbose;

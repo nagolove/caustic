@@ -29,14 +29,16 @@ struct WatchContext {
     void            *data;
 };
 
+bool inotifier_verbose = false;
+
 #define MAX_WATCHED_FILES 32
 
 // TODO: Перенести в структуру
 struct {
-    int fd;
-    int wd[MAX_WATCHED_FILES];
-    char *fnames[MAX_WATCHED_FILES];
-    int watched_num;
+    int    fd;
+    int    wd[MAX_WATCHED_FILES];
+    char   *fnames[MAX_WATCHED_FILES];
+    int    watched_num;
     HTable *tbl;
     struct pollfd fds[1];
 } in;
@@ -86,8 +88,18 @@ static void process_event(const struct inotify_event *event) {
     */
     //}}}
 
+    if (event->mask & IN_CREATE) {
+        if (inotifier_verbose)
+            trace("process_event: IN_CREATE '%s'\n", event->name);
+    }
+
     //XXX: При флаге IN_DELETE_SELF заново вызывать inotify_add_watch()
 
+    if (inotifier_verbose)
+        trace(
+            "process_event: event->mask '%s'\n",
+            to_bitstr_uint32_t(event->mask)
+        );
 
     if (!(event->mask & IN_MOVE_SELF))
         return;
@@ -101,13 +113,15 @@ static void process_event(const struct inotify_event *event) {
     ctx = htable_get(in.tbl, fname, strlen(fname) + 1, NULL);
     //trace("ctx %p\n", ctx);
     if (ctx && ctx->cb) {
-        trace("process_event: callback\n");
+        if (inotifier_verbose)
+            trace("process_event: callback\n");
         ctx->cb(fname, ctx->data);
     }
 }
 
 static void inotifier_handle_events() {
-    trace("inotifier_handle_events:\n");
+    if (inotifier_verbose)
+        trace("inotifier_handle_events:\n");
     char buf[4096]
         __attribute__ ((aligned(__alignof__(struct inotify_event))));
     const struct inotify_event *event;
@@ -134,25 +148,28 @@ static void inotifier_handle_events() {
 static HTableAction iter_list(
     const void *key, int key_len, void *value, int value_len, void *udata
 ) {
-    console_buf_write(">%s", (char*)key);
-    trace("l_notifier_list: %s\n", (char*)key);
+    /*console_buf_write(">%s", (char*)key);*/
+    trace("inotifier_list: %s\n", (char*)key);
     return HTABLE_ACTION_NEXT;
 }
 
+
+/*
 static int l_inotifier_list(lua_State *lua) {
     htable_each(in.tbl, iter_list, NULL);
     return 0;
 }
+*/
+
+void inotifier_list() {
+    htable_each(in.tbl, iter_list, NULL);
+}
 
 void inotifier_init() {
-    trace("inotifier_init:\n");
+    if (inotifier_verbose)
+        trace("inotifier_init:\n");
 
-    if (in.tbl) {
-        const char *msg = "inotifier_init: tbl ~= NULL, "
-                          "may be a double initialization?\n";
-        trace("%s", msg);
-        exit(EXIT_FAILURE);
-    }
+    assert(in.tbl == NULL);
 
     in.tbl = htable_new(&(struct HTableSetup) {
         .cap       = MAX_WATCHED_FILES,
@@ -168,16 +185,19 @@ void inotifier_init() {
         .fd = in.fd,
         .events = POLLIN,
     };
+    
     //fds[1] = (struct pollfd) {
         //.fd = STDIN_FILENO,
         //.events = POLLIN,
     //};
 
+    /*
     sc_register_function(
         l_inotifier_list,
         "inotifier_list",
         "Вывести список отслеживаемых для перезагрузки файлов."
     );
+    // */
 };
 
 void inotifier_update() {
@@ -232,7 +252,8 @@ static void fnames_free() {
 }
 
 void inotifier_shutdown() {
-    trace("inotifier_shutdown:\n");
+    if (inotifier_verbose)
+        trace("inotifier_shutdown:\n");
     if (in.tbl) {
         htable_free(in.tbl);
         in.tbl = NULL;
@@ -246,18 +267,24 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     if (!in.tbl) return;
 
     if (in.watched_num == MAX_WATCHED_FILES) {
-        trace("inotifier_watch: MAX_WATCHED_FILES reached\n");
+        if (inotifier_verbose)
+            trace("inotifier_watch: MAX_WATCHED_FILES reached\n");
         return;
     }
 
-    trace("inotifier_watch: '%s' with data %p\n", fname, data);
+    if (inotifier_verbose)
+        trace("inotifier_watch: '%s' with data %p\n", fname, data);
     uint32_t mask = IN_ALL_EVENTS;
     //uint32_t mask = IN_MOVE_SELF;
     in.wd[in.watched_num] = inotify_add_watch(in.fd, fname, mask);
     in.fnames[in.watched_num] = strdup(fname);
 
     if (in.wd[in.watched_num] == -1) {
-        trace("inotifier_watch: cannot watch '%s': %s\n", fname, strerror(errno));
+        if (inotifier_verbose)
+            trace(
+                "inotifier_watch: cannot watch '%s': %s\n",
+                fname, strerror(errno)
+            );
     }
 
     struct WatchContext ctx = {
