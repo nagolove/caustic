@@ -301,10 +301,16 @@ static inline char *r_sprintf(char* buffer, const char* format, ...) {
     return buffer;
 }
 
+__attribute_deprecated__
 bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);
-bool koh_check_fname(const char *fname);
+bool koh_str_match(const char *str, size_t *str_len, const char *pattern);
+
+bool koh_is_fname_image_ext(const char *fname);
 
 char *points2table_allocated(const Vector2 *points, int points_num);
+
+// Возвращает указатель на статический буфер максимальной длины 1024 
+// заполненный символами в диапазоне 'a'-'A'
 const char *koh_str_gen_aA(size_t len);
 
 char *koh_str_sub_alloc(

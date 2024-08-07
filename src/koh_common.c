@@ -1980,6 +1980,10 @@ bool koh_file_exist(const char *fname) {
 }
 
 bool rgexpr_match(const char *str, size_t *str_len, const char *pattern) {
+    return koh_str_match(str, str_len, pattern);
+}
+
+bool koh_str_match(const char *str, size_t *str_len, const char *pattern) {
     assert(str);
     assert(pattern);
 
@@ -2033,16 +2037,11 @@ static const char *extensions[] = {
     NULL,
 };
 
-bool koh_check_fname(const char *fname) {
+bool koh_is_fname_image_ext(const char *fname) {
     for (const char **ext = extensions; *ext; ext++) {
-        // printf("*ext '%s'\n", *ext);
         char *pos = strstr(fname, *ext);
-        // printf("pos '%s'\n", pos);
         if (pos && strlen(*ext) == strlen(pos) && strcmp(*ext, pos) == 0) {
-            //printf("found '%s'\n", *ext);
-            //printf("found '%s'\n", *line);
             return true;
-            break;
         }
         
     }
