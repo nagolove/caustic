@@ -8,25 +8,22 @@ extern bool koh_verbose_input;
 
 typedef struct InputKbMouseDrawer InputKbMouseDrawer;
 
-struct InputKbMouseDrawerSetup {
+typedef struct InputKbMouseDrawerSetup {
     int btn_width;
-};
+} InputKbMouseDrawerSetup;
 
-InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup);
+InputKbMouseDrawer *input_kb_new(InputKbMouseDrawerSetup *setup);
 void input_kb_free(InputKbMouseDrawer *kb);
 void input_kb_update(InputKbMouseDrawer *kb);
 void input_kb_gui_update(InputKbMouseDrawer *kb);
 
-
 typedef struct InputGamepadDrawer InputGamepadDrawer;
 
-/*
-struct InputGamepadDrawerSetup {
-    int btn_width;
-};
-*/
+typedef struct InputGamepadDrawerSetup {
+    float scale;
+} InputGamepadDrawerSetup;
 
-InputGamepadDrawer *input_gp_new();
+InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup);
 void input_gp_free(InputGamepadDrawer *kb);
 void input_gp_update(InputGamepadDrawer *kb);
 /*void input_gp_gui_update(InputGamepadDrawer *kb);*/
