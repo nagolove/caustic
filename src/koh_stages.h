@@ -16,16 +16,21 @@ struct Stage;
 #define MAX_STAGE_NAME  64
 
 typedef void (*Stage_callback)(struct Stage *s);
-typedef void (*Stage_data_callback)(struct Stage *s, const char *str);
+/*typedef void (*Stage_data_callback)(struct Stage *s, const char *str);*/
 typedef struct StagesStore StagesStore;
 
 // TODO: Оставить одну структуру сцены. В ней хранить подсцены вместо
 // StagesStore
 typedef struct Stage {
     StagesStore         *store;
-    Stage_callback      init, enter, leave;
-    Stage_callback      shutdown, draw, update, gui;
+
+    // TODO: Добавить проверку на NULL утверждением в вызовы Stage_callback
+    Stage_callback      init, enter, leave,
+                        shutdown, draw, update, gui;
+
+    // XXX: Что обычно хранится в data? Кто кладет туда данные?
     void                *data;
+
     char                name[MAX_STAGE_NAME];
 } Stage;
 

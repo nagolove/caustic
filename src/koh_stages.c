@@ -125,7 +125,10 @@ void stage_shutdown(StagesStore *ss) {
     assert(ss);
     for(int i = 0; i < ss->num; i++) {
         Stage *st = ss->stages[i];
-        if (st) {
+
+        assert(st);
+        //if (st) {
+        {
             if (st->shutdown) 
                 st->shutdown(st);
             free(st);
@@ -137,8 +140,11 @@ void stage_shutdown(StagesStore *ss) {
 void stage_active_update(StagesStore *ss) {
     assert(ss);
     Stage *st = ss->cur;
-    if (!st)
-        return;
+
+    assert(st);
+    /*if (!st)*/
+        /*return;*/
+
     if (st->update) st->update(st);
     if (st->draw) st->draw(st);
 }
@@ -146,6 +152,7 @@ void stage_active_update(StagesStore *ss) {
 Stage *stage_find(StagesStore *ss, const char *name) {
     for(int i = 0; i < ss->num; i++) {
         Stage *st = ss->stages[i];
+        assert(st);
         if (!strcmp(name, st->name)) {
             return st;
         }
@@ -155,7 +162,7 @@ Stage *stage_find(StagesStore *ss, const char *name) {
 
 void stage_active_set(StagesStore *ss, const char *name) {
     Stage *st = stage_find(ss, name);
-    //assert(st);
+    assert(st);
 
     if (!st) {
         trace("stage_set_active: '%s' not found\n", name);
@@ -227,6 +234,7 @@ int l_stage_get_active(lua_State *lua) {
 */
 
 void stage_print(StagesStore *ss) {
+    // {{{
     assert(ss);
     trace("stage_print:\n");
     if (!ss->num) return;
@@ -285,6 +293,7 @@ _exit:
         trace("stage_print: '%s'\n", ss->stages[i]->name);
     }
     */
+    // }}}
 }
 
 const char *stage_active_name_get(StagesStore *ss) {
