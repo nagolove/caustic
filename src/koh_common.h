@@ -143,6 +143,12 @@ void koh_qsort_soa(
 cpSpaceDebugColor from_Color(Color c);
 
 struct CameraProcessScale {
+    // TODO: Выбрать лучшее именование для камеры?
+    //Camera2D    *cam_ptr;
+    //Camera2D    *ptr_cam;
+    //Camera2D    *pcam;
+    //Camera2D    *camp;
+    
     Camera2D    *cam;
     float       dscale_value;       // Приращение масштаба
     KeyboardKey modifier_key_down;
