@@ -31,15 +31,16 @@ struct WatchContext {
 
 bool inotifier_verbose = false;
 
-#define MAX_WATCHED_FILES 32
+#define MAX_WATCHED_FILES 64
 
 // TODO: Перенести в структуру
 struct {
-    int    fd;
-    int    wd[MAX_WATCHED_FILES];
-    char   *fnames[MAX_WATCHED_FILES];
-    int    watched_num;
-    HTable *tbl;
+    int      fd;
+    int      wd[MAX_WATCHED_FILES];
+    char     *fnames[MAX_WATCHED_FILES];
+    uint32_t masks[MAX_WATCHED_FILES];
+    int      watched_num;
+    HTable   *tbl;
     struct pollfd fds[1];
 } in;
 
@@ -52,41 +53,58 @@ static const char *get_fname(int target_wd) {
     return NULL;
 }
 
+typedef struct Mask2Str {
+    uint32_t mask;
+    char *str_mask, *str_comment;
+} Mask2Str;
+
+Mask2Str _mask2str[] = {
+    // {{{
+    { IN_ACCESS, "IN_ACCESS", " File was accessed.", },
+    { IN_MODIFY, "IN_MODIFY", " File was modified.", },
+    { IN_ATTRIB, "IN_ATTRIB", " Metadata changed.", },
+    { IN_CLOSE_WRITE, "IN_CLOSE_WRITE", " Writtable file was closed.", },
+    { IN_CLOSE_NOWRITE, "IN_CLOSE_NOWRITE", " Unwrittable file closed.", },
+    { IN_CLOSE, "IN_CLOSE", "Close."},
+    { IN_OPEN , "IN_OPEN  ", " File was opened.", },
+    { IN_MOVED_FROM, "IN_MOVED_FROM", " File was moved from X.", },
+    { IN_MOVED_TO, "IN_MOVED_TO",      " File was moved to Y.", },
+    { IN_MOVE, "IN_MOVE" , "Moves." },
+    { IN_CREATE, "IN_CREATE", " Subfile was created.", },
+    { IN_DELETE, "IN_DELETE", " Subfile was deleted.", },
+    { IN_DELETE_SELF, "IN_DELETE_SELF", " Self was deleted.", },
+    { IN_MOVE_SELF, "IN_MOVE_SELF", " Self was moved.", },
+    { IN_UNMOUNT, "IN_UNMOUNT", " Backing fs was unmounted.", },
+    { IN_Q_OVERFLOW, "IN_Q_OVERFLOW", " Event queued overflowed.", },
+    { IN_IGNORED, "IN_IGNORED", " File was ignored.", },
+    { IN_ONLYDIR, "IN_ONLYDIR", " Only watch the path if it is a directory.", },
+    { IN_DONT_FOLLOW, "IN_DONT_FOLLOW", " Do not follow a sym link.", },
+    { IN_EXCL_UNLINK, "IN_EXCL_UNLINK", " Exclude events on unlinked objects.", },
+    { IN_MASK_CREATE, "IN_MASK_CREATE", " Only create watches.", },
+    { IN_MASK_ADD, "IN_MASK_ADD", " Add to the mask of an already existing watch.", },
+    { IN_ISDIR, "IN_ISDIR", " Event occurred against dir.", },
+    { IN_ONESHOT, "IN_ONESHOT", " Only send event once.", },
+    { 0, NULL, NULL },
+    // }}}
+};
+
+Mask2Str *mask2str(uint32_t mask) {
+    static Mask2Str strs[100];
+    memset(strs, 0, sizeof(strs));
+
+    int num = 0;
+    for (int i = 0; _mask2str[i].str_mask; i++) {
+        if (mask & _mask2str[i].mask)
+            strs[num++] = _mask2str[i];
+    }
+
+    trace("mask2str: num %d\n", num);
+
+    return strs;
+}
+
 static void process_event(const struct inotify_event *event) {
     assert(event);
-
-    //{{{
-    /*
-    if (event->mask &IN_ACCESS	 )
-        printf("IN_ACCESS	 \n");
-    if (event->mask &IN_MODIFY	 )
-        printf("IN_MODIFY	 \n");
-    if (event->mask &IN_ATTRIB	 )
-        printf("IN_ATTRIB	 \n");
-    if (event->mask &IN_CLOSE_WRITE	 )
-        printf("IN_CLOSE_WRITE	 \n");
-    if (event->mask &IN_CLOSE_NOWRITE )
-        printf("IN_CLOSE_NOWRITE \n");
-    if (event->mask &IN_CLOSE	 )
-        printf("IN_CLOSE	 \n");
-    if (event->mask &IN_OPEN		 )
-        printf("IN_OPEN		 \n");
-    if (event->mask &IN_MOVED_FROM	 )
-        printf("IN_MOVED_FROM	 \n");
-    if (event->mask &IN_MOVED_TO      )
-        printf("IN_MOVED_TO      \n");
-    if (event->mask &IN_MOVE		 )
-        printf("IN_MOVE		 \n");
-    if (event->mask &IN_CREATE	 )
-        printf("IN_CREATE	 \n");
-    if (event->mask &IN_DELETE	 )
-        printf("IN_DELETE	 \n");
-    if (event->mask &IN_DELETE_SELF	 )
-        printf("IN_DELETE_SELF	 \n");
-    if (event->mask &IN_MOVE_SELF	 )
-        printf("IN_MOVE_SELF	 \n");
-    */
-    //}}}
 
     if (event->mask & IN_CREATE) {
         if (inotifier_verbose)
@@ -95,14 +113,31 @@ static void process_event(const struct inotify_event *event) {
 
     //XXX: При флаге IN_DELETE_SELF заново вызывать inotify_add_watch()
 
-    if (inotifier_verbose)
+    if (inotifier_verbose) {
+        static char buf[1024 * 2] = {}, *pbuf = buf;
+        memset(buf, 0, sizeof(buf));
+
+        Mask2Str *strs = mask2str(event->mask);
+        while (strs->str_mask) {
+            trace("process_event: str_mask '%s'\n", strs->str_mask);
+            int r = sprintf(pbuf, "%s|", strs->str_mask);
+            pbuf += r;
+            strs++;
+        }
+
         trace(
-            "process_event: event->mask '%s'\n",
-            to_bitstr_uint32_t(event->mask)
+            "process_event: mask '%s', name '%s'\n",
+            //to_bitstr_uint32_t(event->mask),
+            buf,
+            event->name
         );
+    }
 
     if (!(event->mask & IN_MOVE_SELF))
         return;
+
+    //if (!(event->mask & IN_CLOSE))
+        //return;
 
     const char *fname = get_fname(event->wd);
     if (!fname)
@@ -299,6 +334,7 @@ void inotifier_watch_remove(const char *fname) {
     if (!in.tbl) return;
 
     assert(fname);
+    // XXX: Где удаление in.fnames? Где декремент in.watched_num?
     for (int i = 0; i < in.watched_num; i++) {
         if (!strcmp(fname, in.fnames[i])) {
             inotify_rm_watch(in.fd, in.wd[i]);
