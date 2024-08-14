@@ -406,7 +406,7 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 
     if (koh_verbose_input) {
         int i = 10;
-        while (i > 0) {
+        while (i >= 0) {
             trace(
                 "input_gp_new: gamepad %d was detected %s, name '%s' \n",
                 i,
@@ -419,6 +419,7 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
             i--;
         }
     }
+    trace("input_gp_new: active_gp %d\n", gp->active_gp);
 
     return gp;
 }
@@ -540,8 +541,24 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // Draw axis: left-right triggers
     DrawRectangle(170, 30, 15, 70, GRAY);
     DrawRectangle(604, 30, 15, 70, GRAY);
-    DrawRectangle(170, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70), RED);
-    DrawRectangle(604, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70), RED);
+
+    float (*axis_movement)(int gamepad, int axis) = GetGamepadAxisMovement;
+
+    if (koh_verbose_input && axis_movement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER) != 0.)
+        trace("input_gp_update: GAMEPAD_AXIS_LEFT_TRIGGER\n");
+    DrawRectangle(
+        170, 30, 15, 
+        (int)(((1 + axis_movement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70),
+        RED
+    );
+
+    DrawRectangle(
+        604, 30, 15, 
+        (int)(((1 + axis_movement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70),
+        RED
+    );
+    if (koh_verbose_input && axis_movement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))
+        trace("input_gp_update: GAMEPAD_AXIS_RIGHT_TRIGGER\n");
 
     EndMode2D();
     EndTextureMode();
