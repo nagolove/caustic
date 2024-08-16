@@ -175,7 +175,40 @@ inline static void world_shape_render_circle(
         b2Body_GetWorldPoint(body_id, circle.center)
     );
 
-    DrawCircleV(center, circle.radius, r_opts->color);
+    Color color = r_opts->color;
+    if (b2Shape_IsSensor(shape_id))
+        color = GRAY;
+
+    if (r_opts->tex) {
+        b2BodyId bid =  b2Shape_GetBody(shape_id);
+        b2Vec2 pos = b2Body_GetPosition(bid);
+        /*pos = b2Body_GetWorldPoint(bid, pos);*/
+        b2Circle circle =  b2Shape_GetCircle(shape_id);
+        Rectangle   src = r_opts->src, 
+                    dst = {
+                        .x = pos.x,
+                        .y = pos.y,
+                        /*.width = r_opts->tex->width,*/
+                        /*.height = r_opts->tex->height,*/
+                        .width = circle.radius,
+                        .height = circle.radius,
+                    };
+
+        trace("world_shape_render_circle: src %s\n", rect2str(src));
+        trace(
+            "world_shape_render_circle: circle.radius %f\n",
+            circle.radius
+        );
+
+        /*Vector2 origin = Vector2Zero();*/
+        Vector2 origin = {
+            circle.radius / 2.,
+            circle.radius / 2.,
+        };
+        float rot = b2Body_GetAngle(bid) * (180. / M_PI);
+        DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+    } else 
+        DrawCircleV(center, circle.radius, color);
 }
 
 inline static void world_shape_render_poly(
