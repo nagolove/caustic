@@ -61,15 +61,18 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     tmr->id = id++;
     tmr->start_time = tmr->last_now = GetTime();
     assert(td.duration > 0);
-    tmr->duration = td.duration;;
+    tmr->duration = td.duration;
 
-    if (td.sz) {
-        tmr->sz = td.sz;
+
+    tmr->sz = td.sz;
+
+    if (0 != td.sz) {
         tmr->data = malloc(td.sz);
         assert(tmr->data);
-        memmove(tmr->data, td.udata, td.sz);
-    } else
-        tmr->data = td.udata;
+        memmove(tmr->data, td.data, td.sz);
+    } else {
+        tmr->data = td.data;
+    }
 
     tmr->on_update = td.on_update;
     tmr->on_stop = td.on_stop;

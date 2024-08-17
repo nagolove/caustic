@@ -12,16 +12,16 @@ struct Timer {
     double          amount;     // 0..1
     double          last_now;
     //bool            expired;
-    size_t          id; // уникальный номер
-    size_t          sz; // XXX: если == 0, то для data не выделяется память ???
-    void            *data;      // всегда динамически выделяемая память
+    size_t          id; // уникальный номер, присваивается автоматически
+    size_t          sz; // если == 0, то для data не выделяется память
+    void            *data;  // динамически выделяемая память если sz != 0
     // возвращает истину для удаления таймера
     bool            (*on_update)(struct Timer *tmr); 
     void            (*on_stop)(struct Timer *tmr);
 };
 
 struct TimerDef {
-    void    *udata;    // источник для копирования данных
+    void    *data;    // источник для копирования данных
     size_t  sz;      // размер копируемых данных
     double  duration;
     // возвращает истину для удаления таймера
