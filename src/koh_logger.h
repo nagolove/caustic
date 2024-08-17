@@ -49,3 +49,5 @@ void trace_push_group(const char *group_name);
 void traceg(const char *format, ...);
 */
 void koh_log_custom(int msgType, const char *text, va_list args);
+// Не использует GetTime()
+void koh_log_custom_null(int msgType, const char *text, va_list args);
