@@ -856,7 +856,7 @@ void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
         .duration = opts->duration,
         .on_update = update_shape_under_mouse,
         .on_stop = stop_shape_under_mouse,
-        .udata = &ctx,
+        .data = &ctx,
         .sz = sizeof(ctx),
     });
 }
