@@ -182,33 +182,69 @@ inline static void world_shape_render_circle(
     if (r_opts->tex) {
         b2BodyId bid =  b2Shape_GetBody(shape_id);
         b2Vec2 pos = b2Body_GetPosition(bid);
-        /*pos = b2Body_GetWorldPoint(bid, pos);*/
         b2Circle circle =  b2Shape_GetCircle(shape_id);
+
+        /*
+        trace(
+            "world_shape_render_circle: circle.center %s, circle.radius %f\n",
+            b2Vec2_to_str(circle.center),
+            circle.radius
+        );
+        */
+
+        /*trace("world_shape_render_circle: 1 pos %s\n", b2Vec2_to_str(pos));*/
+        /*pos = b2Body_GetWorldPoint(bid, b2Add(pos, circle.center));*/
+        /*trace("world_shape_render_circle: 2 pos %s\n", b2Vec2_to_str(pos));*/
+
         Rectangle   src = r_opts->src, 
                     dst = {
-                        .x = pos.x,
-                        .y = pos.y,
+                        .x = pos.x - circle.radius * 4.,
+                        .y = pos.y - circle.radius * 4.,
                         /*.width = r_opts->tex->width,*/
                         /*.height = r_opts->tex->height,*/
-                        .width = circle.radius,
-                        .height = circle.radius,
+                        .width = circle.radius * 2.,
+                        .height = circle.radius * 2.,
                     };
 
+        /*
         trace("world_shape_render_circle: src %s\n", rect2str(src));
         trace(
             "world_shape_render_circle: circle.radius %f\n",
             circle.radius
         );
+        */
 
         /*Vector2 origin = Vector2Zero();*/
+
         Vector2 origin = {
-            circle.radius / 2.,
-            circle.radius / 2.,
+            circle.radius,
+            circle.radius,
         };
-        float rot = b2Body_GetAngle(bid) * (180. / M_PI);
+        // */
+
+        /*float rot = b2Body_GetAngle(bid) * (180. / M_PI);*/
+        float rot = 0.;
+
         DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+
+        // origin
+        origin.x = 0., origin.y = 0.;
+        color.a = 128;
+        color.b = 255;
+        DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+
+        // dst pos
+        dst.x = pos.x, dst.y = pos.y;
+        color = WHITE;
+        color.a = 128;
+        color.g = 255;
+        DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+
+        /*DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);*/
     } else 
         DrawCircleV(center, circle.radius, color);
+
+    DrawCircleV(center, circle.radius, GRAY);
 }
 
 inline static void world_shape_render_poly(
