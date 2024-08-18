@@ -182,6 +182,7 @@ void box2d_gui(struct WorldCtx *wctx);
 
 // TODO: Область камеры не должна превышать область экран, то есть
 // GetScreenWidth(), GetScreenHeight()
+// FIXME: Заменить Camera2D *cam на Camera2D cam
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     assert(cam);
     float zoom = 1. / cam->zoom;
@@ -189,29 +190,38 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     Vector2 offset = cam->offset;
     struct b2AABB aabb;
 
-    if (false)
-        trace("camera2aabb: %s\n", camera2str(*cam, false));
-   
-    /*gap_radius = 0.;*/
+    aabb.lowerBound.x = - zoom * offset.x + zoom * gap_radius;
+    aabb.lowerBound.y = - zoom * offset.y + zoom * gap_radius;
+    aabb.upperBound.x = - zoom * offset.x + zoom * w - zoom * gap_radius;
+    aabb.upperBound.y = - zoom * offset.y + zoom * h - zoom * gap_radius;
+
+    if (!b2AABB_IsValid(aabb)) {
+        trace("camera2aabb: %s\n", rect2str(aabb2rect(aabb)));
+        abort();
+    }
+    return aabb;
+}
+
+// FIXME: Заменить Camera2D *cam на Camera2D cam
+static inline bool is_camera2aabb_valid(
+    Camera2D *cam, float gap_radius, b2AABB *ret_aabb
+) {
+    assert(cam);
+    float zoom = 1. / cam->zoom;
+    float w = GetScreenWidth(), h = GetScreenHeight();
+    Vector2 offset = cam->offset;
+    struct b2AABB aabb;
 
     aabb.lowerBound.x = - zoom * offset.x + zoom * gap_radius;
     aabb.lowerBound.y = - zoom * offset.y + zoom * gap_radius;
-    //aabb.upperBound.x = - zoom * offset.x + w * zoom - zoom * gap_radius;
-    //aabb.upperBound.y = - zoom * offset.y + h  * zoom - zoom * gap_radius;
     aabb.upperBound.x = - zoom * offset.x + zoom * w - zoom * gap_radius;
     aabb.upperBound.y = - zoom * offset.y + zoom * h - zoom * gap_radius;
-//    */
 
-    /*
-    aabb.lowerBound.x = - 1. * offset.x + gap_radius;
-    aabb.lowerBound.y = - 1. * offset.y - gap_radius;
-    aabb.upperBound.x = - 1. * offset.x + w - gap_radius;
-    aabb.upperBound.y = - 1. * offset.y + h - gap_radius;
-    // */
-
-    assert(b2AABB_IsValid(aabb));
-    return aabb;
+    if (ret_aabb)
+        *ret_aabb = aabb;
+    return b2AABB_IsValid(aabb);
 }
+
 
 // Границы запроса раздвигаются на gap_radius что-бы было видно объекты 
 // частично попавшие в прямоугольник запроса.
