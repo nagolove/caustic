@@ -50,6 +50,31 @@ void timerman_free(struct TimerMan *tm) {
     free(tm);
 }
 
+static const char *timerdef2str(struct TimerDef td) {
+    static char buf[256];
+    memset(buf, 0, sizeof(buf));
+    char *pbuf = buf;
+
+    int r = 0;
+
+    r = sprintf(pbuf, "{\n");
+    pbuf += r;
+    r = sprintf(pbuf, "data = \"%p\",\n", td.data);
+    pbuf += r;
+    r = sprintf(pbuf, "sz = %zu,\n", td.sz);
+    pbuf += r;
+    r = sprintf(pbuf, "duration = %f,\n", td.duration);
+    pbuf += r;
+    r = sprintf(pbuf, "on_update = \"%p\",\n", td.on_update);
+    pbuf += r;
+    r = sprintf(pbuf, "on_stop = \"%p\",\n", td.on_stop);
+    pbuf += r;
+    r = sprintf(pbuf, "}\n");
+    //pbuf += r;
+
+    return buf;
+}
+
 bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     assert(tm);
     if (tm->timers_size + 1 >= tm->timers_cap) 
@@ -63,6 +88,8 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     assert(td.duration > 0);
     tmr->duration = td.duration;
 
+    if (timerman_verbose)
+        trace("timerman_add: td = %s \n", timerdef2str(td));
 
     tmr->sz = td.sz;
 
@@ -70,7 +97,11 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
         tmr->data = malloc(td.sz);
         assert(tmr->data);
         memmove(tmr->data, td.data, td.sz);
+        if (timerman_verbose)
+            trace("timerman_add: allocated memory for tmr->data\n");
     } else {
+        if (timerman_verbose)
+            trace("timerman_add: just copy void*\n");
         tmr->data = td.data;
     }
 
