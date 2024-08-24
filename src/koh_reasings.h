@@ -1,3 +1,7 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
+
+// {{{
 /*******************************************************************************************
 *
 *   reasings - raylib easings library, based on Robert Penner library
@@ -78,9 +82,12 @@
 *     3. This notice may not be removed or altered from any source distribution.
 *
 **********************************************************************************************/
+// }}}
 
 #ifndef REASINGS_H
 #define REASINGS_H
+
+#include <stdlib.h>
 
 #define REASINGS_STATIC_INLINE     // NOTE: By default, compile functions as static inline
 
@@ -265,7 +272,14 @@ struct EaseTuple {
     EaseFunc func;
 };
 
+// Если функция не находит искомое, то возвращает -1
+int ease_func2index(EaseFunc func);
+// Если функция не находит искомое, то возвращает -1
+int ease_name2index(const char *name);
+
 extern struct EaseTuple easings[];
+extern const char *easings_names[];
+extern size_t easings_names_num;
 ////////////////////////////////////////////////////
 
 #if defined(__cplusplus)
