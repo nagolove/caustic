@@ -395,7 +395,7 @@ char **b2BodyDef_to_str(b2BodyDef bd) {
     p(lines[i++], "{");
     p(lines[i++], "type = '%s',",  b2BodyType_to_str(bd.type));   
     p(lines[i++], "position = %s,", b2Vec2_to_str(bd.position));   
-    p(lines[i++], "angle = %f,",  bd.angle);  
+    p(lines[i++], "angle = %f,",  b2Rot_GetAngle(bd.rotation));  
     p(lines[i++], "linearVelocity = %s,",  b2Vec2_to_str(bd.linearVelocity)); 
     p(lines[i++], "angularVelocity = %f,",  bd.angularVelocity);    
     p(lines[i++], "linearDamping = %f,",  bd.linearDamping);  
@@ -520,7 +520,8 @@ char **b2BodyId_to_str(b2BodyId body_id) {
     sprintf(lines[i++], "\tangular_velovity = %f,", w);
     sprintf(lines[i++], "\tbody_type = '%s',", body_type);
     sprintf(lines[i++], "\tposition = %s,", position);
-    sprintf(lines[i++], "\tangle = %f,", b2Body_GetAngle(body_id));
+    b2Rot rot = b2Body_GetRotation(body_id);
+    sprintf(lines[i++], "\tangle = %f,", b2Rot_GetAngle(rot));
     sprintf(lines[i++], "}");
 
     lines[i] = NULL;
