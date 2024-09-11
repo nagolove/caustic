@@ -589,8 +589,8 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
     r->registry[r->registry_num++] = comp;
 }
 
-de_ecs* de_ecs_make() {
-    de_trace("de_ecs_make:\n");
+de_ecs* de_ecs_new() {
+    de_trace("de_ecs_new:\n");
     de_ecs* r = calloc(1, sizeof(de_ecs));
     assert(r);
     r->storages = 0;
@@ -601,10 +601,14 @@ de_ecs* de_ecs_make() {
     //r->registry_num = 0;
     r->cp_types = htable_new(NULL);
     return r;
+}
+
+de_ecs* de_ecs_make() {
+    return de_ecs_new();
 } 
 
-void de_ecs_destroy(de_ecs* r) {
-    de_trace("de_ecs_destroy: %p\n", r);
+void de_ecs_free(de_ecs* r) {
+    de_trace("de_ecs_free: %p\n", r);
     assert(r);
 
     if (r->cp_types) {
@@ -629,6 +633,10 @@ void de_ecs_destroy(de_ecs* r) {
 
     memset(r, 0, sizeof(de_ecs));
     free(r);
+}
+
+void de_ecs_destroy(de_ecs* r) {
+    de_ecs_free(r);
 }
 
 /*
@@ -1332,7 +1340,7 @@ static de_storage *de_storage_clone(const de_storage *in) {
 de_ecs *de_ecs_clone(de_ecs *in) {
     assert(in);
     de_trace("de_ecs_clone: ecs %p\n", in);
-    de_ecs *out = de_ecs_make();
+    de_ecs *out = de_ecs_new();
     assert(out);
 
     //memcpy(out->registry, in->registry, sizeof(in->registry));

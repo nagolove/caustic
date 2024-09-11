@@ -56,8 +56,10 @@ typedef uint32_t de_entity;
     Component Type identifier information.
 */
 typedef struct de_cp_type {
-    size_t      cp_id; // component unique id
-    size_t      cp_sizeof; // component sizeof
+    // component unique id, filled auto by register function
+    size_t      cp_id; 
+    // component sizeof
+    size_t      cp_sizeof; 
                           
     /*uint32_t    callbacks_flags;*/
     void        (*on_emplace)(void *payload, de_entity e); 
@@ -102,11 +104,15 @@ de_entity de_make_entity(uint32_t id, uint32_t version);
 
 /*  Allocates and initializes a de_ecs context */
 // de_ecs_make -> de_ecs_new
+__attribute_deprecated__
 de_ecs* de_ecs_make();
 
+de_ecs* de_ecs_new();
+
 /*  Deinitializes and frees a de_ecs context */
-// de_ecs_destroy -> de_ecs_free
+__attribute_deprecated__
 void de_ecs_destroy(de_ecs* r);
+void de_ecs_free(de_ecs* r);
 
 void de_ecs_register(de_ecs *r, de_cp_type comp);
 
