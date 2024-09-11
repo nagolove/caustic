@@ -280,7 +280,7 @@ Stage *stage_ecs_new(void) {
 void stage_ecs_init(Stage_ECS *st) {
     SetTargetFPS(6000);
     cam.zoom = 1;
-    r = de_ecs_make();
+    r = de_ecs_new();
     component_register(component_position);
     component_register(component_velocity);
     component_register(component_angular_velocity);
@@ -317,7 +317,7 @@ void stage_ecs_update(Stage_ECS *st) {
 }
 
 void stage_ecs_shutdown(Stage_ECS *st) {
-    de_ecs_destroy(r);
+    de_ecs_free(r);
     trace("stage_ecs_shutdown:\n");
 }
 

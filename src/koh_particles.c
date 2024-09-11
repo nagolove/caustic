@@ -61,7 +61,7 @@ static const de_cp_type component_lifetime = {
 
 PartsEngine *parts_new() {
     struct PartsEngine *pe = calloc(1, sizeof(*pe));
-    pe->ecs = de_ecs_make();
+    pe->ecs = de_ecs_new();
     pe->requests_num = 0;
     pe->requests_cap = 256;
     pe->requests = calloc(pe->requests_cap, sizeof(pe->requests[0]));
@@ -71,7 +71,7 @@ PartsEngine *parts_new() {
 void parts_free(PartsEngine *pe) {
     assert(pe);
     if (pe->ecs)
-        de_ecs_destroy(pe->ecs);
+        de_ecs_free(pe->ecs);
     if (pe->requests)
         free(pe->requests);
     memset(pe, 0, sizeof(*pe));
