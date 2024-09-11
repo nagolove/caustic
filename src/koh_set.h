@@ -56,12 +56,11 @@ int set_size(const koh_Set *set);
         int key_len = set_each_key_len(&v);
     }
 */
-struct koh_SetView {
+typedef struct koh_SetView {
     koh_Set *set;
     int     i;
     bool    finished;
-};
-
+} koh_SetView;
 
 struct koh_SetView set_each_begin(koh_Set *set);
 bool set_each_valid(struct koh_SetView *v);
