@@ -1,3 +1,4 @@
+// vim: set colorcolumn=85
 // vim: fdm=marker
 #include "koh_lua_tools.h"
 
@@ -18,7 +19,7 @@
 // Максимальное количество методов в таблице. Простая защита от 
 // переполнения
 static const int max_fields_num = 100;
-static bool verbose = false;
+bool L_verbose = false;
 
 TypeEntry *typelist = NULL;
 
@@ -109,7 +110,7 @@ void doc_shutdown(DocArray *docarr) {
     docarr->arr = NULL;
 }
 
-void table_print(lua_State *lua, int idx) {
+void L_table_print(lua_State *lua, int idx) {
 
     if (lua_type(lua, idx) != LUA_TTABLE)
         return;
@@ -171,8 +172,12 @@ void table_print(lua_State *lua, int idx) {
     /*printf("print_table: [%s]\n", stack_dump(lua));*/
 }
 
+void table_print(lua_State *lua, int idx) {
+    L_table_print(lua, idx);
+}
+
 // TODO: Сделать рекурсивную распачатку таблицы
-char *table_get_print(
+char *L_table_get_print(
     lua_State *lua, int idx, const struct TablePrintOpts *opts
 ) {
     static char buf[2048] = {};
@@ -308,6 +313,12 @@ char *table_get_print(
     return buf;
 }
 
+char *table_get_print(
+    lua_State *lua, int idx, const struct TablePrintOpts *opts
+) {
+    return L_table_get_print(lua, idx, opts);
+}
+
 static void type_alloc(const char *mtname, const Reg_ext *methods) {
     assert(mtname);
     assert(methods);
@@ -410,7 +421,7 @@ void sc_register_methods_and_doc(
     const char *mtname,
     const Reg_ext *methods
 ) {
-    if (verbose)
+    if (L_verbose)
         trace(
             "register_methods_and_doc: '%s' [%s]\n", mtname, L_stack_dump(lua)
         );
@@ -478,7 +489,7 @@ void types_shutdown() {
         curr = next;
         i++;
     }
-    if (verbose)
+    if (L_verbose)
         trace("types_shutdown: %d type freed\n", i);
     typelist = NULL;
 }
@@ -489,7 +500,8 @@ TypeEntry *types_getlist() {
 
 //#include "koh_lua_serpent.inc"
 #include "serpent.lua.h"
-char *table_dump2allocated_str(lua_State *l) {
+
+char *L_table_dump2allocated_str(lua_State *l) {
     // TODO:
     // Проверить, модуль serpent загружен
     // Если модуль отсутствует, то загрузить его из строки
@@ -497,27 +509,27 @@ char *table_dump2allocated_str(lua_State *l) {
     int top = lua_gettop(l);
 
     lua_getglobal(l, "package");
-    printf("table_dump2allocated_str: 0 [%s]\n", L_stack_dump(l));
+    printf("L_table_dump2allocated_str: 0 [%s]\n", L_stack_dump(l));
     lua_getfield(l, -1, "preload");
-    printf("table_dump2allocated_str: 1 [%s]\n", L_stack_dump(l));
+    printf("L_table_dump2allocated_str: 1 [%s]\n", L_stack_dump(l));
 
     /*
     printf(
-        "table_dump2allocated_str: strlen(serpent_lua) == %zu\n",
+        "L_table_dump2allocated_str: strlen(serpent_lua) == %zu\n",
         strlen(serpent_lua)
     );
     */
 
     if (luaL_loadstring(l, (char*)serpent_lua) != LUA_OK) {
         printf(
-            "table_dump2allocated_str: luaL_loadstring error '%s'\n",
+            "L_table_dump2allocated_str: luaL_loadstring error '%s'\n",
             lua_tostring(l, -1)
         );
     }
 
-    printf("table_dump2allocated_str: 2 [%s]\n", L_stack_dump(l));
+    printf("L_table_dump2allocated_str: 2 [%s]\n", L_stack_dump(l));
     lua_setfield(l, -2, "serpent");
-    printf("table_dump2allocated_str: 3 [%s]\n", L_stack_dump(l));
+    printf("L_table_dump2allocated_str: 3 [%s]\n", L_stack_dump(l));
 
     lua_settop(l, top);
 
@@ -536,7 +548,7 @@ char *table_dump2allocated_str(lua_State *l) {
                         "end\n"
                         "return DUMP";
 
-    //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
+    //printf("L_table_dump2allocated_str: [%s]\n", stack_dump(l));
     //int top = lua_gettop(l);
 
     // XXX: Что делать с принудительной загрузкой библиотек?
@@ -556,10 +568,10 @@ char *table_dump2allocated_str(lua_State *l) {
         return NULL;
     }
     const char *dumped_data = lua_tostring(l, -1);
-    /*printf("table_dump2allocated_str: [%s]\n", stack_dump(l));*/
+    /*printf("L_table_dump2allocated_str: [%s]\n", stack_dump(l));*/
     if (dumped_data) {
         lua_pop(l, 1);
-        //printf("table_dump2allocated_str: [%s]\n", stack_dump(l));
+        //printf("L_table_dump2allocated_str: [%s]\n", stack_dump(l));
         /*assert(lua_gettop(l) == top);*/
         /*lua_pop(l, 1);*/
         return strdup(dumped_data);
@@ -569,7 +581,11 @@ char *table_dump2allocated_str(lua_State *l) {
     return NULL;
 }
 
-void table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
+char *table_dump2allocated_str(lua_State *l) {
+    return L_table_dump2allocated_str(l);
+}
+
+void L_table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
     assert(l);
     assert(points);
     assert(points_num >= 0);
@@ -591,7 +607,11 @@ void table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
     }
 }
 
-void table_push_rect_as_arr(lua_State *l, Rectangle rect) {
+void table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
+    L_table_push_points_as_arr(l, points, points_num);
+}
+
+void L_table_push_rect_as_arr(lua_State *l, Rectangle rect) {
     assert(l);
     lua_createtable(l, 0, 0);
 
@@ -606,6 +626,10 @@ void table_push_rect_as_arr(lua_State *l, Rectangle rect) {
 
     lua_pushnumber(l, rect.height);
     lua_rawseti(l, -2, 4);
+}
+
+void table_push_rect_as_arr(lua_State *l, Rectangle rect) {
+    return L_table_push_rect_as_arr(l, rect);
 }
 
 const char *L_stack_dump(lua_State *lua) {
