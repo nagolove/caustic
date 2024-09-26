@@ -6,10 +6,10 @@
 #include "cimgui_impl.h"
 
 #include "koh_common.h"
-#include "chipmunk/cpBB.h"
+/*#include "chipmunk/cpBB.h"*/
 #include "raylib.h"
 #include "raymath.h"
-#include "chipmunk/chipmunk.h"
+//#include "chipmunk/chipmunk.h"
 #include <assert.h>
 #include <float.h>
 #include <stdio.h>
@@ -29,6 +29,7 @@ static inline void vec4_from_color(float vec[4], Color c) {
     vec[3] = c.a / 255.;
 }
 
+/*
 static inline cpVect from_Vector2(Vector2 v) {
     return (cpVect){ v.x, v.y };
 }
@@ -36,6 +37,7 @@ static inline cpVect from_Vector2(Vector2 v) {
 static inline Vector2 from_Vect(cpVect v) {
     return (Vector2){ v.x, v.y };
 }
+*/
 
 static inline Vector2 from_polar(float angle, float radius) {
     return (Vector2){ cos(angle) * radius, sin(angle) * radius };
@@ -59,11 +61,13 @@ static inline struct Polar to_polar(float x, float y) {
     };
 }
 
+/*
 static inline const char *cpVect_tostr(cpVect v) {
     static char buf[100] = {0};
     sprintf(buf, "{%11.5f, %11.5f}", v.x, v.y);
     return buf;
 }
+*/
 
 static inline const char *Rectangle_tostr(Rectangle r) {
     static char buf[100] = {0};
@@ -78,6 +82,7 @@ static inline const char *Vector2_tostr(Vector2 v) {
     return buf;
 }
 
+/*
 static inline Rectangle from_bb(cpBB bb) {
     return (Rectangle) { 
         .x = bb.l, 
@@ -87,13 +92,17 @@ static inline Rectangle from_bb(cpBB bb) {
         //.height = bb.b - bb.t,
     };
 }
+*/
 
+/*
 static inline const char *bb_tostr(cpBB bb) {
     static char buf[100] = {0};
     sprintf(buf, "lbrt = {%6.5f, %6.5f, %6.5f, %6.5f}\n", bb.l, bb.b, bb.r, bb.t);
     return buf;
 }
+*/
 
+/*
 static inline cpBB bb_local2world(cpBody *body, cpBB bb) {
     assert(body);
     cpVect p1 = cpBodyLocalToWorld(body, (cpVect) { bb.l, bb.t });
@@ -106,7 +115,9 @@ static inline cpBB bb_local2world(cpBody *body, cpBB bb) {
         .b = p2.y,
     };
 }
+*/
 
+/*
 static inline cpBB bb_world2local(cpBody *body, cpBB bb) {
     assert(body);
     cpVect p1 = cpBodyWorldToLocal(body, (cpVect) { bb.l, bb.t });
@@ -119,6 +130,7 @@ static inline cpBB bb_world2local(cpBody *body, cpBB bb) {
         .b = p2.y,
     };
 }
+*/
 
 static inline Rectangle rect_extend(Rectangle rect, float delta) {
     return (Rectangle) {

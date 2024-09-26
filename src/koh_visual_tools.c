@@ -1,6 +1,6 @@
 #include "koh_visual_tools.h"
 
-#include "chipmunk/chipmunk_types.h"
+//#include "chipmunk/chipmunk_types.h"
 #include "koh.h"
 #include "koh_common.h"
 #include "koh_logger.h"
@@ -379,6 +379,7 @@ static void rectanglea_handle_resize(
     if (rf->rect.height < 0.) rf->rect.height = 0.;
 }
 
+/*
 static void rectangle_update_verts(struct ToolRectangle *rf) {
     if (IsKeyDown(KEY_LEFT)) {
         rf->angle += 0.01;
@@ -387,50 +388,48 @@ static void rectangle_update_verts(struct ToolRectangle *rf) {
         rf->angle -= 0.01;
     }
 
-    /*
-    rf->radius = sqrt(
-        rf->rect.width * rf->rect.width +
-        rf->rect.height * rf->rect.height
-    ) / 2.;
-    rf->center =  (Vector2) {
-        .x = rf->rect.x + rf->rect.width / 2.,
-        .y = rf->rect.y + rf->rect.height / 2.,
-    };
-    */
+    // rf->radius = sqrt(
+        // rf->rect.width * rf->rect.width +
+        // rf->rect.height * rf->rect.height
+    // ) / 2.;
+    // rf->center =  (Vector2) {
+        // .x = rf->rect.x + rf->rect.width / 2.,
+        // .y = rf->rect.y + rf->rect.height / 2.,
+    // };
 
-    cpTransform t = cpTransformIdentity;
+    // cpTransform t = cpTransformIdentity;
+
+    // --------------------------------------------------
     //t = cpTransformMult(cpTransformTranslate(from_Vector2(rf->center)), t);
     //t = cpTransformMult(t, cpTransformTranslate(from_Vector2(rf->center)));
-    cpTransform rot = cpTransformRotate(rf->angle);
+    // --------------------------------------------------
+    
+    //cpTransform rot = cpTransformRotate(rf->angle);
 
-    cpTransform result = cpTransformMult(t, rot);
+    //cpTransform result = cpTransformMult(t, rot);
 
-    /*
-    cpTransform result = cpTransformMult(
-        t, cpTransformMult(
-            //rot, cpTransformTranslate(from_Vector2(Vector2Negate(rf->center)))
-            //cpTransformTranslate(from_Vector2(Vector2Negate(rf->center))), rot
-            cpTransformTranslate(from_Vector2(Vector2Negate(rf->center))), rot
-        )
-    );
-    */
+    //cpTransform result = cpTransformMult(
+    //    t, cpTransformMult(
+    //        //rot, cpTransformTranslate(from_Vector2(Vector2Negate(rf->center)))
+    //        //cpTransformTranslate(from_Vector2(Vector2Negate(rf->center))), rot
+    //        cpTransformTranslate(from_Vector2(Vector2Negate(rf->center))), rot
+    //    )
+    //);
 
-    Vector2 *points = rf->points;
+    //Vector2 *points = rf->points;
 
+    //points[0] = from_Vect(cpTransformVect(result, from_Vector2(points[0])));
+    //points[1] = from_Vect(cpTransformVect(result, from_Vector2(points[1])));
+    //points[2] = from_Vect(cpTransformVect(result, from_Vector2(points[2])));
+    //points[3] = from_Vect(cpTransformVect(result, from_Vector2(points[3])));
+    //points[4] = points[0];
 
-    points[0] = from_Vect(cpTransformVect(result, from_Vector2(points[0])));
-    points[1] = from_Vect(cpTransformVect(result, from_Vector2(points[1])));
-    points[2] = from_Vect(cpTransformVect(result, from_Vector2(points[2])));
-    points[3] = from_Vect(cpTransformVect(result, from_Vector2(points[3])));
-    points[4] = points[0];
-
-    /*
-    trace("ribbonframe_update_verts: point[0] %s\n", Vector2_tostr(points[0]));
-    trace("ribbonframe_update_verts: point[1] %s\n", Vector2_tostr(points[1]));
-    trace("ribbonframe_update_verts: point[2] %s\n", Vector2_tostr(points[2]));
-    trace("ribbonframe_update_verts: point[3] %s\n", Vector2_tostr(points[3]));
-    */
+    //trace("ribbonframe_update_verts: point[0] %s\n", Vector2_tostr(points[0]));
+    //trace("ribbonframe_update_verts: point[1] %s\n", Vector2_tostr(points[1]));
+    //trace("ribbonframe_update_verts: point[2] %s\n", Vector2_tostr(points[2]));
+    //trace("ribbonframe_update_verts: point[3] %s\n", Vector2_tostr(points[3]));
 }
+*/
 
 static void rectanglea_set_state_by_corner_index(
     struct ToolRectangleAlignedInternal *internal
@@ -1256,7 +1255,7 @@ void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam) {
     struct ToolRectangleInternal *internal = rf->internal;
     Vector2 mp = mouse_with_cam(cam);
 
-    rectangle_update_verts(rf);
+    /*rectangle_update_verts(rf);*/
 
     //internal->corner_index = -1;
 

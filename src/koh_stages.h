@@ -2,7 +2,6 @@
 
 #include "lua.h"
 #include <assert.h>
-#include "raylib.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "koh_lua_tools.h"

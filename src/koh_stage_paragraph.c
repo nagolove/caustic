@@ -1,11 +1,11 @@
 // vim: fdm=marker
 #include "koh_stage_paragraph.h"
 
-#include "chipmunk/chipmunk.h"
+//#include "chipmunk/chipmunk.h"
 #include <string.h>
 #include "koh_common.h"
 #include "koh_paragraph.h"
-#include "koh_routine.h"
+/*#include "koh_routine.h"*/
 #include "koh_stages.h"
 #include "raylib.h"
 #include <stdlib.h>
@@ -59,7 +59,7 @@ void stage_paragraph_update(Stage_paragraph *st) {
     paragraph_add(&pa, "id = %.4d", 441);
     paragraph_add(&pa, "rotation = %8.4f", 31.2);
     paragraph_add(&pa, "strength = %8.4f", 313.013);
-    paragraph_add(&pa, "pos = %s", cpVect_tostr(cpvzero));
+    /*paragraph_add(&pa, "pos = %s", cpVect_tostr(cpvzero));*/
     paragraph_add(&pa, "weapon = %11s", "KEkekekekekekekek");
     paragraph_build(&pa, st->fnt);
     paragraph_draw(&pa, pos);

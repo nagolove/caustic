@@ -74,6 +74,7 @@ void render_texture(
 
 // Draw a part of a texture (defined by a rectangle) with 'pro' parameters
 // NOTE: origin is relative to destination rectangle size
+/*
 void render_texture_t(
     Texture2D texture, Rectangle source, Rectangle dest, 
     Vector2 origin, float rotation, Color tint,
@@ -163,6 +164,7 @@ void render_texture_t(
 
     }
 }
+*/
 
 // Рисует круг
 static const char *shdr_src = 

@@ -4,9 +4,9 @@
 #define PCRE2_CODE_UNIT_WIDTH   8
 
 // {{{ include
-#include "chipmunk/chipmunk.h"
-#include "chipmunk/chipmunk_structs.h"
-#include "chipmunk/chipmunk_types.h"
+//#include "chipmunk/chipmunk.h"
+//#include "chipmunk/chipmunk_structs.h"
+//#include "chipmunk/chipmunk_types.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "koh_rand.h"
@@ -66,7 +66,7 @@ bool common_verbose = false;
 static bool verbose_search_files_rec = false;
 static struct Common cmn;
 
-static inline Color DebugColor2Color(cpSpaceDebugColor dc);
+/*static inline Color DebugColor2Color(cpSpaceDebugColor dc);*/
 static void add_chars_range(int first, int last);
 
 bool koh_search_files_small(
@@ -75,7 +75,6 @@ bool koh_search_files_small(
 bool koh_search_files_pcre2(
     struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
 );
-static char *pcre_code_str(int errnumber);
 
 void custom_log(int msgType, const char *text, va_list args)
 {
@@ -196,66 +195,7 @@ Font load_font_unicode(const char *fname, int size) {
     return LoadFontEx(fname, size, cmn.font_chars, cmn.font_chars_num);
 }
 
-// {{{ Chipnumnk shutdown iterators
-static void ShapeFreeWrap(cpSpace *space, cpShape *shape, void *unused){
-    //trace("ShapeFreeWrap: shape %p\n", shape);
-    if (shape->userData)
-        trace("ShapeFreeWrap: shape->userData %p\n", shape->userData);
-    cpSpaceRemoveShape(space, shape);
-    struct SpaceShutdownCtx *ctx = unused;
-    if (ctx->free_shapes) {
-        cpShapeFree(shape);
-        if (ctx->print_shapes)
-            trace("ShapeFreeWrap: shape %p\n", shape);
-    }
-}
-
-static void PostShapeFree(cpShape *shape, struct SpaceShutdownCtx *ctx){
-    cpSpaceAddPostStepCallback(ctx->space, (cpPostStepFunc)ShapeFreeWrap, shape, ctx);
-}
-
-static void ConstraintFreeWrap(cpSpace *space, cpConstraint *constraint, void *unused){
-    cpSpaceRemoveConstraint(space, constraint);
-    struct SpaceShutdownCtx *ctx = unused;
-    if (ctx->free_constraints) {
-        cpConstraintFree(constraint);
-        if (ctx->print_constraints)
-            trace("ConstraintFreeWrap: constraint %p\n", constraint);
-    }
-}
-
-static void PostConstraintFree(cpConstraint *constraint, struct SpaceShutdownCtx *ctx){
-    cpSpaceAddPostStepCallback(ctx->space, (cpPostStepFunc)ConstraintFreeWrap, constraint, ctx);
-}
-
-static void BodyFreeWrap(cpSpace *space, cpBody *body, void *unused){
-    cpSpaceRemoveBody(space, body);
-    struct SpaceShutdownCtx *ctx = unused;
-    if (ctx->free_bodies) {
-        cpBodyFree(body);
-        if (ctx->print_bodies)
-            trace("BodyFreeWrap: body %p\n", body);
-    }
-}
-
-static void PostBodyFree(cpBody *body, struct SpaceShutdownCtx *ctx){
-    cpSpaceAddPostStepCallback(ctx->space, (cpPostStepFunc)BodyFreeWrap, body, ctx);
-}
-// }}}
-
-void space_shutdown(struct SpaceShutdownCtx ctx) {
-    cpSpace *space = ctx.space;
-    assert(ctx.space);
-    trace("space_shutdown: space %p\n", space);
-    //cpSpaceStep(space, 1 / 60.);
-    cpSpaceEachShape(space, (cpSpaceShapeIteratorFunc)PostShapeFree, &ctx);
-    cpSpaceEachConstraint(
-        space, (cpSpaceConstraintIteratorFunc)PostConstraintFree, &ctx
-    );
-    cpSpaceEachBody(space, (cpSpaceBodyIteratorFunc)PostBodyFree, &ctx);
-    //cpSpaceStep(space, 1 / 60.);
-}
-
+/*
 void space_debug_draw_circle(
         cpVect pos, 
         cpFloat angle, 
@@ -268,7 +208,9 @@ void space_debug_draw_circle(
     //DrawCircle(pos.x, pos.y, radius, *((Color*)data));
     DrawCircle(pos.x, pos.y, radius, DebugColor2Color(fillColor));
 }
+*/
 
+/*
 void space_debug_draw_segment(
         cpVect a, 
         cpVect b, 
@@ -276,11 +218,13 @@ void space_debug_draw_segment(
         cpDataPointer data
 ) {
     //DrawLine(a.x, a.y, b.x, b.y, *((Color*)data));
-    /*DrawLine(a.x, a.y, b.x, b.y, DebugColor2Color(color));*/
+    //DrawLine(a.x, a.y, b.x, b.y, DebugColor2Color(color));
     float thick = 3.;
     DrawLineEx(from_Vect(a), from_Vect(b), thick, DebugColor2Color(color));
 }
+*/
 
+/*
 void space_debug_draw_fatsegment(
         cpVect a, 
         cpVect b, 
@@ -289,19 +233,18 @@ void space_debug_draw_fatsegment(
         cpSpaceDebugColor fillColor, 
         cpDataPointer data
 ) {
-    /*printf("space_debug_draw_fatsegment\n");*/
     DrawLine(a.x, a.y, b.x, b.y, DebugColor2Color(outlineColor));
 
-    /*
-    DrawLineEx(
-            (Vector2){ a.x, a.y}, 
-            (Vector2){ b.x, b.y}, 
-            radius,
-            *((Color*)data));
-    */
+//    DrawLineEx(
+//            (Vector2){ a.x, a.y}, 
+//            (Vector2){ b.x, b.y}, 
+//            radius,
+//            *((Color*)data));
 
 }
+*/
 
+/*
 void space_debug_draw_polygon(
         int count, 
         const cpVect *verts, 
@@ -323,7 +266,7 @@ void space_debug_draw_polygon(
     points[count + 1].x  = points[0].x;
     points[count + 1].y  = points[0].y;
 
-    /*DrawLineStrip(points, count + 2, DebugColor2Color(outlineColor));*/
+    //DrawLineStrip(points, count + 2, DebugColor2Color(outlineColor));
     float thick = 3;
     for (int i = 0; i < count + 1; i++) {
         DrawLineEx(
@@ -340,7 +283,9 @@ void space_debug_draw_polygon(
         DebugColor2Color(outlineColor)
     );
 }
+*/
 
+/*
 void space_debug_draw_dot(
         cpFloat size,
         cpVect pos, 
@@ -350,7 +295,9 @@ void space_debug_draw_dot(
     //DrawCircle(pos.x, pos.y, size, *((Color*)data));
     DrawCircle(pos.x, pos.y, size, DebugColor2Color(color));
 }
+*/
 
+/*
 cpSpaceDebugColor space_debug_draw_color_for_shape(
         cpShape *shape, 
         cpDataPointer data
@@ -367,7 +314,9 @@ cpSpaceDebugColor space_debug_draw_color_for_shape(
 
     return def;
 }
+*/
 
+/*
 cpSpaceDebugColor from_Color(Color c) {
     return (cpSpaceDebugColor) { 
         .r = c.r,
@@ -376,7 +325,9 @@ cpSpaceDebugColor from_Color(Color c) {
         .a = c.a,
     };
 }
+*/
 
+/*
 void space_debug_draw(cpSpace *space, Color color) {
     cpSpaceDebugDrawOptions options = {
         .drawCircle = space_debug_draw_circle,
@@ -389,15 +340,17 @@ void space_debug_draw(cpSpace *space, Color color) {
             CP_SPACE_DEBUG_DRAW_COLLISION_POINTS,
         .shapeOutlineColor = from_Color(color),
         .colorForShape = space_debug_draw_color_for_shape,
-        /*.colorForShape = {255., 0., 0., 255.},*/
+        //.colorForShape = {255., 0., 0., 255.},
         .constraintColor = {0., 255., 0., 255.},
         .collisionPointColor = {0., 0., 255., 255.},
-        /*.data = &color,*/
+        //.data = &color,
         .data = NULL,
     };
     cpSpaceDebugDraw(space, &options);
 }
+*/
 
+/*
 void draw_paragraph(
         Font fnt, 
         char **paragraph, 
@@ -411,6 +364,7 @@ void draw_paragraph(
         coord.y += fnt.baseSize;
     }
 }
+*/
 
 float axis2zerorange(float value) {
     return (1. + value) / 2.;
@@ -531,9 +485,9 @@ const char *skip_lead_zeros(const char *s) {
 }
 */
 
-static inline Color DebugColor2Color(cpSpaceDebugColor dc) {
-    return (Color){ .a = dc.a, .r = dc.r, .g = dc.g, .b = dc.b, };
-}
+/*static inline Color DebugColor2Color(cpSpaceDebugColor dc) {*/
+    /*return (Color){ .a = dc.a, .r = dc.r, .g = dc.g, .b = dc.b, };*/
+/*}*/
 
 int u8_codeptlen(const char *str) {
     const char *pstr = str;
@@ -554,6 +508,7 @@ int u8_codeptlen(const char *str) {
     return i;
 }
 
+/*
 void bb_draw(cpBB bb, Color color) {
     const float radius = 5.;
     DrawCircle(bb.l, bb.b, radius, color);
@@ -561,6 +516,7 @@ void bb_draw(cpBB bb, Color color) {
     DrawRectangleLines(bb.l, bb.b, bb.r - bb.l, bb.t - bb.b, color);
     //printf("w, h %f %f\n", bb.r - bb.l, bb.b - bb.t);
 }
+*/
 
 Vector2 random_outrect_quad(
     xorshift32_state *st, Vector2 start, int w, int border_width
@@ -651,11 +607,13 @@ Vector2 bzr_cubic(Vector2 segments4[4], float t) {
     return p;
 }
 
+/*
 const char *shapefilter2str(cpShapeFilter filter) {
     static char buf[128] = {0};
     //snprintf(buf, sizeof(buf), "group %u", filter.group,
     return buf;
 }
+*/
 
 const char *splitstr_quartet(const char *in) {
     static char buf[128] = {0};
@@ -679,6 +637,7 @@ const char *splitstr_quartet(const char *in) {
 //printf("%s\n", splitstr_quartet("000011110000"));
 //printf("%s\n", splitstr_quartet("2000011110000"));
 
+/*
 void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter) {
     assert(pa);
     const char *tmp = NULL;
@@ -688,7 +647,9 @@ void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter) {
     tmp = splitstr_quartet(to_bitstr_uint32_t(filter.categories));
     paragraph_add(pa, " -- categories %44s", tmp);
 }
+*/
 
+/*
 cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr) {
     int num = ceil(radius);
     cpVect verts[num * sizeof(cpVect)];
@@ -704,7 +665,9 @@ cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr) {
     cpTransform _tr = tr ? *tr : cpTransformIdentity;
     return cpPolyShapeNew(body, num, verts, _tr, 1.);
 }
+*/
 
+/*
 cpShape *circle2polyshape(cpSpace *space, cpShape *inshape) {
     cpBody *body = cpShapeGetBody(inshape);
     float radius = cpCircleShapeGetRadius(inshape);
@@ -733,6 +696,7 @@ cpShape *circle2polyshape(cpSpace *space, cpShape *inshape) {
 
     return outshape;
 }
+*/
 
 Vector2 camera2screen(Camera2D cam, Vector2 in) {
     return (Vector2) { 
@@ -1026,6 +990,7 @@ void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx) {
     }
 }
 
+/*
 const char *transform2str(cpTransform tr) {
     static char buf[128] = {0};
     memset(buf, 0, sizeof(buf));
@@ -1036,6 +1001,7 @@ const char *transform2str(cpTransform tr) {
     );
     return buf;
 }
+*/
 
 const char *camera2str(Camera2D cam, bool multiline) {
     static char buf[256] = {0};
@@ -1650,7 +1616,7 @@ const char *koh_incremental_fname(const char *fname, const char *ext) {
     return NULL;
 }
 
-static char *pcre_code_str(int errnumber) {
+char *pcre_code_str(int errnumber) {
     static char buffer[512] = {};
     pcre2_get_error_message(
         errnumber, (unsigned char*)buffer, sizeof(buffer)

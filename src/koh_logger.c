@@ -1,14 +1,13 @@
 // vim: fdm=marker
 #include "koh_logger.h"
 
-// TODO: Переписать libsmallregex на pcre2
-#define USE_REGEX    1
+#define PCRE2_CODE_UNIT_WIDTH   8
 
+#include "koh_common.h"
 #include "koh_console.h"
 #include "koh_script.h"
 #include "koh_strset.h"
 #include "lauxlib.h"
-#include "libsmallregex.h"
 #include "lua.h"
 #include <assert.h>
 #include <stdarg.h>
@@ -20,6 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include "pcre2.h"
 
 #define MAX_TRACE_GROUPS    40
 #define MAX_TRACE_LEN       120
@@ -29,10 +29,9 @@ static StrSet *traces_set = NULL;
 static bool is_trace_enabled = true;
 
 struct FilterEntry {
-#ifdef USE_REGEX
-    struct small_regex *regex;
-#endif
-    char *pattern;
+    pcre2_code          *r;
+    pcre2_match_data    *match_data;
+    char                *pattern;
 };
 
 static struct FilterEntry *filters = {0};
@@ -56,16 +55,31 @@ void trace_filter_add(const char *pattern) {
 
     struct FilterEntry *fe = &filters[filters_num++];
     fe->pattern = strdup(pattern);
-#ifdef USE_REGEX
-    fe->regex = regex_compile(pattern);
-#endif
+
+    int         errnumner = 0;
+    size_t      erroffset = 0;
+    uint32_t    flags = 0;
+    fe->r = pcre2_compile(
+        (unsigned char*)pattern, 
+        PCRE2_ZERO_TERMINATED, flags, 
+        &errnumner, &erroffset, 
+        NULL
+    );
+
+    if (!fe->r) {
+        printf(
+            "trace_filter_add: could not compile pattern '%s' with '%s'\n",
+            pattern, pcre_code_str(errnumner)
+        );
+    }
+
+    //printf("rgexpr_match: compiled\n");
+
+    fe->match_data = pcre2_match_data_create_from_pattern(fe->r, NULL);
+    assert(fe->match_data);
 }
 
 bool filter_match(const char *string) {
-#ifndef USE_REGEX
-    return false;
-#endif
-
     if (!string)
         return false;
 
@@ -78,6 +92,15 @@ bool filter_match(const char *string) {
             return true;
         }
 #endif
+        size_t str_len = strlen(string);
+        int rc = pcre2_match(
+            filters[j].r, (unsigned char*)string,
+            str_len, 0, 0, 
+            filters[j].match_data, NULL
+        );
+
+        if (rc > 0)
+            return true;
     }
 
     return false;
@@ -93,10 +116,10 @@ void filter_free() {
         struct FilterEntry *fe = &filters[i];
         if (fe->pattern)
             free(fe->pattern);
-#ifdef USE_REGEX
-        if (fe->regex)
-            regex_free(fe->regex);
-#endif
+        if (fe->match_data)
+            pcre2_match_data_free(fe->match_data);
+        if (fe->r)
+            pcre2_code_free(fe->r);
     }
 }
 
@@ -205,6 +228,14 @@ int l_filter_remove(lua_State *lua) {
     int index = lua_tonumber(lua, 1);
     if (index >= 1 && index <= filters_num) {
         index--; // from 1 based array to 0 based
+                 
+        if (filters[index].pattern)
+            free(filters[index].pattern);
+        if (filters[index].match_data)
+            pcre2_match_data_free(filters[index].match_data);
+        if (filters[index].r)
+            pcre2_code_free(filters[index].r);
+
         filters[index] = filters[filters_num - 1];
         filters_num--;
     }

@@ -17,8 +17,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "chipmunk/chipmunk.h"
-#include "chipmunk/chipmunk_types.h"
+//#include "chipmunk/chipmunk.h"
+//#include "chipmunk/chipmunk_types.h"
 /*#include "enet.h"*/
 #include "raylib.h"
 
@@ -54,6 +54,7 @@ const char *color2str(Color color);
 const char *Color_to_str(Color color);
 Font load_font_unicode(const char *fname, int size);
 
+/*
 struct SpaceShutdownCtx {
     cpSpace *space;
     bool free_shapes, free_constraints, free_bodies;
@@ -62,6 +63,7 @@ struct SpaceShutdownCtx {
 
 void space_shutdown(struct SpaceShutdownCtx ctx);
 void space_debug_draw(cpSpace *space, Color color);
+*/
 
 void draw_paragraph(
     Font fnt, 
@@ -71,6 +73,7 @@ void draw_paragraph(
     Color color
 );
 
+// -1..1 -> 0..1
 float axis2zerorange(float value);
 
 /*
@@ -93,17 +96,17 @@ const char *to_bitstr_uint64_t(uint64_t value);
 
 int u8_codeptlen(const char *str);
 void save_scripts(FILE *file);
-void bb_draw(cpBB bb, Color color);
+//void bb_draw(cpBB bb, Color color);
 Vector2 random_inrect(xorshift32_state *st, Rectangle rect);
 Vector2 random_outrect_quad(
     xorshift32_state *st, Vector2 start, int w, int border_width
 );
 Vector2 bzr_cubic(Vector2 segments4[4], float t);
-const char *shapefilter2str(cpShapeFilter filter);
+//const char *shapefilter2str(cpShapeFilter filter);
 
-void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter);
-cpShape *circle2polyshape(cpSpace *space, cpShape *inshape);
-cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr);
+//void paragraph_paste_collision_filter(Paragraph *pa, cpShapeFilter filter);
+//cpShape *circle2polyshape(cpSpace *space, cpShape *inshape);
+//cpShape *make_circle_polyshape(cpBody *body, float radius, cpTransform *tr);
 
 // Возвращает вектор смещение камеры плюс вектор in 
 Vector2 camera2screen(Camera2D cam, Vector2 in);
@@ -140,7 +143,7 @@ void koh_qsort_soa(
     QSortCmpFunc cmp, QSortSwapFunc swap, void *udata
 );
 
-cpSpaceDebugColor from_Color(Color c);
+//cpSpaceDebugColor from_Color(Color c);
 
 struct CameraProcessScale {
     // TODO: Выбрать лучшее именование для камеры?
@@ -171,7 +174,7 @@ struct CameraAxisDrawCtx {
 };
 
 void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx);
-const char *transform2str(cpTransform tr);
+//const char *transform2str(cpTransform tr);
 const char *camera2str(Camera2D cam, bool multiline);
 Color random_raylib_color();
 uint32_t next_eq_pow2(uint32_t p);
@@ -312,6 +315,8 @@ bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);
 // str_len может быть равна NULL, тогда будет вызвана функция strlen(str)
 bool koh_str_match(const char *str, size_t *str_len, const char *pattern);
 
+// Проверяет окончивается ли имя файла на
+// ".png", ".jpg", ".tga", ".PNG", ".JPG", ".TGA"
 bool koh_is_fname_image_ext(const char *fname);
 
 char *points2table_allocated(const Vector2 *points, int points_num);
@@ -323,4 +328,7 @@ const char *koh_str_gen_aA(size_t len);
 char *koh_str_sub_alloc(
     const char *subject, const char* pattern, const char *replacement
 );
+
 extern bool common_verbose;
+
+char *pcre_code_str(int errnumber);

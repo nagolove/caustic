@@ -24,7 +24,7 @@ struct {
     void    **datas;
     int     num, cap;
     bool    enabled;
-    cpSpace *space;
+    //cpSpace *space;
 } static dev;
 
 struct Trace {
@@ -373,6 +373,7 @@ struct Label {
     Vector2 pos;
 };
 
+/*
 void dev_draw_label(Font fnt, Vector2 pos, char *msg, Color color) {
     Vector2 text_size = MeasureTextEx(fnt, msg, fnt.baseSize, 0.);
 
@@ -399,13 +400,16 @@ void dev_draw_label(Font fnt, Vector2 pos, char *msg, Color color) {
     l->pos = pos;
     //b->userData = l;
 }
+*/
 
+/*
 void dev_label_group_open() {
     assert(dev.space == NULL);
     dev.space = cpSpaceNew();
     cpSpaceSetGravity(dev.space, cpvzero);
     //cpSpaceSetGravity(dev.space, (cpVect) { 0.1, 0. });
 }
+*/
 
 /*
 static void iter_shape(cpShape *shape, void *data) {
@@ -444,9 +448,11 @@ void dev_label_group_close() {
 }
 */
 
+/*
 static void dev_label_group_push_func(void *ptr) {
     dev_label_group_open();
 }
+*/
 
 /*
 static void dev_label_group_pop_func(void *ptr) {
@@ -454,9 +460,11 @@ static void dev_label_group_pop_func(void *ptr) {
 }
 */
 
+/*
 void dev_label_group_push() {
     dev_draw_push(dev_label_group_push_func, NULL, 0);
 }
+*/
 
 /*
 void dev_label_group_pop() {
