@@ -67,13 +67,14 @@ if string.match(lfs.currentdir(), "tl_dst") then
     chdir("..")
 end
 
--- TODO: Как-то предухранить каталог caustic с рабочей средой от затирания
+-- TODO: Как-то предохранить каталог caustic с рабочей средой от затирания
 -- при ошибочно выставленной переменной окружения CAUSTIC_PATH
 
 local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
 
 local format        = string.format
+local match         = string.match
 local cache_name    = "cache.lua"
 -- Добавить разные уровни многословности?
 --[[
@@ -109,7 +110,7 @@ local record Cfg
         file_out: string
         on_read: function(line: string)
         on_write: function(capture: string): {string}
-        on_finish: function() -- XXX: Только для отладки
+        on_finish: function() -- XXX: Почему только для отладки?
     end
     -- }}}
 end
@@ -153,6 +154,7 @@ project dir -> bld.lua
 -- }}}
 --]]
 
+-- Не использовать io.popen() так могут быть проблемы с кодом возврата
 local function cmd_do(_cmd: string|{string})
     if verbose then
         os.execute("echo `pwd`")
@@ -196,6 +198,11 @@ local function filter_sources_c(
 ) 
     ut.filter_sources(".*%.c$", path, cb, exclude)
 end
+
+
+--[[ TODO: Добавить загрузку зависимостей из bld.lua, через поле 
+    proj_dependencies так как dependendies занято.
+--]]
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
@@ -342,11 +349,13 @@ local record Dependency
 
     -- Строки для дефайнов компилятора
     custom_defines: function(dep: Dependency): {string}
+    -- XXX: Что делает данная функция?
     lualibrary_install: function(abs_project_root_dir: string, to_dir: string)
     -- Значения коллбэка - build_make, build_cmake, etc
     build: function(dep: Dependency)
-	-- for WebAssembly
-    wbuild: function(dep: Dependency) 
+
+    wasm_build: function(dep: Dependency) 
+
     after_build: function(dep: Dependency)
     -- }}}
     -- XXX: Добавить методы к зависимостям
@@ -440,9 +449,9 @@ local function build_small_regex(dep: Dependency)
         return
     end
     print(lfs.currentdir())
-    -- TODO: Разница между cmd_do() и popen()?
     cmd_do('gcc -c libsmallregex.c')
     cmd_do("ar rcs libsmallregex.a libsmallregex.o")
+
     --[[
     local cmd_gcc = 'gcc -c libsmallregex.c'
     local cmd_ar = "ar rcs libsmallregex.a libsmallregex.o"
@@ -646,6 +655,7 @@ end
 
 local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
+    -- TODO: Проверка наличия fd
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
     cmd_do("cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
     cmd_do("make clean && make -j")
@@ -907,21 +917,6 @@ dependencies = {
         url_action = "git",
     },
 
---[[
-    {
-		-- XXX: That issue with freetype compiling?
-		-- XXX: Does freetype library used by cimgui?
-        after_init = freetype_after_init,
-        build_method = 'none',
-        description = "загрузчик ttf шрифтов. используется в imgui",
-        dir = 'freetype',
-        disabled = true,
-        libdirs = { "freetype/bld/build" },
-        name = 'freetype',
-        url = "https://github.com/freetype/freetype.git",
-    },
---]]
-
     -- TODO: обновить зависимость
     {
         -- компилировать не нужно
@@ -1145,6 +1140,7 @@ local function get_urls(deps: {Dependency}): {string}
 end
 --]]
 
+--[[
 local function get_include_dirs(deps: {Dependency}): {string}
 
     local _includedirs = {}
@@ -1166,6 +1162,7 @@ local function get_include_dirs(deps: {Dependency}): {string}
 
     return _includedirs
 end
+--]]
 
 -- TODO: Проверка на дубликаты путей:
 --      как проверка будет функционировать? какой-то флаг?
@@ -1324,6 +1321,7 @@ end
 
 local libdirs = gather_libdirs(dependencies)
 
+--[[
 local wasm_libdirs = { 
     "../caustic/wasm_objects/",
     "../caustic/wasm_3rd_party/genann",
@@ -1337,6 +1335,7 @@ local wasm_libdirs = {
     --"../caustic/wasm_3rd_party/sunvox/sunvox_lib/
     "../caustic/3rd_party/sunvox/sunvox_lib/js/lib"
 }
+--]]
 
 local function get_dir(dep: Dependency): string
     assert(type(dep.url) == 'string')
@@ -1346,7 +1345,7 @@ local function get_dir(dep: Dependency): string
     assert(dep.dir)
     local url = dep.url
     if not string.match(url, "%.zip$") then
-        -- TODO: Что делает поиск паттерна?
+        -- Вернуть имя каталога из строки url репозитория
         local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
         return dirname
     else
@@ -1508,8 +1507,6 @@ local function download_and_unpack_zip(dep: Dependency)
     os.remove(fname)
 end
 
--- FIXME: Зачем делать проверку действия по строке, если действие можно задать 
--- флагом или функцией?
 local function _dependecy_init(dep: Dependency)
 	assert(dep)
     if dep.disabled then
@@ -1639,37 +1636,31 @@ end
 
 local record Actions
     -- {{{
-    project: function(Args)
-    stage: function(Args)
     --anim_convert: function(Args)
     build: function(Args)
+    build_smart: function(Args)
     compile_flags: function(Args)
+    dependencies: function(Args)
     deps: function(Args)
     init: function(Args)
-    init_add: function(Args)
-    selftest: function(Args)
-    selftest_status: function(Args)
-    selftest_push: function(Args)
-    selftest_lg: function(Args)
-    
-    -- новая версия init, которая работает с таблицей dependencies через
-    -- аргумент функции
-    init_smart: function(Args)
-
     luainit: function(Args)
     make: function(Args)
+    proj_init: function(Args)
+    project: function(Args)
     publish: function(Args)
     remove: function(Args)
+    rmdirs: function(Args)
     rocks: function(Args)
     run: function(Args)
+    selftest: function(Args)
+    selftest_lg: function(Args)
+    selftest_push: function(Args)
+    selftest_status: function(Args)
+    stage: function(Args)
     test: function(Args)
-    verbose: function(Args)
-    dependencies: function(Args)
-    wbuild: function(Args)
-    build_smart: function(Args)
-    --updates: function(Args)
     update: function(Args)
-    rmdirs: function(Args)
+    verbose: function(Args)
+    wasm_build: function(Args)
     -- }}}
 end
 
@@ -1682,9 +1673,14 @@ local enum ActionsEnum
     "compile_flags"
     "dependencies"
     "deps"
-    "init"
-    "init_add"
-    "init_smart"
+
+    -- FIXME: Как добавить поддержку зависимотей для текущего проекта?
+    -- Значить нужно добавлять пути и опции компилятора от текущего проекта
+    "init"          
+    "proj_init"
+
+    --"init_add"      -- NOTE: что эта штука делает?
+    --"init_smart"    -- NOTE: что эта штука делает?
     "make"
     "publish"
     "remove"
@@ -1698,7 +1694,7 @@ local enum ActionsEnum
     "update"
     "verbose"
     --"updates"
-    --"wbuild"
+    "wasm_build"
     -- }}}
 end
 
@@ -1709,7 +1705,7 @@ local record ParserSetup
     arguments: {{string|integer}}
 end
 
--- TODO: комментарии на русском?
+-- TODO: Добавить вывод справки на русском?
 local parser_setup: {string:ParserSetup} = {
     -- {{{
 
@@ -1913,7 +1909,6 @@ local function _init_smart(path: string, deps: {Dependency})
 end
 --]]
 
--- FIXME: Переключаться в каталог CAUSTIC_PATH
 local function _init(path: string, deps: {Dependency})
     print("_init", path)
 	--print(tabular(deps))
@@ -1940,7 +1935,6 @@ local function _init(path: string, deps: {Dependency})
     local threads: {lanes.Thread} = {}
     local opt_tbl = { required = {"lfs", "compat53" }, }
     local func = lanes.gen("*", opt_tbl, dependency_init)
-	--local func = lanes.gen("package base", opt_tbl, dependency_init)
 
     --local sorter = Toposorter.new()
 	local single_thread = true
@@ -2066,7 +2060,11 @@ end
 function actions.stage(_args: Args)
     print("actions.stage")
 
-    -- TODO: Проверить, что пользователь находится в каталоге с проектом
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    if not cfgs then
+        error("No project bld.lua in current directory")
+    end
+
     if _args.new == "new" and type(_args.name) == "string" then
         stage_new(_args.name)
     end
@@ -2096,10 +2094,11 @@ function actions.run(_args: Args)
     end
 end
 
+--[[
 function actions.init_add(_args: Args)
     print("init_add")
-
 end
+--]]
 
 --[[
 function actions.init_smart(_args: Args)
@@ -2129,6 +2128,34 @@ function actions.init_smart(_args: Args)
     --_init(win_third_party, deps)
 end
 --]]
+
+-- Скачать зависимости указанные в bld.lua для текущего проекта
+function actions.proj_init(_args: Args)
+    local deps = {}
+    if _args.name then
+        local dependencies_name_map = get_deps_name_map(dependencies)
+        print('partial init for dependency', _args.name)
+        if dependencies_name_map[_args.name] then
+            table.insert(deps, dependencies_name_map[_args.name])
+        else
+            print("bad dependency name", _args.name)
+            return
+        end
+    else
+        for _, dep in ipairs(dependencies) do
+            table.insert(deps, dep)
+        end
+    end
+
+    --print('deps', inspect(deps))
+    --check_for_unstaged(deps)
+
+    local project_path = lfs.currentdir()
+    _init(project_path, deps)
+
+    --_init(path_wasm_third_party, deps)
+    --_init(win_third_party, deps)
+end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
@@ -2430,7 +2457,6 @@ local function check_files_in_dir(dirname: string, filelist: {string}): boolean
 end
 
 local function sub_publish(_args: Args, cfg: Cfg)
-    -- TODO: 
     -- * проверка наличия wasm сборки
     --      как сделать проверку унифицированно?
     -- * выгрузка сборки в репозиторий сайта
@@ -2491,10 +2517,6 @@ local function sub_publish(_args: Args, cfg: Cfg)
     ut.pop_dir()
 end
 
-
---[[
-TODO: Как быть с несколькими целями в bld.lua ?
---]]
 function actions.publish(_args: Args)
     print('publish')
 
@@ -2557,9 +2579,15 @@ local function rec_remove_dir(dirname: string)
                 end
 
                 -- XXX:
-                pcall(function()
+                ok, errmsg = pcall(function()
                     os.remove(path)
-                end)
+                end) as (boolean, string)
+                if not ok then
+                    print(format(
+                        "rec_remove_dir: could not remove file '%s' with %s",
+                        path, errmsg
+                    ))
+                end
             end
         end
     end)
@@ -2709,17 +2737,18 @@ function actions.compile_flags(_: Args)
     end
 end
 
+--[[
 local function buildw_chipmunk()
     ut.push_current_dir()
     chdir("wasm_3rd_party/Chipmunk2D/")
-
     cmd_do("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
     cmd_do("emmake make -j")
-
     ut.pop_dir()
 end
+--]]
 
-local function link(objfiles: {string}, libname: string, flags: string)
+--[[
+local function w_link(objfiles: {string}, libname: string, flags: string)
     print('link: ')
     print(tabular(objfiles))
     flags = flags or ""
@@ -2728,11 +2757,15 @@ local function link(objfiles: {string}, libname: string, flags: string)
     local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
     cmd_do(cmd)
 end
+--]]
 
+--[[
 local function src2obj(filename: string): string
     return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1] as string
 end
+--]]
 
+--[[
 local function buildw_lua()
     local prevdir = lfs.currentdir()
     chdir("wasm_3rd_party/lua")
@@ -2755,17 +2788,17 @@ local function buildw_lua()
 
     chdir(prevdir)
 end
+--]]
 
+--[[
 local function buildw_raylib()
     ut.push_current_dir()
     chdir("wasm_3rd_party/raylib")
 
-    --[[
-    make CC=x86_64-w64-mingw32-gcc \
-        PLATFORM=PLATFORM_DESKTOP \
-        PLATFORM_OS=WINDOWS \
-        RAYLIB_LIBTYPE=SHARED
-    --]]
+    --make CC=x86_64-w64-mingw32-gcc \
+        --PLATFORM=PLATFORM_DESKTOP \
+        --PLATFORM_OS=WINDOWS \
+        --RAYLIB_LIBTYPE=SHARED
 
     chdir("src")
     local EMSDK = os.getenv('EMSDK')
@@ -2777,7 +2810,9 @@ local function buildw_raylib()
 
     ut.pop_dir()
 end
+--]]
 
+--[[
 local function buildw_genann()
     local prevdir = lfs.currentdir()
     chdir("wasm_3rd_party/genann")
@@ -2804,7 +2839,9 @@ local function buildw_genann()
 
     chdir(prevdir)
 end
+--]]
 
+--[[
 local function buildw_smallregex()
     local prevdir = lfs.currentdir()
     chdir("wasm_3rd_party/small-regex/libsmallregex")
@@ -2831,7 +2868,9 @@ local function buildw_smallregex()
 
     chdir(prevdir)
 end
+--]]
 
+--[[
 local function buildw_utf8proc()
     ut.push_current_dir()
     chdir("wasm_3rd_party/utf8proc/")
@@ -2840,10 +2879,12 @@ local function buildw_utf8proc()
 
     ut.pop_dir()
 end
+--]]
 
+
+--[[
 local type ObjectFiles = {string}
-
-local function build_project(
+local function w_build_project(
     output_dir: string, exclude: {string}
 ): ObjectFiles
     print('build_project:', output_dir)
@@ -2899,7 +2940,9 @@ local function build_project(
 
     return objfiles
 end
+--]]
 
+--[[
 local function link_wasm_libproject(objfiles: {string})
     print('link_libproject')
     assert(objfiles)
@@ -2910,7 +2953,9 @@ local function link_wasm_libproject(objfiles: {string})
     link(objfiles, 'libproject.a')
     chdir(prevdir)
 end
+--]]
 
+--[[
 local function link_koh_lib(objs_dir: string)
     print('link_koh_lib:', lfs.currentdir())
     local files = {}
@@ -2925,7 +2970,9 @@ local function link_koh_lib(objs_dir: string)
     print(cmd)
     cmd_do(cmd)
 end
+--]]
 
+--[[
 local function buildw_koh()
     local dir = "wasm_objects"
     build_project(dir, {
@@ -2933,6 +2980,7 @@ local function buildw_koh()
     })
     link_koh_lib(dir)
 end
+--]]
 
 local function make_L(list: {string}, third_party_prefix: string): {string}
     local ret = {}
@@ -2970,6 +3018,7 @@ end
 #context creation call to an import would not prevent that. 
 -- }}}
 --]]
+--[[
 local function link_wasm_project(main_fname: string, _args: Args)
     --local currentdir = lfs.currentdir()
     print('link_project:', lfs.currentdir())
@@ -3058,7 +3107,9 @@ local function link_wasm_project(main_fname: string, _args: Args)
 
     chdir(prev_dir)
 end
+--]]
 
+--[[
 function actions.wbuild(_args: Args)
     local exist = lfs.attributes("caustic.lua")
     if exist then
@@ -3080,11 +3131,12 @@ function actions.wbuild(_args: Args)
             os.exit(1)
         end
         -- TODO: parallel build
-        local objfiles = build_project("wasm_objects", { cfg.main })
+        local objfiles = w_build_project("wasm_objects", { cfg.main })
         link_wasm_libproject(objfiles)
         link_wasm_project("src/" .. cfg.main, _args)
     end
 end
+--]]
 
 --[[
 local function _build_smart(dep: Dependency)
@@ -3129,6 +3181,57 @@ local function _build_smart(dep: Dependency)
 end
 --]]
 
+local function build_dep(dep: Dependency)
+
+    local map: {string: function} = {
+        ["function"] = function()
+            dep.build(dep)
+        end,
+        ["string"] = function()
+            local capture = match(dep.build as string, "@(%a+)")
+            print(format("_build: capture '%s'", capture))
+            if capture then
+                local glo = _G as {string:string}
+                local ptr = glo[capture as string] as function(dep: Dependency)
+                if not ptr then
+                    error(format(
+                        "_build: could not find capture '%s' if _G",
+                        capture
+                    ))
+                else
+                    if type(ptr) == 'function' then
+                        ptr(dep)
+                    else
+                        error("_build: bad type for ptr")
+                    end
+                end
+            else
+                error("_build: bad build string format")
+            end
+        end,
+    }
+
+    if not dep.build then
+        print(format('%s has no build method', dep.name))
+        return
+    end
+
+    local ok, errmsg: boolean, string = pcall(function()
+        local tp = type(dep.build)
+        print("_build: dep.build type is", tp)
+
+        local func = map[tp]
+        if not func then
+            error("_build: bad type for 'tp'")
+        end
+        func()
+    end)
+    if not ok then
+        print('build error:', errmsg)
+    end
+
+end
+
 local function _build(dep: Dependency)
     print("_build:", dep.name)
     if dep.disabled then
@@ -3158,16 +3261,7 @@ local function _build(dep: Dependency)
         print("_build: current directory is", lfs.currentdir())
     end
 
-    if dep.build then
-        local ok, errmsg: boolean, string = pcall(function()
-            dep.build(dep)
-        end)
-        if not ok then
-            print('build error:', errmsg)
-        end
-    else
-        print(format('%s has no build method', dep.name))
-    end
+    build_dep(dep)
 
     if dep and dep.after_build then
         local ok, errmsg: boolean, string = pcall(function()
@@ -3181,7 +3275,6 @@ local function _build(dep: Dependency)
     ut.pop_dir()
 end
 
--- TODO: менять каталог на caustic_path
 function actions.build(_args: Args)
     ut.push_current_dir()
 
@@ -3667,15 +3760,14 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         os.exit(1)
     end
 
-    -- TODO: кэширование генерируемых файлов
+    -- TODO: кэширование генерируемых файлов. Значит нужно проверять время?
     if not _args.nocodegen and cfg.codegen then
         for _, v in ipairs(cfg.codegen) do
             codegen(v)
         end
     end
 
-    -- FIXME: Сборка caustic не запускается из каталога caustic_path/src
-    -- Почему?
+    -- FIXME: Почему сборка caustic не запускается из каталога caustic_path/src
     cache = Cache.new(cache_name)
     local exclude = {}
 
@@ -4080,7 +4172,8 @@ local function main()
     --]]
 
     parser:add_complete()
-    local ok, _args: boolean, argparse.Args = parser:pparse() as (boolean, argparse.Args)
+    local ok, _args: boolean, argparse.Args = parser:pparse() 
+                                              as (boolean, argparse.Args)
     --local has_command = false
 
     if ok then
@@ -4098,10 +4191,10 @@ local function main()
             print("CAUSTIC_PATH", path_caustic)
         end
 
-        print("_args", inspect(_args))
+        --print("_args", inspect(_args))
         for k, v in pairs(_args) do
             local can_call = type(v) == 'boolean' and v == true 
-            print("k, v", k, v)
+            --print("k, v", k, v)
             if actions[k as ActionsEnum] and can_call then
                 actions[k as ActionsEnum](_args as Args)
                 --has_command = true
