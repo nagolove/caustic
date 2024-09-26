@@ -107,6 +107,7 @@ de_entity de_make_entity(uint32_t id, uint32_t version);
 __attribute_deprecated__
 de_ecs* de_ecs_make();
 
+// TODO: Передать структурку с опциями
 de_ecs* de_ecs_new();
 
 /*  Deinitializes and frees a de_ecs context */
