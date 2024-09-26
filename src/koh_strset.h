@@ -40,10 +40,10 @@ void strset_print(StrSet *set, FILE *f);
 void strset_print_f(StrSet *set, FILE *f, const char *fmt);
 size_t strset_count(const StrSet *set);
 
-struct StrSetIter {
+typedef struct StrSetIter {
     size_t  i;
     StrSet  *set;
-};
+} StrSetIter;
 
 struct StrSetIter strset_iter_new(StrSet *set);
 bool strset_iter_valid(struct StrSetIter *iter);
