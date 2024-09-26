@@ -74,6 +74,7 @@ local site_repo = "~/nagolove.github.io"
 
 
 local format = string.format
+local match = string.match
 local cache_name = "cache.lua"
 
 
@@ -87,6 +88,7 @@ local errexit = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end = "{CAUSTIC_PASTE_END}"
 local cache
+
 
 
 
@@ -196,6 +198,11 @@ local function filter_sources_c(
 
    ut.filter_sources(".*%.c$", path, cb, exclude)
 end
+
+
+
+
+
 
 
 local function search_and_load_cfgs_up(fname)
@@ -353,6 +360,8 @@ end
 
 
 
+
+
 local dependencies
 
 local function get_deps_name_map(deps)
@@ -440,9 +449,9 @@ local function build_small_regex(dep)
       return
    end
    print(lfs.currentdir())
-
    cmd_do('gcc -c libsmallregex.c')
    cmd_do("ar rcs libsmallregex.a libsmallregex.o")
+
 
 
 
@@ -645,6 +654,7 @@ local function build_raylib(_)
 end
 
 local function build_box2c(_)
+
 
    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
    cmd_do("cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
@@ -908,21 +918,6 @@ dependencies = {
    },
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    {
 
       after_init = rlimgui_after_init,
@@ -1145,27 +1140,29 @@ dependencies = {
 
 
 
-local function get_include_dirs(deps)
 
-   local _includedirs = {}
-   for _, dep in ipairs(deps) do
-      if not dep.disabled then
-         if dep.includes then
-            for _, include in ipairs(dep.includes) do
-               table.insert(_includedirs, include)
-            end
-         end
-      end
-   end
 
-   for k, dir in ipairs(_includedirs) do
-      _includedirs[k] = path_caustic .. "/%s/" .. dir
-   end
 
-   table.insert(_includedirs, path_caustic .. "/src")
 
-   return _includedirs
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1324,19 +1321,21 @@ end
 
 local libdirs = gather_libdirs(dependencies)
 
-local wasm_libdirs = {
-   "../caustic/wasm_objects/",
-   "../caustic/wasm_3rd_party/genann",
-   "../caustic/wasm_3rd_party/utf8proc",
-   "../caustic/wasm_3rd_party/Chipmunk2D/src",
-   "../caustic/wasm_3rd_party/cimgui",
-
-   "../caustic/wasm_3rd_party/raylib",
-   "../caustic/wasm_3rd_party/lua",
 
 
-   "../caustic/3rd_party/sunvox/sunvox_lib/js/lib",
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function get_dir(dep)
    assert(type(dep.url) == 'string')
@@ -1508,8 +1507,6 @@ local function download_and_unpack_zip(dep)
    os.remove(fname)
 end
 
-
-
 local function _dependecy_init(dep)
    assert(dep)
    if dep.disabled then
@@ -1636,7 +1633,6 @@ function Toposorter:sort()
    end
    return sorted
 end
-
 
 
 
@@ -1913,7 +1909,6 @@ local actions = {}
 
 
 
-
 local function _init(path, deps)
    print("_init", path)
 
@@ -1940,7 +1935,6 @@ local function _init(path, deps)
    local threads = {}
    local opt_tbl = { required = { "lfs", "compat53" } }
    local func = lanes.gen("*", opt_tbl, dependency_init)
-
 
 
    local single_thread = true
@@ -2066,6 +2060,10 @@ end
 function actions.stage(_args)
    print("actions.stage")
 
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
+   if not cfgs then
+      error("No project bld.lua in current directory")
+   end
 
    if _args.new == "new" and type(_args.name) == "string" then
       stage_new(_args.name)
@@ -2096,39 +2094,68 @@ function actions.run(_args)
    end
 end
 
-function actions.init_add(_args)
-   print("init_add")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function actions.proj_init(_args)
+   local deps = {}
+   if _args.name then
+      local dependencies_name_map = get_deps_name_map(dependencies)
+      print('partial init for dependency', _args.name)
+      if dependencies_name_map[_args.name] then
+         table.insert(deps, dependencies_name_map[_args.name])
+      else
+         print("bad dependency name", _args.name)
+         return
+      end
+   else
+      for _, dep in ipairs(dependencies) do
+         table.insert(deps, dep)
+      end
+   end
+
+
+
+
+   local project_path = lfs.currentdir()
+   _init(project_path, deps)
+
+
 
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2436,7 +2463,6 @@ local function sub_publish(_args, cfg)
 
 
 
-
    local build_dir = "wasm_build"
    local attrs = lfs.attributes(build_dir)
    if not attrs then
@@ -2490,10 +2516,6 @@ local function sub_publish(_args, cfg)
 
    ut.pop_dir()
 end
-
-
-
-
 
 function actions.publish(_args)
    print('publish')
@@ -2557,9 +2579,15 @@ local function rec_remove_dir(dirname)
             end
 
 
-            pcall(function()
+            ok, errmsg = pcall(function()
                os.remove(path)
             end)
+            if not ok then
+               print(format(
+               "rec_remove_dir: could not remove file '%s' with %s",
+               path, errmsg))
+
+            end
          end
       end
    end)
@@ -2709,56 +2737,6 @@ function actions.compile_flags(_)
    end
 end
 
-local function buildw_chipmunk()
-   ut.push_current_dir()
-   chdir("wasm_3rd_party/Chipmunk2D/")
-
-   cmd_do("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
-   cmd_do("emmake make -j")
-
-   ut.pop_dir()
-end
-
-local function link(objfiles, libname, flags)
-   print('link: ')
-   print(tabular(objfiles))
-   flags = flags or ""
-   print(inspect(objfiles))
-   local objfiles_str = table.concat(objfiles, " ")
-   local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
-   cmd_do(cmd)
-end
-
-local function src2obj(filename)
-   return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1]
-end
-
-local function buildw_lua()
-   local prevdir = lfs.currentdir()
-   chdir("wasm_3rd_party/lua")
-
-   local objfiles = {}
-   local exclude = {
-      "lua.c",
-   }
-   filter_sources_c(".", function(file)
-      local cmd = format("emcc -c %s -Os -Wall", file)
-      print(cmd)
-      local pipe = io.popen(cmd)
-      local res = pipe:read("*a")
-      if #res > 0 then
-         print(res)
-      end
-      table.insert(objfiles, src2obj(file))
-   end, exclude)
-   link(objfiles, 'liblua.a')
-
-   chdir(prevdir)
-end
-
-local function buildw_raylib()
-   ut.push_current_dir()
-   chdir("wasm_3rd_party/raylib")
 
 
 
@@ -2767,172 +2745,242 @@ local function buildw_raylib()
 
 
 
-   chdir("src")
-   local EMSDK = os.getenv('EMSDK')
-   local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
-   print(cmd)
-   cmd_do(cmd)
-
-   cmd_do("cp libraylib.a ../libraylib.a")
-
-   ut.pop_dir()
-end
-
-local function buildw_genann()
-   local prevdir = lfs.currentdir()
-   chdir("wasm_3rd_party/genann")
-
-   local objfiles = {}
-   local sources = {
-      "genann.c",
-   }
-   for _, file in ipairs(sources) do
-
-      local flags = "-Wall -g3 -I."
-      local cmd = format("emcc -c %s %s", file, flags)
-      print(cmd)
-
-      local pipe = io.popen(cmd)
-      local res = pipe:read("*a")
-      if #res > 0 then
-         print(res)
-      end
-
-      table.insert(objfiles, src2obj(file))
-   end
-   link(objfiles, 'libgenann.a')
-
-   chdir(prevdir)
-end
-
-local function buildw_smallregex()
-   local prevdir = lfs.currentdir()
-   chdir("wasm_3rd_party/small-regex/libsmallregex")
-
-   local objfiles = {}
-   local sources = {
-      "libsmallregex.c",
-   }
-   for _, file in ipairs(sources) do
-
-      local flags = "-Wall -g3 -I."
-      local cmd = format("emcc -c %s %s", file, flags)
-      print(cmd)
-
-      local pipe = io.popen(cmd)
-      local res = pipe:read("*a")
-      if #res > 0 then
-         print(res)
-      end
-
-      table.insert(objfiles, src2obj(file))
-   end
-   link(objfiles, 'libsmallregex.a')
-
-   chdir(prevdir)
-end
-
-local function buildw_utf8proc()
-   ut.push_current_dir()
-   chdir("wasm_3rd_party/utf8proc/")
-
-   cmd_do("emmake make")
-
-   ut.pop_dir()
-end
-
-
-
-local function build_project(
-   output_dir, exclude)
-
-   print('build_project:', output_dir)
-   local tmp_includedirs = ut.template_dirs(
-   get_include_dirs(),
-   path_wasm_third_party)
-
-
-   print('tmp_includedirs', inspect(tmp_includedirs))
-   print("os.exit(1)")
-   os.exit(1)
-
-   local _exclude = {}
-   for k, v in ipairs(exclude) do
-      _exclude[k] = v
-   end
-
-   if _exclude then
-      for k, v in ipairs(_exclude) do
-         _exclude[k] = string.match(v, ".*/(.*)$") or v
-      end
-   end
-
-   local _includedirs = {}
-   for _, v in ipairs(tmp_includedirs) do
-      table.insert(_includedirs, "-I" .. v)
-   end
 
 
 
 
-   local include_str = table.concat(_includedirs, " ")
-   print('include_str', include_str)
 
-   local define_str = "-DPLATFORM_WEB=1"
 
-   mkdir(output_dir)
-   local path = "src"
-   local objfiles = {}
-   filter_sources_c(path, function(file)
-      print(file)
-      local output_path = output_dir ..
-      "/" .. string.gsub(file, "(.*%.)c$", "%1o")
 
-      local cmd = format(
-      "emcc -o %s -c %s/%s -Wall %s %s",
-      output_path, path, file, include_str, define_str)
 
-      print(cmd)
-      cmd_do(cmd)
-      table.insert(objfiles, src2obj(file))
-   end, _exclude)
 
-   return objfiles
-end
 
-local function link_wasm_libproject(objfiles)
-   print('link_libproject')
-   assert(objfiles)
-   local prevdir = lfs.currentdir()
-   chdir("wasm_objects")
-   print('currentdir', lfs.currentdir())
-   print(tabular(objfiles))
-   link(objfiles, 'libproject.a')
-   chdir(prevdir)
-end
 
-local function link_koh_lib(objs_dir)
-   print('link_koh_lib:', lfs.currentdir())
-   local files = {}
-   for file in lfs.dir(objs_dir) do
-      if string.match(file, ".*%.o") then
-         table.insert(files, objs_dir .. "/" .. file)
-      end
-   end
-   print('files', inspect(files))
-   local files_str = table.concat(files, " ")
-   local cmd = "emar rcs " .. objs_dir .. "/libcaustic.a " .. files_str
-   print(cmd)
-   cmd_do(cmd)
-end
 
-local function buildw_koh()
-   local dir = "wasm_objects"
-   build_project(dir, {
-      "koh_input.c",
-   })
-   link_koh_lib(dir)
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function make_L(list, third_party_prefix)
    local ret = {}
@@ -2970,164 +3018,219 @@ end
 
 
 
-local function link_wasm_project(main_fname, _args)
 
-   print('link_project:', lfs.currentdir())
 
-   local project_dir = "wasm_build"
-   mkdir(project_dir)
 
-   local prev_dir = lfs.currentdir()
 
-   local flags = {
-      "-s USE_GLFW=3",
-      "-s MAXIMUM_MEMORY=4294967296",
-      "-s ALLOW_MEMORY_GROWTH=1",
-      "-s EMULATE_FUNCTION_POINTER_CASTS",
-      "-s LLD_REPORT_UNDEFINED",
 
-      "--preload-file assets",
-      "-Wall -flto -g3 -DPLATFORM_WEB",
-      main_fname or '',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function build_dep(dep)
+
+   local map = {
+      ["function"] = function()
+         dep.build(dep)
+      end,
+      ["string"] = function()
+         local capture = match(dep.build, "@(%a+)")
+         print(format("_build: capture '%s'", capture))
+         if capture then
+            local glo = _G
+            local ptr = glo[capture]
+            if not ptr then
+               error(format(
+               "_build: could not find capture '%s' if _G",
+               capture))
+
+            else
+               if type(ptr) == 'function' then
+                  ptr(dep)
+               else
+                  error("_build: bad type for ptr")
+               end
+            end
+         else
+            error("_build: bad build string format")
+         end
+      end,
    }
 
-   local shell = "--shell-file ../caustic/3rd_party/raylib/src/minshell.html"
-   if _args.minshell then
-      table.insert(flags, 1, shell)
+   if not dep.build then
+      print(format('%s has no build method', dep.name))
+      return
    end
 
-   table.insert(flags, format("-o %s/%s.html", project_dir, 'index'))
+   local ok, errmsg = pcall(function()
+      local tp = type(dep.build)
+      print("_build: dep.build type is", tp)
 
-   local _includedirs = {}
-   for _, v in ipairs(get_ready_includes()) do
-      table.insert(_includedirs, "-I" .. v)
-   end
-   local includes_str = table.concat(_includedirs, " ")
-
-
-
-
-   local _libs = {}
-   for _, v in ipairs(get_ready_links()) do
-      table.insert(_libs, v)
-   end
-   table.insert(_libs, "caustic")
-   table.insert(_libs, "project")
-
-
-
-
-   print("_libs before", inspect(_libs))
-   _libs = make_l(_libs)
-   print("_libs after", inspect(_libs))
-
-
-
-
-   local libs_str = table.concat(_libs, " ")
-
-   print(inspect(_libs))
-   print()
-
-   local libspath = {}
-
-   table.insert(libspath, "wasm_objects")
-   for _, v in ipairs(wasm_libdirs) do
-      table.insert(libspath, v)
-   end
-
-   for k, v in ipairs(libspath) do
-      libspath[k] = "-L" .. v
-   end
-
-
-   print('currentdir', lfs.currentdir())
-   local libspath_str = table.concat(libspath, " ")
-
-   print('flags')
-   print(tabular(flags))
-
-
-
-   local flags_str = table.concat(flags, " ")
-   local cmd = format(
-   "emcc %s %s %s %s", libspath_str, libs_str, includes_str, flags_str)
-
-   print(cmd)
-   cmd_do(cmd)
-
-   chdir(prev_dir)
-end
-
-function actions.wbuild(_args)
-   local exist = lfs.attributes("caustic.lua")
-   if exist then
-
-      buildw_chipmunk()
-      buildw_lua()
-      buildw_raylib()
-      buildw_genann()
-      buildw_smallregex()
-      buildw_utf8proc()
-      buildw_koh()
-   else
-      local cfg
-      local ok, errmsg = pcall(function()
-         cfg = loadfile("bld.lua")()
-      end)
-      if not ok then
-         print("Failed to load bld.lua", errmsg)
-         os.exit(1)
+      local func = map[tp]
+      if not func then
+         error("_build: bad type for 'tp'")
       end
-
-      local objfiles = build_project("wasm_objects", { cfg.main })
-      link_wasm_libproject(objfiles)
-      link_wasm_project("src/" .. cfg.main, _args)
+      func()
+   end)
+   if not ok then
+      print('build error:', errmsg)
    end
+
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function _build(dep)
    print("_build:", dep.name)
@@ -3158,16 +3261,7 @@ local function _build(dep)
       print("_build: current directory is", lfs.currentdir())
    end
 
-   if dep.build then
-      local ok, errmsg = pcall(function()
-         dep.build(dep)
-      end)
-      if not ok then
-         print('build error:', errmsg)
-      end
-   else
-      print(format('%s has no build method', dep.name))
-   end
+   build_dep(dep)
 
    if dep and dep.after_build then
       local ok, errmsg = pcall(function()
@@ -3180,7 +3274,6 @@ local function _build(dep)
 
    ut.pop_dir()
 end
-
 
 function actions.build(_args)
    ut.push_current_dir()
@@ -3675,7 +3768,6 @@ local function sub_make(_args, cfg, push_num)
    end
 
 
-
    cache = Cache.new(cache_name)
    local exclude = {}
 
@@ -4083,6 +4175,7 @@ local function main()
    local ok, _args = parser:pparse()
 
 
+
    if ok then
 
       if _args.verbose then
@@ -4098,10 +4191,10 @@ local function main()
          print("CAUSTIC_PATH", path_caustic)
       end
 
-      print("_args", inspect(_args))
+
       for k, v in pairs(_args) do
          local can_call = type(v) == 'boolean' and v == true
-         print("k, v", k, v)
+
          if actions[k] and can_call then
             actions[k](_args)
 
