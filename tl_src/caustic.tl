@@ -749,6 +749,7 @@ dependencies = {
     -- Но повторное копирование не требуется. Добавлять путь для LUA_PATH
     -- TODO: Добавить возможность добавления библиотекой дефайнов для 
     -- компилятора, в частности для разрешения пути.
+
     {
         disabled = false,
         --build = build_munit,
@@ -782,7 +783,7 @@ dependencies = {
     },
 
     {
-        disabled = false,
+        disabled = true,
         build = build_resvg,
         description = "svg rendering library",
         dir = "resvg",
@@ -800,7 +801,6 @@ dependencies = {
         url_action = "git",
         url = "https://github.com/RazrFalcon/resvg.git",
     },
-
 
     {
         disabled = false,
@@ -886,6 +886,7 @@ dependencies = {
         url = "https://github.com/PhilipHazel/pcre2.git",
     },
 
+    -- XXX: Используется в cimgui?
     {
         disabled = false,
         name = "imgui",
@@ -1002,6 +1003,7 @@ dependencies = {
     },
 
     {
+        disabled = true,
         copy_for_wasm = true,
         build = build_chipmunk,
         dir = "Chipmunk2D",
@@ -1046,6 +1048,7 @@ dependencies = {
     {
         --build_method = 'other',
         --depends = {'lua'},
+        disabled = true,
         copy_for_wasm = true,
         build = build_small_regex,
         description = "простая библиотека для регулярных выражений",
