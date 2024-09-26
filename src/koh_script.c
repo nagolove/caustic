@@ -136,6 +136,7 @@ void print_avaible_functions(lua_State *lua) {
     free(pairs);
 }
 
+/*
 void print_type_methods(lua_State *lua, const char *type) {
     const char *mtname = lua_tostring(lua, 1);
     DocArray docarr = doc_init(lua, mtname);
@@ -152,7 +153,9 @@ void print_type_methods(lua_State *lua, const char *type) {
     }
     doc_shutdown(&docarr);
 }
+*/
 
+/*
 void print_avaible_types(lua_State *lua) {
     printf("print_avaible_types: [%s]\n", L_stack_dump(lua));
 
@@ -162,7 +165,9 @@ void print_avaible_types(lua_State *lua) {
         curr = curr->next;
     }
 }
+*/
 
+/*
 int l_help(lua_State *lua) {
     printf("[%s]\n", L_stack_dump(lua));
 
@@ -190,13 +195,14 @@ int l_help(lua_State *lua) {
         console_buf_write_c(
             MAGENTA, "help('types') - список типов для которых доступны справка"
         );
-        /*console_buf_write_c(BLUE, "Примеры команды:");*/
-        /*console_buf_write_c(BLUE, "help('Tank')");*/
+        //console_buf_write_c(BLUE, "Примеры команды:");
+        //console_buf_write_c(BLUE, "help('Tank')");
     }
 
     printf("[%s]\n", L_stack_dump(lua));
     return 0;
 }
+*/
 
 int l_GetTime(lua_State *l) {
     lua_pushnumber(l, GetTime());
@@ -250,7 +256,12 @@ void register_internal() {
         "сценария"
     );
 
-    sc_register_function(l_help, "help", "List of global registered functions.");
+    /*
+    sc_register_function(
+        l_help, "help", "List of global registered functions."
+    );
+    */
+
     //register_function(l_con_print, "con_print", "Print to console");
     sc_register_function(
         l_GetTime,
