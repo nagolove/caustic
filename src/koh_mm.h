@@ -6,14 +6,14 @@
     Блочный менеджер памяти с гибкой политикой выделения.
  */
 
-struct MMArenaOpts {
+typedef struct MMArenaOpts {
     // Начальный запас блоков, размер блока
-    size_t initial_capacity, block_sz;
+    size_t capacity1, block_sz;
     // Порог количества элементов, после которого будет вызов realloc()
-    size_t threshold1, threshold2, threshold3;
+    size_t capacity2, capacity3, capacity4;
     // Коээфициент на который домножается cap при достижении данного порога.
-    float  mult1, mult2, mult3;
-};
+    float  mult2, mult3, mult4;
+} MMArenaOpts;
 
 typedef struct MMArena {
     char               *arena;

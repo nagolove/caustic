@@ -6,39 +6,39 @@
 
 struct MMArenaOpts mm_arena_opts_default = {
     .block_sz = 0,
-    .initial_capacity = 1000,
-    .threshold1 = 1000,
-    .mult1 = 1.5,
-    .threshold2 = 10000,
+    .capacity1 = 1000,
+    .capacity2 = 1500,
     .mult2 = 1.5,
-    .threshold3 = 100000,
+    .capacity3 = 10000,
     .mult3 = 1.5,
+    .capacity4 = 100000,
+    .mult4 = 1.5,
 };
 
 void mm_arena_init(MMArena *mm, struct MMArenaOpts opts) {
     assert(mm);
-    assert(opts.initial_capacity > 0);
-    assert(opts.threshold1 > opts.initial_capacity);
-    assert(opts.threshold2 > opts.threshold1);
-    assert(opts.threshold3 > opts.threshold2);
-    assert(opts.mult1 > 0.);
+    assert(opts.capacity1 > 0);
+    assert(opts.capacity2 > opts.capacity1);
+    assert(opts.capacity3 > opts.capacity2);
+    assert(opts.capacity4 > opts.capacity3);
     assert(opts.mult2 > 0.);
     assert(opts.mult3 > 0.);
+    assert(opts.mult4 > 0.);
     assert(opts.block_sz > 0);
 
     memset(mm, 0, sizeof(*mm));
     mm->opts = opts;
 
     struct MMArenaOpts *o = &mm->opts;
-    mm->arena = calloc(o->block_sz, o->initial_capacity);
+    mm->arena = calloc(o->block_sz, o->capacity1);
 
     mm->blocks_allocated = calloc(
         sizeof(mm->blocks_allocated[0]),
-        o->initial_capacity
+        o->capacity1
     );
     mm->blocks_free = calloc(
         sizeof(mm->blocks_free[0]),
-        o->initial_capacity
+        o->capacity1
     );
 
 }
