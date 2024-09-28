@@ -331,4 +331,9 @@ char *koh_str_sub_alloc(
 
 extern bool common_verbose;
 
+// Вспомогательная функция для получения сообщения об ошибке компиляции 
+// регулярного выражения из числового кода.
+// Возвращает указатель на статическую память.
 char *pcre_code_str(int errnumber);
+
+const char *koh_bin2hex(const void *data, size_t data_len);

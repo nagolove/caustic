@@ -2109,3 +2109,28 @@ char *koh_str_sub_alloc(
     pcre2_code_free(re);
     return (char*)result;
 }
+
+const char *koh_bin2hex(const void *data, size_t data_len) {    
+    assert(data_len < 512);
+
+    if (data_len >= 512)
+        return NULL;
+
+    static char buf[1024] = {};
+    char *pbuf = buf;
+    memset(buf, 0, sizeof(buf));
+    const char *tmp = data;
+    const char x[] = {
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        'A', 'B', 'C', 'D', 'E', 'F',
+    };
+    for (size_t i = 0; i < data_len; i++) {
+        int lo = tmp[i] % 16;
+        int hi = tmp[i] / 16;
+        //printf("'%c', lo %d, hi %d\n", tmp[i], lo, hi);
+        *pbuf++ = x[hi];
+        *pbuf++ = x[lo];
+    }
+    return buf;
+}
+
