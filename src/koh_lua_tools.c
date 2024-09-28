@@ -501,6 +501,7 @@ TypeEntry *types_getlist() {
 //#include "koh_lua_serpent.inc"
 #include "serpent.lua.h"
 
+// XXX: Протестировать
 char *L_table_dump2allocated_str(lua_State *l) {
     // TODO:
     // Проверить, модуль serpent загружен
@@ -509,9 +510,9 @@ char *L_table_dump2allocated_str(lua_State *l) {
     int top = lua_gettop(l);
 
     lua_getglobal(l, "package");
-    printf("L_table_dump2allocated_str: 0 [%s]\n", L_stack_dump(l));
+    //printf("L_table_dump2allocated_str: 0 [%s]\n", L_stack_dump(l));
     lua_getfield(l, -1, "preload");
-    printf("L_table_dump2allocated_str: 1 [%s]\n", L_stack_dump(l));
+    /*printf("L_table_dump2allocated_str: 1 [%s]\n", L_stack_dump(l));*/
 
     /*
     printf(
@@ -527,9 +528,9 @@ char *L_table_dump2allocated_str(lua_State *l) {
         );
     }
 
-    printf("L_table_dump2allocated_str: 2 [%s]\n", L_stack_dump(l));
+    /*printf("L_table_dump2allocated_str: 2 [%s]\n", L_stack_dump(l));*/
     lua_setfield(l, -2, "serpent");
-    printf("L_table_dump2allocated_str: 3 [%s]\n", L_stack_dump(l));
+    /*printf("L_table_dump2allocated_str: 3 [%s]\n", L_stack_dump(l));*/
 
     lua_settop(l, top);
 
