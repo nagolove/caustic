@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool htable_verbose = true;
+
 typedef struct Bucket {
     int    key_len, value_len;
     Hash_t hash;
@@ -37,10 +39,13 @@ _Static_assert(
 );
 
 static inline uint32_t get_aligned_size(uint32_t size) {
+    
     int mod = size % 16;
     // Написать что значит в понятном виде
     // Выравнивание на 32?
     return size - mod + (((mod + 15) >> 4) << 4);
+    // */
+    /*return size;*/
 }
 
 static inline void *get_key(const Bucket *bucket) {
@@ -145,6 +150,13 @@ void *htable_add(
     //print_table(ht);
 
     size_t index = _htable_get(ht, key, key_len, NULL);
+
+    if (htable_verbose)
+        printf(
+            "htable_add: key %p, key_len %d, value %p, value_len %d"
+            ", index %zu, cap %zu\n",
+            key, key_len, value, value_len, index, ht->cap
+        );
 
     if (index != SIZE_MAX) {
         if (value_len != ht->arr[index]->value_len) {
@@ -266,6 +278,12 @@ HTable *htable_new(struct HTableSetup *setup) {
 
     if (!ht->hash_func)
         ht->hash_func = koh_hasher_mum;
+
+    if (htable_verbose)
+        printf(
+            "htable_new: capacity %zu, hash functions %s\n",
+            ht->cap, koh_hashers_name_by_funcptr(ht->hash_func)
+        );
 
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
     ht->taken = 0;

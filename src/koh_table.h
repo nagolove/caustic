@@ -18,12 +18,14 @@ typedef void (*HTableOnRemove)(
     const void *key, int key_len, void *value, int value_len 
 );
 
-struct HTableSetup {
+typedef struct HTableSetup {
     HTableOnRemove  on_remove;
     HashFunction    hash_func;
     size_t          cap;
-};
+} HTableSetup;
 
+// Добавляет значение по ключу в таблицу. Возвращает указатель на скопированные 
+// внутрь данные.
 void *htable_add(
     HTable *ht, const void *key, int key_len, const void *value, int value_len
 );
@@ -39,3 +41,5 @@ void htable_remove(HTable *ht, const void *key, int key_len);
 void htable_remove_s(HTable *ht, const char *key);
 void htable_print(HTable *ht);
 void htable_fprint(HTable *ht, FILE *f);
+
+extern bool htable_verbose;
