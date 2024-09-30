@@ -1,11 +1,17 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
 #include "koh_table.h"
 
+#include "koh_lua_tools.h"
 #include "koh_hashers.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
 
 bool htable_verbose = true;
 
@@ -39,7 +45,6 @@ _Static_assert(
 );
 
 static inline uint32_t get_aligned_size(uint32_t size) {
-    
     int mod = size % 16;
     // Написать что значит в понятном виде
     // Выравнивание на 32?
@@ -79,6 +84,79 @@ void htable_fprint(HTable *ht, FILE *f) {
 
 void htable_print(HTable *ht) {
     htable_fprint(ht, stdout);
+}
+
+void htable_print_tabular(HTable *ht) {
+    assert(ht);
+    FILE *f = stdout;
+    assert(f);
+    fprintf(f, "-----\n");
+    lua_State *l = luaL_newstate();
+    luaL_openlibs(l);
+
+    printf("htable_print_tabular: [%s]\n", L_stack_dump(l));
+
+    lua_newtable(l);  // t = {}
+    printf("htable_print_tabular: capacity %zu\n", ht->cap);
+    for (size_t i = 0; i < ht->cap; i++) {
+        if (ht->arr[i]) {
+
+            /*
+            fprintf(
+                f, "[%.3zu] %10.10s = %10d, hash mod cap = %.3zu\n",
+                i, (char*)get_key(ht->arr[i]), *((int*)get_value(ht->arr[i])),
+                ht->arr[i]->hash % ht->cap
+            );
+            */
+
+            /*printf("htable_print_tabular: [%s]\n", L_stack_dump(l));*/
+
+            // Первый элемент таблицы
+            lua_pushnumber(l, i + 1);  // t[1] (lua использует 1-индексацию)
+            lua_newtable(l);  // создаем подтаблицу
+
+            /*printf("htable_print_tabular: [%s]\n", L_stack_dump(l));*/
+
+            // index = 0
+            lua_pushstring(l, "index");
+            lua_pushnumber(l, i);
+            lua_settable(l, -3);  // t[1]["index"] = 0
+
+            // key = "k1"
+            lua_pushstring(l, "key");
+            lua_pushstring(l, (char*)(get_key(ht->arr[i])));
+            lua_settable(l, -3);  // t[1]["key"] = "k1"
+
+            // val = "v1"
+            lua_pushstring(l, "val");
+            /*lua_pushstring(l, "v1");*/
+            lua_pushnumber(l, *((int*)get_value(ht->arr[i])));
+            lua_settable(l, -3);  // t[1]["val"] = "v1"
+
+            // hash_index = 1
+            lua_pushstring(l, "hash_index");
+            lua_pushnumber(l, ht->arr[i]->hash % ht->cap);
+            lua_settable(l, -3);  // t[1]["hash_index"] = 1
+
+            /*printf("htable_print_tabular: [%s]\n", L_stack_dump(l));*/
+            lua_settable(l, -3);  // Добавляем подтаблицу в основную таблицу (t[1] = {...})
+            /*printf("htable_print_tabular: [%s]\n", L_stack_dump(l));*/
+
+            /*printf("htable_print_tabular: i %zu\n", i);*/
+        } else {
+            /*fprintf(f, "[%.3zu]\n", i);*/
+        }
+    }
+
+    /*lua_newtable(l);*/
+    const char *global_name = "UNIQ_TABLE_NAME_981";
+    lua_setglobal(l, global_name);
+
+    L_tabular_print(l, global_name);
+
+    fprintf(f, "-----\n");
+
+    lua_close(l);
 }
 
 Bucket *bucket_alloc(int key_len, int value_len) {
@@ -346,4 +424,124 @@ size_t htable_count(HTable *ht) {
     assert(ht);
     return ht->taken;
 }
+//
+
+// {{{ Tests
+
+static struct {
+    const char  *key;
+    bool        taken;
+    int         val_i;
+    char        val_s[32];
+} strings[] = {
+    { "apple", false },
+    { "banana", false },
+    { "orange", false },
+    { "grape", false },
+    { "pear", false },
+    { "kiwi", false },
+    { "watermelon", false },
+    { "cherry", false },
+    { "strawberry", false },
+    { "blueberry", false },
+    { "aaaaaaaaaaaa", false },
+    { "zzzzzzzzzzzz", false },
+    { "1234567890", false },
+    { "!@#$%^&*()", false },
+    { "Lorem ipsum dolor sit amet, consectetur adipiscing elit", false },
+    { "the quick brown fox jumps over the lazy dog", false },
+    /*{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", false },*/
+    { "hash_table_test", false },
+    { "hash collision test", false },
+    { NULL, false },
+};
+
+static MunitResult test_htable_internal_new_free(
+    const MunitParameter params[], void* data
+) {
+    printf("\n");
+    htable_verbose = true;
+    HTable *t = htable_new(NULL);
+    htable_free(t);
+    htable_verbose = false;
+    return MUNIT_OK;
+}
+
+static MunitResult test_htable_internal_print_tabular(
+    const MunitParameter params[], void* data
+) {
+    htable_verbose = false;
+    HTable *t = htable_new(&(HTableSetup) {
+        .cap = 1024,
+        .hash_func = koh_hasher_fnv64,
+    });
+
+    const char *lines[] = {
+        "apple",
+        "banana",
+        "juice",
+        NULL,
+    };
+
+    for (int i = 0; lines[i]; i++) {
+        uint64_t val = i * 11;
+        /*htable_add_s(t, strings[i].key, &val, sizeof(val));*/
+        htable_add_s(t, lines[i], &val, sizeof(val));
+    }
+
+    /*
+┌─────┬─────────────────────┐
+│278 :│┌────────────┬─────┐ │
+│     ││hash_index :│277.0│ │
+│     ││index .....:│277.0│ │
+│     ││key .......:│apple│ │
+│     ││val .......:│0.0  │ │
+│     │└────────────┴─────┘ │
+│822 :│┌────────────┬─────┐ │
+│     ││hash_index :│821.0│ │
+│     ││index .....:│821.0│ │
+│     ││key .......:│juice│ │
+│     ││val .......:│22.0 │ │
+│     │└────────────┴─────┘ │
+│823 :│┌────────────┬──────┐│
+│     ││hash_index :│822.0 ││
+│     ││index .....:│822.0 ││
+│     ││key .......:│banana││
+│     ││val .......:│11.0  ││
+│     │└────────────┴──────┘│
+└─────┴─────────────────────┘
+*/
+
+
+    htable_print_tabular(t);
+    htable_free(t);
+    return MUNIT_OK;
+}
+
+// }}}
+
+static MunitTest test_htable_internal[] = {
+
+    {
+        (char*) "/test_htable_internal_new_free",
+        test_htable_internal_new_free,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    {
+        (char*) "/test_htable_internal_print_tabular",
+        test_htable_internal_print_tabular,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
+};
+
+MunitSuite test_htable_suite_internal = {
+    (char*) "htable_suite_internal",
+    test_htable_internal,
+    NULL,
+    1,
+    MUNIT_SUITE_OPTION_NONE,
+};
 

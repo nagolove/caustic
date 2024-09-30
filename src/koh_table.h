@@ -1,8 +1,11 @@
+// vim: set colorcolumn=85
+// vim: fdm=marker
 #pragma once
 
 #include "koh_hashers.h"
 #include <stdbool.h>
 #include <stdio.h>
+#include <munit.h>
 
 typedef enum HTableAction {
     HTABLE_ACTION_NEXT,
@@ -43,3 +46,4 @@ void htable_print(HTable *ht);
 void htable_fprint(HTable *ht, FILE *f);
 
 extern bool htable_verbose;
+extern MunitSuite test_htable_suite_internal;
