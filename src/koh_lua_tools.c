@@ -668,3 +668,40 @@ const char *L_stack_dump(lua_State *lua) {
     }
     return ret;
 }
+
+static const char *L_tabular_print_internal(lua_State *l, const char *global_name) {
+    assert(l);
+    assert(global_name);
+
+    const char *s = 
+        // TODO: добавить код tabular.lua в включаемый файл
+        "package.path = package.path .. ';/usr/share/lua/5.4/?.lua'\n"
+        "T = require 'tabular'\n"
+        "return T(";
+    const char *e = ")\n";
+    char chunk[512] = {};
+
+    strcat(chunk, s);
+    strcat(chunk, global_name);
+    strcat(chunk, e);
+
+    if (luaL_dostring(l, chunk) != LUA_OK) {
+        printf("L_tabular: '%s'\n", lua_tostring(l, -1));
+    }
+
+    assert(lua_isstring(l, -1));
+    return lua_tostring(l, -1);
+}
+
+void L_tabular_print(lua_State *l, const char *global_name) {
+    const char *t = L_tabular_print_internal(l, global_name);
+    assert(t);
+    printf("%s", t);
+}
+
+const char *L_tabular_alloc(lua_State *l, const char *global_name) {
+    const char *t = L_tabular_print_internal(l, global_name);
+    assert(t);
+    return strdup(t);
+}
+
