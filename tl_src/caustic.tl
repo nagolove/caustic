@@ -752,7 +752,6 @@ dependencies = {
 
     {
         disabled = false,
-        --build = build_munit,
         description = "lua functional style library",
         custom_defines = defines_luafun,
         lualibrary_install = lualibrary_install_luafun,
@@ -4095,6 +4094,8 @@ local function do_parser_setup(
     parser: argparse.Parser, setup: {string:ParserSetup}
 )
     local prnt = function(...:any) 
+        local x = table.unpack({...})
+        x = nil
     end
 
     --prnt = print
@@ -4158,11 +4159,14 @@ list_cmd:argument("copy"):args("?")
 --]]
 
 local function main()
+    global KOH_VERBOSE: boolean = nil
+
     local parser = argparse()
 
     do_parser_setup(parser, parser_setup)
 
     parser:flag("-v --verbose", "use verbose output")
+    parser:flag("-V --KOH_VERBOSE", "use debug verbose")
     parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
 
     --[[
@@ -4178,6 +4182,10 @@ local function main()
     local ok, _args: boolean, argparse.Args = parser:pparse() 
                                               as (boolean, argparse.Args)
     --local has_command = false
+
+    if _args.KOH_VERBOSE then
+        KOH_VERBOSE = true
+    end
 
     if ok then
         --print(inspect(_args))

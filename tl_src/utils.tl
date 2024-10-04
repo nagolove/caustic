@@ -1,6 +1,7 @@
 local lfs = require 'lfs'
 --local inspect = require 'inspect'
 
+local format = string.format
 local dir_stack: {string} = {}
 --require "caustic"
 
@@ -101,7 +102,7 @@ local function cat_file(fname: string)
 end
 
 -- TODO: {exclude} may be a map, not a array
--- XXX: В таблице исключаемых имен могут быть части имен?
+-- В таблице исключаемых имен могут быть шаблоны string.match()
 local function filter_sources(
     pattern: string, path: string, cb: function(string), exclude: {string}
 )
@@ -130,6 +131,13 @@ local function filter_sources(
             end
             if not found then
                 table.insert(files_processed, file)
+                if (_G as {string:boolean})["KOH_VERBOSE"] then
+                    print(format("filter_sources: apply '%s'", file))
+                end
+            else 
+                if (_G as {string:boolean})["KOH_VERBOSE"] then
+                    print(format("filter_sources: decline '%s'", file))
+                end
             end
         end
     end
