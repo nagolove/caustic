@@ -10,7 +10,7 @@
 typedef enum HTableAction {
     HTABLE_ACTION_NEXT,
     HTABLE_ACTION_BREAK,
-    //HTABLE_ACTION_REMOVE,
+    HTABLE_ACTION_REMOVE,
 } HTableAction;
 
 typedef struct HTable HTable;
@@ -20,15 +20,20 @@ typedef HTableAction (*HTableEachCallback)(
 typedef void (*HTableOnRemove)(
     const void *key, int key_len, void *value, int value_len 
 );
+typedef const char *(*HTableKey2Str)(const void *key, int key_len);
 
 typedef struct HTableSetup {
     HTableOnRemove  on_remove;
     HashFunction    hash_func;
+    HTableKey2Str   key2str_func;
     size_t          cap;
+    void            *userdata;
 } HTableSetup;
 
 // Добавляет значение по ключу в таблицу. Возвращает указатель на скопированные 
 // внутрь данные.
+// XXX: Можно ли добавлять значения нулевой длины или NULL? Чтобы получилось
+// множество.
 void *htable_add(
     HTable *ht, const void *key, int key_len, const void *value, int value_len
 );
@@ -44,6 +49,12 @@ void htable_remove(HTable *ht, const void *key, int key_len);
 void htable_remove_s(HTable *ht, const char *key);
 void htable_print(HTable *ht);
 void htable_fprint(HTable *ht, FILE *f);
+
+void *htable_userdata_get(HTable *ht);
+void htable_userdata_set(HTable *ht, void *userdata);
+
+void htable_print_tabular(HTable *ht);
+char *htable_print_tabular_alloc(HTable *ht);
 
 extern bool htable_verbose;
 extern MunitSuite test_htable_suite_internal;
