@@ -669,7 +669,9 @@ const char *L_stack_dump(lua_State *lua) {
     return ret;
 }
 
-static const char *L_tabular_print_internal(lua_State *l, const char *global_name) {
+static const char *L_tabular_print_internal(
+    lua_State *l, const char *global_name
+) {
     assert(l);
     assert(global_name);
 
@@ -699,9 +701,14 @@ void L_tabular_print(lua_State *l, const char *global_name) {
     printf("%s", t);
 }
 
-const char *L_tabular_alloc(lua_State *l, const char *global_name) {
+char *L_tabular_alloc(lua_State *l, const char *global_name) {
     const char *t = L_tabular_print_internal(l, global_name);
     assert(t);
     return strdup(t);
 }
 
+const char *L_tabular_alloc_s(lua_State *l, const char *lua_str) {
+    const char *t = L_tabular_print_internal(l, lua_str);
+    assert(t);
+    return strdup(t);
+}

@@ -104,6 +104,7 @@ void L_table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num);
 
 // Распечатать Луа структуру как форматированную таблицу
 void L_tabular_print(lua_State *l, const char *global_name);
-const char *L_tabular_alloc(lua_State *l, const char *global_name);
+char *L_tabular_alloc(lua_State *l, const char *global_name);
+/*const char *L_tabular_alloc_s(lua_State *l, const char *lua_str);*/
 
 extern bool L_verbose;
