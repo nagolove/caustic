@@ -48,7 +48,9 @@ struct genann_view {
     struct NeuronInfo *current_neuron;
 };
 
-static void link_free(const void *key, int key_len, void *data, int data_len) {
+static void link_free(
+    const void *key, int key_len, void *data, int data_len, void *ud
+) {
     struct NeuronLinks *nl = data;
     trace("link_free: %s, %p\n", (char*)key, data);
     if (nl->weights) {

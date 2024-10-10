@@ -681,7 +681,7 @@ static const char *L_tabular_print_internal(
         "T = require 'tabular'\n"
         "return T(";
     const char *e = ")\n";
-    char chunk[512] = {};
+    char chunk[1024 * 10] = {};
 
     strcat(chunk, s);
     strcat(chunk, global_name);
@@ -707,7 +707,7 @@ char *L_tabular_alloc(lua_State *l, const char *global_name) {
     return strdup(t);
 }
 
-const char *L_tabular_alloc_s(lua_State *l, const char *lua_str) {
+char *L_tabular_alloc_s(lua_State *l, const char *lua_str) {
     const char *t = L_tabular_print_internal(l, lua_str);
     assert(t);
     return strdup(t);
