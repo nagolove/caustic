@@ -3814,6 +3814,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         _defines = _defines .. " " .. table.concat({
             "-DDEBUG",
             "-g3",
+            "-fno-omit-frame-pointer",
         }, " ")
         if cfg.debug_define then
             print("sub_make: appling debug defines")
@@ -3854,6 +3855,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     if not _args.noasan then
         --table.insert(flags, "-fsanitize=address")
         table.insert(flags, "-fsanitize=address,undefined")
+        table.insert(flags, "-fsanitize-address-use-after-scope")
     end
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
