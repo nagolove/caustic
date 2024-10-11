@@ -3800,7 +3800,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
-
+        "-flto",
         -- Ошибки сборки с флагом последней версии языка C
         -- Отсутствуют разные функции стандартной библиотеки
         --"-std=c2x",
@@ -3809,6 +3809,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         --"-D_USE_MATH_DEFINES",
         --"-D__USE_MISC",
     }
+
     if not _args.release then
         table.insert(flags, "-ggdb3")
         _defines = _defines .. " " .. table.concat({
