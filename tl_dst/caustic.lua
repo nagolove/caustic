@@ -3799,7 +3799,8 @@ local function sub_make(_args, cfg, push_num)
    end
 
 
-   local flags = {}
+   local flags = {
+      "-flto",
 
 
 
@@ -3807,7 +3808,7 @@ local function sub_make(_args, cfg, push_num)
 
 
 
-
+   }
 
    if not _args.release then
       table.insert(flags, "-ggdb3")
