@@ -61,6 +61,14 @@ _Static_assert(
 
 #define htable_aligment 16
 
+static inline void htable_assert(HTable *t) {
+    assert(t);
+    assert(t->arr);
+    assert(t->hash_func);
+    assert(t->cap >= 0);
+    assert(t->taken >= 0);
+}
+
 static inline uint32_t get_aligned_size(uint32_t size) {
     _Static_assert(htable_aligment == 16, "only 16 bytes aligment supported");
     return (size + (htable_aligment - 1)) & ~(htable_aligment - 1);
@@ -499,6 +507,10 @@ int64_t htable_count(HTable *ht) {
 }
 //
 
+void htable_shrink(HTable *ht) {
+    // XXX: Здесь ничего и никого..
+}
+
 // {{{ Tests
 
 typedef struct TableNode {
@@ -752,13 +764,13 @@ void _test_htable_internal_add_strings(
     htable_free(t);
 }
 
-static MunitResult test_htable_internal_extend(
-    const MunitParameter params[], void* data
+static MunitResult _test_htable_internal_extend(
+        int cap_initial, int cap_mult, int cap_add
 ) {
     printf("\n");
+
     HTable *t = htable_new(&(HTableSetup) {
-        /*.cap = 100,*/
-        .cap = 1,
+        .cap = cap_initial,
     });
 
     // Добавляю ключи и значения
@@ -775,7 +787,7 @@ static MunitResult test_htable_internal_extend(
     }
 
     // Увеличиваю вместимость таблицы
-    htable_extend(t, t->cap + 10);
+    htable_extend(t, t->cap * cap_mult + cap_add);
 
     // Снова проверяю наличие значений
     for (int i = 0; strings[i].key; i++) {
@@ -785,6 +797,43 @@ static MunitResult test_htable_internal_extend(
     }
 
     htable_free(t);
+    return MUNIT_OK;
+}
+
+// Проверка расширения таблицы и перехэширования
+static MunitResult test_htable_internal_extend(
+    const MunitParameter params[], void* data
+) {
+    printf("\n");
+
+    struct {
+        int cap_initial, cap_mult, cap_add;
+    } tests[] = {
+
+        { 0, 1, 1},
+        { 1, 1, 1},
+        { 2, 1, 1},
+        { 10, 2, 0},
+        { 100, 1, 1},
+
+        { 0, 2, 1},
+        { 1, 2, 1},
+        { 2, 2, 1},
+        { 10, 2, 0},
+        { 100, 2, 1},
+
+    };
+    int tests_num = sizeof(tests) / sizeof(tests[0]);
+
+    for (int i = 0; i < tests_num; i++) {
+        if (!_test_htable_internal_extend(
+            tests[i].cap_initial,
+            tests[i].cap_mult,
+            tests[i].cap_add
+        ))
+            return MUNIT_FAIL;
+    }
+
     return MUNIT_OK;
 }
 
@@ -1001,5 +1050,25 @@ MunitSuite test_htable_suite_internal = {
     1,
     MUNIT_SUITE_OPTION_NONE,
 };
+
+KOH_INLINE KOH_HIDDEN HTableIterator htable_iter_new(HTable *t) {
+    htable_assert(t);
+    HTableIterator i = {
+        .index = 0,
+        .t = t,
+    };
+    return i;
+}
+
+KOH_INLINE KOH_HIDDEN void htable_iter_next(HTableIterator *i) {
+    assert(i);
+    htable_assert(i->t);
+}
+
+KOH_INLINE KOH_HIDDEN bool htable_iter_valid(HTableIterator *i) {
+    assert(i);
+    htable_assert(i->t);
+    return false;
+}
 
 #undef htable_aligment

@@ -2,6 +2,7 @@
 // vim: fdm=marker
 #pragma once
 
+#include "koh_common.h"
 #include "koh_hashers.h"
 #include <stdbool.h>
 #include <stdio.h>
@@ -50,12 +51,23 @@ void htable_remove_s(HTable *ht, const char *key);
 void htable_print(HTable *ht);
 void htable_fprint(HTable *ht, FILE *f);
 void htable_extend(HTable *ht, int64_t new_cap);
+void htable_shrink(HTable *ht);
 
 void *htable_userdata_get(HTable *ht);
 void htable_userdata_set(HTable *ht, void *userdata);
 
 void htable_print_tabular(HTable *ht);
 char *htable_print_tabular_alloc(HTable *ht);
+
+// TODO: Сделать итераторы
+typedef struct HTableIterator {
+    HTable  *t;
+    int64_t index;
+} HTableIterator;
+
+KOH_INLINE HTableIterator htable_iter_new(HTable *t);
+KOH_INLINE void htable_iter_next(HTableIterator *i);
+KOH_INLINE bool htable_iter_valid(HTableIterator *i);
 
 extern bool htable_verbose;
 extern MunitSuite test_htable_suite_internal;
