@@ -27,7 +27,7 @@ bool htable_verbose = true;
 ------------------------------------------------------
 */
 typedef struct Bucket {
-    Hash_t hash;
+    Hash_t key_hash;
     int    key_len, value_len;
 /*} Bucket __attribute__((aligned(1)));*/
 } Bucket;
@@ -35,10 +35,18 @@ typedef struct Bucket {
 typedef struct HTable {
     Bucket          **arr;
     int64_t         taken, cap;
+
     // TODO: Единообразные названия функций обратного вызова
     HTableOnRemove  on_remove;
     HashFunction    hash_func;
     HTableKey2Str   key2str_func;
+
+    /*
+    HTableOnRemove  f_on_remove;
+    HashFunction    f_hash;
+    HTableKey2Str   f_key2str;
+     */
+
     void            *userdata;
 } HTable;
 
@@ -48,9 +56,11 @@ static int64_t _htable_get(
 static void _htable_remove(HTable *ht, int64_t index);
 static void bucket_free(HTable *ht, int64_t index);
 static void _htable_add_uniq(HTable *ht, Bucket *bucket);
+static Bucket *bucket_alloc(int key_len, int value_len);
 
+// {{{ 64bits static assertions
 _Static_assert(
-    sizeof(Hash_t) == sizeof(uint64_t),
+    sizeof(Hash_t) == sizeof(int64_t),
     "Please use 64 bit Hash_t value"
 );
 
@@ -59,7 +69,7 @@ _Static_assert(
     "Only 64 bit size_t supported"
 );
 
-#define htable_aligment 16
+// }}}
 
 static inline void htable_assert(HTable *t) {
     assert(t);
@@ -69,21 +79,50 @@ static inline void htable_assert(HTable *t) {
     assert(t->taken >= 0);
 }
 
+#define htable_aligment 16
 static inline uint32_t get_aligned_size(uint32_t size) {
     _Static_assert(htable_aligment == 16, "only 16 bytes aligment supported");
     return (size + (htable_aligment - 1)) & ~(htable_aligment - 1);
 }
 
-static inline void *get_key(const Bucket *bucket) {
+static inline void *bucket_get_key(const Bucket *bucket) {
     assert(bucket);
     return (char*)bucket + get_aligned_size(sizeof(*bucket));
 }
 
-static inline void *get_value(const Bucket *bucket) {
+static inline void *bucket_get_value(const Bucket *bucket) {
     assert(bucket);
     assert(bucket->key_len > 0);
     return (char*)bucket + get_aligned_size(sizeof(*bucket)) +
                            get_aligned_size(bucket->key_len);
+}
+
+// Обновить значение ключа в корзинке. Если новое значение короче или длиннее -
+// перевыделить память для корзинки. Возвращает измененную или корзину.
+static inline Bucket *bucket_update_value(
+    Bucket *bucket, const void *value, int64_t val_len
+) {
+    assert(bucket);
+    assert(bucket->key_len > 0);
+    assert(bucket->value_len >= 0);
+    assert(val_len >= 0);
+
+    // XXX: Нужно ли вызывать on_remove в случае пересоздания корзинки?
+
+    if (val_len != bucket->value_len) {
+        Bucket *new_buck = bucket_alloc(bucket->key_len, val_len);
+        memmove(
+            bucket_get_key(new_buck),
+            bucket_get_key(bucket),
+            bucket->key_len
+        );
+        memmove(bucket_get_value(new_buck), value, val_len);
+        free(bucket);
+        return new_buck;
+    } else {
+        memmove(bucket_get_value(bucket), value, bucket->value_len);
+        return bucket;
+    }
 }
 
 void htable_fprint(HTable *ht, FILE *f) {
@@ -94,8 +133,8 @@ void htable_fprint(HTable *ht, FILE *f) {
         if (ht->arr[i])
             fprintf(
                 f, "[%.3zu] %10.10s = %10d, hash mod cap = %.3zu\n",
-                i, (char*)get_key(ht->arr[i]), *((int*)get_value(ht->arr[i])),
-                ht->arr[i]->hash % ht->cap
+                i, (char*)bucket_get_key(ht->arr[i]), *((int*)bucket_get_value(ht->arr[i])),
+                ht->arr[i]->key_hash % ht->cap
             );
         else
             fprintf(f, "[%.3zu]\n", i);
@@ -129,17 +168,17 @@ char *htable_print_tabular_alloc(HTable *ht) {
 
             // key = "k1"
             lua_pushstring(l, "key");
-            lua_pushstring(l, (char*)(get_key(ht->arr[i])));
+            lua_pushstring(l, (char*)(bucket_get_key(ht->arr[i])));
             lua_settable(l, -3);  // t[1]["key"] = "k1"
 
             // val = "v1"
             lua_pushstring(l, "val");
-            lua_pushnumber(l, *((int*)get_value(ht->arr[i])));
+            lua_pushnumber(l, *((int*)bucket_get_value(ht->arr[i])));
             lua_settable(l, -3);  // t[1]["val"] = "v1"
 
             // hash_index = 1
             lua_pushstring(l, "hash_index");
-            lua_pushnumber(l, ht->arr[i]->hash % ht->cap);
+            lua_pushnumber(l, ht->arr[i]->key_hash % ht->cap);
             lua_settable(l, -3);  // t[1]["hash_index"] = 1
 
             lua_settable(l, -3);  // Добавляем подтаблицу в основную таблицу (t[1] = {...})
@@ -171,7 +210,11 @@ Bucket *bucket_alloc(int key_len, int value_len) {
     /*return calloc(size, 1);*/
     /*printf("bucket_alloc: size %u\n", size);*/
     /*return aligned_alloc(sizeof(void*), size);*/
-    return calloc(1, size + 100);
+    Bucket *b = calloc(1, size);
+    assert(b);
+    b->key_len = key_len;
+    b->value_len = value_len;
+    return b;
 }
 
 void htable_extend(HTable *ht, int64_t new_cap) {
@@ -198,8 +241,8 @@ void htable_extend(HTable *ht, int64_t new_cap) {
     for (int64_t j = 0; j < ht->cap; j++) {
         if (ht->arr[j]) {
             // XXX: Зачем пересчитывать значение хэша?
-            ht->arr[j]->hash = ht->hash_func(
-                get_key(ht->arr[j]), ht->arr[j]->key_len
+            ht->arr[j]->key_hash = ht->hash_func(
+                bucket_get_key(ht->arr[j]), ht->arr[j]->key_len
             );
             _htable_add_uniq(&tmp, ht->arr[j]);
         }
@@ -212,11 +255,16 @@ void htable_extend(HTable *ht, int64_t new_cap) {
 // TODO: Как-то можно проверить корректность работы данной функции?
 static void bucket_free(HTable *ht, int64_t index) {
     assert(ht);
+    assert(ht->arr);
+    assert(ht->cap >= 0);
+    assert(ht->taken >= 0);
+    assert(index >= 0);
+
     if (ht->arr[index]) {
         if (ht->on_remove)
             ht->on_remove(
-                get_key(ht->arr[index]), ht->arr[index]->key_len,
-                get_value(ht->arr[index]), ht->arr[index]->value_len,
+                bucket_get_key(ht->arr[index]), ht->arr[index]->key_len,
+                bucket_get_value(ht->arr[index]), ht->arr[index]->value_len,
                 ht->userdata
             );
         free(ht->arr[index]);
@@ -232,7 +280,7 @@ void _htable_add_uniq(HTable *ht, Bucket *bucket) {
     assert(bucket);
     assert(ht->taken < ht->cap);
 
-    int index = bucket->hash % ht->cap;
+    int index = bucket->key_hash % ht->cap;
 
     while (ht->arr[index])
         index = (index + 1) % ht->cap;
@@ -257,6 +305,15 @@ void *htable_add(
 
     int64_t index = _htable_get(ht, key, key_len, NULL);
 
+
+    if (htable_verbose)
+        printf(
+            "htable_add: key '%s', key_len %d, value %p, value_len %d"
+            ", index %zu, cap %zu\n",
+            (char*)key, key_len, value, value_len, index, ht->cap
+        );
+    // */
+
     /*
     if (htable_verbose)
         printf(
@@ -264,7 +321,7 @@ void *htable_add(
             ", index %zu, cap %zu\n",
             key, key_len, value, value_len, index, ht->cap
         );
-        */
+    //  */
 
     // Ключ есть в таблице, обновить значение
     if (index != INT64_MAX) {
@@ -272,12 +329,12 @@ void *htable_add(
             bucket_free(ht, index);
             ht->arr[index] = bucket_alloc(key_len, value_len);
             // XXX: Почему идет запись значения ключа, но сравнивается длина значения?
-            memmove(get_key(ht->arr[index]), key, key_len);
+            memmove(bucket_get_key(ht->arr[index]), key, key_len);
         }
         ht->arr[index]->value_len = value_len;
         ht->arr[index]->key_len = key_len;
-        memmove(get_value(ht->arr[index]), value, value_len);
-        return get_value(ht->arr[index]);
+        memmove(bucket_get_value(ht->arr[index]), value, value_len);
+        return bucket_get_value(ht->arr[index]);
     }
 
     if (ht->taken >= ht->cap * 0.7)
@@ -294,12 +351,12 @@ void *htable_add(
     ht->arr[index] = bucket_alloc(key_len, value_len);
     ht->arr[index]->value_len = value_len;
     ht->arr[index]->key_len = key_len;
-    ht->arr[index]->hash = hash;
-    memmove(get_key(ht->arr[index]), key, key_len);
+    ht->arr[index]->key_hash = hash;
+    memmove(bucket_get_key(ht->arr[index]), key, key_len);
     if (value)
-        memmove(get_value(ht->arr[index]), value, value_len);
+        memmove(bucket_get_value(ht->arr[index]), value, value_len);
     ht->taken++;
-    return get_value(ht->arr[index]);
+    return bucket_get_value(ht->arr[index]);
 }
 
 void *htable_add_s(HTable *ht, const char *key, void *value, int value_len) {
@@ -329,8 +386,8 @@ void htable_each(HTable *ht, HTableEachCallback cb, void *udata) {
         Bucket *b = ht->arr[j];
         if (b) {
             HTableAction action = cb(
-                get_key(b), b->key_len,
-                get_value(b), b->value_len, udata
+                bucket_get_key(b), b->key_len,
+                bucket_get_value(b), b->value_len, udata
             );
             switch (action) {
                 case HTABLE_ACTION_BREAK:
@@ -367,16 +424,38 @@ int64_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     assert(ht->hash_func);
 
     int64_t index = ht->hash_func(key, key_len) % ht->cap;
+
+    printf("_htable_get: index %ld\n", index);
+    printf("_htable_get: key '%s'\n", (char*)key);
+
+    // Максимальное время поиска - проверить все элементы массива
     for (int64_t i = 0; i < ht->cap; i++) {
-    // XXX: Почему падает с uint64_t ?
-    /*for (uint64_t i = 0; i < ht->cap; i++) {*/
         if (!ht->arr[index]) break;
-        if (memcmp(get_key(ht->arr[index]), key, key_len) == 0)
+        char *key_t = bucket_get_key(ht->arr[index]);
+        assert(key_t);
+        assert(key_len > 0);
+        assert(key);
+        printf(
+            "memcmp: key_t '%s', key '%s', key_len %d\n",
+            key_t, (char*)key, key_len
+        );
+        // FIXME: Доделать сравнение длин ключей
+        int target_key_len = key_len > ht->arr[index]->key_len ? 
+                             ht->arr[index]->key_len : key_len;
+        if (memcmp(key_t, key, key_len) == 0)
             break;
         index = (index + 1) % ht->cap;
     }
 
-    if (ht->arr[index] && memcmp(get_key(ht->arr[index]), key, key_len) == 0) {
+    assert(!ht->arr[index]);
+    if (!ht->arr[index])
+        return INT64_MAX;
+
+    char *key_t = bucket_get_key(ht->arr[index]);
+
+    assert(key_t);
+    bool key_cmp = memcmp(key_t, key, key_len);
+    if (ht->arr[index] && key_cmp == 0) {
         if (value_len)
             *value_len = ht->arr[index]->value_len;
         return index;
@@ -386,7 +465,6 @@ int64_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
 
     /*
     size_t ret = SIZE_MAX;
-    // XXX: Случится ли переполнение index если тип будет uint64_t?
     int64_t index = ht->hash_func(key, key_len) % ht->cap;
     for (size_t i = 0; i < ht->cap; i++) {
         if (!ht->arr[index]) break;
@@ -404,11 +482,23 @@ int64_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
 
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     int64_t index = _htable_get(ht, key, key_len, value_len);
-    return index == INT64_MAX ? NULL : get_value(ht->arr[index]);
+    return index == INT64_MAX ? NULL : bucket_get_value(ht->arr[index]);
 }
 
 void *htable_get_s(HTable *ht, const char *key, int *value_len) {
     return htable_get(ht, key, strlen(key) + 1, value_len);
+}
+
+bool htable_exist(HTable *ht, const void *key, int key_len) {
+    assert(ht);
+    assert(key);
+    assert(key_len > 0);
+    return _htable_get(ht, key, key_len, NULL) != INT64_MAX;
+}
+
+bool htable_exist_s(HTable *ht, const char *key) {
+    assert(key);
+    return htable_exist(ht, key, strlen(key) + 1);
 }
 
 void *htable_userdata_get(HTable *ht) {
@@ -466,7 +556,7 @@ static void rec_shift(HTable *ht, int64_t index, int hashi) {
         );
         */
 
-        if (ht->arr[index]->hash % ht->cap <= hashi) {
+        if (ht->arr[index]->key_hash % ht->cap <= hashi) {
             ht->arr[initial_index] = ht->arr[index];
             ht->arr[index] = NULL;
             rec_shift(ht, index, hashi + 1);
@@ -480,7 +570,7 @@ void _htable_remove(HTable *ht, int64_t remove_index) {
     assert(ht);
     assert(remove_index >= 0 && remove_index < ht->cap);
 
-    int hashi = ht->arr[remove_index]->hash % ht->cap;
+    int hashi = ht->arr[remove_index]->key_hash % ht->cap;
     bucket_free(ht, remove_index);
 
     rec_shift(ht, remove_index, hashi);
@@ -511,7 +601,27 @@ void htable_shrink(HTable *ht) {
     // XXX: Здесь ничего и никого..
 }
 
-// {{{ Tests
+KOH_INLINE KOH_HIDDEN HTableIterator htable_iter_new(HTable *t) {
+    htable_assert(t);
+    HTableIterator i = {
+        .index = 0,
+        .t = t,
+    };
+    return i;
+}
+
+KOH_INLINE KOH_HIDDEN void htable_iter_next(HTableIterator *i) {
+    assert(i);
+    htable_assert(i->t);
+}
+
+KOH_INLINE KOH_HIDDEN bool htable_iter_valid(HTableIterator *i) {
+    assert(i);
+    htable_assert(i->t);
+    return false;
+}
+
+// {{{ Tests code
 
 typedef struct TableNode {
     const char  *key;
@@ -612,6 +722,116 @@ static MunitResult test_htable_internal_new_free(
     return MUNIT_OK;
 }
 
+static MunitResult test_htable_internal_get(
+    const MunitParameter params[], void* data
+) {
+    printf("\n");
+    htable_verbose = true;
+
+    for (int j = 0; j < 100; j++) {
+        HTable *t = htable_new(&(HTableSetup) {
+            .cap = j,
+        });
+
+        munit_assert(htable_get_s(t, "", NULL) == NULL);
+        for (int i = 0; strings[i].key; i++) {
+            munit_assert(htable_get_s(t, strings[i].key, NULL) == NULL);
+        }
+
+        htable_free(t);
+    }
+
+    htable_verbose = false;
+    return MUNIT_OK;
+}
+
+static MunitResult test_htable_internal_get2(
+    const MunitParameter params[], void* data
+) {
+    printf("\n");
+
+    for (int j = 0; j < 100; j++) {
+        HTable *t = htable_new(&(HTableSetup) {
+            .cap = j,
+        });
+
+        htable_verbose = true;
+        for (int i = 0; strings[i].key; i++) {
+            htable_add_s(t, strings[i].key, NULL, 0);
+        }
+        htable_verbose = false;
+
+        for (int i = 0; strings[i].key; i++) {
+            munit_assert(htable_exist_s(t, strings[i].key) == true);
+        }
+
+        htable_free(t);
+    }
+
+    return MUNIT_OK;
+}
+
+
+static MunitResult test_htable_internal_bucket_allocation2(
+    const MunitParameter params[], void* data
+) {
+    // {{{
+    printf("\ntest_htable_internal_bucket_allocation2:\n");
+
+    struct {
+        char *key, *val, *new_val;
+    } combos[] = {
+        { "1234567", "123", "123", },
+        { "1234567", "23", "123", },
+        { "1234567", "", "123", },
+        { "1234567", "", "", },
+        { "1234567", NULL, NULL, }, // XXX: Что делать с таким случаем?
+        { NULL, NULL, NULL, },
+    };
+
+    for (int j = 0; combos[j].key; j++) {
+
+        /*
+        printf(
+            "key '%s', val '%s', new_val '%s'\n",
+            combos[j].key,
+            combos[j].val,
+            combos[j].new_val
+        );
+        */
+
+        char *key = combos[j].key;
+        int key_len = strlen(key) + 1;
+
+        char *val = combos[j].val;
+        int val_len =val ? strlen(val) + 1 : 0;
+
+        char *new_val = combos[j].new_val;
+        int new_value_len = new_val ? strlen(new_val) + 1 : 0;
+
+        Bucket *buck = bucket_alloc(key_len, val_len);
+
+        if (val_len) {
+            strcpy(bucket_get_key(buck), key);
+            strcpy(bucket_get_value(buck), val);
+
+            munit_assert(strcmp(bucket_get_value(buck), val) == 0);
+            munit_assert(strcmp(bucket_get_key(buck), key) == 0);
+
+            buck = bucket_update_value(buck, new_val, new_value_len);
+
+            munit_assert(strcmp(bucket_get_value(buck), new_val) == 0);
+            munit_assert(strcmp(bucket_get_key(buck), key) == 0);
+        }
+
+        free(buck);
+    }
+
+    return MUNIT_OK;
+    // }}}
+}
+
+
 // Проверяет верно ли работет выделение памяти под корзинку и функции обращения
 // к ключу и значению.
 static MunitResult test_htable_internal_bucket_allocation(
@@ -636,11 +856,11 @@ static MunitResult test_htable_internal_bucket_allocation(
     Hash_t hash_val = 171;
     buck->value_len = value_len;
     buck->key_len = key_len;
-    buck->hash = hash_val;
+    buck->key_hash = hash_val;
 
-    char *key_res = get_key(buck);
+    char *key_res = bucket_get_key(buck);
     strcpy(key_res, key);
-    char *value_res = get_value(buck);
+    char *value_res = bucket_get_value(buck);
     strcpy(value_res, value);
 
     {
@@ -650,7 +870,7 @@ static MunitResult test_htable_internal_bucket_allocation(
 
         printf("hash_val %lu\n", *(Hash_t*)p);
         munit_assert(*(Hash_t*)p == hash_val);
-        p += sizeof(buck->hash);
+        p += sizeof(buck->key_hash);
 
         printf("key_len %d\n", *(int*)p);
         munit_assert(*(int*)p == key_len);
@@ -807,9 +1027,10 @@ static MunitResult test_htable_internal_extend(
     printf("\n");
 
     struct {
-        int cap_initial, cap_mult, cap_add;
+        int cap_initial,    // начальная вместимость;
+            cap_mult,       // коэф. умножения мнестимости;
+            cap_add;        // число, добавляемое к вместимости
     } tests[] = {
-
         { 0, 1, 1},
         { 1, 1, 1},
         { 2, 1, 1},
@@ -869,6 +1090,12 @@ static MunitResult test_htable_internal_add_strings(
     return MUNIT_OK;
 }
 
+
+// Проверить несуществующий ключ
+// Добавить ключ
+// Проверить ключ
+// Удалить ключ
+// Снова проверить ключ
 static MunitResult test_htable_internal_remove(
     const MunitParameter params[], void* data
 ) {
@@ -938,7 +1165,7 @@ static MunitResult test_htable_internal_print_tabular(
     };
 
     for (int i = 0; lines[i]; i++) {
-        uint64_t val = i * 11;
+        int64_t val = i * 11;
         htable_add_s(t, lines[i], &val, sizeof(val));
     }
 
@@ -1001,11 +1228,26 @@ static MunitResult test_htable_internal_print_tabular(
 
 // }}}
 
+// {{{ Tests definitions
 static MunitTest test_htable_internal[] = {
 
     {
         (char*) "/test_htable_internal_new_free",
         test_htable_internal_new_free,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    /*
+    {
+        (char*) "/test_htable_internal_get",
+        test_htable_internal_get,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+    */
+
+    {
+        (char*) "/test_htable_internal_get2",
+        test_htable_internal_get2,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
@@ -1022,23 +1264,34 @@ static MunitTest test_htable_internal[] = {
     },
 
     {
+        (char*) "/test_htable_internal_bucket_allocation2",
+        test_htable_internal_bucket_allocation2,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    /*
+    {
         (char*) "test_htable_internal_remove",
         test_htable_internal_remove,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
+    */
 
-
+    /*
     {
         (char*) "test_htable_internal_extend",
         test_htable_internal_extend,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
+    */
 
+    /*
     {
         (char*) "test_htable_internal_add_strings",
         test_htable_internal_add_strings,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
+    */
 
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
@@ -1051,24 +1304,6 @@ MunitSuite test_htable_suite_internal = {
     MUNIT_SUITE_OPTION_NONE,
 };
 
-KOH_INLINE KOH_HIDDEN HTableIterator htable_iter_new(HTable *t) {
-    htable_assert(t);
-    HTableIterator i = {
-        .index = 0,
-        .t = t,
-    };
-    return i;
-}
-
-KOH_INLINE KOH_HIDDEN void htable_iter_next(HTableIterator *i) {
-    assert(i);
-    htable_assert(i->t);
-}
-
-KOH_INLINE KOH_HIDDEN bool htable_iter_valid(HTableIterator *i) {
-    assert(i);
-    htable_assert(i->t);
-    return false;
-}
+// }}}
 
 #undef htable_aligment
