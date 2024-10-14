@@ -39,16 +39,19 @@ typedef struct HTableSetup {
 
 // Добавляет значение по ключу в таблицу. Возвращает указатель на скопированные 
 // внутрь данные.
-// XXX: Можно ли добавлять значения нулевой длины или NULL? Чтобы получилось
-// множество.
+// Можно ли добавлять значения нулевой длины или передавать NULL для значения..
 void *htable_add(
     HTable *ht, const void *key, int key_len, const void *value, int value_len
 );
 void *htable_add_s(HTable *ht, const char *key, void *value, int value_len);
+void *htable_add_f32(HTable *ht, float key, void *value, int value_len);
 
 // Доступ к элементам
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len);
 void *htable_get_s(HTable *ht, const char *key, int *value_len);
+// TODO: htable_get_f32, htable_get_i32, htable_get_i64, htable_get_char,
+// в виде встраиваемых функций.
+void *htable_get_f32(HTable *ht, float key, int *value_len);
 
 // Существование элемента. Работа в режиме множества.
 bool htable_exist(HTable *ht, const void *key, int key_len);
@@ -59,6 +62,7 @@ void htable_free(HTable *ht);
 
 void htable_remove(HTable *ht, const void *key, int key_len);
 void htable_remove_s(HTable *ht, const char *key);
+static inline void htable_remove_f32(HTable *ht, float key);
 
 void htable_print(HTable *ht);
 void htable_fprint(HTable *ht, FILE *f);
@@ -100,9 +104,20 @@ for (HTableIterator i = htable_iter_new(t);
 
 htable_free(t);
  */
-KOH_INLINE HTableIterator htable_iter_new(HTable *t);
-KOH_INLINE void htable_iter_next(HTableIterator *i);
-KOH_INLINE bool htable_iter_valid(HTableIterator *i);
+// Во время итерации нельзя удалять ключи
+
+//#define KOH_INLINE_ITER KOH_INLINE
+#define KOH_INLINE_ITER 
+KOH_INLINE_ITER HTableIterator htable_iter_new(HTable *t);
+KOH_INLINE_ITER void htable_iter_next(HTableIterator *i);
+KOH_INLINE_ITER bool htable_iter_valid(HTableIterator *i);
+KOH_INLINE_ITER void *htable_iter_key(HTableIterator *i, int *key_len);
+KOH_INLINE_ITER void *htable_iter_value(HTableIterator *i, int *value_len);
+#undef KOH_INLINE_ITER
 
 extern bool htable_verbose;
 extern MunitSuite test_htable_suite_internal;
+
+static inline void htable_remove_f32(HTable *ht, float key) {
+    htable_remove(ht, &key, sizeof(key));
+}
