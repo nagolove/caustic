@@ -25,6 +25,11 @@ bool htable_verbose = true;
 ------------------------------------------------------
 | key_len | value_len | hash | key data | value data |
 ------------------------------------------------------
+
+Случай хранения ключа без значения
+------------------------------------------------------
+| key_len | 0         | hash | key data | 
+------------------------------------------------------
 */
 typedef struct Bucket {
     // XXX: Добавить функцию обратного вызова на удаление в каждую корзинку?
@@ -37,15 +42,16 @@ typedef struct HTable {
     int64_t         taken, cap;
     // Порог 0..1 при котором будет выполняться расширение таблицы
     float           extend_coef;
+    float           cap_mult, cap_add;
 
     HTableOnRemove  f_on_remove;
     HashFunction    f_hash;
-    HTableKey2Str   f_key2str;
+    HTableData2Str  f_key2str, f_val2str;
 
     void            *userdata;
 } HTable;
 
-static int64_t _htable_get(
+static int64_t _htable_get_index(
     HTable *ht, const void *key, int key_len, int *value_len
 );
 static void _htable_remove(HTable *ht, int64_t index);
@@ -147,41 +153,60 @@ void htable_print(HTable *ht) {
 
 char *htable_print_tabular_alloc(HTable *ht) {
     assert(ht);
-    FILE *f = stdout;
-    assert(f);
     lua_State *l = luaL_newstate();
     luaL_openlibs(l);
 
     lua_newtable(l);  
     for (int64_t i = 0; i < ht->cap; i++) {
-        if (ht->arr[i]) {
+        Bucket *b = ht->arr[i];
+        if (!b) 
+            continue;;
 
-            // Первый элемент таблицы
-            lua_pushnumber(l, i + 1);  // t[1] (lua использует 1-индексацию)
-            lua_newtable(l);  // создаем подтаблицу
+        // Первый элемент таблицы
+        lua_pushnumber(l, i + 1);  // t[1] (lua использует 1-индексацию)
+        lua_newtable(l);  // создаем подтаблицу
 
-            // index = 0
-            lua_pushstring(l, "index");
-            lua_pushnumber(l, i);
-            lua_settable(l, -3);  // t[1]["index"] = 0
+        // index = 0
+        lua_pushstring(l, "index");
+        lua_pushnumber(l, i);
+        lua_settable(l, -3);  // t[1]["index"] = 0
 
-            // key = "k1"
+        // key = "k1"
+        if (ht->f_key2str) {
+            const char *tmp = ht->f_key2str(bucket_get_key(b), b->key_len);
+            assert(tmp);
             lua_pushstring(l, "key");
-            lua_pushstring(l, (char*)(bucket_get_key(ht->arr[i])));
+            lua_pushstring(l, tmp);
             lua_settable(l, -3);  // t[1]["key"] = "k1"
-
-            // val = "v1"
-            lua_pushstring(l, "val");
-            lua_pushnumber(l, *((int*)bucket_get_value(ht->arr[i])));
-            lua_settable(l, -3);  // t[1]["val"] = "v1"
-
-            // hash_index = 1
-            lua_pushstring(l, "hash_index");
-            lua_pushnumber(l, ht->arr[i]->key_hash % ht->cap);
-            lua_settable(l, -3);  // t[1]["hash_index"] = 1
-
-            lua_settable(l, -3);  // Добавляем подтаблицу в основную таблицу (t[1] = {...})
         }
+
+        // val = "v1"
+        /*
+        lua_pushstring(l, "val");
+        if (b->value_len && ht->f_val2str) {
+            const char *tmp = ht->f_val2str(bucket_get_value(b), b->value_len);
+            lua_pushstring(l, tmp);
+        } else {
+            lua_pushnil(l);
+        }
+        lua_settable(l, -3);  // t[1]["val"] = "v1"
+        */
+        if (b->value_len && ht->f_val2str) {
+            const char *tmp = ht->f_val2str(bucket_get_value(b), b->value_len);
+            assert(tmp);
+            lua_pushstring(l, "val");
+            lua_pushstring(l, tmp);
+            lua_settable(l, -3);  // t[1]["val"] = "v1"
+        } else {
+            /*lua_pushnil(l);*/
+        }
+
+        // hash_index = 1
+        lua_pushstring(l, "hash_index");
+        lua_pushnumber(l, b->key_hash % ht->cap);
+        lua_settable(l, -3);  // t[1]["hash_index"] = 1
+
+        lua_settable(l, -3);  // Добавляем подтаблицу в основную таблицу (t[1] = {...})
     }
 
     /*lua_newtable(l);*/
@@ -301,11 +326,15 @@ void *htable_add(
     assert(key);
     assert(key_len > 0);
     assert(value_len >= 0);
+    assert((value && value_len > 0) || (!value && value_len == 0));
 
     if (value_len == 0)
         value = NULL;
 
-    int64_t index = _htable_get(ht, key, key_len, NULL);
+    if (!value)
+        value = NULL;
+
+    int64_t index = _htable_get_index(ht, key, key_len, NULL);
 
     if (htable_verbose)
         printf(
@@ -315,46 +344,17 @@ void *htable_add(
         );
     // */
 
-    /*
-    if (htable_verbose)
-        printf(
-            "htable_add: key %p, key_len %d, value %p, value_len %d"
-            ", index %zu, cap %zu\n",
-            key, key_len, value, value_len, index, ht->cap
-        );
-    //  */
-
     // Ключ есть в таблице, обновить значение
     if (index != INT64_MAX) {
         ht->arr[index] = bucket_update_value(
             ht->arr[index], value, value_len
         );
-
-        /*
-        if (value_len != ht->arr[index]->value_len) {
-
-            //ht->arr[index] = bucket_update_value(
-            //    ht->arr[index], value, value_len
-            //);
-
-            bucket_free(ht, index);
-            ht->arr[index] = bucket_alloc(key_len, value_len);
-            // XXX: Почему идет запись значения ключа, но сравнивается длина значения?
-            memmove(bucket_get_key(ht->arr[index]), key, key_len);
-        }
-        */
-
-        /*
-        ht->arr[index]->value_len = value_len;
-        ht->arr[index]->key_len = key_len;
-        memmove(bucket_get_value(ht->arr[index]), value, value_len);
-        */
-
-        return bucket_get_value(ht->arr[index]);
+        return value ? bucket_get_value(ht->arr[index]) : NULL;
     }
 
-    if (ht->taken >= ht->cap * 0.7)
-        htable_extend(ht, ht->cap * 2 + 1);
+    // Расширяю таблицу при определенном пороге загрузки
+    if (ht->taken >= ht->cap * ht->extend_coef)
+        htable_extend(ht, ht->cap * ht->cap_mult + ht->cap_add);
 
     assert(ht->taken < ht->cap);
 
@@ -365,14 +365,14 @@ void *htable_add(
         index = (index + 1) % ht->cap;
 
     ht->arr[index] = bucket_alloc(key_len, value_len);
-    /*ht->arr[index]->value_len = value_len;*/
-    /*ht->arr[index]->key_len = key_len;*/
     ht->arr[index]->key_hash = hash;
     memmove(bucket_get_key(ht->arr[index]), key, key_len);
+
     if (value)
         memmove(bucket_get_value(ht->arr[index]), value, value_len);
     ht->taken++;
-    // XXX: Если value == NULL, то результат будет не пустой.
+
+    // Вернуть NULL если нет значения
     return value ? bucket_get_value(ht->arr[index]) : NULL;
 }
 
@@ -447,15 +447,16 @@ void htable_free(HTable *ht) {
     free(ht);
 }
 
-int64_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
+// В случае неудачи поиска возращает INT64_MAX
+// В случае неудачи поиска value_len не изменяется
+int64_t _htable_get_index(
+    HTable *ht, const void *key, int key_len, int *value_len
+) {
     htable_assert(ht);
     assert(key_len > 0);
     assert(key);
 
     int64_t index = ht->f_hash(key, key_len) % ht->cap;
-
-    /*printf("_htable_get: index %ld\n", index);*/
-    /*printf("_htable_get: key '%s'\n", (char*)key);*/
 
     // Максимальное время поиска - проверить все элементы массива
     for (int64_t i = 0; i < ht->cap; i++) {
@@ -465,14 +466,6 @@ int64_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
         char *key_t = bucket_get_key(buck);
         assert(key_t);
 
-        /*
-        printf(
-            "memcmp: key_t '%s', key '%s', key_len %d\n",
-            key_t, (char*)key, key_len
-        );
-        */
-
-        // FIXME: Доделать сравнение длин ключей
         if (buck->key_len != key_len)
             break;
 
@@ -482,44 +475,36 @@ int64_t _htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
         index = (index + 1) % ht->cap;
     }
 
-    //assert(!ht->arr[index]);
-    if (!ht->arr[index])
+    Bucket *buck = ht->arr[index];
+
+    if (!buck)
         return INT64_MAX;
 
-    char *key_t = bucket_get_key(ht->arr[index]);
+    char *key_t = bucket_get_key(buck);
     assert(key_t);
 
-    Bucket *buck = ht->arr[index];
-    if (buck) {
-        int trgt_key_len = key_len > buck->key_len ? buck->key_len : key_len;
-        if (!memcmp(key_t, key, trgt_key_len)) {
-            if (value_len)
-                *value_len = ht->arr[index]->value_len;
-            return index;
-        }
+    if (htable_verbose) 
+        printf("_htable_get: index %ld\n", index);
+
+    if (htable_verbose && ht->f_key2str) {
+        printf("_htable_get: key '%s'\n", ht->f_key2str(key_t, buck->key_len));
+    }
+
+    if (buck->key_len != key_len)
+        return INT64_MAX;
+
+    int trgt_key_len = key_len > buck->key_len ? buck->key_len : key_len;
+    if (!memcmp(key_t, key, trgt_key_len)) {
+        if (value_len)
+            *value_len = buck->value_len;
+        return index;
     }
 
     return INT64_MAX;
-
-    /*
-    size_t ret = SIZE_MAX;
-    int64_t index = ht->hash_func(key, key_len) % ht->cap;
-    for (size_t i = 0; i < ht->cap; i++) {
-        if (!ht->arr[index]) break;
-        if (memcmp(get_key(ht->arr[index]), key, key_len) == 0) {
-            if (value_len)
-                *value_len = ht->arr[index]->value_len;
-            return index;
-        }
-        index = (index + 1) % ht->cap;
-    }
-
-    return ret;
-    */
 }
 
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
-    int64_t index = _htable_get(ht, key, key_len, value_len);
+    int64_t index = _htable_get_index(ht, key, key_len, value_len);
     return index == INT64_MAX ? NULL : bucket_get_value(ht->arr[index]);
 }
 
@@ -535,11 +520,14 @@ bool htable_exist(HTable *ht, const void *key, int key_len) {
     assert(ht);
     assert(key);
     assert(key_len > 0);
-    return _htable_get(ht, key, key_len, NULL) != INT64_MAX;
+    int64_t ret =  _htable_get_index(ht, key, key_len, NULL);
+    printf("htable_exist: ret %ld\n", ret);
+    return ret != INT64_MAX;
 }
 
 bool htable_exist_s(HTable *ht, const char *key) {
     assert(key);
+    /*printf("htable_exist_s: '%s'\n", key);*/
     return htable_exist(ht, key, strlen(key) + 1);
 }
 
@@ -563,7 +551,8 @@ HTable *htable_new(struct HTableSetup *setup) {
     if (setup) {
         ht->f_on_remove = setup->on_remove;
         ht->f_hash = setup->hash_func;
-        ht->f_key2str = setup->key2str_func;
+        ht->f_key2str = setup->f_key2str;
+        ht->f_val2str = setup->f_val2str;
     }
 
     if (!ht->f_hash)
@@ -577,6 +566,9 @@ HTable *htable_new(struct HTableSetup *setup) {
 
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
     ht->taken = 0;
+    ht->extend_coef = 0.7;
+    ht->cap_mult = 2.;
+    ht->cap_add = 1;
     return ht;
 }
 
@@ -622,7 +614,7 @@ void _htable_remove(HTable *ht, int64_t remove_index) {
 
 void htable_remove(HTable *ht, const void *key, int key_len) {
     assert(ht);
-    int64_t index = _htable_get(ht, key, key_len, NULL);
+    int64_t index = _htable_get_index(ht, key, key_len, NULL);
     if (index != INT64_MAX) {
         _htable_remove(ht, index);
     }
@@ -727,7 +719,6 @@ static TableNodeStr strings[] = {
     { "Frank" },
     { "Leo" },
     { "Leo" },
-    { "Leo" },
     { "Hank" },
     { "Charlie" },
     { "Rose" },
@@ -775,10 +766,6 @@ static TableNodeStr strings[] = {
     { "{LJg)-6wD(X" },
     { "P|b!" },
     { "Gb_?$b[K|jO" },
-    { "FK)Oh" },
-    { ";@b6J" },
-    { "SjR3QzZ_f\\kHdW" },
-    { "jn!@sQw>vS:" },
     { "(wV:9R6" },
     { "^/y" },
     { "3/$/m" },
@@ -812,51 +799,6 @@ static TableNodeStr strings[] = {
     { "3v\\b" },
     { "9Qe(1see" },
     { "_}D9\\Sw0+7}I" },
-    { "l\'4z@" },
-    { "zhFfg1" },
-    { "wDAtd6mt\\vh+sJ" },
-    { "Df5x<1vR6|@P3mK" },
-    { "(z.^E).\\B" },
-    { "Hty9" },
-    { "6&^#7G1PY" },
-    { "n\'dyYm&O3?=/I" },
-    { ">(u$" },
-    { "So+Tg5UdEeY[" },
-    { "\"#,<qO97cX.|\"" },
-    { "viGod1H" },
-    { "s6i^}i" },
-    { "78!x4TR" },
-    { ".!s*u" },
-    { "2<K5vf0-oPi" },
-    { "gA_Qb]GI-U(J" },
-    { "\",lO*\"" },
-    { "V2g$L(" },
-    { "n-yJb" },
-    { "\"P8QdD,=v$\"" },
-    { "qk]o1TH4P?wIV" },
-    { "\"}ZyGzT_C<,p,\"" },
-    { "zdNjIs" },
-    { "hoVh" },
-    { "{TXUF" },
-    { "\\}%]gWz" },
-    { "X-U" },
-    { "Cle99(v\'" },
-    { "K^6I6|KxD}" },
-    { "zJdKN9" },
-    { ">#En.&(WZ" },
-    { "1#M3#H]T" },
-    { "Z}EZ9" },
-    { "acmG" },
-    { "ba4+" },
-    { "\",owgJL\"\"" },
-    { "\"GHu;D,O#\"" },
-    { "\"2|i%:\'_2[[,kTb\"" },
-    { "\",q*h)T\"" },
-    { "M9xcL)A.NvPi" },
-    { "\",%3ao[}&[P9Mc\"" },
-    { "b{-O9*YZj(rw" },
-    { "86&K_" },
-    { "x%^%AaEC&Gadxj!" },
     { "U0_71DN{F1Z5" },
     { ";?n[U4qH[I" },
     { "4;&*3" },
@@ -1205,6 +1147,7 @@ static MunitResult test_htable_internal_get(
     for (int j = 0; j < 100; j++) {
         HTable *t = htable_new(&(HTableSetup) {
             .cap = j,
+            .f_key2str = htable_str_str,
         });
 
         munit_assert(htable_get_s(t, "", NULL) == NULL);
@@ -1235,21 +1178,34 @@ static MunitResult test_htable_internal_get2(
     printf("\n");
 
     // Создавать таблица с разной вместимостью
-    for (int j = 0; j < 100; j++) {
+    //for (int j = 0; j < 100; j += 10) {
+    /*for (int j = 0; j < 20; j += 10) {*/
+    {
+        int j = 10;
+
         HTable *t = htable_new(&(HTableSetup) {
             .cap = j,
+            .f_key2str = htable_str_str,
         });
 
         /*htable_verbose = true;*/
         htable_verbose = false;
+
         // Добавить строковые ключи, без данных
         for (int i = 0; strings[i].key; i++) {
             htable_add_s(t, strings[i].key, NULL, 0);
         }
         htable_verbose = false;
 
+        char *table = htable_print_tabular_alloc(t);
+        if (table) {
+            printf("%s\n", table);
+            free(table);
+        }
+
         // Все строки должны присутствовать в табличке
         for (int i = 0; strings[i].key; i++) {
+            printf("--------------------\n");
             if (!htable_exist_s(t, strings[i].key)) {
                 printf(
                     "test_htable_internal_get2: key '%s' does not exists\n",
@@ -1527,6 +1483,7 @@ static MunitResult _test_htable_internal_extend(
 
     HTable *t = htable_new(&(HTableSetup) {
         .cap = cap_initial,
+        .f_key2str = htable_str_str,
     });
 
     // Добавляю ключи и значения
@@ -1614,6 +1571,7 @@ static MunitResult test_htable_internal_add_strings(
     /*_test_htable_internal_add_strings(strings, &(HTableSetup) {*/
         /*.cap = 100,*/
         .hash_func = koh_hasher_djb2,
+        .f_key2str = htable_str_str,
     });
 
     /*
@@ -1644,7 +1602,8 @@ static void _test_htable_internal_add_get_remove_get_float(HashFunction f) {
     // Создать таблицу с определенной хэш функцией
     HTable *t = htable_new(&(HTableSetup) {
         .hash_func = f,
-        .key2str_func = NULL,
+        .f_key2str = htable_i32_str,
+        .f_val2str = htable_i32_str,
     });
 
     for (int j = 0; floats[j].key < INFINITY; j++) {
@@ -1700,7 +1659,7 @@ static void _test_htable_internal_add_get_remove_get_str(HashFunction f) {
     // Создать таблицу с определенной хэш функцией
     HTable *t = htable_new(&(HTableSetup) {
         .hash_func = f,
-        .key2str_func = NULL,
+        .f_key2str = htable_i32_str,
         .on_remove = on_remove_example,
     });
 
@@ -1858,10 +1817,36 @@ static MunitResult test_htable_internal_print_tabular(
     return MUNIT_OK;
 }
 
+static MunitResult test_htable_internal_data2str(
+    const MunitParameter params[], void* data
+) {
+    int i32 = 10;
+    float f32 = 112;
+    int64_t i64 = -1000;
+    char *str = "hello";
+    char c = 101;
+
+#define eq munit_assert_string_equal
+    eq(htable_i32_str(&i32, sizeof(i32)), "10");
+    eq(htable_f32_str(&f32, sizeof(f32)), "112.000000");
+    eq(htable_i64_str(&i64, sizeof(i64)), "-1000");
+    eq(htable_str_str(str, strlen(str)), "hello");
+    eq(htable_char_str(&c, sizeof(c)), "101");
+#undef eq
+
+    return MUNIT_OK;
+}
+
 // }}}
 
 // {{{ Tests definitions
 static MunitTest test_htable_internal[] = {
+
+    {
+        (char*) "/test_htable_internal_data2str",
+        test_htable_internal_data2str,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
 
     {
         (char*) "/test_htable_internal_strings_find",

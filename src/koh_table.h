@@ -22,14 +22,14 @@ typedef HTableAction (*HTableEachCallback)(
 typedef void (*HTableOnRemove)(
     const void *key, int key_len, void *value, int value_len, void *userdata
 );
-typedef const char *(*HTableKey2Str)(const void *key, int key_len);
+typedef const char *(*HTableData2Str)(const void *data, int data_len);
 
 typedef struct HTableSetup {
     HTableOnRemove  on_remove;
     HashFunction    hash_func;
     // TODO: Сделать заготовки для вывода строк, целых чисел и 
     // чисел с плавающей запятой
-    HTableKey2Str   key2str_func;
+    HTableData2Str  f_key2str, f_val2str;
     int64_t         cap;
     void            *userdata;
 } HTableSetup;
@@ -121,3 +121,47 @@ extern MunitSuite test_htable_suite_internal;
 static inline void htable_remove_f32(HTable *ht, float key) {
     htable_remove(ht, &key, sizeof(key));
 }
+
+// {{{ Функции конверторы данных
+static inline const char *htable_i32_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    sprintf(buf, "%d", *(int*)data);
+    return buf;
+}
+
+static inline const char *htable_f32_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    sprintf(buf, "%f", *(float*)data);
+    return buf;
+}
+
+static inline const char *htable_i64_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    sprintf(buf, "%ld", *(int64_t*)data);
+    return buf;
+}
+
+static inline const char *htable_str_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    sprintf(buf, "%.*s", (int)sizeof(buf) - 10, (char*)data);
+    return buf;
+}
+
+static inline const char *htable_char_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    sprintf(buf, "%d", *(char*)data);
+    return buf;
+}
+// }}}
+
+
