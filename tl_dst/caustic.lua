@@ -408,24 +408,26 @@ local function gennann_after_build(dep)
    ut.pop_dir()
 end
 
-local function build_chipmunk(dep)
-   print("chipmunk_custom_build:", lfs.currentdir())
-   ut.push_current_dir()
-   chdir(dep.dir)
-   local opts = {
-      "BUILD_DEMOS=OFF",
-      "INSTALL_DEMOS=OFF",
-      "BUILD_SHARED=OFF",
-      "BUILD_STATIC=ON",
-      "INSTALL_STATIC=OFF",
-   }
-   for k, opt in ipairs(opts) do
-      opts[k] = "-D " .. opt
-   end
-   cmd_do("cmake . " .. table.concat(opts, " "))
-   cmd_do("make -j")
-   ut.pop_dir()
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function build_pcre2(dep)
    ut.push_current_dir()
@@ -1001,20 +1003,22 @@ dependencies = {
       url_action = 'git',
    },
 
-   {
-      disabled = true,
-      copy_for_wasm = true,
-      build = build_chipmunk,
-      dir = "Chipmunk2D",
-      description = "плоский игровой физический движок",
-      includes = { "Chipmunk2D/include" },
-      libdirs = { "Chipmunk2D/src" },
-      links = { "chipmunk:static" },
-      links_internal = { "chipmunk:static" },
-      name = 'chipmunk',
-      url_action = 'git',
-      url = "https://github.com/nagolove/Chipmunk2D.git",
-   },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
    {
       build = build_with_make,
@@ -3371,6 +3375,7 @@ local function run_parallel(queue)
 
 
 
+   local wait_iters = 1
    repeat
       local new_threads = {}
       for _ = 1, tasks_num do
@@ -3404,7 +3409,14 @@ local function run_parallel(queue)
       threads = live_threads
 
       stop = not has_jobs
+      wait_iters = wait_iters + 1
    until stop
+
+   if verbose then
+      print(ansicolors(
+      "%{red}" .. format("wait iterations done %d", wait_iters) .. "%{reset}"))
+
+   end
 end
 
 local function run_serial(queue)
@@ -3958,10 +3970,15 @@ local function sub_make(_args, cfg, push_num)
    end
 
    if not _args.j then
+      print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
       run_serial(queue)
    else
+      print(ansicolors("%{blue}" .. "run_parallel" .. "%{reset}"))
       run_parallel(queue)
    end
+
+
+
 
    cache:save()
    cache = nil
