@@ -408,6 +408,7 @@ local function gennann_after_build(dep: Dependency)
     ut.pop_dir()
 end
 
+--[[
 local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
     ut.push_current_dir()
@@ -426,6 +427,7 @@ local function build_chipmunk(dep: Dependency)
     cmd_do("make -j")
     ut.pop_dir()
 end
+--]]
 
 local function build_pcre2(dep: Dependency)
     ut.push_current_dir()
@@ -1001,6 +1003,7 @@ dependencies = {
         url_action = 'git',
     },
 
+    --[[
     {
         disabled = true,
         copy_for_wasm = true,
@@ -1015,6 +1018,7 @@ dependencies = {
         url_action = 'git',
         url = "https://github.com/nagolove/Chipmunk2D.git",
     },
+    --]]
 
     {
         build = build_with_make,
@@ -3371,6 +3375,7 @@ local function run_parallel(queue: {string})
 
     local type THREAD_FUNC = function(string)
 
+    local wait_iters = 1
     repeat
         local new_threads: {lanes.Thread} = {}
         for _ = 1, tasks_num do
@@ -3404,7 +3409,14 @@ local function run_parallel(queue: {string})
         threads = live_threads
 
         stop = not has_jobs
+        wait_iters = wait_iters + 1
     until stop
+
+    if verbose then
+        print(ansicolors(
+            "%{red}" .. format("wait iterations done %d", wait_iters) .. "%{reset}"
+        ))
+    end
 end
 
 local function run_serial(queue: {string})
@@ -3958,10 +3970,15 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
     end
 
     if not _args.j then
+        print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
         run_serial(queue)
     else
+        print(ansicolors("%{blue}" .. "run_parallel" .. "%{reset}"))
         run_parallel(queue)
     end
+
+    --print("os.exit(1)")
+    --os.exit(1);
 
     cache:save()
     cache = nil
