@@ -133,18 +133,18 @@ static inline Bucket *bucket_update_value(
 void htable_fprint(HTable *ht, FILE *f) {
     assert(ht);
     assert(f);
-    /*fprintf(f, "-----\n");*/
+    fprintf(f, "\n");
     for (int64_t i = 0; i < ht->cap; i++) {
-        if (ht->arr[i])
+        if (ht->arr[i]) {
             fprintf(
                 f, "[%.3zu] %10.10s = %10d, hash mod cap = %.3zu\n",
                 i, (char*)bucket_get_key(ht->arr[i]), *((int*)bucket_get_value(ht->arr[i])),
                 ht->arr[i]->key_hash % ht->cap
             );
-        else
+        } else
             fprintf(f, "[%.3zu]\n", i);
     }
-    /*fprintf(f, "-----\n");*/
+    fprintf(f, "\n");
 }
 
 void htable_print(HTable *ht) {
@@ -1197,11 +1197,14 @@ static MunitResult test_htable_internal_get2(
         }
         htable_verbose = false;
 
+        htable_print(t);
+        /*
         char *table = htable_print_tabular_alloc(t);
         if (table) {
             printf("%s\n", table);
             free(table);
         }
+        */
 
         // Все строки должны присутствовать в табличке
         for (int i = 0; strings[i].key; i++) {

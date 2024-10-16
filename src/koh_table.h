@@ -71,6 +71,12 @@ void htable_shrink(HTable *ht);
 void htable_clear(HTable *ht);
 int64_t htable_count(HTable *ht);
 
+// Только если установлены функции обратного вызова для ключей и значений.
+// Возвращает выделенную память.
+char *htable_save_alloc(HTable *ht);
+// Загрузить из Луа таблицы представленной строкой
+bool htable_load(HTable *ht, const char *lua_code);
+
 // Возвращает новую таблицу, объединяя а и б. 
 // Если ключи равны, то берется значение из a
 HTable *htable_union(HTable *a, HTable *b);
