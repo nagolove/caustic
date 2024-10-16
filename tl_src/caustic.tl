@@ -96,6 +96,7 @@ local record Cfg
     src: string
     artifact: string
     main: string
+    -- Выполняется перед компиляцией
     codegen: {Codegen}
     -- Дефайны препроцессора, применяемые только к релизной сборке
     -- Пары -Dключ=значение будут поданы компилятору
@@ -106,6 +107,10 @@ local record Cfg
     -- шаблоны файлов, которые исключаются из процесса сборки
     exclude: {string}
     record Codegen
+        -- Вызов этой функции если есть
+        external: function()
+
+        -- Если external нету, то используется метод ниже
         file_in: string
         file_out: string
         on_read: function(line: string)
@@ -3621,6 +3626,19 @@ local function codegen(cg: Cfg.Codegen)
     if verbose then
         print('codegen', inspect(cg))
     end
+
+    if cg.external then
+        ut.push_current_dir()
+        local ok, errmsg: boolean, string = pcall(function()
+            cg.external()
+        end)
+        if not ok then
+            print("Error in calling 'external' codegen function", errmsg)
+        end
+        ut.pop_dir()
+        return
+    end
+
     local lines = {}
     local file = io.open(cg.file_in, "r")
     if not file then
