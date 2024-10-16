@@ -677,11 +677,15 @@ static const char *L_tabular_print_internal(
 
     const char *s = 
         // TODO: добавить код tabular.lua в включаемый файл
+        // Как-то добавить включение koh_lua_tabular.h
         "package.path = package.path .. ';/usr/share/lua/5.4/?.lua'\n"
         "T = require 'tabular'\n"
         "return T(";
     const char *e = ")\n";
     char chunk[1024 * 10] = {};
+
+//  #include "koh_lua_tabular.h"
+//  luaL_dostring(fileTable[0].data);
 
     strcat(chunk, s);
     strcat(chunk, global_name);
