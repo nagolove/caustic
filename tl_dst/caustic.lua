@@ -155,6 +155,11 @@ local cache
 
 
 
+
+
+
+
+
 local function cmd_do(_cmd)
    if verbose then
       os.execute("echo `pwd`")
@@ -3621,6 +3626,19 @@ local function codegen(cg)
    if verbose then
       print('codegen', inspect(cg))
    end
+
+   if cg.external then
+      ut.push_current_dir()
+      local ok, errmsg = pcall(function()
+         cg.external()
+      end)
+      if not ok then
+         print("Error in calling 'external' codegen function", errmsg)
+      end
+      ut.pop_dir()
+      return
+   end
+
    local lines = {}
    local file = io.open(cg.file_in, "r")
    if not file then
