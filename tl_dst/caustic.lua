@@ -413,25 +413,24 @@ local function gennann_after_build(dep)
    ut.pop_dir()
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+local function build_chipmunk(dep)
+   print("chipmunk_custom_build:", lfs.currentdir())
+   ut.push_current_dir()
+   chdir(dep.dir)
+   local opts = {
+      "BUILD_DEMOS=OFF",
+      "INSTALL_DEMOS=OFF",
+      "BUILD_SHARED=OFF",
+      "BUILD_STATIC=ON",
+      "INSTALL_STATIC=OFF",
+   }
+   for k, opt in ipairs(opts) do
+      opts[k] = "-D " .. opt
+   end
+   cmd_do("cmake . " .. table.concat(opts, " "))
+   cmd_do("make -j")
+   ut.pop_dir()
+end
 
 
 local function build_pcre2(dep)
@@ -1008,22 +1007,20 @@ dependencies = {
       url_action = 'git',
    },
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   {
+      disabled = false,
+      copy_for_wasm = true,
+      build = build_chipmunk,
+      dir = "Chipmunk2D",
+      description = "плоский игровой физический движок",
+      includes = { "Chipmunk2D/include" },
+      libdirs = { "Chipmunk2D/src" },
+      links = { "chipmunk:static" },
+      links_internal = { "chipmunk:static" },
+      name = 'chipmunk',
+      url_action = 'git',
+      url = "https://github.com/nagolove/Chipmunk2D.git",
+   },
 
    {
       build = build_with_make,
@@ -1787,6 +1784,7 @@ local parser_setup = {
          { "-r --release", "release" },
          { "-a --noasan", "no address sanitazer" },
          { "-p --cpp", "use c++ code" },
+         { "-l --link", "use linking time optimization" },
       },
    },
    publish = {
@@ -2025,6 +2023,7 @@ local function _init(path, deps)
 
    ut.pop_dir()
 end
+
 
 
 
@@ -3829,8 +3828,7 @@ local function sub_make(_args, cfg, push_num)
    end
 
 
-   local flags = {
-      "-flto",
+   local flags = {}
 
 
 
@@ -3838,7 +3836,14 @@ local function sub_make(_args, cfg, push_num)
 
 
 
-   }
+
+
+   if _args.link then
+      if verbose then
+         print("using flto")
+      end
+      table.insert(flags, "-flto")
+   end
 
    if not _args.release then
       table.insert(flags, "-ggdb3")

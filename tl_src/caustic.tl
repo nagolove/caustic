@@ -413,7 +413,6 @@ local function gennann_after_build(dep: Dependency)
     ut.pop_dir()
 end
 
---[[
 local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
     ut.push_current_dir()
@@ -1008,9 +1007,8 @@ dependencies = {
         url_action = 'git',
     },
 
-    --[[
     {
-        disabled = true,
+        disabled = false,
         copy_for_wasm = true,
         build = build_chipmunk,
         dir = "Chipmunk2D",
@@ -1023,7 +1021,6 @@ dependencies = {
         url_action = 'git',
         url = "https://github.com/nagolove/Chipmunk2D.git",
     },
-    --]]
 
     {
         build = build_with_make,
@@ -1787,6 +1784,7 @@ local parser_setup: {string:ParserSetup} = {
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
             { "-p --cpp", "use c++ code" },
+            { "-l --link", "use linking time optimization" },
         },
     },
     publish = {
@@ -2038,17 +2036,18 @@ local record Args
     copy: string
 
     cpp: string
-    nocodegen: string
-    release: string
-    noasan: string
-    verbose: string
-    make: boolean
+    nocodegen: string   -- отключить проход кодогенератора
+    release: string     -- сборка без отладки, с оптимизацией
+    noasan: string      -- отключить санитайзер
+    verbose: string     -- много отладочного вывода
+    make: boolean       -- собрать
     minshell: string
-    c: string
-    j: string
-    name: string				-- dependency name
+    c: string           -- clean, полная пересборка
+    j: string           -- паралленьная сборка
+    name: string		-- dependency name
     make_type: MakeAction
-    full: string
+    link: string        -- оптимизация времени линковки(работает долго)
+    full: string        -- XXX: Что значит?
     flags: {string}
     -- }}}
 end
@@ -3830,7 +3829,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
-        "-flto",
         -- Ошибки сборки с флагом последней версии языка C
         -- Отсутствуют разные функции стандартной библиотеки
         --"-std=c2x",
@@ -3839,6 +3837,13 @@ local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
         --"-D_USE_MATH_DEFINES",
         --"-D__USE_MISC",
     }
+
+    if _args.link then
+        if verbose then
+            print("using flto")
+        end
+        table.insert(flags, "-flto")
+    end
 
     if not _args.release then
         table.insert(flags, "-ggdb3")
