@@ -103,6 +103,7 @@ end
 
 -- TODO: {exclude} may be a map, not a array
 -- В таблице исключаемых имен могут быть шаблоны string.match()
+-- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
 local function filter_sources(
     pattern: string, path: string, cb: function(string), exclude: {string}
 )
