@@ -38,12 +38,14 @@ typedef struct HTableSetup {
 
 
 // Добавляет значение по ключу в таблицу. Возвращает указатель на скопированные 
-// внутрь данные.
-// Можно ли добавлять значения нулевой длины или передавать NULL для значения..
+// внутрь данные значения. Если длина значения равно нулю или указатель на
+// значение пустой, то функция возвращает NULL.
 void *htable_add(
     HTable *ht, const void *key, int key_len, const void *value, int value_len
 );
 void *htable_add_s(HTable *ht, const char *key, void *value, int value_len);
+// TODO: Разместить реализацию в заголовочном файле
+// static inline
 void *htable_add_f32(HTable *ht, float key, void *value, int value_len);
 
 // Доступ к элементам

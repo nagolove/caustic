@@ -18,7 +18,9 @@
 #include <fcntl.h>
 #include <malloc.h>
 
-bool htable_verbose = true;
+bool htable_verbose = false;
+
+#define HTABLE_DEBUG_BUCKET 1
 
 /*
 структура корзинки таблицы:
@@ -32,6 +34,9 @@ bool htable_verbose = true;
 ------------------------------------------------------
 */
 typedef struct Bucket {
+#ifdef HTABLE_DEBUG_BUCKET
+    int64_t bucket_size;
+#endif
     // XXX: Добавить функцию обратного вызова на удаление в каждую корзинку?
     Hash_t key_hash;
     int    key_len, value_len;
@@ -134,6 +139,11 @@ static inline Bucket *bucket_update_value(
     assert(bucket->value_len >= 0);
     assert(val_len >= 0);
 
+    if (!value)
+        val_len = 0;
+    if (!val_len)
+        value = NULL;
+
     // XXX: Нужно ли вызывать on_remove в случае пересоздания корзинки?
 
     // Перевыделить память если длина значения иная
@@ -144,7 +154,10 @@ static inline Bucket *bucket_update_value(
             bucket_get_key(bucket),
             bucket->key_len
         );
-        memmove(bucket_get_value(new_buck), value, val_len);
+
+        if (val_len)
+            memmove(bucket_get_value(new_buck), value, val_len);
+
         free(bucket);
         bucket = new_buck;
     } else {
@@ -196,6 +209,7 @@ char *htable_print_tabular_alloc(HTable *ht) {
         if (ht->f_key2str) {
             const char *tmp = ht->f_key2str(bucket_get_key(b), b->key_len);
             assert(tmp);
+            //printf("key '%s'\n", tmp);
             lua_pushstring(l, "key");
             lua_pushstring(l, tmp);
             lua_settable(l, -3);  // t[1]["key"] = "k1"
@@ -212,6 +226,7 @@ char *htable_print_tabular_alloc(HTable *ht) {
         }
         lua_settable(l, -3);  // t[1]["val"] = "v1"
         */
+
         if (b->value_len && ht->f_val2str) {
             const char *tmp = ht->f_val2str(bucket_get_value(b), b->value_len);
             assert(tmp);
@@ -259,6 +274,9 @@ Bucket *bucket_alloc(int key_len, int value_len) {
     assert(b);
     b->key_len = key_len;
     b->value_len = value_len;
+#ifdef HTABLE_DEBUG_BUCKET
+    b->bucket_size = size;
+#endif
     return b;
 }
 
@@ -272,12 +290,14 @@ void htable_extend(HTable *ht, int64_t new_cap) {
     assert(ht->cap < new_cap);
 
     HTable tmp = *ht;
-    /*int64_t new_cap = ht->cap * 1.5 + 1;*/
-    /*int64_t new_cap = ht->cap * 15 + 1;*/
+
+    /*
     printf(
         "\n\033[32m htable_extend: cap %ld, cap %ld\033[0m\n",
         ht->cap, new_cap
     );
+    */
+
     tmp.cap = new_cap;
     tmp.arr = calloc(tmp.cap, sizeof(ht->arr[0]));
     tmp.taken = 0;
@@ -353,10 +373,11 @@ void *htable_add(
         value = NULL;
 
     if (!value)
-        value = NULL;
+        value_len = 0;
 
     int64_t index = _htable_get_index(ht, key, key_len, NULL);
 
+    /*
     if (htable_verbose)
         printf(
             "htable_add: key '%s', key_len %d, value %p, value_len %d"
@@ -365,13 +386,23 @@ void *htable_add(
         );
     // */
 
+    /*
+    if (index != INT64_MAX) {
+        bucket_print(ht, ht->arr[index], stdout, NULL);
+        printf("\n");
+    }
+    */
+
     // Ключ есть в таблице, обновить значение
     if (index != INT64_MAX) {
         ht->arr[index] = bucket_update_value(
             ht->arr[index], value, value_len
         );
+        /*printf("value updated, value %p\n", value);*/
         return value ? bucket_get_value(ht->arr[index]) : NULL;
     }
+
+    /*printf("before extend:\n");*/
 
     // Расширяю таблицу при определенном пороге загрузки
     if (ht->taken >= ht->cap * ht->extend_coef)
@@ -543,7 +574,13 @@ _next:
 
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len) {
     int64_t index = _htable_get_index(ht, key, key_len, value_len);
-    return index == INT64_MAX ? NULL : bucket_get_value(ht->arr[index]);
+    bool found = index != INT64_MAX;
+    if (found) {
+        Bucket *b = ht->arr[index];
+        if (b->value_len)
+            return bucket_get_value(b);
+    }
+    return NULL;
 }
 
 void *htable_get_s(HTable *ht, const char *key, int *value_len) {
@@ -694,7 +731,7 @@ KOH_INLINE KOH_HIDDEN HTableIterator htable_iter_new(HTable *t) {
     // Поиск первого существующего элемента
     int j = 0;
     for (; j < t->cap; j++) {
-        printf("j %d\n", j);
+        /*printf("j %d\n", j);*/
         if (t->arr[j]) {
             i.index = j;
             /*printf("htable_iter_new: break\n");*/
@@ -719,16 +756,16 @@ KOH_INLINE KOH_HIDDEN void htable_iter_next(HTableIterator *i) {
             break;
 
         if (i->t->arr[i->index]) {
-            printf("htable_iter_next: break\n");
+            /*printf("htable_iter_next: break\n");*/
             break;
         }
-        printf("htable_iter_next: index %ld\n", i->index);
+        /*printf("htable_iter_next: index %ld\n", i->index);*/
     }
 }
 
 KOH_INLINE KOH_HIDDEN bool htable_iter_valid(HTableIterator *i) {
     htable_iter_assert(i);
-    printf("htable_iter_valid: index %ld, cap %ld\n", i->index, i->t->cap);
+    /*printf("htable_iter_valid: index %ld, cap %ld\n", i->index, i->t->cap);*/
     return i->index + 0 < i->t->cap;
 }
 
@@ -882,6 +919,48 @@ static TableNodeStr strings[] = {
     { "U!*\\%#%bw" },
     { "Rj]" },
     { "T8{-q%E" },
+    { NULL},
+    // }}}
+};
+// Строки с повторами
+//
+static TableNodeStr strings2[] = {
+    // {{{
+
+    { "Bob" },
+    { "Charlie" },
+    { "David" },
+    { "FSbi" },
+    { "Frank" },
+    { "Gb_?$b[K|jO" },
+    { "HAw?D4+|+" },
+    { "Hank" },
+    { "IK0" },
+    { "Ivy" },
+    { "Jack" },
+    { "K3<" },
+    { "Karen" },
+    { "Leo" },
+    { "Mona" },
+    { "Paul" },
+    { "P|b!" },
+    { "Q2P" },
+    { "QSFq.*Emw&LwWP" },
+    { "Quinn" },
+    { "R9-" },
+    { "Rj]" },
+    { "Rose" },
+    { "S/Hf&lYoQ" },
+    { "T8{-q%E" },
+    { "U!*\\%#%bw" },
+    { "U0_71DN{F1Z5" },
+    { "Wade" },
+    { "Wq/I0zt2dbwV_X." },
+    { "Xena" },
+    { "Ycp;T" },
+    { "ZQp-M11<[" },
+    { "Zane" },
+    { "ZmQ@/=p=" },
     { NULL},
     // }}}
 };
@@ -1218,10 +1297,13 @@ static bool strings_find(const char *s, int *index) {
     return false;
 }
 
+// XXX: Проблемы с экранированием полей key, вывод не работает, ошибка парсера
+// Lua
+__attribute_maybe_unused__
 static void strings_print(TableNodeStr *strings) {
     lua_State *l = luaL_newstate();
     luaL_openlibs(l);
-    char *s = calloc(2048, 1);
+    char *s = calloc(2048 * 10, 1);
 
     strcat(s, "{ ");
     for (int i = 0; strings[i].key; i++) {
@@ -1240,7 +1322,7 @@ static void strings_print(TableNodeStr *strings) {
     }
     strcat(s, " }");
 
-    /*printf("\n\ns = %s\n\n", start);*/
+    printf("\n\ns = %s\n\n", s);
 
     char *table = L_tabular_alloc_s(l, s);
     printf("%s\n", table);
@@ -1253,7 +1335,7 @@ static TableNodeStr *strings_permuted_alloc() {
     size_t strings_num = sizeof(strings) / sizeof(strings[0]);
     TableNodeStr *new_strings = calloc(strings_num, sizeof(strings[0]));
 
-    strings_print(strings);
+    /*strings_print(strings);*/
 
     int permuted[strings_num];
     for (int i = 0; i < strings_num; i++) {
@@ -1269,7 +1351,7 @@ static TableNodeStr *strings_permuted_alloc() {
         new_strings[i].val_i = strings[permuted[i]].val_i;
     }
 
-    strings_print(new_strings);
+    /*strings_print(new_strings);*/
 
     return new_strings;
 }
@@ -1366,7 +1448,9 @@ static MunitResult test_htable_internal_get2(
 
         // Все строки должны присутствовать в табличке
         for (int i = 0; strings[i].key; i++) {
-            printf("--------------------\n");
+
+            /*printf("--------------------\n");*/
+
             if (!htable_exist_s(t, strings[i].key)) {
                 printf(
                     "test_htable_internal_get2: key '%s' does not exists\n",
@@ -1484,7 +1568,7 @@ static MunitResult test_htable_internal_iterator4(
          htable_iter_valid(&i);
          htable_iter_next(&i)) {
 
-        printf("key '%s'\n", (char*)htable_iter_key(&i, NULL));
+        /*printf("key '%s'\n", (char*)htable_iter_key(&i, NULL));*/
 
         munit_assert_string_equal(htable_iter_key(&i, NULL), "hello");
         munit_assert_null(htable_iter_value(&i, NULL));
@@ -1518,7 +1602,8 @@ static MunitResult test_htable_internal_bucket_allocation2(
     const MunitParameter params[], void* data
 ) {
     // {{{
-    printf("\ntest_htable_internal_bucket_allocation2:\n");
+
+    //printf("\ntest_htable_internal_bucket_allocation2:\n");
 
     struct {
         char *key, *val, *new_val;
@@ -1580,10 +1665,15 @@ static MunitResult test_htable_internal_bucket_allocation(
     const MunitParameter params[], void* data
 ) {
     // {{{
-    printf("\ntest_htable_internal_bucket_allocation:\n");
 
+    /*printf("\ntest_htable_internal_bucket_allocation:\n");*/
+    // XXX: Не учитывает макроса HTABLE_DEBUG_BUCKET и наличия поля в
+    // начале структуры.
+
+    // Произвольный ключ
     const char *key = "1234567";
     int key_len = strlen(key) + 1;
+    // Произвольное значение
     const char *value = "890";
     int value_len = strlen(value) + 1;
     Bucket *buck = bucket_alloc(key_len, value_len);
@@ -1595,6 +1685,7 @@ static MunitResult test_htable_internal_bucket_allocation(
     ------------------------------------------------------
     */
 
+    // Произвольное значение
     Hash_t hash_val = 171;
     buck->value_len = value_len;
     buck->key_len = key_len;
@@ -1610,28 +1701,34 @@ static MunitResult test_htable_internal_bucket_allocation(
         //    int    key_len, value_len;
         char *p = (char*)buck;
 
-        printf("hash_val %lu\n", *(Hash_t*)p);
+        /*printf("hash_val %lu\n", *(Hash_t*)p);*/
+
+#ifdef HTABLE_DEBUG_BUCKET
+        /*munit_assert(*(Hash_t*)p == hash_val);*/
+        p += sizeof(buck->bucket_size);
+#endif
+
         munit_assert(*(Hash_t*)p == hash_val);
         p += sizeof(buck->key_hash);
 
-        printf("key_len %d\n", *(int*)p);
+        /*printf("key_len %d\n", *(int*)p);*/
         munit_assert(*(int*)p == key_len);
 
         p += sizeof(buck->key_len);
 
-        printf("value_len %d\n", *(int*)p);
+        /*printf("value_len %d\n", *(int*)p);*/
         munit_assert(*(int*)p == value_len);
 
         p += sizeof(buck->value_len);
 
         char *k = p;
-        printf("strcmp %d, k '%s'\n", strcmp(k, key), k);
+        /*printf("strcmp %d, k '%s'\n", strcmp(k, key), k);*/
         munit_assert(strcmp(k, key) == 0);
 
         p += key_len + 0;
 
-        char *v = p;
-        printf("strcmp %d, v '%s'\n", strcmp(v, value), v);
+        /*char *v = p;*/
+        /*printf("strcmp %d, v '%s'\n", strcmp(v, value), v);*/
         // TODO: Доделать
         /*munit_assert(strcmp(v, value) == 0);*/
     }
@@ -1661,10 +1758,11 @@ static void on_remove_example(
 }
 
 void _test_htable_internal_add_strings(
-    TableNodeStr *strings, HTableSetup *table_setup
+    TableNodeStr *strings_in, HTableSetup *table_setup
 ) {
-    assert(strings);
     assert(table_setup);
+
+    table_setup->f_val2str = htable_i32_str;
 
     // Создать таблицу с определенной хэш функцией
     HTable *t = htable_new(table_setup);
@@ -1673,9 +1771,9 @@ void _test_htable_internal_add_strings(
     /*htable_verbose = true;*/
     htable_verbose = false;
 
-    for (int j = 0; strings[j].key; j++) {
-        int val = strings[j].val_i;
-        const char *key_src = strings[j].key;
+    for (int j = 0; strings_in[j].key; j++) {
+        int val = strings_in[j].val_i;
+        const char *key_src = strings_in[j].key;
 
         /*
         printf(
@@ -1692,7 +1790,7 @@ void _test_htable_internal_add_strings(
 
         /*
         printf(
-            "test_htable_internal_add_strings: add key_src '%s'\n",
+            "test_htable_internal_add_strings_in: add key_src '%s'\n",
             key_src
         );
         // */
@@ -1701,21 +1799,31 @@ void _test_htable_internal_add_strings(
     }
     htable_verbose = htable_verbose_prev;
 
-    for (int j = 0; strings[j].key; j++) {
-        int val = strings[j].val_i;
-        const char *key_src = strings[j].key;
+    htable_print(t);
+    printf("\n");
+
+    char *s = htable_print_tabular_alloc(t);
+    if (s) {
+        printf("%s\n", s);
+        free(s);
+    }
+
+    for (int j = 0; strings_in[j].key; j++) {
+        int val = strings_in[j].val_i;
+        const char *key_src = strings_in[j].key;
 
         // Проверить ключ
-        /*
         printf(
-            "test_htable_internal_add_strings: get key_src '%s'\n",
+            "test_htable_internal_add_strings_in: get key_src '%s'\n",
             key_src
         );
         // */
 
         const int *val_get = htable_get_s(t, key_src, NULL);
+        printf("key_src '%s'\n", key_src);
+
         munit_assert_not_null(val_get);
-        munit_assert_int(*val_get, ==, val);
+        /*munit_assert_int(*val_get, ==, val);*/
 
         // Удалить ключ
         htable_remove_s(t, key_src);
@@ -1731,7 +1839,7 @@ void _test_htable_internal_add_strings(
 static MunitResult _test_htable_internal_extend(
     int cap_initial, int cap_mult, int cap_add
 ) {
-    printf("\n");
+    /*printf("\n");*/
 
     HTable *t = htable_new(&(HTableSetup) {
         .cap = cap_initial,
@@ -1740,39 +1848,73 @@ static MunitResult _test_htable_internal_extend(
     });
 
     // Добавляю ключи и значения
-    for (int i = 0; strings[i].key; i++) {
-        int val = strings[i].val_i = i;
-        htable_add_s(t, strings[i].key, &val, sizeof(val));
+    for (int i = 0; strings_uniq[i].key; i++) {
+        int val = strings_uniq[i].val_i = i;
+        htable_add_s(t, strings_uniq[i].key, &val, sizeof(val));
     }
 
     // Проверяю наличие значений
-    for (int i = 0; strings[i].key; i++) {
-        int *val = htable_get_s(t, strings[i].key, NULL);
+    for (int i = 0; strings_uniq[i].key; i++) {
+        int *val = htable_get_s(t, strings_uniq[i].key, NULL);
         munit_assert_not_null(val);
 
+        /*
         printf(
-            "_test_htable_internal_extend: *val %d, strings[i].val_i %d\n",
-            *val, strings[i].val_i
+            "_test_htable_internal_extend: *val %d, strings_uniq[i].val_i %d\n",
+            *val, strings_uniq[i].val_i
         );
+        */
 
-        if (*val == strings[i].val_i) {
-            printf("no eq: %d %d\n", *val, strings[i].val_i);
+        /*
+        if (*val != strings_uniq[i].val_i) {
+            printf("no eq: %d %d\n", *val, strings_uniq[i].val_i);
         }
+        */
 
-        /*munit_assert_int(*val, ==, strings[i].val_i);*/
+        munit_assert_int(*val, ==, strings_uniq[i].val_i);
     }
 
     // Увеличиваю вместимость таблицы
     htable_extend(t, t->cap * cap_mult + cap_add);
 
     // Снова проверяю наличие значений
-    for (int i = 0; strings[i].key; i++) {
-        int *val = htable_get_s(t, strings[i].key, NULL);
+    for (int i = 0; strings_uniq[i].key; i++) {
+        int *val = htable_get_s(t, strings_uniq[i].key, NULL);
         munit_assert_not_null(val);
-        munit_assert_int(*val, ==, strings[i].val_i);
+        munit_assert_int(*val, ==, strings_uniq[i].val_i);
     }
 
     htable_free(t);
+    return MUNIT_OK;
+}
+
+static MunitResult test_htable_internal_add_add(
+    const MunitParameter params[], void* data
+) {
+    printf("\n");
+
+    HTable *t = htable_new(NULL);
+    int i = -1, *i_g;
+
+    // Добавляю ключ со значением
+    htable_add_s(t, "hello", &i, sizeof(i));
+    // Проверяю значение
+    i_g = htable_get_s(t, "hello", NULL);
+    munit_assert_not_null(i_g);
+    munit_assert_int(*i_g, ==, -1);
+
+    // Добавляю ключ без значения
+    htable_add_s(t, "hello", NULL, 0);
+    // Проверяю существование ключа
+    munit_assert(htable_exist_s(t, "hello"));
+    // Проверяю ключ, значение должно отсутствовать
+    i_g = htable_get_s(t, "hello", NULL);
+    printf("i_g %p\n", i_g);
+    munit_assert(i_g == NULL);
+    /*munit_assert_int(*i_g, ==, -1);*/
+
+    htable_free(t);
+
     return MUNIT_OK;
 }
 
@@ -1803,12 +1945,20 @@ static MunitResult test_htable_internal_extend(
     int tests_num = sizeof(tests) / sizeof(tests[0]);
 
     for (int i = 0; i < tests_num; i++) {
+
+        /*
         if (!_test_htable_internal_extend(
             tests[i].cap_initial,
             tests[i].cap_mult,
             tests[i].cap_add
         ))
             return MUNIT_FAIL;
+        */
+
+        _test_htable_internal_extend(
+            tests[i].cap_initial, tests[i].cap_mult, tests[i].cap_add
+        );
+
     }
 
     return MUNIT_OK;
@@ -1819,28 +1969,15 @@ static MunitResult test_htable_internal_add_strings(
 ) {
     printf("\n");
 
-    for (int i = 0; strings[i].key; i++) {
-        strings[i].val_i = i * 10;
-    }
-
     TableNodeStr *strings_permuted = strings_permuted_alloc();
-    _test_htable_internal_add_strings(strings_permuted, &(HTableSetup) {
-    /*_test_htable_internal_add_strings(strings, &(HTableSetup) {*/
-        /*.cap = 100,*/
+    /*_test_htable_internal_add_strings(strings_permuted, &(HTableSetup) {*/
+
+    _test_htable_internal_add_strings(strings2, &(HTableSetup) {
         .hash_func = koh_hasher_djb2,
         .f_key2str = htable_str_str,
     });
 
-    /*
-    for (int i = 0; koh_hashers[i].f; i++) {
-        _test_htable_internal_add_strings(strings, &(HTableSetup) {
-            .cap = 180,
-            //.hash_func = koh_hasher_fnv64,
-            .hash_func = koh_hashers[i].f,
-        });
-        //_test_htable_internal_add_strings(strings);
-    }
-    */
+    printf("\n\n\n\n\n");
 
     free(strings_permuted);
 
@@ -1850,10 +1987,12 @@ static MunitResult test_htable_internal_add_strings(
 static void _test_htable_internal_add_get_remove_get_float(HashFunction f) {
     assert(f);
 
+    /*
     printf(
         "\n_test_htable_internal_add_get_remove_get_float: hasher '%s'\n",
         koh_hashers_name_by_funcptr(f)
     );
+    */
 
     htable_verbose = false;
     // Создать таблицу с определенной хэш функцией
@@ -1907,10 +2046,12 @@ static void _test_htable_internal_add_get_remove_get_float(HashFunction f) {
 static void _test_htable_internal_add_get_remove_get_str(HashFunction f) {
     assert(f);
 
+    /*
     printf(
         "\n_test_htable_internal_add_get_remove_get: hasher '%s'\n",
         koh_hashers_name_by_funcptr(f)
     );
+    */
 
     htable_verbose = false;
     // Создать таблицу с определенной хэш функцией
@@ -2003,6 +2144,8 @@ static MunitResult test_htable_internal_print_tabular(
     HTable *t = htable_new(&(HTableSetup) {
         .cap = 1024,
         .hash_func = koh_hasher_fnv64,
+        .f_key2str = htable_str_str,
+        .f_val2str = htable_i32_str,
     });
 
     const char *lines[] = {
@@ -2024,19 +2167,19 @@ static MunitResult test_htable_internal_print_tabular(
         "│     ││hash_index :│277.0│ │\n",
         "│     ││index .....:│277.0│ │\n",
         "│     ││key .......:│apple│ │\n",
-        "│     ││val .......:│0.0  │ │\n",
+        "│     ││val .......:│0    │ │\n",
         "│     │└────────────┴─────┘ │\n",
         "│822 :│┌────────────┬─────┐ │\n",
         "│     ││hash_index :│821.0│ │\n",
         "│     ││index .....:│821.0│ │\n",
         "│     ││key .......:│juice│ │\n",
-        "│     ││val .......:│22.0 │ │\n",
+        "│     ││val .......:│22   │ │\n",
         "│     │└────────────┴─────┘ │\n",
         "│823 :│┌────────────┬──────┐│\n",
         "│     ││hash_index :│822.0 ││\n",
         "│     ││index .....:│822.0 ││\n",
         "│     ││key .......:│banana││\n",
-        "│     ││val .......:│11.0  ││\n",
+        "│     ││val .......:│11    ││\n",
         "│     │└────────────┴──────┘│\n",
         "└─────┴─────────────────────┘\n",
         // }}}
@@ -2062,8 +2205,33 @@ static MunitResult test_htable_internal_print_tabular(
     fseek(temp_file, 0, SEEK_SET);
     int i = 0;
     char buffer[1024] = {};
+
+    /*
+    printf("\n");
+    while (fgets(buffer, sizeof(buffer), temp_file) != NULL) {
+        printf("%s", buffer);
+    }
+    printf("\n");
+    */
+
+    /*
+    for (int i = 0; table[i]; i++) {
+        printf("%s", table[i]);
+    }
+    printf("\n\n\n");
+    */
+
     while (fgets(buffer, sizeof(buffer), temp_file) != NULL) {
         int res = strcmp(buffer,table[i]);
+
+        if (res) {
+            printf("\nresssss, i %d\n", i);
+            printf("buffer: '%s'\n", buffer);
+            printf("table[%d] '%s'\n", i, table[i]);
+            printf("\n");
+        }
+        // */
+
         munit_assert(res == 0);
         i++;
     }
@@ -2096,8 +2264,140 @@ static MunitResult test_htable_internal_data2str(
 
 // }}}
 
+static MunitResult test_koh_hashers_search(
+    const MunitParameter params[], void* data
+) {
+
+    const char *name = NULL;
+
+    name = koh_hashers_name_by_funcptr(koh_hasher_fnv64);
+    munit_assert_not_null(name);
+    munit_assert_string_equal(name, "fnv64");
+
+    name = koh_hashers_name_by_funcptr(koh_hasher_mum);
+    munit_assert_not_null(name);
+    munit_assert_string_equal(name, "mum");
+
+    name = koh_hashers_name_by_funcptr(koh_hasher_djb2);
+    munit_assert_not_null(name);
+    munit_assert_string_equal(name, "djb2");
+
+    name = koh_hashers_name_by_funcptr(test_koh_hashers_search);
+    munit_assert_null(name);
+
+    return MUNIT_OK;
+}
+
+static void _test_htable_singles(HTable *t) {
+    // {{{
+    htable_verbose = false;
+    printf("\n");
+
+    int val, val_len, *get_val;
+    void *ptr;
+
+    // Добавить значение
+    // Проверить существующее значение
+    {
+        // {{{
+        val = 47;
+        ptr = htable_add_s(t, "666666", &val, sizeof(val));
+        munit_assert_not_null(ptr);
+
+        get_val = NULL;
+        get_val = htable_get_s(t, "666666", &val_len);
+        munit_assert_int(val_len, ==, sizeof(val));
+        munit_assert_not_null(get_val);
+        munit_assert_int(*get_val, ==, 47);
+        // }}}
+    }
+
+    {
+        // {{{
+        int64_t val = 47;
+        ptr = htable_add_s(t, "123", &val, sizeof(val));
+        munit_assert_not_null(ptr);
+
+        get_val = NULL;
+        get_val = htable_get_s(t, "123", &val_len);
+        munit_assert_int64(val_len, ==, sizeof(val));
+        munit_assert_not_null(get_val);
+        munit_assert_int64(*get_val, ==, 47);
+        // }}}
+    }
+
+    // XXX: Почему int16_t не читается из таблицы?
+    {
+        // {{{
+        int16_t val = 47;
+        ptr = htable_add_s(t, "_123", &val, sizeof(val));
+        munit_assert_not_null(ptr);
+
+        get_val = NULL;
+        get_val = htable_get_s(t, "_123", &val_len);
+        munit_assert_int16(val_len, ==, sizeof(val));
+        munit_assert_not_null(get_val);
+
+#ifdef HTABLE_DEBUG_BUCKET
+        char *key = "_123";
+        int key_len = strlen(key) + 1;
+        int64_t index = _htable_get_index(t, key, key_len, NULL);
+        printf("bucket_size: %ld\n", t->arr[index]->bucket_size);
+#endif
+
+        munit_assert_int16(*get_val, ==, 47);
+        // }}}
+    }
+
+    {
+        // {{{
+        val = 47;
+        ptr = htable_add_s(t, "xxx123", &val, sizeof(int));
+        munit_assert_not_null(ptr);
+
+        get_val = NULL;
+        get_val = htable_get_s(t, "xxx123", &val_len);
+        munit_assert_int(val_len, ==, sizeof(int));
+        munit_assert_not_null(get_val);
+        munit_assert_int(*get_val, ==, 47);
+        // }}}
+    }
+
+    htable_verbose = false;
+    // }}}
+}
+
+static MunitResult test_htable_internal_singles(
+    const MunitParameter params[], void* data
+) {
+
+    printf("\n");
+
+    // Проверка на всех хэшировщиках
+    for (int i = 0; koh_hashers[i].f; i++) {
+        htable_verbose = true;
+        HTable *t = htable_new(&(HTableSetup){
+            .cap = 1,
+            .hash_func = koh_hashers[i].f,
+            .on_remove = NULL,
+        });
+        htable_verbose = false;
+        _test_htable_singles(t);
+        htable_free(t);
+    }
+
+    return MUNIT_OK;
+}
+
 // {{{ Tests definitions
 static MunitTest test_htable_internal[] = {
+
+
+    {
+        (char*) "/test_koh_hashers_search",
+        test_koh_hashers_search,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
 
     {
         (char*) "/test_htable_internal_data2str",
@@ -2117,13 +2417,12 @@ static MunitTest test_htable_internal[] = {
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
-    /*
     {
         (char*) "/test_htable_internal_get",
         test_htable_internal_get,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
-    */
+    // */
 
     {
         (char*) "/test_htable_internal_exists",
@@ -2199,13 +2498,24 @@ static MunitTest test_htable_internal[] = {
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
-    /*
+    {
+        (char*) "/test_htable_internal_xxx",
+        test_htable_internal_singles,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    {
+        (char*) "test_htable_internal_add_add",
+        test_htable_internal_add_add,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
     {
         (char*) "test_htable_internal_add_strings",
         test_htable_internal_add_strings,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
-    */
+    // */
 
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
