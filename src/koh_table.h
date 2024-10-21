@@ -27,8 +27,6 @@ typedef const char *(*HTableData2Str)(const void *data, int data_len);
 typedef struct HTableSetup {
     HTableOnRemove  on_remove;
     HashFunction    hash_func;
-    // TODO: Сделать заготовки для вывода строк, целых чисел и 
-    // чисел с плавающей запятой
     HTableData2Str  f_key2str, f_val2str;
     int64_t         cap;
     void            *userdata;
@@ -36,17 +34,24 @@ typedef struct HTableSetup {
 
 // TODO: ВОзможность хранения ключей без значений(множество)
 
-
-// Добавляет значение по ключу в таблицу. Возвращает указатель на скопированные 
-// внутрь данные значения. Если длина значения равно нулю или указатель на
-// значение пустой, то функция возвращает NULL.
+// Добавляет значение по ключу в таблицу. 
+// Возвращает указатель на скопированные внутрь данные значения. 
+// Если длина значения равно нулю или указатель на значение пустой, то функция 
+// возвращает NULL.
 void *htable_add(
     HTable *ht, const void *key, int key_len, const void *value, int value_len
 );
 void *htable_add_s(HTable *ht, const char *key, void *value, int value_len);
-// TODO: Разместить реализацию в заголовочном файле
-// static inline
-void *htable_add_f32(HTable *ht, float key, void *value, int value_len);
+
+static inline void *htable_add_f32(
+    HTable *ht, float key, void *value, int value_len
+);
+static inline void *htable_add_i32(
+    HTable *ht, int key, void *value, int value_len
+);
+static inline void *htable_add_i64(
+    HTable *ht, int64_t key, void *value, int value_len
+);
 
 // Доступ к элементам
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len);
@@ -62,9 +67,13 @@ bool htable_exist_s(HTable *ht, const char *key);
 HTable *htable_new(HTableSetup *setup);
 void htable_free(HTable *ht);
 
-void htable_remove(HTable *ht, const void *key, int key_len);
-void htable_remove_s(HTable *ht, const char *key);
-static inline void htable_remove_f32(HTable *ht, float key);
+// Возвращает истину если ключ был найден в таблице и удален.
+bool htable_remove(HTable *ht, const void *key, int key_len);
+bool htable_remove_s(HTable *ht, const char *key);
+
+static inline bool htable_remove_f32(HTable *ht, float key);
+static inline bool htable_remove_i32(HTable *ht, int key);
+static inline bool htable_remove_i64(HTable *ht, int64_t key);
 
 void htable_print(HTable *ht);
 void htable_fprint(HTable *ht, FILE *f);
@@ -81,9 +90,12 @@ bool htable_load(HTable *ht, const char *lua_code);
 
 // Возвращает новую таблицу, объединяя а и б. 
 // Если ключи равны, то берется значение из a
+// Параметры новой таблицы (функция хэширования, преобразователи ключей,
+// функции удаления, указатель на пользовательские данные) берутся из a
 HTable *htable_union(HTable *a, HTable *b);
+
 // Возвращает новую таблицу равную разности a - b
-HTable *htable_subtract(HTable *a, HTable *b);
+/*HTable *htable_subtract(HTable *a, HTable *b);*/
 
 void htable_each(HTable *ht, HTableEachCallback cb, void *udata);
 
@@ -125,10 +137,6 @@ KOH_INLINE_ITER void *htable_iter_value(HTableIterator *i, int *value_len);
 
 extern bool htable_verbose;
 extern MunitSuite test_htable_suite_internal;
-
-static inline void htable_remove_f32(HTable *ht, float key) {
-    htable_remove(ht, &key, sizeof(key));
-}
 
 // {{{ Функции конверторы данных
 static inline const char *htable_i32_str(const void *data, int len) {
@@ -172,4 +180,32 @@ static inline const char *htable_char_str(const void *data, int len) {
 }
 // }}}
 
+// {{{ Inlines
+static inline void *htable_add_f32(HTable *ht, float key, void *value, int value_len) {
+    return htable_add(ht, &key, sizeof(key), value, value_len);
+}
 
+static inline void *htable_add_i32(
+    HTable *ht, int key, void *value, int value_len
+) {
+    return htable_add(ht, &key, sizeof(key), value, value_len);
+}
+
+static inline void *htable_add_i64(
+    HTable *ht, int64_t key, void *value, int value_len
+) {
+    return htable_add(ht, &key, sizeof(key), value, value_len);
+}
+
+static inline bool htable_remove_f32(HTable *ht, float key) {
+    return htable_remove(ht, &key, sizeof(key));
+}
+
+static inline bool htable_remove_i64(HTable *ht, int64_t key) {
+    return htable_remove(ht, &key, sizeof(key));
+}
+
+static inline bool htable_remove_i32(HTable *ht, int key) {
+    return htable_remove(ht, &key, sizeof(key));
+}
+// }}} 

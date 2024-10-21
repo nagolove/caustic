@@ -441,17 +441,6 @@ void *htable_add_s(HTable *ht, const char *key, void *value, int value_len) {
     return htable_add(ht, key, strlen(key) + 1, value, value_len);
 }
 
-void *htable_add_f32(HTable *ht, float key, void *value, int value_len) {
-    if (value_len == 4) {
-        if (htable_verbose)
-            printf(
-                "htable_add_f32: key %e, value %d, value_len %d\n",
-                key, *(int*)value, value_len
-            );
-    }
-    return htable_add(ht, &key, sizeof(key), value, value_len);
-}
-
 void htable_clear(HTable *ht) {
     for (int64_t k = 0; k < ht->cap; k++) {
         bucket_free(ht, k);
@@ -687,16 +676,18 @@ void _htable_remove(HTable *ht, int64_t remove_index) {
     ht->taken--;
 }
 
-void htable_remove(HTable *ht, const void *key, int key_len) {
+bool htable_remove(HTable *ht, const void *key, int key_len) {
     assert(ht);
     int64_t index = _htable_get_index(ht, key, key_len, NULL);
     if (index != INT64_MAX) {
         _htable_remove(ht, index);
+        return true;
     }
+    return false;
 }
 
-void htable_remove_s(HTable *ht, const char *key) {
-    htable_remove(ht, key, strlen(key) + 1);
+bool htable_remove_s(HTable *ht, const char *key) {
+    return htable_remove(ht, key, strlen(key) + 1);
 }
 
 int64_t htable_count(HTable *ht) {
@@ -709,6 +700,56 @@ int64_t htable_count(HTable *ht) {
 
 void htable_shrink(HTable *ht) {
     // XXX: Здесь ничего и никого..
+}
+
+HTable *htable_union(HTable *a, HTable *b) {
+    htable_assert(a);
+    htable_assert(b);
+
+    HTableSetup u_setup = {
+        .hash_func = a->f_hash,
+        .f_val2str = a->f_val2str,
+        .f_key2str = a->f_key2str,
+        .userdata = a->userdata,
+        .on_remove = a->f_on_remove,
+    };
+    
+    HTable *u = htable_new(&u_setup);
+    assert(u);
+
+    HTableIterator i;
+
+    i = htable_iter_new(a);
+    // Для все ключей A
+    for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+        int key_len = -1;
+        void *key = htable_iter_key(&i, &key_len);
+
+        int value_len = -1;
+        void *value = htable_iter_value(&i, &value_len);
+
+        // Если ключа нету в B, то добавляю в U
+        if (!htable_exist(b, key, key_len)) {
+            htable_add(u, key, key_len, value, value_len);
+        }
+    }
+
+    i = htable_iter_new(b);
+    // Для все ключей B
+    for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+        int key_len = -1;
+        void *key = htable_iter_key(&i, &key_len);
+
+        int value_len = -1;
+        void *value = htable_iter_value(&i, &value_len);
+
+        // Если ключа нету в A, то добавляю в U
+        if (!htable_exist(a, key, key_len)) {
+            htable_add(u, key, key_len, value, value_len);
+        }
+    }
+
+    return u;
 }
 
 static inline void htable_iter_assert(HTableIterator *i) {
@@ -1722,8 +1763,11 @@ static MunitResult test_htable_internal_bucket_allocation(
         p += sizeof(buck->value_len);
 
         char *k = p;
-        /*printf("strcmp %d, k '%s'\n", strcmp(k, key), k);*/
-        munit_assert(strcmp(k, key) == 0);
+        printf("strcmp %d, k '%s', key '%s'\n", strcmp(k, key), k, key);
+        munit_assert(strcmp(bucket_get_key(buck), key) == 0);
+
+        // XXX: Не работает при HTABLE_DEBUG_BUCKET, почему?
+        /*munit_assert(strcmp(k, key) == 0);*/
 
         p += key_len + 0;
 
@@ -1960,6 +2004,71 @@ static MunitResult test_htable_internal_extend(
         );
 
     }
+
+    return MUNIT_OK;
+}
+
+static MunitResult test_htable_internal_union(
+    const MunitParameter params[], void* data
+) {
+    printf("\n");
+
+    struct {
+        char *line;
+        int payload;
+    }  a[] = {
+        { "1", 1, },
+        { "2", 2, },
+        { "3", 3, },
+        { NULL, },
+    }, b[] = {
+        { "1", -1, },
+        { "2", -2, },
+        { "4", 4, },
+        { NULL, },
+    }, a_b[] = {
+        { "1", 1, },
+        { "2", 2, },
+        { "3", 3, },
+        { "4", 4, },
+        { NULL, },
+    }, b_a[] = {
+        { "1", -1, },
+        { "2", -2, },
+        { "3", 3, },
+        { "4", 4, },
+        { NULL, },
+    };
+
+    HTable *ta = htable_new(NULL),
+           *tb = htable_new(NULL),
+           *tab = NULL,
+           *tba = NULL;
+
+    for (int i = 0; a[i].line; i++) {
+        htable_add_s(ta, a[i].line, &a[i].payload, sizeof(a[i].payload));
+    }
+    for (int i = 0; b[i].line; i++) {
+        htable_add_s(ta, b[i].line, &b[i].payload, sizeof(b[i].payload));
+    }
+
+    tab = htable_union(ta, tb);
+    tba = htable_union(tb, ta);
+
+    // Дилемма - пройтись по массиву и проверить содержимое таблицы или
+    // пройтись по таблице, проверяя содержимое массива?
+    for (int i = 0; a_b[i].line; i++) {
+        munit_assert(htable_exist_s(tab, a_b[i].line));
+    }
+
+    for (int i = 0; b_a[i].line; i++) {
+        munit_assert(htable_exist_s(tba, b_a[i].line));
+    }
+
+    htable_free(ta);
+    htable_free(tb);
+    htable_free(tab);
+    htable_free(tba);
 
     return MUNIT_OK;
 }
@@ -2293,13 +2402,13 @@ static void _test_htable_singles(HTable *t) {
     htable_verbose = false;
     printf("\n");
 
-    int val, val_len, *get_val;
-    void *ptr;
-
-    // Добавить значение
+    // Добавить значение размера int(4)
     // Проверить существующее значение
     {
         // {{{
+        int val, val_len, *get_val;
+        void *ptr;
+
         val = 47;
         ptr = htable_add_s(t, "666666", &val, sizeof(val));
         munit_assert_not_null(ptr);
@@ -2312,9 +2421,14 @@ static void _test_htable_singles(HTable *t) {
         // }}}
     }
 
+    // Добавить значение размера int64_t(8)
+    // Проверить существующее значение
     {
         // {{{
-        int64_t val = 47;
+        int64_t val = 47, *get_val;
+        int val_len = 0;
+        void *ptr;
+
         ptr = htable_add_s(t, "123", &val, sizeof(val));
         munit_assert_not_null(ptr);
 
@@ -2327,9 +2441,14 @@ static void _test_htable_singles(HTable *t) {
     }
 
     // XXX: Почему int16_t не читается из таблицы?
+    // Добавить значение размера int16_t(2)
+    // Проверить существующее значение
     {
         // {{{
-        int16_t val = 47;
+        int16_t val = 47, *get_val;
+        int val_len = 0;
+        void *ptr;
+
         ptr = htable_add_s(t, "_123", &val, sizeof(val));
         munit_assert_not_null(ptr);
 
@@ -2349,7 +2468,13 @@ static void _test_htable_singles(HTable *t) {
         // }}}
     }
 
+    // Добавить ключ и значение размера int(4)
+    // Проверить ключ и значение
+    // Удалить ключ и значени
+    // Проверить ключ и значение
     {
+        int val, val_len, *get_val;
+        void *ptr;
         // {{{
         val = 47;
         ptr = htable_add_s(t, "xxx123", &val, sizeof(int));
@@ -2360,8 +2485,15 @@ static void _test_htable_singles(HTable *t) {
         munit_assert_int(val_len, ==, sizeof(int));
         munit_assert_not_null(get_val);
         munit_assert_int(*get_val, ==, 47);
+
+        htable_remove_s(t, "xxx123");
+        val_len = -1;
+        get_val = htable_get_s(t, "xxx123", &val_len);
+        munit_assert_int(val_len, ==, -1);
+        munit_assert_null(get_val);
         // }}}
     }
+    // */
 
     htable_verbose = false;
     // }}}
@@ -2392,129 +2524,135 @@ static MunitResult test_htable_internal_singles(
 // {{{ Tests definitions
 static MunitTest test_htable_internal[] = {
 
-
     {
-        (char*) "/test_koh_hashers_search",
+        "/test_koh_hashers_search",
         test_koh_hashers_search,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_data2str",
+        "/test_htable_internal_data2str",
         test_htable_internal_data2str,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_strings_find",
+        "/test_htable_internal_strings_find",
         test_htable_internal_strings_find,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_new_free",
+        "/test_htable_internal_new_free",
         test_htable_internal_new_free,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_get",
+        "/test_htable_internal_get",
         test_htable_internal_get,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
     // */
 
     {
-        (char*) "/test_htable_internal_exists",
+        "/test_htable_internal_exists",
         test_htable_internal_exists,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
 
     {
-        (char*) "/test_htable_internal_get2",
+        "/test_htable_internal_get2",
         test_htable_internal_get2,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_print_tabular",
+        "/test_htable_internal_print_tabular",
         test_htable_internal_print_tabular,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_bucket_allocation",
+        "/test_htable_internal_bucket_allocation",
         test_htable_internal_bucket_allocation,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_bucket_allocation2",
+        "/test_htable_internal_bucket_allocation2",
         test_htable_internal_bucket_allocation2,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_iterator1",
+        "/test_htable_internal_iterator1",
         test_htable_internal_iterator1,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
 
     {
-        (char*) "/test_htable_internal_iterator2",
+        "/test_htable_internal_iterator2",
         test_htable_internal_iterator2,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_iterator3",
+        "/test_htable_internal_iterator3",
         test_htable_internal_iterator3,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_iterator4",
+        "/test_htable_internal_iterator4",
         test_htable_internal_iterator4,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "test_htable_internal_add_get_remove_get_float",
+        "test_htable_internal_add_get_remove_get_float",
         test_htable_internal_add_get_remove_get_float,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "test_htable_internal_add_get_remove_get_str",
+        "test_htable_internal_add_get_remove_get_str",
         test_htable_internal_add_get_remove_get_str,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "test_htable_internal_extend",
+        "test_htable_internal_extend",
         test_htable_internal_extend,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "/test_htable_internal_xxx",
+        "/test_htable_internal_xxx",
         test_htable_internal_singles,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "test_htable_internal_add_add",
+        "test_htable_internal_add_add",
         test_htable_internal_add_add,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
     {
-        (char*) "test_htable_internal_add_strings",
+        "test_htable_internal_add_strings",
         test_htable_internal_add_strings,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
+
+    {
+        "/test_htable_internal_union",
+        test_htable_internal_union,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
     // */
 
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
