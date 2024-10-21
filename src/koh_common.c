@@ -1801,8 +1801,11 @@ const char * koh_backtrace_get() {
 char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
     assert(verts);
     assert(num >= 0);
-    const int vert_buf_sz = 32;
-    size_t sz = vert_buf_sz * sizeof(char) * num;
+    
+    // Количество байт на одно строковое представление Vector2?
+    const int vert_buf_sz = 64; 
+    size_t sz = vert_buf_sz * num;
+
     char *buf = malloc(sz);
     assert(buf);
     char *pbuf = buf;
