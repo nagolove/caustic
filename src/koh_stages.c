@@ -342,7 +342,14 @@ void stages_gui_window(StagesStore *ss) {
     bool opened = true;
     ImGuiWindowFlags flags = //ImGuiWindowFlags_NoResize |
                              ImGuiWindowFlags_AlwaysAutoResize; 
-    igBegin("stages window", &opened, flags);
+    char buf[128] = {};
+    if (ss->cur) {
+        sprintf(buf, "stages window - '%.64s'", ss->cur->name);
+    } else {
+        sprintf(buf, "stages window");
+    }
+
+    igBegin(buf, &opened, flags);
 
     igText("active stage: %s", ss->cur ? ss->cur->name : NULL);
 
