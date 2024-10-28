@@ -64,6 +64,9 @@ void *htable_get_f32(HTable *ht, float key, int *value_len);
 bool htable_exist(HTable *ht, const void *key, int key_len);
 bool htable_exist_s(HTable *ht, const char *key);
 
+bool htable_compare_keys(HTable *t1, HTable *t2);
+
+
 HTable *htable_new(HTableSetup *setup);
 void htable_free(HTable *ht);
 

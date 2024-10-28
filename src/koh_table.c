@@ -840,6 +840,25 @@ KOH_INLINE void *htable_iter_value(HTableIterator *i, int *value_len) {
     return NULL;
 }
 
+bool htable_compare_keys(HTable *t1, HTable *t2) {
+    htable_assert(t1);
+    htable_assert(t2);
+
+    if (htable_count(t1) != htable_count(t2)) 
+        return false;
+
+    HTableIterator i = htable_iter_new(t1);
+    for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+        int key_len = 0;
+        void *key = htable_iter_key(&i, &key_len);
+
+        if (!htable_exist(t2, key, key_len))
+            return false;
+    }
+
+    return true;
+}
+
 // {{{ Tests code
 
 typedef struct TableNodeStr {
@@ -1493,10 +1512,12 @@ static MunitResult test_htable_internal_get2(
             /*printf("--------------------\n");*/
 
             if (!htable_exist_s(t, strings[i].key)) {
+                /*
                 printf(
                     "test_htable_internal_get2: key '%s' does not exists\n",
                     strings[i].key
                 );
+                */
             }
             /*munit_assert(htable_exist_s(t, strings[i].key) == true);*/
         }
@@ -1593,7 +1614,7 @@ static MunitResult test_htable_internal_iterator2(
 
 static void htable_iter_print(HTableIterator *i) {
     htable_iter_assert(i);
-    printf("index %ld, cap %ld\n", i->index, i->t->cap);
+    //printf("index %ld, cap %ld\n", i->index, i->t->cap);
 }
 
 // Проход по таблице из одного элемента
@@ -1763,7 +1784,7 @@ static MunitResult test_htable_internal_bucket_allocation(
         p += sizeof(buck->value_len);
 
         char *k = p;
-        printf("strcmp %d, k '%s', key '%s'\n", strcmp(k, key), k, key);
+        //printf("strcmp %d, k '%s', key '%s'\n", strcmp(k, key), k, key);
         munit_assert(strcmp(bucket_get_key(buck), key) == 0);
 
         // XXX: Не работает при HTABLE_DEBUG_BUCKET, почему?
@@ -1843,20 +1864,25 @@ void _test_htable_internal_add_strings(
     }
     htable_verbose = htable_verbose_prev;
 
-    htable_print(t);
+    //htable_print(t);
+
     printf("\n");
 
+    /*
     char *s = htable_print_tabular_alloc(t);
     if (s) {
         printf("%s\n", s);
         free(s);
     }
+    */
+
 
     for (int j = 0; strings_in[j].key; j++) {
         int val = strings_in[j].val_i;
         const char *key_src = strings_in[j].key;
 
         // Проверить ключ
+        /*
         printf(
             "test_htable_internal_add_strings_in: get key_src '%s'\n",
             key_src
@@ -1864,7 +1890,7 @@ void _test_htable_internal_add_strings(
         // */
 
         const int *val_get = htable_get_s(t, key_src, NULL);
-        printf("key_src '%s'\n", key_src);
+        //printf("key_src '%s'\n", key_src);
 
         munit_assert_not_null(val_get);
         /*munit_assert_int(*val_get, ==, val);*/
@@ -1953,7 +1979,7 @@ static MunitResult test_htable_internal_add_add(
     munit_assert(htable_exist_s(t, "hello"));
     // Проверяю ключ, значение должно отсутствовать
     i_g = htable_get_s(t, "hello", NULL);
-    printf("i_g %p\n", i_g);
+    /*printf("i_g %p\n", i_g);*/
     munit_assert(i_g == NULL);
     /*munit_assert_int(*i_g, ==, -1);*/
 
@@ -2373,6 +2399,116 @@ static MunitResult test_htable_internal_data2str(
 
 // }}}
 
+
+static MunitResult test_htable_internal_compare_keys(
+    const MunitParameter params[], void* data
+) {
+
+    // eq
+    {
+        HTable *t1 = htable_new(NULL), 
+               *t2 = htable_new(NULL);
+
+        munit_assert(htable_compare_keys(t1, t2));
+
+        htable_free(t1);
+        htable_free(t2);
+    }
+
+    // eq
+    {
+        HTable *t1 = htable_new(NULL), 
+               *t2 = htable_new(NULL);
+
+        char *lines[] = {
+            "1", "2", "3", "banama", NULL,
+        };
+
+        for (int i = 0; lines[i]; i++) {
+            htable_add_s(t1, lines[i], NULL, 0);
+            htable_add_s(t2, lines[i], NULL, 0);
+        }
+
+        munit_assert(htable_compare_keys(t1, t2));
+
+        htable_free(t1);
+        htable_free(t2);
+    }
+        
+    // eq
+    {
+        HTable *t1 = htable_new(NULL), 
+               *t2 = htable_new(NULL);
+
+        char *lines1[] = {
+            "1", "2", "3", "banama", NULL,
+        }, *lines2[] = {
+            "2", "3", "1", "3", "banama", NULL,
+        };
+
+        for (int i = 0; lines1[i]; i++)
+            htable_add_s(t1, lines1[i], NULL, 0);
+
+        for (int i = 0; lines2[i]; i++) 
+            htable_add_s(t2, lines2[i], NULL, 0);
+
+        munit_assert(htable_compare_keys(t1, t2));
+
+        htable_free(t1);
+        htable_free(t2);
+    }
+
+    // not eq
+    {
+        HTable *t1 = htable_new(NULL), 
+               *t2 = htable_new(NULL);
+
+        char *lines1[] = {
+            "1", "2", "3", "banama", NULL,
+        }, *lines2[] = {
+            "_", "1", "2", "3", "banama", NULL,
+        };
+
+
+        for (int i = 0; lines1[i]; i++)
+            htable_add_s(t1, lines1[i], NULL, 0);
+
+        for (int i = 0; lines2[i]; i++) 
+            htable_add_s(t2, lines2[i], NULL, 0);
+
+        munit_assert(!htable_compare_keys(t1, t2));
+
+        htable_free(t1);
+        htable_free(t2);
+    }
+        
+    // not eq
+    {
+        HTable *t1 = htable_new(NULL), 
+               *t2 = htable_new(NULL);
+
+        char *lines1[] = {
+            "+", "1", "2", "3", "banama", NULL,
+        }, *lines2[] = {
+            "_", "1", "2", "3", "banama", NULL,
+        };
+
+
+        for (int i = 0; lines1[i]; i++)
+            htable_add_s(t1, lines1[i], NULL, 0);
+
+        for (int i = 0; lines2[i]; i++) 
+            htable_add_s(t2, lines2[i], NULL, 0);
+
+        munit_assert(!htable_compare_keys(t1, t2));
+
+        htable_free(t1);
+        htable_free(t2);
+    }
+
+    return MUNIT_OK;
+}
+
 static MunitResult test_koh_hashers_search(
     const MunitParameter params[], void* data
 ) {
@@ -2650,6 +2786,12 @@ static MunitTest test_htable_internal[] = {
     {
         "/test_htable_internal_union",
         test_htable_internal_union,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    {
+        "/test_htable_internal_compare_keys",
+        test_htable_internal_compare_keys,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
