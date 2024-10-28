@@ -1819,6 +1819,7 @@ char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
 }
 
 static char *pixelformat2str[] = {
+    // {{{
     [PIXELFORMAT_UNCOMPRESSED_GRAYSCALE] = "PIXELFORMAT_UNCOMPRESSED_GRAYSCALE", // 8 bit per pixel (no alpha)
     [PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA] = "PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA",    // 8*2 bpp (2 channels)
     [PIXELFORMAT_UNCOMPRESSED_R5G6B5] = "PIXELFORMAT_UNCOMPRESSED_R5G6B5",        // 16 bpp
@@ -1843,6 +1844,7 @@ static char *pixelformat2str[] = {
     [PIXELFORMAT_COMPRESSED_PVRT_RGBA] = "PIXELFORMAT_COMPRESSED_PVRT_RGBA",       // 4 bpp
     [PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA] = "PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA",   // 8 bpp
     [PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA] = "PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA", // 2 bpp
+    // }}}
 };
 
 #define STR_NUM 8
