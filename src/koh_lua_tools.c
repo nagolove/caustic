@@ -176,7 +176,7 @@ void table_print(lua_State *lua, int idx) {
     L_table_print(lua, idx);
 }
 
-// TODO: Сделать рекурсивную распачатку таблицы
+// TODO: Сделать рекурсивную распeчатку таблицы
 char *L_table_get_print(
     lua_State *lua, int idx, const struct TablePrintOpts *opts
 ) {

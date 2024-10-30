@@ -79,7 +79,9 @@ char *table_get_print(
     lua_State *lua, int idx, const struct TablePrintOpts *opts
 );
 
-// XXX: Возвращается статическая или выделенная память?
+// Распечатывает значение со стека по указанному индексу в буфер. Возвращает
+// указатель на этот статический буфер.
+// TODO: Обработка переполнения буфера.
 char *L_table_get_print(
     lua_State *lua, int idx, const struct TablePrintOpts *opts
 );
