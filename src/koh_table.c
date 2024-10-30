@@ -1783,14 +1783,14 @@ static MunitResult test_htable_internal_bucket_allocation(
 
         p += sizeof(buck->value_len);
 
-        char *k = p;
+        //char *k = p;
         //printf("strcmp %d, k '%s', key '%s'\n", strcmp(k, key), k, key);
         munit_assert(strcmp(bucket_get_key(buck), key) == 0);
 
         // XXX: Не работает при HTABLE_DEBUG_BUCKET, почему?
         /*munit_assert(strcmp(k, key) == 0);*/
 
-        p += key_len + 0;
+        /*p += key_len + 0;*/
 
         /*char *v = p;*/
         /*printf("strcmp %d, v '%s'\n", strcmp(v, value), v);*/
