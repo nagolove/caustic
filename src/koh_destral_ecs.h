@@ -323,3 +323,6 @@ void de_storage_print(de_ecs *r, de_cp_type cp_type);
 de_cp_type **de_types(de_ecs *r, de_entity e, int *num);
 
 extern bool de_ecs_verbose;
+
+void de_cp_type_print(de_cp_type c);
+

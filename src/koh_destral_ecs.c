@@ -1672,3 +1672,15 @@ de_cp_type **de_types(de_ecs *r, de_entity e, int *num) {
 
     return types;
 }
+
+void de_cp_type_print(de_cp_type c) {
+        printf("component:\n");
+        printf("cp_id = %zu\n", c.cp_id);
+        printf("cp_sizeof = %zu\n", c.cp_sizeof);
+        printf("on_emplace = %p\n", c.on_emplace);
+        printf("on_destroy = %p\n", c.on_destroy);
+        printf("str_repr = %p\n", c.str_repr);
+        printf("name = '%s'\n", c.name);
+        printf("description = '%s'\n", c.description);
+        printf("initial_cap = %zu\n", c.initial_cap);
+}
