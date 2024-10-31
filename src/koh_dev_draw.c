@@ -192,7 +192,7 @@ void register_funcs() {
 static void traces_init() {
     traces = htable_new(&(struct HTableSetup) {
         .cap = 256,
-        .hash_func = koh_hasher_mum,
+        .f_hash = koh_hasher_mum,
     });
 }
 

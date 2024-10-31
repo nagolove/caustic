@@ -17,7 +17,7 @@ typedef enum HTableAction {
 typedef struct HTable HTable;
 
 typedef HTableAction (*HTableEachCallback)(
-    const void *key, int key_len, void *value, int value_len, void *udata
+    const void *key, int key_len, void *value, int value_len, void *userdata
 );
 typedef void (*HTableOnRemove)(
     const void *key, int key_len, void *value, int value_len, void *userdata
@@ -25,8 +25,8 @@ typedef void (*HTableOnRemove)(
 typedef const char *(*HTableData2Str)(const void *data, int data_len);
 
 typedef struct HTableSetup {
-    HTableOnRemove  on_remove;
-    HashFunction    hash_func;
+    HTableOnRemove  f_on_remove;
+    HashFunction    f_hash;
     HTableData2Str  f_key2str, f_val2str;
     int64_t         cap;
     void            *userdata;

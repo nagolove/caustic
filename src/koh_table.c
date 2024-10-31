@@ -613,8 +613,8 @@ HTable *htable_new(struct HTableSetup *setup) {
         ht->cap = 17;
 
     if (setup) {
-        ht->f_on_remove = setup->on_remove;
-        ht->f_hash = setup->hash_func;
+        ht->f_on_remove = setup->f_on_remove;
+        ht->f_hash = setup->f_hash;
         ht->f_key2str = setup->f_key2str;
         ht->f_val2str = setup->f_val2str;
     }
@@ -707,11 +707,11 @@ HTable *htable_union(HTable *a, HTable *b) {
     htable_assert(b);
 
     HTableSetup u_setup = {
-        .hash_func = a->f_hash,
+        .f_hash = a->f_hash,
         .f_val2str = a->f_val2str,
         .f_key2str = a->f_key2str,
         .userdata = a->userdata,
-        .on_remove = a->f_on_remove,
+        .f_on_remove = a->f_on_remove,
     };
     
     HTable *u = htable_new(&u_setup);
@@ -1878,7 +1878,7 @@ void _test_htable_internal_add_strings(
 
 
     for (int j = 0; strings_in[j].key; j++) {
-        int val = strings_in[j].val_i;
+        //int val = strings_in[j].val_i;
         const char *key_src = strings_in[j].key;
 
         // Проверить ключ
@@ -2108,7 +2108,7 @@ static MunitResult test_htable_internal_add_strings(
     /*_test_htable_internal_add_strings(strings_permuted, &(HTableSetup) {*/
 
     _test_htable_internal_add_strings(strings2, &(HTableSetup) {
-        .hash_func = koh_hasher_djb2,
+        .f_hash = koh_hasher_djb2,
         .f_key2str = htable_str_str,
     });
 
@@ -2132,7 +2132,7 @@ static void _test_htable_internal_add_get_remove_get_float(HashFunction f) {
     htable_verbose = false;
     // Создать таблицу с определенной хэш функцией
     HTable *t = htable_new(&(HTableSetup) {
-        .hash_func = f,
+        .f_hash = f,
         .f_key2str = htable_i32_str,
         .f_val2str = htable_i32_str,
     });
@@ -2191,9 +2191,9 @@ static void _test_htable_internal_add_get_remove_get_str(HashFunction f) {
     htable_verbose = false;
     // Создать таблицу с определенной хэш функцией
     HTable *t = htable_new(&(HTableSetup) {
-        .hash_func = f,
+        .f_hash = f,
         .f_key2str = htable_i32_str,
-        .on_remove = on_remove_example,
+        .f_on_remove = on_remove_example,
     });
 
     for (int j = 0; strings[j].key; j++) {
@@ -2278,7 +2278,7 @@ static MunitResult test_htable_internal_print_tabular(
     htable_verbose = false;
     HTable *t = htable_new(&(HTableSetup) {
         .cap = 1024,
-        .hash_func = koh_hasher_fnv64,
+        .f_hash = koh_hasher_fnv64,
         .f_key2str = htable_str_str,
         .f_val2str = htable_i32_str,
     });
@@ -2646,8 +2646,8 @@ static MunitResult test_htable_internal_singles(
         htable_verbose = true;
         HTable *t = htable_new(&(HTableSetup){
             .cap = 1,
-            .hash_func = koh_hashers[i].f,
-            .on_remove = NULL,
+            .f_hash = koh_hashers[i].f,
+            .f_on_remove = NULL,
         });
         htable_verbose = false;
         _test_htable_singles(t);

@@ -52,7 +52,7 @@ int l_sound_play(lua_State *lua) {
 void sfx_init() {
     trace("sfx_init:\n");
     sounds_tbl = htable_new(&(struct HTableSetup) {
-        .hash_func = koh_hasher_mum,
+        .f_hash = koh_hasher_mum,
         .cap = 64,
     });
 

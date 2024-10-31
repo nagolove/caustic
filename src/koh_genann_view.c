@@ -71,7 +71,8 @@ struct genann_view *genann_view_new(const char *ann_name, Font *fnt) {
     /*view->space = cpSpaceNew();*/
     /*view->space->userData = view;*/
     view->h_name2weight = htable_new(&(struct HTableSetup) {
-        .cap = 256, .on_remove = link_free,
+        .cap = 256,
+        .f_on_remove = link_free,
     });
     view->h_name2physobj = htable_new(NULL);
     return view;

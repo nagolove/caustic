@@ -207,8 +207,8 @@ void inotifier_init() {
     assert(in.tbl == NULL);
 
     in.tbl = htable_new(&(struct HTableSetup) {
-        .cap       = MAX_WATCHED_FILES,
-        .hash_func = koh_hasher_mum,
+        .cap    = MAX_WATCHED_FILES,
+        .f_hash = koh_hasher_mum,
     });
 
     in.fd = inotify_init1(IN_NONBLOCK);
