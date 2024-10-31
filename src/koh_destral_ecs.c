@@ -43,6 +43,7 @@ static de_options _options = {
     .tracing = false,
 };
 
+// TODO: Наладить влияние флага на отладочный вывод de_ecs_verbose
 bool de_ecs_verbose = false;
 
 #ifdef DE_NO_TRACE
@@ -878,6 +879,8 @@ static void type_register(de_ecs *r, de_cp_type cp_type) {
     );
 
     size_t new_num = htable_count(r->cp_types);
+
+    // Выделить память под нужны ImGui если надо
     if (r->selected_num != new_num) {
         de_trace("type_register: new type '%s'\n", cp_type.name);
 

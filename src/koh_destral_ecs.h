@@ -139,6 +139,11 @@ void de_shrink(de_ecs *r);
     Warning:
     Undefined behavior if the entity is not valid.
 */
+/*
+    Удаляет сущность. Её версия обновляется и идентификатор может быть 
+    переиспользован при необходимости.
+    Встроен assert() с проверкой сущности на корректность.
+ */
 void de_destroy(de_ecs* r, de_entity e);
 
 /*
