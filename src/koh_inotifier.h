@@ -4,6 +4,9 @@
 
 typedef void (*WatchCallback)(const char *fname, void *data);
 
+// XXX: Почему не используется какая-то переменая контекта?
+// Есть ли необходимость в глобальных переменных?
+
 void inotifier_init();
 void inotifier_shutdown();
 // TODO: Починить необходимость переустановки наблюдателя при вызове обратной
