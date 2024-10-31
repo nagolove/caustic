@@ -472,6 +472,6 @@ const unsigned char ___tl_dst_tabular_lua[7422] = {
 };
 
 const TFileTableEntry fileTable[] = {
-	{"../tl_dst/tabular.lua", ___tl_dst_tabular_lua, 7422}
+	{"../tl_dst/tabular.lua", (const char*)___tl_dst_tabular_lua, 7422}
 };
 const unsigned int fileTableSize = 1;
