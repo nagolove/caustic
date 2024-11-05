@@ -951,6 +951,32 @@ void* de_try_get(de_ecs* r, de_entity e, de_cp_type cp_type) {
     return de_storage_try_get(de_assure(r, cp_type), e);
 }
 
+de_each_iter de_each_begin(de_ecs *r) {
+    de_each_iter i = {
+        .i = 0,
+        .r = r,
+    };
+    return i;
+}
+
+bool de_each_valid(de_each_iter *i) {
+    assert(i);
+    assert(i->r);
+
+    return i->i < i->r->entities_size;
+}
+
+void de_each_next(de_each_iter *i) {
+    assert(i);
+    assert(i->i >= 0);
+    i->i++;
+}
+
+de_entity de_each_entity(de_each_iter *i) {
+    assert(i);
+    assert(i->i >= 0);
+    return i->r->entities[i->i];
+}
 
 void de_each(de_ecs* r, de_function fun, void* udata) {
     assert(r);
@@ -959,6 +985,7 @@ void de_each(de_ecs* r, de_function fun, void* udata) {
         return;
     }
 
+    // XXX: что хранит available_id?
     if (r->available_id == de_null) {
         for (size_t i = r->entities_size; i; --i) {
             if (fun(r, r->entities[i - 1], udata)) 

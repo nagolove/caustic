@@ -331,3 +331,12 @@ extern bool de_ecs_verbose;
 
 void de_cp_type_print(de_cp_type c);
 
+typedef struct {
+    de_ecs *r;
+    size_t i;
+} de_each_iter;
+
+de_each_iter de_each_begin(de_ecs *r);
+bool de_each_valid(de_each_iter *i);
+void de_each_next(de_each_iter *i);
+de_entity de_each_entity(de_each_iter *i);
