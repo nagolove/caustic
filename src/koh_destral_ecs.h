@@ -6,17 +6,14 @@
     Copyright (c) 2020 Daniel Guzman
 */
 
-// TODO: написать тестирование с созданием сущностей, креплением к ним
-// компонент, а потом с удалением сущностей. Так как кажется есть проблемы
-// с затиранием памяти при de_destroy()
-
-// TODO: Сделать функцию для итерации по всем типам компонентов прикрепленных
-// к сущности
+// TODO: Кажется есть проблемы с затиранием памяти при de_destroy()
 
 #include <stdio.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include "munit.h"
 
 /*  de_ecs
 
@@ -321,15 +318,16 @@ void de_ecs_print(de_ecs *r);
 void de_gui(de_ecs *r, de_entity e);
 void de_storage_print(de_ecs *r, de_cp_type cp_type);
 
-// Возвращет статический массив с NULL элементов в конце со списком типов 
-// компонент присоединенных к сущности. Типы компонентов должны быть 
-// предварительтно указаны через de_ecs_register()
-// В num возвращает количество типов
+// Функция для итерации по всем типам компонентов прикрепленных к сущности.
+// Возвращет статический массив с NULL элементов в конце. 
+// Типы должны быть предварительтно указаны через de_ecs_register().
+// Опционально в num возвращается количество типов.
 de_cp_type **de_types(de_ecs *r, de_entity e, int *num);
 
 extern bool de_ecs_verbose;
 
 void de_cp_type_print(de_cp_type c);
+void de_entity_print(de_ecs *r, de_entity e);
 
 typedef struct {
     de_ecs *r;
@@ -340,3 +338,6 @@ de_each_iter de_each_begin(de_ecs *r);
 bool de_each_valid(de_each_iter *i);
 void de_each_next(de_each_iter *i);
 de_entity de_each_entity(de_each_iter *i);
+
+extern MunitSuite test_de_ecs_suite_internal;
+void de_ecs_test_init();
