@@ -49,6 +49,9 @@ static inline void *htable_add_f32(
 static inline void *htable_add_i32(
     HTable *ht, int key, void *value, int value_len
 );
+static inline void *htable_add_u32(
+    HTable *ht, int key, void *value, int value_len
+);
 static inline void *htable_add_i64(
     HTable *ht, int64_t key, void *value, int value_len
 );
@@ -142,11 +145,20 @@ extern bool htable_verbose;
 extern MunitSuite test_htable_suite_internal;
 
 // {{{ Функции конверторы данных
+
 static inline const char *htable_i32_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
     sprintf(buf, "%d", *(int*)data);
+    return buf;
+}
+
+static inline const char *htable_u32_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    sprintf(buf, "%u", *(int*)data);
     return buf;
 }
 
@@ -189,6 +201,12 @@ static inline void *htable_add_f32(HTable *ht, float key, void *value, int value
 }
 
 static inline void *htable_add_i32(
+    HTable *ht, int key, void *value, int value_len
+) {
+    return htable_add(ht, &key, sizeof(key), value, value_len);
+}
+
+static inline void *htable_add_u32(
     HTable *ht, int key, void *value, int value_len
 ) {
     return htable_add(ht, &key, sizeof(key), value, value_len);
