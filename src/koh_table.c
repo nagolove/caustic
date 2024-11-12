@@ -2437,6 +2437,23 @@ static MunitResult test_htable_internal_compare_keys(
         
     // eq
     {
+        HTable *t1 = htable_new(NULL); 
+
+        char *lines[] = {
+            "1", "2", "3", "banama", NULL,
+        };
+
+        for (int i = 0; lines[i]; i++) {
+            htable_add_s(t1, lines[i], NULL, 0);
+        }
+
+        munit_assert(htable_compare_keys(t1, t1));
+
+        htable_free(t1);
+    }
+
+    // eq
+    {
         HTable *t1 = htable_new(NULL), 
                *t2 = htable_new(NULL);
 
