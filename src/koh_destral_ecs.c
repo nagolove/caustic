@@ -2975,143 +2975,21 @@ static MunitResult test_emplace_destroy(
     return MUNIT_OK;
 }
 
-static MunitResult test_has(
+static MunitResult test_assure(
     const MunitParameter params[], void* data
 ) {
+    de_ecs *r = de_ecs_new();
 
-    {
-        de_ecs *r = de_ecs_new();
-        de_entity e = de_create(r);
-        de_emplace(r, e, cp_triple);
-        //memset(tr, 1, sizeof(*tr));
-        munit_assert(de_has(r, e, cp_triple) == true);
-        munit_assert(de_has(r, e, cp_cell) == false);
-        de_ecs_free(r);
-    }
+    de_storage *s0 = de_storage_find(r, cp_type_1);
+    munit_assert(s0 == NULL);
 
-    {
-        de_ecs *r = de_ecs_new();
-        de_entity e = de_create(r);
-        de_emplace(r, e, cp_triple);
-        de_emplace(r, e, cp_cell);
-        //memset(tr, 1, sizeof(*tr));
-        munit_assert(de_has(r, e, cp_triple) == true);
-        munit_assert(de_has(r, e, cp_cell) == true);
-        de_ecs_free(r);
-    }
+    de_storage *s1 = de_assure(r, cp_type_1);
+    de_storage *s2 = de_assure(r, cp_type_1);
+    munit_assert(s1 == s2);
 
-    {
-        de_ecs *r = de_ecs_new();
-        de_entity e = de_create(r);
-        de_emplace(r, e, cp_triple);
-        de_emplace(r, e, cp_cell);
-        //memset(tr, 1, sizeof(*tr));
-        munit_assert(de_has(r, e, cp_triple) == true);
-        munit_assert(de_has(r, e, cp_cell) == true);
-        de_ecs_free(r);
-    }
+    munit_assert(de_storage_find(r, cp_type_1) != NULL);
 
-    {
-        de_ecs *r = de_ecs_new();
-
-        if (verbose_print)
-            de_ecs_print(r);
-        de_entity e1 = de_create(r);
-        de_emplace(r, e1, cp_triple);
-
-        if (verbose_print)
-            de_ecs_print(r);
-        de_entity e2 = de_create(r);
-        de_emplace(r, e2, cp_cell);
-
-        if (verbose_print)
-            de_ecs_print(r);
-        de_entity e3 = de_create(r);
-        de_emplace(r, e3, cp_node);
-
-        if (verbose_print)
-            de_ecs_print(r);
-
-        if (verbose_print) {
-            de_storage_print(r, cp_triple);
-            de_storage_print(r, cp_cell);
-            de_storage_print(r, cp_node);
-        }
-
-        munit_assert(de_has(r, e1, cp_triple) == true);
-        munit_assert(de_has(r, e1, cp_cell) == false);
-        munit_assert(de_has(r, e2, cp_triple) == false);
-        munit_assert(de_has(r, e2, cp_cell) == true);
-
-        //de_destroy(r, e1);
-        de_remove_all(r, e2);
-        if (verbose_print)
-            de_ecs_print(r);
-        de_remove_all(r, e1);
-        if (verbose_print)
-            de_ecs_print(r);
-        de_remove_all(r, e3);
-        if (verbose_print)
-            de_ecs_print(r);
-        //de_destroy(r, e2);
-
-        if (verbose_print) {
-            de_storage_print(r, cp_triple);
-            de_storage_print(r, cp_cell);
-            de_storage_print(r, cp_node);
-        }
-
-        munit_assert(de_valid(r, e1));
-        munit_assert(de_valid(r, e2));
-        munit_assert(de_valid(r, e3));
-        munit_assert((e1 != e2) && (e1 != e3));
-
-        if (verbose_print)
-            de_ecs_print(r);
-        
-        munit_assert(de_orphan(r, e1) == true);
-        munit_assert(de_orphan(r, e2) == true);
-        munit_assert(de_orphan(r, e3) == true);
-
-        if (verbose_print)
-            de_ecs_print(r);
-
-        munit_assert(de_has(r, e1, cp_triple) == false);
-        //munit_assert(de_has(r, e2, cp_cell) == false);
-        //munit_assert(de_has(r, e3, cp_node) == false);
-
-        de_ecs_free(r);
-    }
-
-    // XXX: Что если к одной сущности несколько раз цеплять компонент одного и
-    // того же типа?
-    {
-        de_ecs *r = de_ecs_new();
-        const int num = 100;
-        de_entity ennts[num];
-        for (int i = 0; i < num; i++) {
-            de_entity e = de_create(r);
-            de_emplace(r, e, cp_triple);
-            ennts[i] = e;
-        }
-
-        for (int i = 0; i < num; i++) {
-            de_entity e = ennts[i];
-            munit_assert(de_has(r, e, cp_triple) == true);
-            munit_assert(de_has(r, e, cp_cell) == false);
-        }
-
-        de_view_single v = de_view_single_create(r, cp_triple);
-        for(; de_view_single_valid(&v); de_view_single_next(&v)) {
-            de_entity e = de_view_single_entity(&v);
-            munit_assert(de_has(r, e, cp_triple) == true);
-            munit_assert(de_has(r, e, cp_cell) == false);
-        }
-
-        de_ecs_free(r);
-    }
-
-
+    de_ecs_free(r);
 
     return MUNIT_OK;
 }
@@ -3470,20 +3348,21 @@ static MunitResult test_sparse_1(
     // добавить
     {
         de_sparse s = {};
-        de_entity e1, e2, e3;
+        de_entity e1 = de_make_entity(de_entity_id(100), de_entity_ver(0)),
+                  e2 = de_make_entity(de_entity_id(10), de_entity_ver(0)),
+                  e3 = de_make_entity(de_entity_id(11), de_entity_ver(0));
 
-        e1 = de_make_entity(de_entity_id(100), de_entity_ver(0));
-        e2 = de_make_entity(de_entity_id(10), de_entity_ver(0));
-        e3 = de_make_entity(de_entity_id(11), de_entity_ver(0));
+        de_sparse_init(&s, 101);
 
-        de_sparse_init(&s, 10);
-
+        munit_assert(de_sparse_contains(&s, e1) == false);
         de_sparse_emplace(&s, e1);
         munit_assert(de_sparse_contains(&s, e1));
 
+        munit_assert(de_sparse_contains(&s, e2) == false);
         de_sparse_emplace(&s, e2);
         munit_assert(de_sparse_contains(&s, e2));
 
+        munit_assert(de_sparse_contains(&s, e3) == false);
         de_sparse_emplace(&s, e3);
         munit_assert(de_sparse_contains(&s, e3));
 
@@ -3821,6 +3700,25 @@ static MunitResult test_de_has(
     const MunitParameter params[], void* data
 ) {
 
+
+    {
+        de_ecs *r = de_ecs_new();
+        de_entity e = de_create(r);
+        // XXX: При добавлении к сущности компонента любого типа
+        // de_has() срабатывает на любом типе.
+        de_emplace(r, e, cp_type_17);
+
+        de_storage *storage = de_assure(r, cp_type_1);
+
+        bool has = de_storage_contains(storage, e);
+        printf("\ntest_has: has %s\n", has ? "true" : "false");
+
+        bool has2 = de_storage_contains(de_assure(r, cp_type_5), e);
+        printf("\ntest_has: has2 %s\n", has2 ? "true" : "false");
+
+        de_ecs_free(r);
+    }
+
     {
         de_ecs *r = de_ecs_new();
         de_entity e = de_create(r);
@@ -3844,6 +3742,143 @@ static MunitResult test_de_has(
         de_emplace(r, e, cp_type_1);
         munit_assert(de_has(r, e, cp_type_1) == true);
         munit_assert(de_has(r, e, cp_type_17) == false);
+        de_ecs_free(r);
+    }
+
+    {
+        de_ecs *r = de_ecs_new();
+        de_entity e = de_create(r);
+        de_emplace(r, e, cp_triple);
+        //memset(tr, 1, sizeof(*tr));
+        munit_assert(de_has(r, e, cp_triple) == true);
+        munit_assert(de_has(r, e, cp_cell) == false);
+        de_ecs_free(r);
+    }
+
+    {
+        de_ecs *r = de_ecs_new();
+        de_entity e = de_create(r);
+        de_emplace(r, e, cp_triple);
+        de_emplace(r, e, cp_cell);
+        //memset(tr, 1, sizeof(*tr));
+        munit_assert(de_has(r, e, cp_triple) == true);
+        munit_assert(de_has(r, e, cp_cell) == true);
+        de_ecs_free(r);
+    }
+
+    {
+        de_ecs *r = de_ecs_new();
+        de_entity e = de_create(r);
+        de_emplace(r, e, cp_triple);
+        de_emplace(r, e, cp_cell);
+        //memset(tr, 1, sizeof(*tr));
+        munit_assert(de_has(r, e, cp_triple) == true);
+        munit_assert(de_has(r, e, cp_cell) == true);
+        de_ecs_free(r);
+    }
+
+    {
+        de_ecs *r = de_ecs_new();
+
+        if (verbose_print)
+            de_ecs_print(r);
+        de_entity e1 = de_create(r);
+        de_emplace(r, e1, cp_triple);
+
+        if (verbose_print)
+            de_ecs_print(r);
+        de_entity e2 = de_create(r);
+        de_emplace(r, e2, cp_cell);
+
+        if (verbose_print)
+            de_ecs_print(r);
+        de_entity e3 = de_create(r);
+        de_emplace(r, e3, cp_node);
+
+        if (verbose_print)
+            de_ecs_print(r);
+
+        if (verbose_print) {
+            de_storage_print(r, cp_triple);
+            de_storage_print(r, cp_cell);
+            de_storage_print(r, cp_node);
+        }
+
+        munit_assert(de_has(r, e1, cp_triple) == true);
+        munit_assert(de_has(r, e1, cp_cell) == false);
+        munit_assert(de_has(r, e2, cp_triple) == false);
+        munit_assert(de_has(r, e2, cp_cell) == true);
+
+        //de_destroy(r, e1);
+        de_remove_all(r, e2);
+        if (verbose_print)
+            de_ecs_print(r);
+        de_remove_all(r, e1);
+        if (verbose_print)
+            de_ecs_print(r);
+        de_remove_all(r, e3);
+        if (verbose_print)
+            de_ecs_print(r);
+        //de_destroy(r, e2);
+
+        if (verbose_print) {
+            de_storage_print(r, cp_triple);
+            de_storage_print(r, cp_cell);
+            de_storage_print(r, cp_node);
+        }
+
+        munit_assert(de_valid(r, e1));
+        munit_assert(de_valid(r, e2));
+        munit_assert(de_valid(r, e3));
+        munit_assert((e1 != e2) && (e1 != e3));
+
+        if (verbose_print)
+            de_ecs_print(r);
+        
+        munit_assert(de_orphan(r, e1) == true);
+        munit_assert(de_orphan(r, e2) == true);
+        munit_assert(de_orphan(r, e3) == true);
+
+        if (verbose_print)
+            de_ecs_print(r);
+
+        munit_assert(de_has(r, e1, cp_triple) == false);
+        //munit_assert(de_has(r, e2, cp_cell) == false);
+        //munit_assert(de_has(r, e3, cp_node) == false);
+
+        de_ecs_free(r);
+    }
+
+    // XXX: Что если к одной сущности несколько раз цеплять компонент одного и
+    // того же типа?
+    // XXX: Что тут происпходит?
+    {
+        de_ecs *r = de_ecs_new();
+
+        // Создать сколько-то сущностей и прицепить к ним компоненты
+        const int num = 100;
+        de_entity ennts[num];
+        for (int i = 0; i < num; i++) {
+            de_entity e = de_create(r);
+            de_emplace(r, e, cp_triple);
+            ennts[i] = e;
+        }
+
+        for (int i = 0; i < num; i++) {
+            de_entity e = ennts[i];
+            // проверить на истинность
+            munit_assert(de_has(r, e, cp_triple) == true);
+            // проверить на ложность
+            munit_assert(de_has(r, e, cp_cell) == false);
+        }
+
+        de_view_single v = de_view_single_create(r, cp_triple);
+        for(; de_view_single_valid(&v); de_view_single_next(&v)) {
+            de_entity e = de_view_single_entity(&v);
+            munit_assert(de_has(r, e, cp_triple) == true);
+            munit_assert(de_has(r, e, cp_cell) == false);
+        }
+
         de_ecs_free(r);
     }
 
@@ -4047,17 +4082,14 @@ static MunitTest test_de_ecs_internal[] = {
       NULL
     },
 
-
-    // FIXME:
     {
-      (char*) "/has",
-      test_has,
-      NULL,
-      NULL,
-      MUNIT_TEST_OPTION_NONE,
-      NULL
+        "/assure",
+        test_assure,
+        NULL,
+        NULL,
+        MUNIT_TEST_OPTION_NONE,
+        NULL,
     },
-    // */
 
     // FIXME:
     {
