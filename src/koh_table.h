@@ -70,7 +70,7 @@ bool htable_exist_s(HTable *ht, const char *key);
 // TODO: Сравнение таблиц на тождественность
 // В тесте 
 // munit_assert(htable_compare(t1, t2) == true)
-bool htable_compare(HTable *t1, HTable *t2);
+//bool htable_compare(HTable *t1, HTable *t2);
 
 // Сравнение таблиц по ключам как множеств.
 bool htable_compare_keys(HTable *t1, HTable *t2);

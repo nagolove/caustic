@@ -46,7 +46,6 @@ do {                                                            \
 #include "koh_routine.h"
 #include "koh_script.h"
 #include "koh_script.h"
-#include "koh_set.h"
 #include "koh_sfx.h"
 #include "koh_stage_ecs.h"
 #include "koh_stages.h"

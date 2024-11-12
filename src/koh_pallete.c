@@ -4,7 +4,7 @@
 #include "koh_pallete.h"
 #include "koh_rand.h"
 #include "koh_routine.h"
-#include "koh_set.h"
+#include "koh_table.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -137,6 +137,7 @@ bool pallete_compare(struct Pallete *p1, struct Pallete *p2) {
 
     bool eq = !p1->colors && !p2->colors;
 
+    /*
     if (p1->colors && p2->colors) {
         koh_Set *s1 = set_new(NULL), *s2 = set_new(NULL);
 
@@ -151,6 +152,23 @@ bool pallete_compare(struct Pallete *p1, struct Pallete *p2) {
 
         set_free(s1);
         set_free(s2);
+    }
+    */
+
+    if (p1->colors && p2->colors) {
+        HTable *s1 = htable_new(NULL), *s2 = htable_new(NULL);
+
+        for (int i = 0; i < p1->num; i++) {
+            htable_add(s1, &p1->colors[i], sizeof(p1->colors[0]), NULL, 0);
+        }
+        for (int i = 0; i < p1->num; i++) {
+            htable_add(s2, &p2->colors[i], sizeof(p2->colors[0]), NULL, 0);
+        }
+
+        eq = htable_compare_keys(s1, s2);
+
+        htable_free(s1);
+        htable_free(s2);
     }
 
     return eq;
