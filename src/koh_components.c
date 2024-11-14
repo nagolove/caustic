@@ -29,12 +29,12 @@ static void on_emplace_body(void *payload, de_entity e) {
 
 // {{{ components 
 
-#define STR_NUM 256
+#define STR_NUM 512
 // TODO: Пишет мимо куда-то в буфер
 static char **str_repr_shape_render_opts(void *payload, de_entity e) {
     //trace("str_repr_shape_render_opts:\n");
     struct ShapeRenderOpts *opts = payload;
-    static char (buf[STR_NUM])[256];
+    static char (buf[STR_NUM])[512];
     memset(buf, 0, sizeof(buf));
     static char *lines[STR_NUM];
     for (int j = 0; j < STR_NUM; ++j) {
