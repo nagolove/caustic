@@ -135,7 +135,9 @@ typedef struct de_ecs {
 
     de_cp_type      registry[DE_REGISTRY_MAX];
     int             registry_num;
-    HTable          *cp_types;
+                    // cp_type.name => cp_type
+    HTable          *cp_types,
+                    *set_cp_types;
 
     // TODO: Вынести GUI поля в отдельную струткурку
     // Для ImGui таблицы

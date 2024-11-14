@@ -62,21 +62,17 @@ typedef struct de_cp_type {
     void        (*on_emplace)(void *payload, de_entity e); 
     void        (*on_destroy)(void *payload, de_entity e);
     //void        (*on_create)(void *payload, de_entity e);
-    // Для компонентного проводника
+
+    // Для компонентного проводника.
+    // Массив строк заканчивается NULL
+    // payload - данные компонента
+    // TODO: Подумать над лучшим представлением данных.
     char        **(*str_repr)(void *payload, de_entity e);
 
     const char  *name; // component name
     const char  *description;
     size_t      initial_cap;
 } de_cp_type;
-
-#define DE_MAKE_CP_TYPE(TypeId, TypeName) \
-{ \
-    .cp_id = TypeId, \
-    .cp_sizeof = sizeof(TypeName), \
-    .on_destroy = NULL, \
-    .name = #TypeName  \
-}
 
 /* The de_null is a de_entity that represents a null entity. */
 extern const de_entity de_null;
@@ -327,6 +323,7 @@ de_cp_type **de_types(de_ecs *r, de_entity e, int *num);
 extern bool de_ecs_verbose;
 
 void de_cp_type_print(de_cp_type c);
+const char *de_cp_type_2str(de_cp_type c);
 void de_entity_print(de_ecs *r, de_entity e);
 
 typedef struct {
@@ -340,4 +337,8 @@ void de_each_next(de_each_iter *i);
 de_entity de_each_entity(de_each_iter *i);
 
 extern MunitSuite test_de_ecs_suite_internal;
+// Инициализация внутренних структур de_cp_type для тестов. Без инициализации
+// поведение test_de_ecs_suite_internal непредсказуемо.
 void de_ecs_test_init();
+
+int de_cp_type_cmp(de_cp_type a, de_cp_type b);
