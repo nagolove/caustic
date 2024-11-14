@@ -16,15 +16,24 @@ typedef enum HTableAction {
 
 typedef struct HTable HTable;
 
+// Вызывается для каждого элемента
 typedef HTableAction (*HTableEachCallback)(
     const void *key, int key_len, void *value, int value_len, void *userdata
 );
+// Вызывается при удалении элемента
 typedef void (*HTableOnRemove)(
     const void *key, int key_len, void *value, int value_len, void *userdata
 );
+// Преобразует ключ или значение в статическую строку и возвращает её.
 typedef const char *(*HTableData2Str)(const void *data, int data_len);
+// Если ключи равны, то возвращается 0. Нужна для сложных по
+// структуре ключей. Для простых ключей можно использовать memcmp()
+typedef int (*HTableKeyCmp)(const void *a, const void *b, size_t len);
+// memcmp(void *a, void *b, size_t len);
 
 typedef struct HTableSetup {
+    // По умолчанию для сравнения ключей используется memcmp()
+    HTableKeyCmp    f_keycmp;
     HTableOnRemove  f_on_remove;
     HashFunction    f_hash;
     HTableData2Str  f_key2str, f_val2str;

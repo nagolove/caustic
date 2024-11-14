@@ -49,6 +49,7 @@ typedef struct HTable {
     float           extend_coef;
     float           cap_mult, cap_add;
 
+    HTableKeyCmp    f_keycmp;
     HTableOnRemove  f_on_remove;
     HashFunction    f_hash;
     HTableData2Str  f_key2str, f_val2str;
@@ -83,6 +84,7 @@ static inline void htable_assert(HTable *t) {
     assert(t->f_hash);
     assert(t->cap >= 0);
     assert(t->taken >= 0);
+    assert(t->f_keycmp);
 }
 
 #define htable_aligment 16
@@ -524,7 +526,8 @@ int64_t _htable_get_index(
         */
 
         // Если ключ найден - прерывание цикла
-        if (memcmp(key_t, key, trgt_key_len) == 0)
+        /*if (memcmp(key_t, key, trgt_key_len) == 0)*/
+        if (ht->f_keycmp(key_t, key, trgt_key_len) == 0)
             break;
 
 _next:
@@ -552,7 +555,8 @@ _next:
         return INT64_MAX;
 
     int trgt_key_len = key_len > buck->key_len ? buck->key_len : key_len;
-    if (!memcmp(key_t, key, trgt_key_len)) {
+    /*if (!memcmp(key_t, key, trgt_key_len)) {*/
+    if (!ht->f_keycmp(key_t, key, trgt_key_len)) {
         if (value_len)
             *value_len = buck->value_len;
         return index;
@@ -612,11 +616,14 @@ HTable *htable_new(struct HTableSetup *setup) {
     } else
         ht->cap = 17;
 
+    ht->f_keycmp = memcmp;
+
     if (setup) {
         ht->f_on_remove = setup->f_on_remove;
         ht->f_hash = setup->f_hash;
         ht->f_key2str = setup->f_key2str;
         ht->f_val2str = setup->f_val2str;
+        ht->f_keycmp = setup->f_keycmp ? setup->f_keycmp : memcmp;
     }
 
     if (!ht->f_hash)
@@ -2399,6 +2406,88 @@ static MunitResult test_htable_internal_data2str(
 
 // }}}
 
+typedef struct {
+    char *name;
+} S;
+
+static int custom_key_cmp(const void *a, const void *b, size_t len) {
+    assert(a);
+    assert(b);
+
+    const S *_a = a, *_b = b;
+
+    return strcmp(_a->name, _b->name);
+}
+
+S S_make(const char *name) {
+    return (S) {
+        .name = strdup(name),
+    };
+}
+
+void S_free(S s) {
+    if (s.name) {
+        free(s.name);
+        s.name = NULL;
+    }
+}
+
+static void S_on_remove(
+    const void *key, int key_len, void *value, int value_len, void *userdata
+) {
+    S *s = (void*)key;
+    S_free(*s);
+}
+
+static MunitResult test_htable_internal_keycmp(
+    const MunitParameter params[], void* data
+) {
+
+    {
+        HTable *t = htable_new(&(HTableSetup) {
+            .f_on_remove = S_on_remove,
+            .f_keycmp = custom_key_cmp,
+        });
+
+        S s1 = S_make("hello1"),
+          s2 = S_make("hello2");
+
+        int val1 = -10,
+            val2 = 111;
+
+        htable_add(t, &s1, sizeof(s1), &val1, sizeof(val1));
+        htable_add(t, &s2, sizeof(s2), &val2, sizeof(val2));
+
+        munit_assert(htable_count(t) == 2);
+
+        htable_free(t);
+    }
+
+    /*
+    // TODO: Доделать ложное срабатывание теста
+    {
+        HTable *t = htable_new(&(HTableSetup) {
+            .f_on_remove = S_on_remove,
+            .f_keycmp = custom_key_cmp,
+        });
+
+        S s1 = { .name = "hello", },
+          s2 = { .name = "hello", };
+
+        int val1 = -10,
+            val2 = 111;
+
+        htable_add(t, &s1, sizeof(s1), &val1, sizeof(val1));
+        htable_add(t, &s2, sizeof(s2), &val2, sizeof(val2));
+
+        munit_assert(htable_count(t) == 1);
+
+        htable_free(t);
+    }
+    */
+
+    return MUNIT_OK;
+}
 
 static MunitResult test_htable_internal_compare_keys(
     const MunitParameter params[], void* data
@@ -2809,6 +2898,12 @@ static MunitTest test_htable_internal[] = {
     {
         "/test_htable_internal_compare_keys",
         test_htable_internal_compare_keys,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    {
+        "/test_htable_internal_keycmp",
+        test_htable_internal_keycmp,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
