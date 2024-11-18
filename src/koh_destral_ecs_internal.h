@@ -115,7 +115,7 @@ typedef struct de_storage {
     de_sparse   sparse;
     void        (*on_destroy)(void *payload, de_entity e);
     void        (*on_emplace)(void *payload, de_entity e);
-    uint32_t    *callbacks_flags;
+    /*uint32_t    *callbacks_flags;*/
     char        name[64];
     size_t      initial_cap;
 } de_storage;
@@ -133,10 +133,13 @@ typedef struct de_ecs {
     de_entity*      entities; /* contains all the created entities */
     uint32_t        available_id; /* first index in the list to recycle */
 
+    // зарегистрированные через de_ecs_register() компоненты
     de_cp_type      registry[DE_REGISTRY_MAX];
     int             registry_num;
-                    // cp_type.name => cp_type
+
+                    // de_cp_type.name => cp_type
     HTable          *cp_types,
+                    // set of de_cp_type
                     *set_cp_types;
 
     // TODO: Вынести GUI поля в отдельную струткурку
@@ -144,7 +147,10 @@ typedef struct de_ecs {
     bool            *selected;
     size_t          selected_num;
     de_cp_type      selected_type;
+
+    // Зачем  нужна машина Луа?
     lua_State       *l;
+    // Фильтр в ImGui интерфейсе для поиска
     int             ref_filter_func;
 } de_ecs;
 

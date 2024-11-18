@@ -1774,6 +1774,36 @@ void koh_backtrace_print() {
     backtrace_symbols_fd(trace, size, STDOUT_FILENO);
 }
 
+/*
+void koh_backtrace_print() {
+    int num = 100;
+    void *trace[num];
+    int size = backtrace(trace, num);
+
+    // Получение массива строк с символами
+    char **symbols = backtrace_symbols(trace, size);
+    if (symbols == NULL) {
+        perror("backtrace_symbols");
+        exit(EXIT_FAILURE);
+    }
+
+    // Вывод символов в стандартный вывод
+    for (int i = 0; i < size; i++) {
+        printf("%s\n", symbols[i]);
+    }
+
+//    for (int i = 0; i < size; i++) {
+//        printf("%s\n", symbols[i]);
+//        char command[256];
+//        snprintf(command, sizeof(command), "addr2line -e /home/nagolove/koh-t80/t80 %p", trace[i]);
+//        system(command);
+//    }
+
+    // Освобождение памяти
+    free(symbols);
+}
+*/
+
 const char * koh_backtrace_get() {
     void *array[100];
     static char buf[4096] = {}, *pbuf = buf;

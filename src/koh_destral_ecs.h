@@ -309,7 +309,7 @@ typedef struct de_options {
 } de_options;
 
 void de_set_options(de_options options);
-void de_ecs_print(de_ecs *r);
+void de_ecs_print_entities(de_ecs *r);
 
 void de_gui(de_ecs *r, de_entity e);
 void de_storage_print(de_ecs *r, de_cp_type cp_type);
@@ -324,7 +324,8 @@ extern bool de_ecs_verbose;
 
 void de_cp_type_print(de_cp_type c);
 const char *de_cp_type_2str(de_cp_type c);
-void de_entity_print(de_ecs *r, de_entity e);
+void de_entity_print(de_entity e);
+const char *de_entity_2str(de_entity e);
 
 typedef struct {
     de_ecs *r;

@@ -34,10 +34,14 @@
 #include "koh_destral_ecs_internal.h"
 // }}}
 
-#define DE_USE_STORAGE_CAPACITY 
-#define DE_USE_SPARSE_CAPACITY
+// Выделять память заранее. Если дефайны отключены, то память будет выделятся
+// на одну следущую структуру, что медленно.
+/*#define DE_USE_STORAGE_CAPACITY */
+/*#define DE_USE_SPARSE_CAPACITY*/
 
-#define DE_NO_TRACE
+// Включить лог большинства операций. Когда отключен, то нет накладных 
+// расходов.
+/*#define DE_NO_TRACE*/
 
 static de_options _options = {
     .tracing = false,
@@ -194,9 +198,9 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
 #else
     assert(s);
     assert(e != de_null);
-    const de_entity_id eid = de_entity_identifier(e);
-    if (eid.id >= s->sparse_size) { // check if we need to realloc
-        const size_t new_sparse_size = eid.id + 1;
+    const uint32_t eid = de_entity_identifier(e);
+    if (eid >= s->sparse_size) { // check if we need to realloc
+        const size_t new_sparse_size = eid + 1;
         s->sparse = realloc(s->sparse, new_sparse_size * sizeof(s->sparse[0]));
         //memset(s->sparse + s->sparse_size, de_null, (new_sparse_size - s->sparse_size) * sizeof(s->sparse[0]));
       
@@ -209,7 +213,7 @@ void de_sparse_emplace(de_sparse* s, de_entity e) {
         
         s->sparse_size = new_sparse_size;
     }
-    s->sparse[eid.id] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
+    s->sparse[eid] = (de_entity)s->dense_size; // set this eid index to the last dense index (dense_size)
     s->dense = realloc(s->dense, (s->dense_size + 1) * sizeof(s->dense[0]));
     s->dense[s->dense_size] = e;
     s->dense_size++;
@@ -272,10 +276,10 @@ size_t de_sparse_remove(de_sparse* s, de_entity e) {
 
 #else
 
-    const size_t pos = s->sparse[de_entity_identifier(e).id];
+    const size_t pos = s->sparse[de_entity_identifier(e)];
     const de_entity other = s->dense[s->dense_size - 1];
 
-    s->sparse[de_entity_identifier(other).id] = (de_entity)pos;
+    s->sparse[de_entity_identifier(other)] = (de_entity)pos;
     s->dense[pos] = other;
     s->sparse[pos] = de_null;
 
@@ -356,6 +360,30 @@ static de_storage* de_storage_init(de_storage* s, de_cp_type cp_type) {
 
     strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
     return s;
+}
+
+static void imgui_update(de_ecs *r, de_cp_type cp_type) {
+    size_t new_num = htable_count(r->cp_types);
+
+    // Выделить память под нужны ImGui если надо
+    if (r->selected_num != new_num) {
+        de_trace("imgui_update: new type '%s'\n", cp_type.name);
+
+        size_t sz = new_num * sizeof(r->selected[0]);
+        if (!r->selected) {
+            r->selected_num = new_num;
+            r->selected = malloc(sz);
+        }
+
+        void *new_ptr = realloc(r->selected, sz);
+        assert(new_ptr);
+        r->selected = new_ptr;
+
+        memset(r->selected, 0, sz);
+        //trace("type_register: r->selected was zeroed\n");
+    }
+
+    r->selected_num = new_num;
 }
 
 static de_storage* de_storage_new(size_t cp_size, de_cp_type cp_type) {
@@ -513,6 +541,7 @@ static void* de_storage_get(de_storage* s, de_entity e) {
     return de_storage_get_by_index(s, de_sparse_index(&s->sparse, e));
 }
 
+// XXX: Надо тестировать
 inline static void* de_storage_try_get(de_storage* s, de_entity e) {
     assert(s);
     assert(e != de_null);
@@ -540,25 +569,11 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
     assert(r->set_cp_types);
     htable_add(r->set_cp_types, &comp, sizeof(comp), NULL, 0);
 
-        /*
-    de_trace(
-        "de_ecs_register: ecs %p, type %s, cp_id %zu\n",
-        r, de_cp_type2str(comp), comp.cp_id
-    );
-*/
+    assert(r->cp_types);
+    htable_add_s(r->cp_types, comp.name, &comp, sizeof(comp));
 
-    /*
-    for (int i = 0; i < r->registry_num; i++) {
-        if (comp.cp_id == r->registry[i].cp_id) {
-            trace(
-                "de_ecs_register: component '%s' has cp_id duplicated\n",
-                comp.name
-            );
-            exit(EXIT_FAILURE);
-        }
-    }
-    r->registry[r->registry_num++] = comp;
-    */
+    // если надо, то обновить список для imgui
+    imgui_update(r, comp);
 
     // Проверка дубликата имени
     for (int i = 0; i < r->registry_num; i++) {
@@ -607,9 +622,10 @@ de_ecs* de_ecs_new() {
     //r->registry_num = 0;
     r->cp_types = htable_new(&(HTableSetup) {
         .f_key2str = htable_str_str,
+        .f_val2str = de_cp_type2str_adaptor,
     });
     r->set_cp_types = htable_new(&(HTableSetup) {
-        .f_keycmp = de_cp_type_cmp_adaptor,
+        /*.f_keycmp = de_cp_type_cmp_adaptor,*/
         .f_key2str = de_cp_type2str_adaptor,
     });
     return r;
@@ -827,10 +843,10 @@ static bool iter_each_print(de_ecs *r, de_entity e, void *udata) {
 }
 */
 
-void de_ecs_print(de_ecs *r) {
+void de_ecs_print_entities(de_ecs *r) {
     assert(r);
     koh_term_color_set(KOH_TERM_BLUE);
-    printf("de_ecs_print:\n");
+    printf("de_ecs_print_entities:\n");
     //de_each(r, iter_each_print, NULL);
     printf("{ ");
     for (int i = 0; i < r->entities_size; i++) {
@@ -839,6 +855,87 @@ void de_ecs_print(de_ecs *r) {
     printf("}\n");
     koh_term_color_reset();
 }
+
+void de_ecs_print_registered_types(de_ecs *r) {
+    assert(r);
+    koh_term_color_set(KOH_TERM_CYAN);
+    printf("de_ecs_print_registered_types:\n");
+    //de_each(r, iter_each_print, NULL);
+    printf("{ ");
+    for (int i = 0; i < r->registry_num; i++) {
+        de_cp_type_print(r->registry[i]);
+        printf("\n");
+        //printf("%u ", r->entities[i]);
+    }
+    printf("}\n");
+    koh_term_color_reset();
+}
+
+static void de_ecs_sparse_print(de_sparse *s) {
+    assert(s);
+    koh_term_color_set(KOH_TERM_GREEN);
+
+    /*
+    de_entity*  sparse;
+    size_t      sparse_size, sparse_cap;
+    de_entity*  dense;
+    size_t      dense_size, dense_cap;
+    size_t      initial_cap;
+    */
+
+    printf("sparse_size: %zu\n", s->sparse_size);
+    printf("sparse_cap: %zu\n", s->sparse_cap);
+    printf("dense_size: %zu\n", s->dense_size);
+    printf("dense_cap: %zu\n", s->dense_cap);
+    printf("initial_cap: %zu\n", s->initial_cap);
+
+    koh_term_color_reset();
+}
+
+static void de_ecs_storage_print(de_storage *s) {
+    assert(s);
+
+    /*
+    size_t      cp_id; 
+    void*       cp_data;
+    size_t      cp_data_size, cp_data_cap; 
+    size_t      cp_sizeof; 
+    de_sparse   sparse;
+    void        (*on_destroy)(void *payload, de_entity e);
+    void        (*on_emplace)(void *payload, de_entity e);
+    char        name[64];
+    size_t      initial_cap;
+    */
+
+    printf("cp_id: %zu\n", s->cp_id); 
+    printf("cp_data: %p\n", s->cp_data);
+    printf("cp_data_size: %zu\n", s->cp_data_size);
+    printf("cp_data_cap: %zu\n", s->cp_data_cap); 
+    printf("cp_sizeof: %zu\n", s->cp_sizeof); 
+    printf("on_destroy: %p\n", s->on_destroy);
+    printf("on_emplace: %p\n", s->on_emplace);
+    printf("name: '%s'\n", s->name);
+    printf("initial_cap: %zu\n", s->initial_cap);
+
+    de_ecs_sparse_print(&s->sparse);
+    /*printf("sparse: %p\n", s->sparse);*/
+}
+
+void de_ecs_print_storages(de_ecs *r) {
+    assert(r);
+    koh_term_color_set(KOH_TERM_RED);
+    printf("de_ecs_print_storages:\n");
+    //de_each(r, iter_each_print, NULL);
+    printf("{ ");
+    for (int i = 0; i < r->storages_size; i++) {
+        de_ecs_storage_print(r->storages[i]);
+        printf("\n");
+        //printf("%u ", r->entities[i]);
+    }
+    printf("}\n");
+    koh_term_color_reset();
+}
+
 
 // XXX: Отладочный вывод из-за удаления элементов в 2048 с поля
 void de_destroy(de_ecs* r, de_entity e) {
@@ -887,6 +984,7 @@ bool de_has(de_ecs* r, de_entity e, const de_cp_type cp_type) {
     return de_storage_contains(storage, e);
 }
 
+/*
 // Все используемые типы добавляются в хтабличку
 static void type_register(de_ecs *r, de_cp_type cp_type) {
     assert(strlen(cp_type.name) > 0);
@@ -919,12 +1017,20 @@ static void type_register(de_ecs *r, de_cp_type cp_type) {
 
     r->selected_num = new_num;
 }
+*/
+
 
 void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
     assert(r);
 
-    if (!htable_get(r->set_cp_types, &cp_type, sizeof(cp_type), NULL)) {
-        printf("de_emplace: type is not registered. use de_ecs_register()\n");
+    /*if (!htable_get(r->set_cp_types, &cp_type, sizeof(cp_type), NULL)) {*/
+    if (!htable_get_s(r->cp_types, cp_type.name, NULL)) {
+        printf(
+            "de_emplace: type '%s' is not registered. use de_ecs_register()\n",
+            cp_type.name
+        );
+
+        de_cp_type_print(cp_type);
 
         char *s = htable_print_tabular_alloc(r->set_cp_types);
         if (s) {
@@ -932,6 +1038,7 @@ void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
             free(s);
         }
 
+        koh_backtrace_print();
         abort();
     }
 
@@ -951,12 +1058,14 @@ void* de_emplace(de_ecs* r, de_entity e, de_cp_type cp_type) {
         "de_emplace: ecs %p, e %u, type %s\n", 
         r, e, de_cp_type_2str(cp_type)
     );
+
+    // выделить память или вернуть выделенную
     de_storage *storage = de_assure(r, cp_type);
+
     void *ret = de_storage_emplace(storage, e);
     assert(ret);
     memset(ret, 0, cp_type.cp_sizeof);
 
-    /*if (storage->on_emplace && *(storage->callbacks_flags) & DE_CB_ON_EMPLACE)*/
     if (storage->on_emplace)
         storage->on_emplace(ret, e);
 
@@ -1767,7 +1876,7 @@ const char *de_cp_type_2str(de_cp_type c) {
     pbuf += sprintf(pbuf, "cp_sizeof = %zu, ", c.cp_sizeof);
     pbuf += sprintf(pbuf, "on_emplace = %s, ", ptr2str(c.on_emplace));
     pbuf += sprintf(pbuf, "on_destroy = %s, ", ptr2str(c.on_destroy));
-    pbuf += sprintf(pbuf, "str_repr = %p, ", ptr2str(c.str_repr));
+    pbuf += sprintf(pbuf, "str_repr = %s, ", ptr2str(c.str_repr));
     pbuf += sprintf(pbuf, "name = '%s', ", c.name);
     pbuf += sprintf(pbuf, "description = '%s', ", c.description);
     pbuf += sprintf(pbuf, "initial_cap = %zu, ", c.initial_cap);
@@ -1778,12 +1887,20 @@ const char *de_cp_type_2str(de_cp_type c) {
     return buf;
 }
 
-void de_entity_print(de_ecs *r, de_entity e) {
-    assert(r);
+void de_entity_print(de_entity e) {
+    /*assert(r);*/
     if (e == de_null)
         printf("de_entity_print: de_null\n");
     else
         printf("de_entity_print: e %u\n", e);
+}
+
+const char *de_entity_2str(de_entity e) {
+    static char buf[32];
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "%u", e);
+    return buf;
 }
 
 int de_cp_type_cmp(de_cp_type a, de_cp_type b) {
@@ -2551,7 +2668,7 @@ struct TestDestroyCtx facade_compare_with_ecs(struct TestDestroyCtx ctx) {
     de_each_iter i = de_each_begin(ctx.r);
     for (; de_each_valid(&i); de_each_next(&i)) {
         de_entity e = de_each_entity(&i);
-        de_entity_print(ctx.r, e);
+        de_entity_print(e);
         EntityDesc *ed = htable_get(ctx.map_entt2Desc, &e, sizeof(e), NULL);
         if (!ed) {
             printf("facade_compare_with_ecs: ed == NULL with e = %u\n", e);
@@ -3802,10 +3919,17 @@ static MunitResult test_ecs_each_iter(
     return MUNIT_OK;
 }
 
+void on_emplace(void *payload, de_entity e) {
+    printf("on_emplace: %s\n", de_entity_2str(e));
+}
+
 static MunitResult test_de_has(
     const MunitParameter params[], void* data
 ) {
 
+    cp_type_1.on_emplace = on_emplace;
+    cp_type_17.on_emplace = on_emplace;
+    cp_type_5.on_emplace = on_emplace;
 
     {
         de_ecs *r = de_ecs_new();
@@ -3814,15 +3938,36 @@ static MunitResult test_de_has(
         de_ecs_register(r, cp_type_17);
         de_ecs_register(r, cp_type_5);
 
-        de_ecs_register(r, cp_triple);
-        de_ecs_register(r, cp_cell);
-        de_ecs_register(r, cp_node);
+        //de_ecs_register(r, cp_triple);
+        //de_ecs_register(r, cp_cell);
+        //de_ecs_register(r, cp_node);
+
+        // XXX: Пусть будет нулевая сущность
+        de_create(r);
 
         de_entity e = de_create(r);
+
+        de_ecs_print_entities(r);
+        de_ecs_print_registered_types(r);
+        de_ecs_print_storages(r);
 
         // XXX: При добавлении к сущности компонента любого типа
         // de_has() срабатывает на любом типе.
         de_emplace(r, e, cp_type_17);
+
+        printf("--------------------------\n");
+        de_ecs_print_entities(r);
+        de_ecs_print_registered_types(r);
+        de_ecs_print_storages(r);
+
+        // de_storage_try_get(de_assure(r, cp_type), e);
+        // de_sparse_contains(&s->sparse, e) ? de_storage_get(s, e) : NULL;
+        // (eid < s->sparse_size) && (s->sparse[eid] != de_null);
+        // de_storage_get_by_index(s, de_sparse_index(&s->sparse, e));
+        // &((char*)s->cp_data)[index * s->cp_sizeof];
+        // s->sparse[de_entity_identifier(e)];
+
+        munit_assert(de_valid(r, e));
 
         munit_assert(de_try_get(r, e, cp_type_1) == NULL);
         munit_assert(de_try_get(r, e, cp_type_5) == NULL);
@@ -3836,9 +3981,9 @@ static MunitResult test_de_has(
         has = de_storage_contains(storage, de_null);
         printf("\ntest_has: has1 %s\n", has ? "true" : "false");
 
-
         bool has2 = de_storage_contains(de_assure(r, cp_type_5), e);
         printf("\ntest_has: has2 %s\n", has2 ? "true" : "false");
+
 
         de_ecs_free(r);
     }
@@ -3916,22 +4061,22 @@ static MunitResult test_de_has(
         de_ecs_register(r, cp_node);
 
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         de_entity e1 = de_create(r);
         de_emplace(r, e1, cp_triple);
 
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         de_entity e2 = de_create(r);
         de_emplace(r, e2, cp_cell);
 
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         de_entity e3 = de_create(r);
         de_emplace(r, e3, cp_node);
 
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
 
         if (verbose_print) {
             de_storage_print(r, cp_triple);
@@ -3947,13 +4092,13 @@ static MunitResult test_de_has(
         //de_destroy(r, e1);
         de_remove_all(r, e2);
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         de_remove_all(r, e1);
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         de_remove_all(r, e3);
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         //de_destroy(r, e2);
 
         if (verbose_print) {
@@ -3968,14 +4113,14 @@ static MunitResult test_de_has(
         munit_assert((e1 != e2) && (e1 != e3));
 
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
         
         munit_assert(de_orphan(r, e1) == true);
         munit_assert(de_orphan(r, e2) == true);
         munit_assert(de_orphan(r, e3) == true);
 
         if (verbose_print)
-            de_ecs_print(r);
+            de_ecs_print_entities(r);
 
         munit_assert(de_has(r, e1, cp_triple) == false);
         //munit_assert(de_has(r, e2, cp_cell) == false);
@@ -4017,6 +4162,10 @@ static MunitResult test_de_has(
 
         de_ecs_free(r);
     }
+
+    cp_type_1.on_emplace = NULL;
+    cp_type_17.on_emplace = NULL;
+    cp_type_5.on_emplace = NULL;
 
     return MUNIT_OK;
 }
