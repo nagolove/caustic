@@ -2619,7 +2619,7 @@ struct TestDestroyCtx facade_compare_with_ecs(struct TestDestroyCtx ctx) {
 
     // de_each(ctx.r, iter_ecs_each, &ctx);
 
-    de_entity e = de_null;
+    //de_entity e = de_null;
 
     /*
     e = 0;
@@ -2873,8 +2873,8 @@ static MunitResult test_destroy_zero(
 }
 
 const char *map_val2str(const void *data, int data_len) {
-    static char buf[128] = {}, 
-                *pbuf = buf;
+    static char buf[128] = {};//, 
+                /**pbuf = buf;*/
     assert(data);
     assert(data_len > 0);
     const EntityDesc *ed = data;
@@ -2895,9 +2895,11 @@ const char *map_val2str(const void *data, int data_len) {
     return buf;
 }
 
+/*
 static const char *EntityDesc_to_str(EntityDesc *ed) {
     return map_val2str(ed, sizeof(*ed));
 }
+*/
 
 static TestDestroyCtx facade_create() {
     return (TestDestroyCtx) {
@@ -2986,16 +2988,12 @@ static void _test_destroy(de_cp_type comps[3]) {
     Проверка, что состояние ecs контейнера соответствует ожидаемому.
     Проверка происходит через de_view c одним компонентом
  */
+
+__attribute_maybe_unused__
 static MunitResult test_create_emplace_destroy(
     const MunitParameter params[], void* data
 ) {
     printf("de_null %u\n", de_null);
-    //srand(time(NULL));
-
-    /*struct StrSet *set = strset_new();*/
-    /*struct koh_Set *set_ecs = set_new();*/
-
-
 
     de_cp_type setups[][3] = {
         // {{{
@@ -3098,11 +3096,6 @@ static MunitResult test_create_emplace_destroy(
     int setups_num = sizeof(setups) / sizeof(setups[0]);
 
     printf("setups_num %d\n", setups_num);
-    /*
-    for (int j = 0; j < setups_num; j++) {
-        _test_destroy(setups[j]);
-    }
-    */
     _test_destroy(setups[0]);
 
     return MUNIT_OK;

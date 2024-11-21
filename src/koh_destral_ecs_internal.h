@@ -107,6 +107,7 @@ typedef struct de_sparse {
 
     }}}
 */
+
 typedef struct de_storage {
     size_t      cp_id; /* component id for this storage */
     void*       cp_data; /*  packed component elements array. aligned with sparse->dense*/
