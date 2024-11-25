@@ -71,39 +71,55 @@ void ss_remove( SparseSet *ss, e_id id );
 // }}}
 
 typedef struct e_storage {
-    size_t      cp_id; // component id for this storage 
-    void*       cp_data; //  packed component elements array. aligned with sparse->dense
-    size_t      cp_data_size, cp_data_cap; // number of elements in the cp_data array 
-    size_t      cp_sizeof; // sizeof for each cp_data element 
+                // идентификатор компонета для данного хранилища
+    size_t      cp_id; 
+                // пакованные данные компонент. выровнены с sparse.dense
+    void*       cp_data; 
+                // текущее количество элементов
+    size_t      cp_data_size, 
+                // на сколько элементов выделена память
+                cp_data_cap,
+                // на сколько элементов изначально выделять память.
+                cp_data_initial_cap;
+
+                // размер элемента данных в cp_data
+    size_t      cp_sizeof; 
     SparseSet   sparse;
-    //void        (*on_destroy)(void *payload, de_entity e);
-    //void        (*on_emplace)(void *payload, de_entity e);
-    //uint32_t    *callbacks_flags;
+    void        (*on_destroy)(void *payload, e_id e);
+    void        (*on_emplace)(void *payload, e_id e);
     char        name[64];
-    size_t      initial_cap;
 } e_storage;
 
 #define E_REGISTRY_MAX 64
+const static int cp_data_initial_cap = 100;
+const static float cp_data_grow_policy = 1.5;
 
 typedef struct ecs_t {
-    e_storage**     storages; // array to pointers to storage 
-    size_t          storages_size, storages_cap; // size of the storages array 
-                                                 //
-    size_t          entities_size, entitities_cap;
-    e_id            *entities; // contains all the created entities 
+    e_storage       *storages; 
+                    // количество хранилищ
+    int             storages_size, 
+                    // на какое количество хранилищ выделно памяти
+                    storages_cap; 
+                                                
+    // количество созданных сущностей
+    size_t          entities_num;
 
-    // Кольцевой буфер для получения номер новых сущностей
-    e_id            *entities_cb;
-    e_id            entities_cb_i, entities_cb_j, entities_cb_len;
+    // если по индексу массива истина - то сущность с таким индексом 
+    // использована
+    bool            *entities;
 
-    // Максимальное количество сущностей в системе. Представляет собой 
-    // вместимость entities_cb и параметр при создании ss_alloc()
-    e_id            max_id;
+                    // Максимальное количество сущностей в системе. 
+                    // Представляет собой вместимость entities_cb и параметр 
+                    // при создании ss_alloc()
+    e_id            max_id, 
+                    // Индекс в entities, по нему создается новая сущность.
+                    avaible_index;
 
+    /*
     // зарегистрированные через de_ecs_register() компоненты
     e_cp_type       registry[E_REGISTRY_MAX];
     int             registry_num;
-
+    */
                     // de_cp_type.name => cp_type
     HTable          *cp_types,
                     // set of de_cp_type
@@ -118,11 +134,6 @@ typedef struct ecs_t {
     // Фильтр в ImGui интерфейсе для поиска
     int             ref_filter_func;
 } ecs_t;
-
-static e_id circle_buffer_pop(ecs_t *r);
-static void circle_buffer_init(ecs_t *r);
-static void circle_buffer_push(ecs_t *r, e_id e);
-static void circle_buffer_shutdown(ecs_t *r);
 
 // {{{ SparseSet implementation
 
@@ -232,6 +243,7 @@ void ss_remove( SparseSet *ss, e_id id )
 }
 
 // }}}
+//
 
 // {{{ Tests
 
@@ -294,81 +306,26 @@ MunitResult test_sparse_set(
     return MUNIT_OK;
 }
 
-MunitResult test_circle_buffer(
+MunitResult test_new_free(
     const MunitParameter params[], void* user_data_or_fixture
 ) {
 
     {
-        ecs_t r = {};
-        r.max_id = 10;
-        circle_buffer_init(&r);
-        circle_buffer_shutdown(&r);
+        ecs_t *r = e_new(NULL);
+        e_free(r);
     }
 
     {
-        ecs_t r = {};
-        r.max_id = 10;
-        circle_buffer_init(&r);
-        circle_buffer_push(&r, 1);
-        munit_assert(circle_buffer_pop(&r) == 1);
-        circle_buffer_shutdown(&r);
-    }
-
-    {
-        ecs_t r = {};
-        r.max_id = 5;
-        circle_buffer_init(&r);
-        circle_buffer_push(&r, 1);
-        circle_buffer_push(&r, 2);
-        circle_buffer_push(&r, 3);
-        circle_buffer_push(&r, 4);
-        circle_buffer_push(&r, 5);
-        munit_assert(circle_buffer_pop(&r) == 1);
-        munit_assert(circle_buffer_pop(&r) == 2);
-        munit_assert(circle_buffer_pop(&r) == 3);
-        munit_assert(circle_buffer_pop(&r) == 4);
-        munit_assert(circle_buffer_pop(&r) == 5);
-        circle_buffer_shutdown(&r);
-    }
-
-    {
-        ecs_t r = {};
-        r.max_id = 5;
-        circle_buffer_init(&r);
-        circle_buffer_push(&r, 1);
-        circle_buffer_push(&r, 2);
-        circle_buffer_push(&r, 3);
-        circle_buffer_push(&r, 4);
-        circle_buffer_push(&r, 5);
-        circle_buffer_push(&r, 6);
-        circle_buffer_push(&r, 7);
-        circle_buffer_push(&r, 8);
-        circle_buffer_push(&r, 9);
-
-        printf("\n circle_buffer_pop %ld\n", circle_buffer_pop(&r));
-        printf("\n circle_buffer_pop %ld\n", circle_buffer_pop(&r));
-        printf("\n circle_buffer_pop %ld\n", circle_buffer_pop(&r));
-        printf("\n circle_buffer_pop %ld\n", circle_buffer_pop(&r));
-        printf("\n circle_buffer_pop %ld\n", circle_buffer_pop(&r));
-        printf("\n circle_buffer_pop %ld\n", circle_buffer_pop(&r));
-
-        /*
-        munit_assert(circle_buffer_pop(&r) == 5);
-        munit_assert(circle_buffer_pop(&r) == 6);
-        munit_assert(circle_buffer_pop(&r) == 7);
-        munit_assert(circle_buffer_pop(&r) == 8);
-        munit_assert(circle_buffer_pop(&r) == 9);
-        */
-
-        circle_buffer_shutdown(&r);
+        ecs_t *r = e_new(&(e_options) {
+            .max_id = 100,
+        });
+        e_free(r);
     }
 
     return MUNIT_OK;
 }
 
-// }}}
-
-// {{{ Tests definitions
+// {{{ tests definitions
 static MunitTest test_e_internal[] = {
 
     {
@@ -381,14 +338,13 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/circle_buffer",
-      test_circle_buffer,
+      (char*) "/new_free",
+      test_new_free,
       NULL,
       NULL,
       MUNIT_TEST_OPTION_NONE,
       NULL
     },
-
 
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
@@ -407,7 +363,83 @@ void e_test_init() {
     printf("e_test_init\n");
 }
 
-// {{{ implementation
+// {{{ ecs implementation
+
+static inline void ecs_assert(ecs_t *r) {
+    assert(r);
+    assert(r->entities);
+    assert(r->entities_num >= 0);
+    // "с запасом"
+    assert(r->avaible_index + 1 < r->max_id);
+}
+
+static inline void cp_type_assert(e_cp_type cp_type) {
+    assert(cp_type.cp_sizeof > 0);
+    assert(strlen(cp_type.name) > 0);
+}
+
+// Проверить - зарегистрирован ли тип данных.
+static bool cp_is_registered(ecs_t *r, e_cp_type cp_type) {
+    ecs_assert(r);
+    return !htable_get(r->set_cp_types, &cp_type, sizeof(cp_type), NULL);
+}
+
+static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
+    if (!cp_is_registered(r, cp_type)) {
+        printf(
+            "e_cp_is_registered: '%s' type is not registered\n",
+            cp_type.name
+        );
+        abort();
+    }
+}
+
+static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
+    ecs_assert(r);
+    cp_type_assert(cp_type);
+    for (int i = 0; i < r->storages_size; i++) {
+        if (cp_type.cp_id == r->storages[i].cp_id) 
+            return &r->storages[i];
+    }
+    return NULL;
+}
+
+// Вернуть указатель(созданный или существующий) на хранилище для данного типа
+e_storage *storage_assure(ecs_t *r, e_cp_type cp_type) {
+    ecs_assert(r);
+    cp_type_assert(cp_type);
+
+    cp_is_registered_assert(r, cp_type);
+
+    e_storage *s = storage_find(r, cp_type);
+
+    if (!s) {
+        assert(r->storages_size + 1 < r->storages_cap);
+        s = &r->storages[r->storages_size++];
+
+        memset(s, 0, sizeof(*s));
+        // Инициализация хранилища
+        s->cp_data_initial_cap = cp_data_initial_cap;
+        s->cp_id = cp_type.cp_id;
+        s->cp_sizeof = cp_type.cp_sizeof;
+        s->on_emplace = cp_type.on_emplace;
+        s->on_destroy = cp_type.on_destroy;
+        strncpy(s->name, cp_type.name, sizeof(s->name));
+        s->sparse = ss_alloc(r->max_id);
+    }
+
+    return s;
+}
+
+static inline void storage_assert(e_storage *s) {
+    assert(s);
+    assert(s->cp_data);
+    assert(s->cp_data_cap > 0);
+    assert(s->cp_data_size > 0);
+    assert(strlen(s->name) > 3);
+}
+
+
 ecs_t *e_new(e_options *opts) {
     ecs_t *r = calloc(1, sizeof(*r));
     assert(r);
@@ -418,94 +450,170 @@ ecs_t *e_new(e_options *opts) {
         r->max_id = opts->max_id;
     }
 
+    r->avaible_index = 0;
+    r->entities_num = 0;
+    r->entities = calloc(r->max_id, sizeof(r->entities[0]));
+    assert(r->entities);
+
+    r->cp_types = htable_new(NULL);
+    r->set_cp_types = htable_new(NULL);
+
     return r;
 }
 
+static void storage_shutdown(e_storage *s) {
+    storage_assert(s);
+    if (s->cp_data) {
+        free(s->cp_data);
+        s->cp_data = NULL;
+    }
+    ss_free(&s->sparse);
+}
+
 void e_free(ecs_t *r) {
-    assert(r);
+    ecs_assert(r);
+
+    for (int i = 0; i < r->storages_size; r++) {
+        storage_shutdown(&r->storages[i]);
+    }
+
+    if (r->cp_types) {
+        htable_free(r->cp_types);
+        r->cp_types = NULL;
+    }
+
+    if (r->set_cp_types) {
+        htable_free(r->set_cp_types);
+        r->set_cp_types = NULL;
+    }
+
+    if (r->entities) {
+        free(r->entities);
+        r->entities = NULL;
+    }
+
     free(r);
 }
 
 void e_register(ecs_t *r, e_cp_type comp) {
-    assert(r);
-}
+    ecs_assert(r);
 
-// {{{ Кольцевой буфер
-
-static void circle_buffer_init(ecs_t *r) {
-    assert(r);
-    assert(r->max_id > 0);
-
-    r->entities_cb = calloc(r->max_id, sizeof(r->entities_cb[0]));
-    r->entities_cb_i = r->entities_cb_j = 0;
-    assert(r->entities_cb);
-}
-
-static void circle_buffer_shutdown(ecs_t *r) {
-    assert(r);
-    assert(r->entities_cb);
-    free(r->entities_cb);
-    r->entities_cb = NULL;
-}
-
-static e_id circle_buffer_pop(ecs_t *r) {
-    assert(r);
-    assert(r->entities_cb);
-
-    e_id ret = INT64_MIN;
-
-    if (r->entities_cb_len > 0) {
-        ret = r->entities_cb[r->entities_cb_j];
-        r->entities_cb_j = (r->entities_cb_j + 1) % r->max_id;
-        r->entities_cb_len--;
-    } else {
-        perror("Not enough entities in ecs");
+    if (cp_is_registered(r, comp)) {
+        printf("e_register: type '%s' already registered\n", comp.name);
         abort();
     }
 
-    printf("circle_buffer_pop: ret %ld\n", ret);
-    return ret;
+    htable_add(r->set_cp_types, &comp, sizeof(comp), NULL, 0);
 }
 
-static void circle_buffer_push(ecs_t *r, e_id e) {
-    assert(r);
-    assert(r->entities_cb);
-
-    r->entities_cb[r->entities_cb_i] = e;
-    r->entities_cb_i = (r->entities_cb_i + 1) % r->max_id;
-    r->entities_cb_len++;
-    if (r->entities_cb_len >= r->max_id) {
-        r->entities_cb_len = r->max_id;
-    }
-}
-
-
-// }}}
-
+// Вернуть новый идентификатор.
 e_id e_create(ecs_t* r) {
-    assert(r);
+    ecs_assert(r);
+    // Проверка, что можно создать сущность по данному индексу
+    assert(r->entities[r->avaible_index] == false);
 
-    return e_null;
+    e_id e = r->avaible_index;
+
+    printf("e_create: e %ld, entities_num %zu\n", e, r->entities_num);
+
+    r->entities[r->avaible_index] = true;
+    r->avaible_index = r->entities_num;
+    r->entities_num++;
+
+    return e;
+}
+
+static inline void entity_assert(ecs_t *r, e_id e) {
+    assert(e >= 0);
+    assert(e < r->max_id);
 }
 
 void e_destroy(ecs_t* r, e_id e) {
-    assert(r);
+    ecs_assert(r);
+    entity_assert(r, e);
+
+    // удалить все компоненты
+    e_remove_all(r, e);
+
+    // утилизировать занятость индекса
+    r->entities[e] = false;
+    r->avaible_index = e;
+    r->entities_num--;
+
+    assert(r->entities_num >= 0);
 }
 
+// Как проверить существование идентификатора?
 bool e_valid(ecs_t* r, e_id e) {
-    assert(r);
+    ecs_assert(r);
+    entity_assert(r, e);
+    return r->entities[e];
+}
 
-    return false;
+static void e_storage_remove(e_storage *s, e_id e) {
+    e_id pos2remove = s->sparse.sparse[e];
+    ss_remove(&s->sparse, e);
+
+    if (s->on_destroy) {
+        char *cp_data = s->cp_data;
+        void *payload = &cp_data[pos2remove * s->cp_sizeof];
+        s->on_destroy(payload, e);
+    }
+
+    // TODO: place your code here
 }
 
 void e_remove_all(ecs_t* r, e_id e) {
-    assert(r);
+    ecs_assert(r);
+    entity_assert(r, e);
+
+    for (int i = 0; i < r->storages_size; i++) {
+        if (ss_has(&r->storages[i].sparse, e)) {
+            e_storage_remove(&r->storages[i], e);
+        }
+    }
 }
 
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
-    assert(r);
+    ecs_assert(r);
+    entity_assert(r, e);
+    cp_is_registered_assert(r, cp_type);
 
-    return NULL;
+    if (!e_valid(r, e))
+        return NULL;
+
+    e_storage *s = storage_assure(r, cp_type);
+    storage_assert(s);
+
+    // Выделить начальное количество памяти
+    if (!s->cp_data) {
+        s->cp_data_cap = s->cp_data_initial_cap ? 
+                         s->cp_data_initial_cap : cp_data_initial_cap;
+        s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
+        assert(s->cp_data);
+    }
+
+    // Проверить вместимость и выделить еще памяти при необходимости
+    if (s->cp_data_size + 1 >= s->cp_data_cap) {
+        s->cp_data_cap *= cp_data_grow_policy;
+        s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
+        assert(s->cp_data);
+    }
+
+    s->cp_data_size++;
+
+
+    // Получить указатель на данные компонента
+    char *cp_data = s->cp_data;
+    void *comp_data = &cp_data[(s->cp_data_size - 1) * s->cp_sizeof];
+
+    // Добавить сущность в разреженный массив
+    ss_add(&s->sparse, e);
+
+    if (s->on_emplace)
+        s->on_emplace(comp_data, e);
+
+    return comp_data;
 }
 
 void e_remove(ecs_t* r, e_id e, e_cp_type cp_type) {
@@ -514,14 +622,37 @@ void e_remove(ecs_t* r, e_id e, e_cp_type cp_type) {
 
 bool e_has(ecs_t* r, e_id e, const e_cp_type cp_type) {
     assert(r);
+    cp_is_registered_assert(r, cp_type);
+    
+    if (!e_valid(r, e)) {
+        printf("e_has: e %ld is not valid\n", e);
+        abort();
+    }
 
-    return false;
+    e_storage *s = storage_assure(r, cp_type);
+    return ss_has(&s->sparse, e);
 }
 
 void* e_get(ecs_t* r, e_id e, e_cp_type cp_type) {
-    assert(r);
+    ecs_assert(r);
+    entity_assert(r, e);
+    cp_type_assert(cp_type);
 
-    return NULL;
+    e_storage *s = storage_assure(r, cp_type);
+
+    // Индекс занят?
+    if (ss_has(&s->sparse, e)) {
+        // Индекс в линейном маcсиве
+        e_id sparse_index = s->sparse.sparse[e];
+        assert(sparse_index >= 0);
+        assert(sparse_index < s->sparse.max);
+
+        char *cp_data = s->cp_data;
+        assert(cp_data);
+
+        return &cp_data[sparse_index * s->cp_sizeof];
+    } else 
+        return NULL;
 }
 
 void e_each(ecs_t* r, e_each_function fun, void* udata) {
@@ -594,19 +725,37 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
     return types;
 }
 
-void e_print_cp_type(e_cp_type c) {
-}
-
 const char *e_cp_type_2str(e_cp_type c) {
-    return NULL;
+    static char buf[512];
+
+    memset(buf, 0, sizeof(buf));
+    char *pbuf = buf;
+
+    char ptr_str[64] = {};
+
+#define ptr2str(ptr) (sprintf(ptr_str, "'%p'", ptr), ptr_str)
+
+    pbuf += sprintf(pbuf, "{ ");
+    pbuf += sprintf(pbuf, "cp_id = %zu, ", c.cp_id);
+    pbuf += sprintf(pbuf, "cp_sizeof = %zu, ", c.cp_sizeof);
+    pbuf += sprintf(pbuf, "on_emplace = %s, ", ptr2str(c.on_emplace));
+    pbuf += sprintf(pbuf, "on_destroy = %s, ", ptr2str(c.on_destroy));
+    pbuf += sprintf(pbuf, "str_repr = %s, ", ptr2str(c.str_repr));
+    pbuf += sprintf(pbuf, "name = '%s', ", c.name);
+    pbuf += sprintf(pbuf, "description = '%s', ", c.description);
+    pbuf += sprintf(pbuf, "initial_cap = %zu, ", c.initial_cap);
+    sprintf(pbuf, " }");
+
+#undef ptr2str
+
+    return buf;
 }
 
-void e_print_id(e_id e) {
-}
-
+/*
 const char *e_id_2str(e_id e) {
     return NULL;
 }
+*/
 
 e_each_iter e_each_begin(ecs_t *r) {
     assert(r);

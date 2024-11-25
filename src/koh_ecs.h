@@ -82,6 +82,8 @@ typedef struct e_options {
 ecs_t *e_new(e_options *opts);
 void e_free(ecs_t *r);
 
+// Зарегистрировать тип компонента до того, как использовать его в каких-либо
+// операциях.
 void e_register(ecs_t *r, e_cp_type comp);
 
 /*
@@ -90,18 +92,15 @@ void e_register(ecs_t *r, e_cp_type comp);
      - New identifier in case no entities have been previously destroyed
      - Recycled identifier with an update version.
 */
+// Создатьет идентификатор сущности.
 e_id e_create(ecs_t* r);
 
 /*
-    Удаляет сущность.
+    Удаляет сущность, со всеми компонентами
  */
 void e_destroy(ecs_t* r, e_id e);
 
-/*
-    Checks if an entity identifier is a valid one.
-    The entity e can be a valid or an invalid one.
-    Returns true if the identifier is valid, false otherwise
-*/
+// Возвращает истину если сущность создана и существует.
 bool e_valid(ecs_t* r, e_id e);
 
 /*
@@ -124,6 +123,8 @@ void e_remove_all(ecs_t* r, e_id e);
     entity that currently has this component instance id results in
     undefined behavior.
 */
+// Нельзя создавать долгоживущие указатели на данные компонента сущности 
+// так как память может быть перераспределена при очередном вызове e_emplace()
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type);
 
 /*
@@ -242,10 +243,9 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num);
 
 extern bool e_verbose;
 
-void e_cp_type_print(e_cp_type c);
+// Возвращает указатель на статический буфер с Lua таблицей описания типа.
 const char *e_cp_type_2str(e_cp_type c);
-void e_id_print(e_id e);
-const char *e_id_2str(e_id e);
+/*const char *e_id_2str(e_id e);*/
 
 typedef struct {
     ecs_t *r;
