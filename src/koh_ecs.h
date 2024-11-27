@@ -212,19 +212,20 @@ void e_orphans_each(ecs_t* r, e_each_function fun, void* udata);
 
 */
 
+#define E_MAX_VIEW_COMPONENTS (16)
+
 typedef struct e_view {
-    #define DE_MAX_VIEW_COMPONENTS (16)
     /* value is the component id, index is where is located in the all_pools array */
-    size_t to_pool_index[DE_MAX_VIEW_COMPONENTS];
-    struct e_storage* all_pools[DE_MAX_VIEW_COMPONENTS]; // de_storage opaque pointers
-    size_t pool_count;
-    struct e_storage* pool; // de_storage opaque pointer
-    size_t current_entity_index;
-    e_id current_entity;
+    size_t              to_pool_index[E_MAX_VIEW_COMPONENTS];
+    struct e_storage    *all_pools[E_MAX_VIEW_COMPONENTS]; // de_storage opaque pointers
+    size_t              pool_count;
+    struct e_storage    *wpool; // de_storage opaque pointer
+    size_t              current_entity_index;
+    e_id                current_entity;
 } e_view;
 
-
 e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
+// Тоже, что и e_view_create(), но для одного типа
 e_view e_view_create_single(ecs_t* r, e_cp_type cp_type);
 bool e_view_valid(e_view* v);
 e_id e_view_entity(e_view* v);
@@ -232,6 +233,9 @@ void* e_view_get(e_view *v, e_cp_type cp_type);
 void e_view_next(e_view* v);
 ecs_t *e_clone(ecs_t *r);
 void e_print_entities(ecs_t *r);
+// Возвращает массив номеров сущностей в виде Луа таблицы. 
+// Память нужно освобождать.
+char *e_entities2table_alloc(ecs_t *r);
 void e_gui(ecs_t *r, e_id e);
 void e_print_storage(ecs_t *r, e_cp_type cp_type);
 
@@ -262,4 +266,5 @@ e_id e_each_entity(e_each_iter *i);
 // Строки сравниваются по содержимому.
 int e_cp_type_cmp(e_cp_type a, e_cp_type b);
 
+// Недостижымый элемент, который всегда отсутствует в системе.
 extern const e_id e_null;

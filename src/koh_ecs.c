@@ -243,9 +243,53 @@ void ss_remove( SparseSet *ss, e_id id )
 }
 
 // }}}
-//
 
-// {{{ Tests
+// {{{ tests implementation
+
+MunitResult test_entities2table_alloc(const MunitParameter prms[], void* ud) {
+    ecs_t *r = e_new(NULL);
+    e_create(r);
+    e_create(r);
+    e_create(r);
+    char *s = e_entities2table_alloc(r);
+    if (s) {
+        /*koh_term_color_set(KOH_TERM_MAGENTA);*/
+
+        // проверить по шаблону {..0,..1,2} где точки обозначают любые 
+        // пробельные символы
+        const char *pattern = "{\\s*0\\s*,\\s*1\\s*,\\s*2\\s*,\\s*}";
+        int match = koh_str_match(s, NULL, pattern);
+        munit_assert(match != false);
+        /*printf("match %d for pattern '%s'\n", match, pattern);*/
+
+        /*printf("test_entities2table_alloc: '%s'\n", s);*/
+        /*koh_term_color_reset();*/
+
+        free(s);
+    } else {
+        // не хватило памяти?
+        munit_assert(false);
+    }
+    e_free(r);
+    return MUNIT_OK;
+}
+
+MunitResult test_orphan(const MunitParameter params[], void* userdata) {
+    {
+        ecs_t *r = e_new(NULL);
+        e_id entts[10] = {};
+        int entts_num = sizeof(entts) / sizeof(entts[0]);
+        for (int i = 0; i < entts_num; i++) {
+            entts[i] = e_create(r);
+        }
+        for (int i = 0; i < entts_num; i++) {
+            munit_assert(e_orphan(r, entts[i]) == true);
+        }
+        e_free(r);
+    }
+    return MUNIT_OK;
+}
+
 
 MunitResult test_sparse_set(
     const MunitParameter params[], void* user_data_or_fixture
@@ -322,8 +366,130 @@ MunitResult test_new_free(
         e_free(r);
     }
 
+    {
+        ecs_t *r = e_new(&(e_options) {
+            .max_id = pow(2, 16),
+        });
+        e_free(r);
+    }
+
     return MUNIT_OK;
 }
+
+MunitResult test_create_destroy(
+    const MunitParameter params[], void* user_data_or_fixture
+) {
+
+    // create 0
+    {
+        ecs_t *r = e_new(NULL);
+        e_id e = e_create(r);
+        munit_assert(e != e_null);
+        printf("test_create_destroy: e %ld\n", e);
+        e_free(r);
+    }
+    
+    // create 0, 1, 2
+    {
+        ecs_t *r = e_new(NULL);
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r);
+        munit_assert(e0 != e_null);
+        munit_assert(e1 != e_null);
+        munit_assert(e2 != e_null);
+        munit_assert_long(e0, ==, 0);
+        munit_assert_long(e1, ==, 1);
+        munit_assert_long(e2, ==, 2);
+        printf("test_create_destroy: e0 %ld\n", e0);
+        printf("test_create_destroy: e1 %ld\n", e1);
+        printf("test_create_destroy: e2 %ld\n", e2);
+        e_free(r);
+    }
+
+    // create 0, 1, 2 + entitie validation
+    {
+        ecs_t *r = e_new(NULL);
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r);
+        munit_assert(e0 != e_null);
+        munit_assert(e1 != e_null);
+        munit_assert(e2 != e_null);
+        munit_assert_long(e0, ==, 0);
+        munit_assert_long(e1, ==, 1);
+        munit_assert_long(e2, ==, 2);
+        munit_assert(e_valid(r, e0) == true);
+        munit_assert(e_valid(r, e1) == true);
+        munit_assert(e_valid(r, e2) == true);
+        printf("test_create_destroy: e0 %ld\n", e0);
+        printf("test_create_destroy: e1 %ld\n", e1);
+        printf("test_create_destroy: e2 %ld\n", e2);
+        e_free(r);
+    }
+
+    // create 0, 1, 2 + entity validation + destroy
+    {
+        ecs_t *r = e_new(NULL);
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r);
+        munit_assert(e0 != e_null);
+        munit_assert(e1 != e_null);
+        munit_assert(e2 != e_null);
+        munit_assert_long(e0, ==, 0);
+        munit_assert_long(e1, ==, 1);
+        munit_assert_long(e2, ==, 2);
+        munit_assert(e_valid(r, e0) == true);
+        munit_assert(e_valid(r, e1) == true);
+        munit_assert(e_valid(r, e2) == true);
+        e_destroy(r, e0);
+        e_destroy(r, e1);
+        e_destroy(r, e2);
+        munit_assert(e_valid(r, e0) == false);
+        munit_assert(e_valid(r, e1) == false);
+        munit_assert(e_valid(r, e2) == false);
+        printf("test_create_destroy: e0 %ld\n", e0);
+        printf("test_create_destroy: e1 %ld\n", e1);
+        printf("test_create_destroy: e2 %ld\n", e2);
+        e_free(r);
+    }
+
+    // create 0, 1, 2 + entity validation + destroy
+    // тоже самое, но в нескольких проходах
+    {
+        ecs_t *r = e_new(NULL);
+        for (int i = 0; i < 10; i++) {
+            printf("test_create_destroy: with iterations: i %d\n", i);
+            e_id e0 = e_create(r),
+                 e1 = e_create(r),
+                 e2 = e_create(r);
+            munit_assert(e0 != e_null);
+            munit_assert(e1 != e_null);
+            munit_assert(e2 != e_null);
+            munit_assert_long(e0, ==, 0);
+            munit_assert_long(e1, ==, 1);
+            munit_assert_long(e2, ==, 2);
+            munit_assert(e_valid(r, e0) == true);
+            munit_assert(e_valid(r, e1) == true);
+            munit_assert(e_valid(r, e2) == true);
+            e_destroy(r, e0);
+            e_destroy(r, e1);
+            e_destroy(r, e2);
+            munit_assert(e_valid(r, e0) == false);
+            munit_assert(e_valid(r, e1) == false);
+            munit_assert(e_valid(r, e2) == false);
+            printf("test_create_destroy: e0 %ld\n", e0);
+            printf("test_create_destroy: e1 %ld\n", e1);
+            printf("test_create_destroy: e2 %ld\n", e2);
+        }
+        e_free(r);
+    }
+
+    return MUNIT_OK;
+}
+
+// }}} 
 
 // {{{ tests definitions
 static MunitTest test_e_internal[] = {
@@ -346,6 +512,35 @@ static MunitTest test_e_internal[] = {
       NULL
     },
 
+    {
+      (char*) "/entities2table_alloc",
+      test_entities2table_alloc,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+    
+    {
+      (char*) "/create_destroy",
+      test_create_destroy,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    /*
+    {
+      (char*) "/orphan",
+      test_orphan,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+    */
+
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
@@ -357,13 +552,13 @@ MunitSuite test_e_suite_internal = {
     MUNIT_SUITE_OPTION_NONE,
 };
 
-// }}} 
-
-void e_test_init() {
-    printf("e_test_init\n");
-}
+// }}}
 
 // {{{ ecs implementation
+
+void e_test_init() {
+    printf("e_test_init:\n");
+}
 
 static inline void ecs_assert(ecs_t *r) {
     assert(r);
@@ -509,16 +704,21 @@ void e_register(ecs_t *r, e_cp_type comp) {
 // Вернуть новый идентификатор.
 e_id e_create(ecs_t* r) {
     ecs_assert(r);
+
+    e_print_entities(r);
+
     // Проверка, что можно создать сущность по данному индексу
     assert(r->entities[r->avaible_index] == false);
 
     e_id e = r->avaible_index;
 
-    printf("e_create: e %ld, entities_num %zu\n", e, r->entities_num);
+    printf("e_create: e %ld, entities_num %zu, ", e, r->entities_num);
 
     r->entities[r->avaible_index] = true;
-    r->avaible_index = r->entities_num;
-    r->entities_num++;
+    r->avaible_index = ++r->entities_num;
+    //r->entities_num++;
+
+    printf("avaible_index %ld\n", r->avaible_index);
 
     return e;
 }
@@ -534,6 +734,8 @@ void e_destroy(ecs_t* r, e_id e) {
 
     // удалить все компоненты
     e_remove_all(r, e);
+
+    e_print_entities(r);
 
     // утилизировать занятость индекса
     r->entities[e] = false;
@@ -656,31 +858,45 @@ void* e_get(ecs_t* r, e_id e, e_cp_type cp_type) {
 }
 
 void e_each(ecs_t* r, e_each_function fun, void* udata) {
-    assert(r);
+    ecs_assert(r);
+    assert(fun);
+
+    for (int i = 0; i < r->entities_num; i++) {
+        if (r->entities[i])
+            fun(r, i, udata);
+    }
 }
 
 bool e_orphan(ecs_t* r, e_id e) {
-    assert(r);
+    ecs_assert(r);
+    entity_assert(r, e);
 
-    return false;
+    int types_num = 0;
+    e_types(r, e, &types_num);
+    return types_num == 0;
 }
 
 void e_orphans_each(ecs_t* r, e_each_function fun, void* udata) {
-    assert(r);
+    ecs_assert(r);
+    assert(fun);
+
+    for (int i = 0; i < r->entities_num; i++) {
+        if (r->entities[i] && e_orphan(r, i)) {
+            fun(r, i, udata);
+        }
+    }
 }
 
 e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types) {
-    assert(r);
+    ecs_assert(r);
+    assert(cp_types);
 
     e_view v = {};
     return v;
 }
 
 e_view e_view_create_single(ecs_t* r, e_cp_type cp_type) {
-    assert(r);
-
-    e_view v = {};
-    return v;
+    return e_view_create(r, 1, &cp_type);
 }
 
 bool e_view_valid(e_view* v) {
@@ -707,8 +923,33 @@ ecs_t *e_clone(ecs_t *r) {
     return NULL;
 }
 
+char *e_entities2table_alloc(ecs_t *r) {
+    ecs_assert(r);
+
+    // количество байт, которого должно хватить для строкого представления числа
+    const int number_size = 8; 
+    char *s = calloc(number_size * (r->entities_num + 1), sizeof(char)), 
+         *ps = s;
+    if (s) {
+        ps += sprintf(ps, "{ ");
+        for (int64_t i = 0; i < r->max_id; i++) {
+            if (r->entities[i]) {
+                ps += sprintf(ps, "%ld, ", i);
+            }
+        }
+        sprintf(ps, " }");
+        return s;
+    }
+    return NULL;
+}
+
 void e_print_entities(ecs_t *r) {
-    assert(r);
+    char *s = e_entities2table_alloc(r);
+    assert(s);
+    if (s) {
+        printf("%s\n", s);
+        free(s);
+    }
 }
 
 void e_gui(ecs_t *r, e_id e) {
@@ -778,7 +1019,23 @@ e_id e_each_entity(e_each_iter *i) {
 }
 
 int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
-    return 0;
+    assert(a.name);
+    assert(b.name);
+
+    bool r_name = a.name && b.name ? 
+                  strcmp(a.name, b.name) : 0;
+    bool r_desctiprion = a.description && b.description ? 
+                         strcmp(a.description, b.description) : 0;
+
+    return !(
+        a.cp_id == b.cp_id &&
+        a.cp_sizeof == b.cp_sizeof &&
+        a.on_emplace == b.on_emplace &&
+        a.on_destroy == b.on_destroy &&
+        a.str_repr == b.str_repr &&
+        !r_name &&
+        !r_desctiprion &&
+        a.initial_cap == b.initial_cap);
 }
 
 // }}}
