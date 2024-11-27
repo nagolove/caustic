@@ -219,7 +219,7 @@ typedef struct e_view {
     size_t              to_pool_index[E_MAX_VIEW_COMPONENTS];
     struct e_storage    *all_pools[E_MAX_VIEW_COMPONENTS]; // de_storage opaque pointers
     size_t              pool_count;
-    struct e_storage    *wpool; // de_storage opaque pointer
+    struct e_storage    *pool; // de_storage opaque pointer
     size_t              current_entity_index;
     e_id                current_entity;
 } e_view;
