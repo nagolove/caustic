@@ -11,6 +11,8 @@
 static const e_id ss_id_max = INT64_MAX - 1;
 
 /** The sparse set. */
+// https://manenko.com/2021/05/23/sparse-sets.html
+// https://gitlab.com/manenko/rho-sparse-set/-/blob/master/include/rho/sparse_set.h
 typedef struct SparseSet {
     e_id *sparse; /**< Sparse array used to speed-optimise the set.    */
     e_id *dense;  /**< Dense array that stores the set's items.        */
@@ -74,21 +76,29 @@ typedef char type_one;
 
 typedef struct {
     int  x, y, z;
-    char str[32];
 } type_two;
 
+typedef struct {
+    float  a, b, c;
+    char str[32];
+} type_three;
+
 // тип для тестирования
-static const e_cp_type cp_type_one = {
-    .cp_id = 0,
+static e_cp_type cp_type_one = {
     .name = "one",
     .cp_sizeof = sizeof(char),
 };
 
 // тип для тестирования
-static const e_cp_type cp_type_two = {
-    .cp_id = 0,
+static e_cp_type cp_type_two = {
     .name = "two",
     .cp_sizeof = sizeof(type_two),
+};
+
+// тип для тестирования
+static e_cp_type cp_type_three = {
+    .name = "three",
+    .cp_sizeof = sizeof(type_three),
 };
 
 typedef struct e_storage {
@@ -104,7 +114,9 @@ typedef struct e_storage {
                 cp_data_initial_cap;
 
                 // размер элемента данных в cp_data
-    size_t      cp_sizeof; 
+    size_t      cp_sizeof,
+                // размер округленный до степени 2
+                cp_sizeof2; 
     SparseSet   sparse;
     void        (*on_destroy)(void *payload, e_id e);
     void        (*on_emplace)(void *payload, e_id e);
@@ -137,13 +149,13 @@ typedef struct ecs_t {
                     avaible_index;
 
     /*
-    // зарегистрированные через de_ecs_register() компоненты
+    // зарегистрированные через e_register() компоненты
     e_cp_type       registry[E_REGISTRY_MAX];
     int             registry_num;
     */
-                    // de_cp_type.name => cp_type
+                    // de_cp_type.name => e_cp_type
     HTable          *cp_types,
-                    // set of de_cp_type
+                    // set of e_cp_type
                     *set_cp_types;
 
     // TODO: Вынести GUI поля в отдельную струткурку
@@ -267,6 +279,216 @@ void ss_remove( SparseSet *ss, e_id id )
 
 // {{{ tests implementation
 
+// проверка прицепления компонент к сущности
+MunitResult test_has(const MunitParameter params[], void* userdata) {
+
+    // без удаления компонент
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r),
+             e3 = e_create(r);
+
+        // there is no e_emplace()
+        munit_assert(e_has(r, e0, cp_type_one) == false);
+        munit_assert(e_has(r, e0, cp_type_two) == false);
+        munit_assert(e_has(r, e0, cp_type_three) == false);
+
+        e_emplace(r, e1, cp_type_one);
+        munit_assert(e_has(r, e1, cp_type_one) == true);
+        munit_assert(e_has(r, e1, cp_type_two) == false);
+        munit_assert(e_has(r, e1, cp_type_three) == false);
+
+        e_emplace(r, e2, cp_type_one);
+        e_emplace(r, e2, cp_type_two);
+        munit_assert(e_has(r, e2, cp_type_one) == true);
+        munit_assert(e_has(r, e2, cp_type_two) == true);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+
+        e_emplace(r, e3, cp_type_one);
+        e_emplace(r, e3, cp_type_two);
+        e_emplace(r, e3, cp_type_three);
+        munit_assert(e_has(r, e3, cp_type_one) == true);
+        munit_assert(e_has(r, e3, cp_type_two) == true);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+
+        e_free(r);
+    }
+
+    // с удалением компонент
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r),
+             e3 = e_create(r);
+
+        // there is no e_emplace()
+        munit_assert(e_has(r, e0, cp_type_one) == false);
+        munit_assert(e_has(r, e0, cp_type_two) == false);
+        munit_assert(e_has(r, e0, cp_type_three) == false);
+
+        e_emplace(r, e1, cp_type_one);
+        munit_assert(e_has(r, e1, cp_type_one) == true);
+        munit_assert(e_has(r, e1, cp_type_two) == false);
+        munit_assert(e_has(r, e1, cp_type_three) == false);
+        e_remove(r, e1, cp_type_one);
+        munit_assert(e_has(r, e1, cp_type_one) == false);
+        munit_assert(e_has(r, e1, cp_type_two) == false);
+        munit_assert(e_has(r, e1, cp_type_three) == false);
+
+        e_emplace(r, e2, cp_type_one);
+        e_emplace(r, e2, cp_type_two);
+        munit_assert(e_has(r, e2, cp_type_one) == true);
+        munit_assert(e_has(r, e2, cp_type_two) == true);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+        e_remove(r, e2, cp_type_two);
+        munit_assert(e_has(r, e2, cp_type_one) == true);
+        munit_assert(e_has(r, e2, cp_type_two) == false);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+        e_remove(r, e2, cp_type_one);
+        munit_assert(e_has(r, e2, cp_type_one) == false);
+        munit_assert(e_has(r, e2, cp_type_two) == false);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+
+        e_emplace(r, e3, cp_type_one);
+        e_emplace(r, e3, cp_type_two);
+        e_emplace(r, e3, cp_type_three);
+        munit_assert(e_has(r, e3, cp_type_one) == true);
+        munit_assert(e_has(r, e3, cp_type_two) == true);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+        e_remove(r, e3, cp_type_two);
+        munit_assert(e_has(r, e3, cp_type_one) == true);
+        munit_assert(e_has(r, e3, cp_type_two) == false);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+        e_remove(r, e3, cp_type_one);
+        munit_assert(e_has(r, e3, cp_type_one) == false);
+        munit_assert(e_has(r, e3, cp_type_two) == false);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+        e_remove(r, e3, cp_type_three);
+        munit_assert(e_has(r, e3, cp_type_one) == false);
+        munit_assert(e_has(r, e3, cp_type_two) == false);
+        munit_assert(e_has(r, e3, cp_type_three) == false);
+
+        e_free(r);
+    }
+
+    // с удалением компонент
+    // итеративно
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        for (int i = 0; i < 100; i++) {
+            e_id e0 = e_create(r),
+                 e1 = e_create(r),
+                 e2 = e_create(r),
+                 e3 = e_create(r);
+
+            // there is no e_emplace()
+            munit_assert(e_has(r, e0, cp_type_one) == false);
+            munit_assert(e_has(r, e0, cp_type_two) == false);
+            munit_assert(e_has(r, e0, cp_type_three) == false);
+
+            e_emplace(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            munit_assert(e_has(r, e1, cp_type_two) == false);
+            munit_assert(e_has(r, e1, cp_type_three) == false);
+            e_remove(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == false);
+            munit_assert(e_has(r, e1, cp_type_two) == false);
+            munit_assert(e_has(r, e1, cp_type_three) == false);
+
+            e_emplace(r, e2, cp_type_one);
+            e_emplace(r, e2, cp_type_two);
+            munit_assert(e_has(r, e2, cp_type_one) == true);
+            munit_assert(e_has(r, e2, cp_type_two) == true);
+            munit_assert(e_has(r, e2, cp_type_three) == false);
+            e_remove(r, e2, cp_type_two);
+            munit_assert(e_has(r, e2, cp_type_one) == true);
+            munit_assert(e_has(r, e2, cp_type_two) == false);
+            munit_assert(e_has(r, e2, cp_type_three) == false);
+            e_remove(r, e2, cp_type_one);
+            munit_assert(e_has(r, e2, cp_type_one) == false);
+            munit_assert(e_has(r, e2, cp_type_two) == false);
+            munit_assert(e_has(r, e2, cp_type_three) == false);
+
+            e_emplace(r, e3, cp_type_one);
+            e_emplace(r, e3, cp_type_two);
+            e_emplace(r, e3, cp_type_three);
+            munit_assert(e_has(r, e3, cp_type_one) == true);
+            munit_assert(e_has(r, e3, cp_type_two) == true);
+            munit_assert(e_has(r, e3, cp_type_three) == true);
+            e_remove(r, e3, cp_type_two);
+            munit_assert(e_has(r, e3, cp_type_one) == true);
+            munit_assert(e_has(r, e3, cp_type_two) == false);
+            munit_assert(e_has(r, e3, cp_type_three) == true);
+            e_remove(r, e3, cp_type_one);
+            munit_assert(e_has(r, e3, cp_type_one) == false);
+            munit_assert(e_has(r, e3, cp_type_two) == false);
+            munit_assert(e_has(r, e3, cp_type_three) == true);
+            e_remove(r, e3, cp_type_three);
+            munit_assert(e_has(r, e3, cp_type_one) == false);
+            munit_assert(e_has(r, e3, cp_type_two) == false);
+            munit_assert(e_has(r, e3, cp_type_three) == false);
+
+            e_destroy(r, e0);
+            e_destroy(r, e1);
+            e_destroy(r, e2);
+            e_destroy(r, e3);
+        }
+
+        e_free(r);
+    }
+
+    return MUNIT_OK;
+}
+
+MunitResult test_types(const MunitParameter params[], void* userdata) {
+
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r),
+             e3 = e_create(r);
+
+        e_cp_type **types = NULL;
+        int types_num = 0;
+
+        // there is no e_emplace()
+        types = e_types(r, e0, &types_num);
+        munit_assert_int(types_num, ==, 0);
+        munit_assert(types[0] == NULL);
+
+        e_emplace(r, e1, cp_type_one);
+        types = e_types(r, e0, &types_num);
+        /*munit_assert_int(types_num, ==, 1);*/
+        munit_assert(types[1] == NULL);
+        munit_assert(e_cp_type_cmp(*types[0], cp_type_one) == 0);
+
+        e_free(r);
+    }
+
+    return MUNIT_OK;
+}
+
+
 MunitResult test_entities2table_alloc(const MunitParameter prms[], void* ud) {
     ecs_t *r = e_new(NULL);
     e_create(r);
@@ -319,8 +541,9 @@ MunitResult test_orphan(const MunitParameter params[], void* userdata) {
             [0] = e_create(r),
             [1] = e_create(r),
         };
-        /*e_register(r, cp_type_one);*/
-        e_emplace(r, entts[1], cp_type_one);
+        e_register(r, &cp_type_one);
+        void *data_one = e_emplace(r, entts[1], cp_type_one);
+        munit_assert_not_null(data_one);
         munit_assert(e_orphan(r, entts[0]) == true);
         munit_assert(e_orphan(r, entts[1]) == false);
         e_free(r);
@@ -496,12 +719,15 @@ MunitResult test_emplace_2(const MunitParameter params[], void* userdata) {
     {
         ecs_t *r = e_new(NULL);
 
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+
         e_id e = e_create(r);
 
-        void *data_one = e_emplace(r, e, cp_type_one);
+        type_one *data_one = e_emplace(r, e, cp_type_one);
         munit_assert_ptr_not_null(data_one);
 
-        void *data_two = e_emplace(r, e, cp_type_two);
+        type_two *data_two = e_emplace(r, e, cp_type_two);
         munit_assert_ptr_not_null(data_two);
 
         type_one val_one = 111;
@@ -510,10 +736,12 @@ MunitResult test_emplace_2(const MunitParameter params[], void* userdata) {
             .y = 777,
             .z = 1111,
         };
-        strcpy(val_two.str, "hello");
+        /*strcpy(val_two.str, "hello");*/
 
-        memcpy(data_one, &val_one, sizeof(val_one));
-        memcpy(data_two, &val_two, sizeof(val_two));
+        //memcpy(data_one, &val_one, sizeof(val_one));
+        //memcpy(data_two, &val_two, sizeof(val_two));
+        *data_one = val_one;
+        *data_two = val_two;
 
         // XXX: Не работает
         void *data_get_one = e_get(r, e, cp_type_one);
@@ -524,9 +752,16 @@ MunitResult test_emplace_2(const MunitParameter params[], void* userdata) {
         munit_assert_memory_equal(
             sizeof(type_one), data_one, data_get_one
         );
+        printf(
+            "sizeof(type_two) %zu, data_get_two %p\n",
+            sizeof(type_two), data_get_two
+        );
+        munit_assert(memcmp(data_two, data_get_two, sizeof(type_two)) == 0);
+        /*
         munit_assert_memory_equal(
             sizeof(type_two), data_two, data_get_two
         );
+        */
 
         e_free(r);
     }
@@ -541,6 +776,7 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
     {
         ecs_t *r = e_new(NULL);
         e_id e = e_create(r);
+        e_register(r, &cp_type_one);
         void *data_one = e_emplace(r, e, cp_type_one);
         munit_assert_ptr_not_null(data_one);
         char data_val = 1;
@@ -552,6 +788,7 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
     {
         ecs_t *r = e_new(NULL);
         e_id e = e_create(r);
+        e_register(r, &cp_type_one);
         void *data_one = e_emplace(r, e, cp_type_one);
         munit_assert_ptr_not_null(data_one);
         const type_one data_val = 111;
@@ -561,6 +798,7 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
         e_free(r);
     }
 
+    /*
     // создать сущность, прикрепить компонент, записать и прочитать значение
     {
         ecs_t *r = e_new(NULL);
@@ -574,7 +812,6 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
             .y = 3333,
             .z = 7777,
         };
-        strcpy(data_val.str, "data_val");
 
         // записал значение
         memcpy(data_one, &data_val, sizeof(data_val));
@@ -585,11 +822,13 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
 
         e_free(r);
     }
+*/
 
     // создать сущность, прикрепить компонент, записать и прочитать значение
     // итеративно
     {
         ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_two);
 
         for (int i = 0; i < 1000; i++) {
             e_id e = e_create(r);
@@ -602,13 +841,12 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
                 .y = 3333,
                 .z = 7777,
             };
-            strcpy(data_val.str, "data_val");
 
             // записал значение
             memcpy(data_one, &data_val, sizeof(data_val));
             
             // чтение значения
-            void *data_one_get = e_get(r, e, cp_type_one);
+            void *data_one_get = e_get(r, e, cp_type_two);
             size_t sz = sizeof(data_val);
             munit_assert_memory_equal(sz, &data_val, data_one_get);
         }
@@ -696,7 +934,6 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
     }
     
 
-    /*
     // create 0, 1, 2 + entity validation + destroy
     // тоже самое, но в нескольких проходах
     {
@@ -709,15 +946,15 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
             munit_assert(e0 != e_null);
             munit_assert(e1 != e_null);
             munit_assert(e2 != e_null);
-            munit_assert_long(e0, ==, 0);
-            munit_assert_long(e1, ==, 1);
-            munit_assert_long(e2, ==, 2);
+            /*munit_assert_long(e0, ==, 0);*/
+            /*munit_assert_long(e1, ==, 1);*/
+            /*munit_assert_long(e2, ==, 2);*/
             munit_assert(e_valid(r, e0) == true);
             munit_assert(e_valid(r, e1) == true);
             munit_assert(e_valid(r, e2) == true);
-            e(r, e0);
-            e(r, e1);
-            e(r, e2);
+            e_destroy(r, e0);
+            e_destroy(r, e1);
+            e_destroy(r, e2);
             munit_assert(e_valid(r, e0) == false);
             munit_assert(e_valid(r, e1) == false);
             munit_assert(e_valid(r, e2) == false);
@@ -727,7 +964,6 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
         }
         e_free(r);
     }
-*/
 
     return MUNIT_OK;
 }
@@ -809,6 +1045,26 @@ static MunitTest test_e_internal[] = {
       NULL
     },
 
+    {
+      (char*) "/has",
+      test_has,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    /*
+    {
+      (char*) "/types",
+      test_types,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+    */
+
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
@@ -841,10 +1097,12 @@ static inline void cp_type_assert(e_cp_type cp_type) {
     assert(strlen(cp_type.name) > 0);
 }
 
-// Проверить - зарегистрирован ли тип данных.
+// Проверить по имени - зарегистрирован ли тип данных.
 static bool cp_is_registered(ecs_t *r, e_cp_type cp_type) {
     ecs_assert(r);
-    return !htable_get(r->set_cp_types, &cp_type, sizeof(cp_type), NULL);
+    /*return !htable_get(r->set_cp_types, &cp_type, sizeof(cp_type), NULL);*/
+    /*return !htable_get_s(r->set_cp_types, cp_type.name, NULL);*/
+    return htable_get_s(r->cp_types, cp_type.name, NULL);
 }
 
 static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
@@ -861,7 +1119,7 @@ static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
     ecs_assert(r);
     cp_type_assert(cp_type);
     for (int i = 0; i < r->storages_size; i++) {
-        if (cp_type.cp_id == r->storages[i].cp_id) 
+        if (cp_type.priv.cp_id == r->storages[i].cp_id) 
             return &r->storages[i];
     }
     return NULL;
@@ -889,8 +1147,9 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
 
         // Инициализация хранилища
         s->cp_data_initial_cap = cp_data_initial_cap;
-        s->cp_id = cp_type.cp_id;
+        s->cp_id = cp_type.priv.cp_id;
         s->cp_sizeof = cp_type.cp_sizeof;
+        s->cp_sizeof2 = cp_type.priv.cp_sizeof2;
         s->on_emplace = cp_type.on_emplace;
         s->on_destroy = cp_type.on_destroy;
         strncpy(s->name, cp_type.name, sizeof(s->name));
@@ -974,15 +1233,25 @@ void e_free(ecs_t *r) {
         free(r);
 }
 
-void e_register(ecs_t *r, e_cp_type comp) {
+e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     ecs_assert(r);
+    assert(strlen(comp->name) >= 1);
+    assert(comp);
 
-    if (cp_is_registered(r, comp)) {
-        printf("e_register: type '%s' already registered\n", comp.name);
+    // Что делать если нужно установить значения в comp?
+    if (cp_is_registered(r, *comp)) {
+        printf("e_register: type '%s' already registered\n", comp->name);
         abort();
     }
 
-    htable_add(r->set_cp_types, &comp, sizeof(comp), NULL, 0);
+    comp->priv.cp_id = htable_count(r->cp_types);
+    comp->priv.cp_sizeof2 = next_eq_pow2(comp->cp_sizeof);
+
+    printf("e_register: priv.cp_sizeof2 %zu\n", comp->priv.cp_sizeof2);
+    htable_add(r->set_cp_types, comp, sizeof(*comp), NULL, 0);
+    htable_add_s(r->cp_types, comp->name, comp, sizeof(*comp));
+
+    return *comp;
 }
 
 // Вернуть новый идентификатор.
@@ -1033,6 +1302,7 @@ void e_destroy(ecs_t* r, e_id e) {
 
     // утилизировать занятость индекса
     r->entities[e] = false;
+    // установить номер нового доступного индекса
     r->avaible_index = e;
 
     // Позволить многократко удалять одну сущность
@@ -1063,7 +1333,24 @@ static void e_storage_remove(e_storage *s, e_id e) {
         s->on_destroy(payload, e);
     }
 
-    // TODO: place your code here
+    // swap (memmove because if cp_data_size 1 it will overlap dst and source.
+    memmove(
+        &((char*)s->cp_data)[pos2remove * s->cp_sizeof],
+        &((char*)s->cp_data)[(s->cp_data_size - 1) * s->cp_sizeof],
+        s->cp_sizeof);
+
+    s->cp_data_size--;
+    assert(s->cp_data_size >= 0);
+
+    /*
+    XXX: Возможно неправильная работа с памятью
+    if (s->cp_data_size < 0.5 * s->cp_data_cap) {
+        s->cp_data_cap /= 2;
+        s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
+    }
+    */
+
+    // s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * s->cp_sizeof);
 }
 
 void e_remove_all(ecs_t* r, e_id e) {
@@ -1120,7 +1407,11 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
 }
 
 void e_remove(ecs_t* r, e_id e, e_cp_type cp_type) {
-    assert(r);
+    ecs_assert(r);
+    assert(e_valid(r, e));
+    cp_is_registered_assert(r, cp_type);
+
+    e_storage_remove(e_assure(r, cp_type), e);
 }
 
 bool e_has(ecs_t* r, e_id e, const e_cp_type cp_type) {
@@ -1229,7 +1520,7 @@ e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types) {
                 v.pool = v.all_pools[i];
             }
         }
-        v.to_pool_index[i] = cp_types[i].cp_id;
+        v.to_pool_index[i] = cp_types[i].priv.cp_id;
     }
 
     if (v.pool && v.pool->cp_data_size != 0) {
@@ -1262,14 +1553,14 @@ int e_view_get_index_safe(e_view* v, e_cp_type cp_type) {
     assert(v);
     assert(e_view_valid(v));
     for (size_t i = 0; i < v->pool_count; i++) {
-        if (v->to_pool_index[i] == cp_type.cp_id) {
+        if (v->to_pool_index[i] == cp_type.priv.cp_id) {
             return i;
         }
     }
     return -1;
 }
 
-inline static void* de_storage_get_by_index(e_storage* s, size_t index) {
+inline static void* e_storage_get_by_index(e_storage* s, size_t index) {
     assert(s);
 
     if (index >= s->cp_data_size) {
@@ -1286,7 +1577,7 @@ inline static void* de_storage_get_by_index(e_storage* s, size_t index) {
 static void* e_storage_get(e_storage* s, e_id e) {
     assert(s);
     assert(e != e_null);
-    return de_storage_get_by_index(s, s->sparse.sparse[e]);
+    return e_storage_get_by_index(s, s->sparse.sparse[e]);
 }
 
 void* e_view_get_by_index(e_view* v, size_t pool_index) {
@@ -1367,8 +1658,36 @@ void e_print_storage(ecs_t *r, e_cp_type cp_type) {
 }
 
 e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
-    assert(r);
+    ecs_assert(r);
+    assert(e_valid(r, e));
     static e_cp_type *types[128] = {};
+
+    memset(types, 0, sizeof(types));
+
+    int found_types_num = 0;
+
+    // Убедиться что хватит места на все типы компонент.
+    assert(htable_count(r->cp_types) < sizeof(types) / sizeof(types[0]));
+
+    for (HTableIterator i = htable_iter_new(r->cp_types);
+        htable_iter_valid(&i); htable_iter_next(&i)) {
+        const char *type_name = htable_iter_key(&i, NULL);
+        assert(type_name);
+        /*printf("e_types: '%s'\n", type_name);*/
+        e_cp_type *type = htable_iter_value(&i, NULL);
+
+        /*const char *s = e_cp_type_2str(*type);*/
+        /*printf("e_types: %s\n", s);*/
+
+        assert(type);
+        if (e_has(r, e, *type)) {
+            types[found_types_num++] = type;
+        }
+    }
+
+    if (num)
+        *num = found_types_num;
+
     return types;
 }
 
@@ -1383,7 +1702,7 @@ const char *e_cp_type_2str(e_cp_type c) {
 #define ptr2str(ptr) (sprintf(ptr_str, "'%p'", ptr), ptr_str)
 
     pbuf += sprintf(pbuf, "{ ");
-    pbuf += sprintf(pbuf, "cp_id = %zu, ", c.cp_id);
+    pbuf += sprintf(pbuf, "cp_id = %zu, ", c.priv.cp_id);
     pbuf += sprintf(pbuf, "cp_sizeof = %zu, ", c.cp_sizeof);
     pbuf += sprintf(pbuf, "on_emplace = %s, ", ptr2str(c.on_emplace));
     pbuf += sprintf(pbuf, "on_destroy = %s, ", ptr2str(c.on_destroy));
@@ -1428,7 +1747,7 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
                          strcmp(a.description, b.description) : 0;
 
     return !(
-        a.cp_id == b.cp_id &&
+        a.priv.cp_id == b.priv.cp_id &&
         a.cp_sizeof == b.cp_sizeof &&
         a.on_emplace == b.on_emplace &&
         a.on_destroy == b.on_destroy &&

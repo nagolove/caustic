@@ -43,13 +43,22 @@
 /* An item stored in a sparse set. */
 typedef int64_t e_id;
 
-typedef struct e_cp_type {
-    // component unique id, filled auto by register function
+typedef struct e_cp_type_private {
+    // идентифатор, устанавливается внутри e_register()
     size_t      cp_id; 
+    // выравненный на степень 2 размер
+    // TODO: выравнять на размер указателя
+    size_t      cp_sizeof2; 
+} e_cp_type_private;
+
+typedef struct e_cp_type {
+    // Нельзя использовать один и тот-же e_cp_type в разных экземплярах
+    // ecs так как e_cp_type_private возможно должны иметь разные значения
+    // для разных ecs
+    e_cp_type_private priv;
     // component sizeof
     size_t      cp_sizeof; 
                           
-    /*uint32_t    callbacks_flags;*/
     void        (*on_emplace)(void *payload, e_id e); 
     void        (*on_destroy)(void *payload, e_id e);
     //void        (*on_create)(void *payload, e_id e);
@@ -83,8 +92,10 @@ ecs_t *e_new(e_options *opts);
 void e_free(ecs_t *r);
 
 // Зарегистрировать тип компонента до того, как использовать его в каких-либо
-// операциях.
-void e_register(ecs_t *r, e_cp_type comp);
+// операциях. 
+// Функция изменяет значения поля priv в comp и возвращает измененный результат
+// который должен быт сохранен.
+e_cp_type e_register(ecs_t *r, e_cp_type *comp);
 
 /*
     Creates a new entity and returns it
@@ -240,8 +251,8 @@ void e_gui(ecs_t *r, e_id e);
 void e_print_storage(ecs_t *r, e_cp_type cp_type);
 
 // Функция для итерации по всем типам компонентов прикрепленных к сущности.
-// Возвращет статический массив с NULL элементов в конце. 
-// Типы должны быть предварительтно указаны через ecs_t_register().
+// Возвращет статический массив с NULL элементом в конце. 
+// Типы должны быть предварительтно указаны через e_register().
 // Опционально в num возвращается количество типов.
 e_cp_type **e_types(ecs_t *r, e_id e, int *num);
 
