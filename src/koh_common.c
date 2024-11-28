@@ -1087,7 +1087,7 @@ static uint32_t pow_of_2[] = {
 };
 
 uint32_t next_eq_pow2(uint32_t p) {
-    int len = sizeof(pow_of_2) / sizeof(pow_of_2[0]);
+    const int len = sizeof(pow_of_2) / sizeof(pow_of_2[0]);
     for (int i = 0; i < len - 1; i++) {
         if (pow_of_2[i] >= p)
             return pow_of_2[i];
