@@ -260,7 +260,6 @@ extern bool e_verbose;
 
 // Возвращает указатель на статический буфер с Lua таблицей описания типа.
 const char *e_cp_type_2str(e_cp_type c);
-/*const char *e_id_2str(e_id e);*/
 
 typedef struct {
     ecs_t *r;

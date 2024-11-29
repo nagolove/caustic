@@ -140,13 +140,17 @@ typedef struct ecs_t {
     // если по индексу массива истина - то сущность с таким индексом 
     // использована
     bool            *entities;
+    // стек свободных индексов, вместимость - max_id
+    e_id            *stack;
+    // указывает на последний элемент в стеке
+    size_t          stack_last;
 
                     // Максимальное количество сущностей в системе. 
-                    // Представляет собой вместимость entities_cb и параметр 
+                    // Представляет собой вместимость entities и параметр 
                     // при создании ss_alloc()
-    e_id            max_id, 
+    e_id            max_id; 
                     // Индекс в entities, по нему создается новая сущность.
-                    avaible_index;
+                    /*avaible_index;*/
 
     /*
     // зарегистрированные через e_register() компоненты
@@ -463,24 +467,115 @@ MunitResult test_types(const MunitParameter params[], void* userdata) {
         e_register(r, &cp_type_two);
         e_register(r, &cp_type_three);
 
-        e_id e0 = e_create(r),
-             e1 = e_create(r),
-             e2 = e_create(r),
-             e3 = e_create(r);
-
         e_cp_type **types = NULL;
         int types_num = 0;
 
         // there is no e_emplace()
-        types = e_types(r, e0, &types_num);
-        munit_assert_int(types_num, ==, 0);
-        munit_assert(types[0] == NULL);
+        {
+            e_id e0 = e_create(r);
+            types = e_types(r, e0, &types_num);
+            munit_assert_int(types_num, ==, 0);
+            munit_assert(types[0] == NULL);
+        }
 
-        e_emplace(r, e1, cp_type_one);
-        types = e_types(r, e0, &types_num);
-        /*munit_assert_int(types_num, ==, 1);*/
-        munit_assert(types[1] == NULL);
-        munit_assert(e_cp_type_cmp(*types[0], cp_type_one) == 0);
+        // прикрепление одного типа
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            types = e_types(r, e1, &types_num);
+            munit_assert(types_num == 1);
+            munit_assert(types[0] != NULL);
+            munit_assert(types[1] == NULL);
+            munit_assert(e_cp_type_cmp(*types[0], cp_type_one) == 0);
+        }
+
+        // прикрепление трех типов
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            e_emplace(r, e1, cp_type_three);
+            e_emplace(r, e1, cp_type_two);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            munit_assert(e_has(r, e1, cp_type_two) == true);
+            munit_assert(e_has(r, e1, cp_type_three) == true);
+            types = e_types(r, e1, &types_num);
+            munit_assert(types_num == 3);
+            munit_assert(types[0] != NULL);
+            munit_assert(types[1] != NULL);
+            munit_assert(types[2] != NULL);
+            munit_assert(types[3] == NULL);
+
+            int taken[3] = {};
+            e_cp_type all_types[3] = {
+                cp_type_one,
+                cp_type_two,
+                cp_type_three,
+            };
+            for (int i = 0; i < types_num; i++) {
+                for (int j = 0; j < 3; j++) {
+                    taken[j] += !e_cp_type_cmp(all_types[j], *types[i]);
+                }
+            }
+            for (int i = 0; i < 3; i++) {
+                // каждый тип должен быть найден только один раз.
+                // если найден несколь раз, то taken[i] > 1
+                munit_assert(taken[i] == 1);
+            }
+        }
+
+        // прикрепление трех типов c последующим удалением одного из типов
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            e_emplace(r, e1, cp_type_three);
+            e_emplace(r, e1, cp_type_two);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            munit_assert(e_has(r, e1, cp_type_two) == true);
+            munit_assert(e_has(r, e1, cp_type_three) == true);
+            types = e_types(r, e1, &types_num);
+            munit_assert(types_num == 3);
+            munit_assert(types[0] != NULL);
+            munit_assert(types[1] != NULL);
+            munit_assert(types[2] != NULL);
+            munit_assert(types[3] == NULL);
+
+            int taken[3] = {};
+            e_cp_type all_types1[3] = {
+                cp_type_one,
+                cp_type_two,
+                cp_type_three,
+            };
+            for (int i = 0; i < types_num; i++) {
+                for (int j = 0; j < 3; j++) {
+                    taken[j] += !e_cp_type_cmp(all_types1[j], *types[i]);
+                }
+            }
+            for (int i = 0; i < 3; i++) {
+                // каждый тип должен быть найден только один раз.
+                // если найден несколь раз, то taken[i] > 1
+                munit_assert(taken[i] == 1);
+            }
+
+            e_remove(r, e1, cp_type_two);
+
+            memset(taken, 0, sizeof(taken));
+            e_cp_type all_types2[2] = {
+                cp_type_one,
+                /*cp_type_two,*/
+                cp_type_three,
+            };
+            for (int i = 0; i < types_num; i++) {
+                for (int j = 0; j < 2; j++) {
+                    taken[j] += !e_cp_type_cmp(all_types2[j], *types[i]);
+                }
+            }
+            for (int i = 0; i < 2; i++) {
+                // каждый тип должен быть найден только один раз.
+                // если найден несколь раз, то taken[i] > 1
+                munit_assert(taken[i] == 1);
+            }
+        }
 
         e_free(r);
     }
@@ -564,6 +659,7 @@ MunitResult test_sparse_set(
         SparseSet ss = ss_alloc(cap);
         HTable *set = htable_new(NULL);
 
+        // проверка на ложное срабатывание
         munit_assert(ss_has(&ss, 0) == false);
         munit_assert(ss_has(&ss, 1) == false);
 
@@ -574,13 +670,17 @@ MunitResult test_sparse_set(
             ss_add(&ss, i);
         }
 
+        // проверка на срабатывание
         for (int i = 0; i < 10; i++)
             munit_assert(ss_has(&ss, i) == true);
 
         assert(ss_size(&ss) == 10);
+
+        // удалить и проверить
         ss_remove(&ss, 0);
         munit_assert(ss_has(&ss, 0) == false);
 
+        // проверка внутреннего содержимого
         munit_assert(ss.dense[0] != 0);
         munit_assert(ss.dense[1] != 0);
         munit_assert(ss.dense[2] != 0);
@@ -939,10 +1039,18 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
     {
         ecs_t *r = e_new(NULL);
         for (int i = 0; i < 10; i++) {
-            printf("test_create: with iterations: i %d\n", i);
+
+            printf("test_create_destroy: before e_create()\n");
+            e_print_entities(r);
+
+            printf("test_create_destroy: with iterations: i %d\n", i);
             e_id e0 = e_create(r),
                  e1 = e_create(r),
                  e2 = e_create(r);
+
+            printf("test_create_destroy: after e_create()\n");
+            e_print_entities(r);
+
             munit_assert(e0 != e_null);
             munit_assert(e1 != e_null);
             munit_assert(e2 != e_null);
@@ -955,6 +1063,10 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
             e_destroy(r, e0);
             e_destroy(r, e1);
             e_destroy(r, e2);
+
+            printf("test_create_destroy: after e_destroy()\n");
+            e_print_entities(r);
+
             munit_assert(e_valid(r, e0) == false);
             munit_assert(e_valid(r, e1) == false);
             munit_assert(e_valid(r, e2) == false);
@@ -1054,7 +1166,6 @@ static MunitTest test_e_internal[] = {
       NULL
     },
 
-    /*
     {
       (char*) "/types",
       test_types,
@@ -1063,7 +1174,6 @@ static MunitTest test_e_internal[] = {
       MUNIT_TEST_OPTION_NONE,
       NULL
     },
-    */
 
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
@@ -1088,8 +1198,8 @@ static inline void ecs_assert(ecs_t *r) {
     assert(r);
     assert(r->entities);
     assert(r->entities_num >= 0);
-    // "с запасом"
-    assert(r->avaible_index + 1 < r->max_id);
+    // проверить на наличие свободных индексов для сущностей
+    assert(r->stack_last > 0);
 }
 
 static inline void cp_type_assert(e_cp_type cp_type) {
@@ -1136,7 +1246,10 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
 
     // создать хранилище если еще не
     if (!s) {
-        printf("e_assure: storages_size %d\n", r->storages_size);
+        printf(
+            "e_assure: '%s' storages_size %d\n",
+            cp_type.name, r->storages_size
+        );
         if (r->storages_size + 1 == r->storages_cap) {
             printf(
                 "e_assure: storages_cap %d is not enough\n", r->storages_cap
@@ -1154,6 +1267,14 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         s->on_destroy = cp_type.on_destroy;
         strncpy(s->name, cp_type.name, sizeof(s->name));
         s->sparse = ss_alloc(r->max_id);
+    }
+
+    // Выделить начальное количество памяти
+    if (!s->cp_data) {
+        s->cp_data_cap = s->cp_data_initial_cap ? 
+                         s->cp_data_initial_cap : cp_data_initial_cap;
+        s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
+        assert(s->cp_data);
     }
 
     return s;
@@ -1178,10 +1299,19 @@ ecs_t *e_new(e_options *opts) {
         r->max_id = opts->max_id;
     }
 
-    r->avaible_index = 0;
     r->entities_num = 0;
     r->entities = calloc(r->max_id, sizeof(r->entities[0]));
     assert(r->entities);
+    r->stack = calloc(r->max_id, sizeof(r->stack[0]));
+    assert(r->stack);
+
+    // заполнить стек свободными доступными индексами сущностей
+    for (int i = r->max_id - 1; i >= 0; i--) {
+        r->stack[r->stack_last++] = i;
+    }
+
+    // что-бы не было выхода за границы памяти, указывает на последний элемент
+    r->stack_last--;
 
     r->storages_cap = 32;
     r->storages = calloc(r->storages_cap, sizeof(r->storages[0]));
@@ -1229,6 +1359,11 @@ void e_free(ecs_t *r) {
         r->entities = NULL;
     }
 
+    if (r->stack) {
+        free(r->stack);
+        r->stack = NULL;
+    }
+
     if (r)
         free(r);
 }
@@ -1238,7 +1373,7 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     assert(strlen(comp->name) >= 1);
     assert(comp);
 
-    // Что делать если нужно установить значения в comp?
+    // Проверка идет только по имени типа
     if (cp_is_registered(r, *comp)) {
         printf("e_register: type '%s' already registered\n", comp->name);
         abort();
@@ -1251,6 +1386,9 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     htable_add(r->set_cp_types, comp, sizeof(*comp), NULL, 0);
     htable_add_s(r->cp_types, comp->name, comp, sizeof(*comp));
 
+    // выделить память что-бы не падало при storage_shutdown()
+    e_assure(r, *comp);
+
     return *comp;
 }
 
@@ -1258,22 +1396,33 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
 e_id e_create(ecs_t* r) {
     ecs_assert(r);
 
-    e_print_entities(r);
+    //e_print_entities(r);
 
     // Проверка, что можно создать сущность по данному индексу
-    assert(r->entities[r->avaible_index] == false);
+    /*assert(r->entities[r->avaible_index] == false);*/
 
-    e_id e = r->avaible_index;
+    // проверка на наличие доступных индексов сущностей
+    assert(r->stack_last > 0);
 
-    printf("e_create: e %ld, entities_num %zu, ", e, r->entities_num);
+    e_id avaible_index = r->stack[r->stack_last];
+    // записываю не используемое значение для проверки корректности заполнения
+    // стека
+    r->stack[r->stack_last] = e_null;
+    r->stack_last--;
+    e_id e = avaible_index;
 
-    r->entities[r->avaible_index] = true;
+    /*printf("e_create: e %ld, entities_num %zu, ", e, r->entities_num);*/
+
+    r->entities[avaible_index] = true;
     r->entities_num++;
 
+    /*
     if (r->avaible_index + 1 == r->entities_num) {
         r->avaible_index = r->entities_num;
     }
+    */
 
+    /*
     printf("avaible_index %ld\n", r->avaible_index);
     char *s = e_entities2table_alloc(r);
     if (s) {
@@ -1282,6 +1431,7 @@ e_id e_create(ecs_t* r) {
         koh_term_color_reset();
         free(s);
     }
+    */
 
     return e;
 }
@@ -1295,23 +1445,32 @@ void e_destroy(ecs_t* r, e_id e) {
     ecs_assert(r);
     entity_assert(r, e);
 
-    // удалить все компоненты
-    e_remove_all(r, e);
+    // если сущность еще не была удалена
+    if (r->entities[e]) {
+        // удалить все компоненты 
+        e_remove_all(r, e);
 
-    e_print_entities(r);
+        // установить номер нового доступного индекса
+        r->stack[++r->stack_last] = e;
+
+        // Позволить многократко удалять одну сущность
+        if (r->entities_num > 0) {
+            r->entities_num--;
+        } else {
+            // TODO: Как вести себя в случае если сущность удаляется 
+            // несколько раз? Молчать или сразу сигнализировать?
+        }
+    }
 
     // утилизировать занятость индекса
     r->entities[e] = false;
-    // установить номер нового доступного индекса
-    r->avaible_index = e;
 
-    // Позволить многократко удалять одну сущность
-    if (r->entities_num > 0) {
-        r->entities_num--;
-    } else {
-        // TODO: Как вести себя в случае если сущность удаляется несколько раз?
-        // Молчать или сразу сигнализировать?
-    }
+    /*
+    koh_term_color_set(KOH_TERM_GREEN);
+    //printf("e_destroy: avaible_index %ld\n", r->avaible_index);
+    koh_term_color_reset();
+    e_print_entities(r);
+    */
 
     assert(r->entities_num >= 0);
 }
@@ -1373,14 +1532,6 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
         return NULL;
 
     e_storage *s = e_assure(r, cp_type);
-
-    // Выделить начальное количество памяти
-    if (!s->cp_data) {
-        s->cp_data_cap = s->cp_data_initial_cap ? 
-                         s->cp_data_initial_cap : cp_data_initial_cap;
-        s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
-        assert(s->cp_data);
-    }
 
     storage_assert(s);
 
@@ -1676,11 +1827,18 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
         /*printf("e_types: '%s'\n", type_name);*/
         e_cp_type *type = htable_iter_value(&i, NULL);
 
-        /*const char *s = e_cp_type_2str(*type);*/
-        /*printf("e_types: %s\n", s);*/
+        const char *s = e_cp_type_2str(*type);
+        printf("e_types: %s\n", s);
 
         assert(type);
         if (e_has(r, e, *type)) {
+            koh_term_color_set(KOH_TERM_GREEN);
+            printf("type");
+            koh_term_color_set(KOH_TERM_YELLOW);
+            printf(" '%s' ",type->name);
+            koh_term_color_set(KOH_TERM_GREEN);
+            printf("was added to array\n");
+            koh_term_color_reset();
             types[found_types_num++] = type;
         }
     }
