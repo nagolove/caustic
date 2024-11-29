@@ -1667,6 +1667,7 @@ static MunitResult test_htable_internal_iterator3(
     return MUNIT_OK;
 }
 
+// Проверка функции перевыделения памяти для корзинки
 static MunitResult test_htable_internal_bucket_allocation2(
     const MunitParameter params[], void* data
 ) {
