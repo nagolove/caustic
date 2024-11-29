@@ -540,6 +540,7 @@ MunitResult test_types(const MunitParameter params[], void* userdata) {
             munit_assert(types[2] != NULL);
             munit_assert(types[3] == NULL);
 
+            // проверка принадлежности
             int taken[3] = {};
             e_cp_type all_types1[3] = {
                 cp_type_one,
@@ -556,10 +557,13 @@ MunitResult test_types(const MunitParameter params[], void* userdata) {
                 // если найден несколь раз, то taken[i] > 1
                 munit_assert(taken[i] == 1);
             }
+            //
 
             e_remove(r, e1, cp_type_two);
 
             memset(taken, 0, sizeof(taken));
+
+            // проверка принадлежности
             e_cp_type all_types2[2] = {
                 cp_type_one,
                 /*cp_type_two,*/
@@ -575,6 +579,7 @@ MunitResult test_types(const MunitParameter params[], void* userdata) {
                 // если найден несколь раз, то taken[i] > 1
                 munit_assert(taken[i] == 1);
             }
+            //
         }
 
         e_free(r);
@@ -612,7 +617,7 @@ MunitResult test_entities2table_alloc(const MunitParameter prms[], void* ud) {
     return MUNIT_OK;
 }
 
-// находятся ли сущности без компонент?
+// находятся ли сироты - сущности без компонент?
 MunitResult test_orphan(const MunitParameter params[], void* userdata) {
 
     // все сущности сироты
@@ -632,15 +637,17 @@ MunitResult test_orphan(const MunitParameter params[], void* userdata) {
     // одна сущность сирота
     {
         ecs_t *r = e_new(NULL);
-        e_id entts[2] = {
+        e_id entts[3] = {
             [0] = e_create(r),
             [1] = e_create(r),
+            [2] = e_create(r),
         };
         e_register(r, &cp_type_one);
         void *data_one = e_emplace(r, entts[1], cp_type_one);
         munit_assert_not_null(data_one);
         munit_assert(e_orphan(r, entts[0]) == true);
         munit_assert(e_orphan(r, entts[1]) == false);
+        munit_assert(e_orphan(r, entts[2]) == true);
         e_free(r);
     }
 
@@ -648,12 +655,12 @@ MunitResult test_orphan(const MunitParameter params[], void* userdata) {
 }
 
 
+// тесты для разреженного множества
 MunitResult test_sparse_set(
     const MunitParameter params[], void* user_data_or_fixture
 ) {
     printf("test_sparse_set:\n");
 
-    // придумать тесты для разреженного множества
     {
         const int cap = 100;
         SparseSet ss = ss_alloc(cap);
@@ -899,6 +906,7 @@ MunitResult test_emplace_1(const MunitParameter params[], void* userdata) {
     }
 
     /*
+    // XXX: Почему закоментрировано? Не работает код?
     // создать сущность, прикрепить компонент, записать и прочитать значение
     {
         ecs_t *r = e_new(NULL);
@@ -989,8 +997,6 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
         e_free(r);
     }
     
-
-
     // create 4 entity + destroy 
     {
         ecs_t *r = e_new(NULL);
@@ -1501,6 +1507,7 @@ static void e_storage_remove(e_storage *s, e_id e) {
     s->cp_data_size--;
     assert(s->cp_data_size >= 0);
 
+    // TODO: Сделать уменьшение объема выделенной памяти
     /*
     XXX: Возможно неправильная работа с памятью
     if (s->cp_data_size < 0.5 * s->cp_data_cap) {
