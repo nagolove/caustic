@@ -27,47 +27,56 @@ typedef struct SparseSet {
  *
  * The set can contain up to (max_id + 1) items.
  */
+// test +
 SparseSet ss_alloc( e_id max_id );
 
 /**
  * Free the sparse set resources, previously allocated with ss_alloc.
  */
+// test +
 void ss_free( SparseSet *ss );
 
 /**
  * Remove all items from the sparse set but do not free memory used by the set.
  */
+// test +
 void ss_clear( SparseSet *ss );
 
 /**
  * Return the number of items in the sparse set.
  */
+// test +
 size_t ss_size( SparseSet *ss );
 
 /**
  * Return a value indicating whether the sparse set is full and cannot add new
  * items.
  */
+// test +
 bool ss_full( SparseSet *ss );
 
 /**
  * Return a value indicating whether the sparse set has no items.
  */
+// test +
 bool ss_empty( SparseSet *ss );
 
 /**
  * Return a value indicating whether the sparse set contains the given item.
  */
+// test +
 bool ss_has( SparseSet *ss, e_id id );
 
 /**
  * Add an item to the sparse set unless it is already there.
  */
+//test+
 void ss_add( SparseSet *ss, e_id id );
 
 /**
  * Remove an item from the sparse set unless it is not there.
  */
+//test+
 void ss_remove( SparseSet *ss, e_id id );
 
 // }}}
@@ -282,6 +291,78 @@ void ss_remove( SparseSet *ss, e_id id )
 // }}}
 
 // {{{ tests implementation
+
+typedef struct {
+    e_id *ids;
+    int *taken;
+    int  num;
+} EachCtx;
+
+bool iter_each(ecs_t *r, e_id e, void *ud) {
+    /*EachCtx *ctx = ud;*/
+    HTable *set = ud;
+    htable_remove(set, &e, sizeof(e));
+    return false;
+}
+
+// XXX: Дописать, долелать, лалала
+MunitResult test_each(const MunitParameter params[], void* userdata) {
+
+    {
+        ecs_t *r = e_new(NULL);
+        const int num = 10;
+        e_id ids[num];
+        memset(ids, 0, sizeof(ids));
+        HTable *set = htable_new(NULL);
+
+        // создать сущностей
+        for (int j = 0; j < num; ++j) {
+            ids[j] = e_create(r);
+        }
+
+        printf("test_each: before removing\n");
+        e_print_entities(r);
+
+        const int num2 = num / 2;
+        // индексы для удаления
+        e_id ids_2remove[num2];
+
+        int *int_ids = koh_rand_uniq_arr_alloc(num, num2);
+        for (int i = 0; i < num2; i++) {
+            ids_2remove[i] = int_ids[i];
+        }
+        free(int_ids);
+
+        // удалить случайные
+        for (int i = 0; i < num2; i++) {
+            e_destroy(r, ids_2remove[i]);
+        }
+
+        printf("test_each: after removing\n");
+        e_print_entities(r);
+
+        /*
+        EachCtx ctx = {
+            .num = num,
+            .taken = taken,
+            .ids = ids,
+        };
+        */
+        e_each(r, iter_each, set);
+
+        munit_assert_int(htable_count(set), ==, 0);
+        for (int i = 0; i < num; i++) {
+            /*munit_assert(taken[i] == false);*/
+        }
+
+        // пройтись по всем оставшимся и сопоставить
+        
+        htable_free(set);
+        e_free(r);
+    }
+
+    return MUNIT_OK;
+}
 
 // проверка прицепления компонент к сущности
 MunitResult test_has(const MunitParameter params[], void* userdata) {
@@ -709,11 +790,41 @@ MunitResult test_sparse_set(
         ss_clear(&ss);
         assert(ss_size(&ss) == 0);
 
+        // после очистки множества
+        for (int i = 0; i < 10; i++)
+            munit_assert(ss_has(&ss, i) == false);
+
         munit_assert(ss_full(&ss) == false);
         munit_assert(ss_empty(&ss) == true);
 
         htable_free(set);
         ss_free(&ss);
+    }
+
+    {
+        SparseSet set = ss_alloc(3);
+        munit_assert(ss_empty(&set) == true);
+        ss_add(&set, 0);
+        munit_assert(ss_size(&set) == 1);
+        ss_add(&set, 2);
+        munit_assert(ss_full(&set) == false);
+        ss_add(&set, 1);
+        ss_add(&set, 3);
+        munit_assert(ss_empty(&set) == false);
+        munit_assert(ss_size(&set) == 4);
+        munit_assert(ss_full(&set) == true);
+
+        munit_assert(ss_has(&set, 0));
+        munit_assert(ss_has(&set, 1));
+        munit_assert(ss_has(&set, 2));
+        munit_assert(ss_has(&set, 3));
+
+        ss_remove(&set, 2);
+        munit_assert(ss_has(&set, 2) == false);
+
+        ss_clear(&set);
+        munit_assert(ss_empty(&set) == true);
+        ss_free(&set);
     }
 
     return MUNIT_OK;
@@ -1090,6 +1201,15 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
 
 // {{{ tests definitions
 static MunitTest test_e_internal[] = {
+
+    {
+      (char*) "/each",
+      test_each,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
 
     {
       (char*) "/sparse_set",
@@ -1523,11 +1643,12 @@ void e_remove_all(ecs_t* r, e_id e) {
     ecs_assert(r);
     entity_assert(r, e);
 
-    for (int i = 0; i < r->storages_size; i++) {
-        if (ss_has(&r->storages[i].sparse, e)) {
-            e_storage_remove(&r->storages[i], e);
+    if (e_valid(r, e))
+        for (int i = 0; i < r->storages_size; i++) {
+            if (ss_has(&r->storages[i].sparse, e)) {
+                e_storage_remove(&r->storages[i], e);
+            }
         }
-    }
 }
 
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
@@ -1611,12 +1732,13 @@ void e_each(ecs_t* r, e_each_function fun, void* udata) {
     ecs_assert(r);
     assert(fun);
 
-    for (int i = 0;
-         i < r->entities_num + 1
+    for (int i = 0; i < r->entities_num + 1
          /* еденица на случай пробела в заполнении r->entities */;
          i++) {
-        if (r->entities[i])
-            fun(r, i, udata);
+        if (r->entities[i]) {
+            if (fun(r, i, udata)) 
+                return;
+        }
     }
 }
 
@@ -1839,6 +1961,8 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
 
         assert(type);
         if (e_has(r, e, *type)) {
+
+            /*
             koh_term_color_set(KOH_TERM_GREEN);
             printf("type");
             koh_term_color_set(KOH_TERM_YELLOW);
@@ -1846,6 +1970,8 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
             koh_term_color_set(KOH_TERM_GREEN);
             printf("was added to array\n");
             koh_term_color_reset();
+            */
+
             types[found_types_num++] = type;
         }
     }

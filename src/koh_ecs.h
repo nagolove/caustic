@@ -88,13 +88,16 @@ typedef struct e_options {
     e_id max_id;
 } e_options;
 
+// t+
 ecs_t *e_new(e_options *opts);
+// t+
 void e_free(ecs_t *r);
 
 // Зарегистрировать тип компонента до того, как использовать его в каких-либо
 // операциях. 
 // Функция изменяет значения поля priv в comp и возвращает измененный результат
 // который должен быт сохранен.
+// t+
 e_cp_type e_register(ecs_t *r, e_cp_type *comp);
 
 /*
@@ -104,14 +107,23 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp);
      - Recycled identifier with an update version.
 */
 // Создатьет идентификатор сущности.
+// t+
 e_id e_create(ecs_t* r);
 
 /*
     Удаляет сущность, со всеми компонентами
  */
+// t+
+e_id e_create(ecs_t* r);
+
+/*
+    Удаляет сущность, со всеми компонентами
+ */
+// t+
 void e_destroy(ecs_t* r, e_id e);
 
 // Возвращает истину если сущность создана и существует.
+// t+
 bool e_valid(ecs_t* r, e_id e);
 
 /*
@@ -154,22 +166,9 @@ bool e_has(ecs_t* r, e_id e, const e_cp_type cp_type);
 
 /*
     Returns the pointer to the given component type data for the entity
-
-    Warning: Using an invalid entity or get a component from an entity
-    that doesn't own it results in undefined behavior.
-
-    Note: This is the fastest way of retrieveing component data but
-    has no checks. This means that you are 100% sure that the entity e
-    has the component emplaced. Use e_try_get to check if you want checks
-*/
-/*void* e_get(ecs_t* r, e_id e, e_cp_type cp_type);*/
-
-/*
-    Returns the pointer to the given component type data for the entity
     or nullptr if the entity doesn't have this component.
 
     Warning: Using an invalid entity results in undefined behavior.
-    Note: This is safer but slower than e_get.
 */
 void* e_get(ecs_t* r, e_id e, e_cp_type cp_type);
 
