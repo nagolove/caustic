@@ -11,6 +11,7 @@
 #include "koh_logger.h"
 #include "koh_rand.h"
 #include "koh_routine.h"
+#include "koh_table.h"
 /*#include "libsmallregex.h"*/
 #include "pcre2.h"
 #include "raylib.h"
@@ -2169,3 +2170,31 @@ const char *koh_bin2hex(const void *data, size_t data_len) {
     return buf;
 }
 
+int *koh_rand_uniq_arr_alloc(int up, int num) {
+    assert(up >= 0);
+    assert(num >= 1);
+    assert(up >= num);
+
+    HTable *set = htable_new(NULL);
+    int *ret = calloc(num, sizeof(ret[0]));
+    for (int i = 0; i < num; i++) {
+        int val = rand() % up;
+        int maxiter = INT16_MAX;
+        while (htable_exist(set, &val, sizeof(int))) {
+            if (maxiter == 0) {
+                fprintf(
+                    stderr,
+                    "koh_rand_uniq_arr_alloc: iteration limit reached\n"
+                );
+                abort();
+            }
+            maxiter--;
+            val = rand() % up;
+        }
+        htable_add(set, &val, sizeof(int), NULL, 0);
+        ret[i] = val;
+    }
+    htable_free(set);
+
+    return ret;
+}

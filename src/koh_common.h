@@ -341,3 +341,9 @@ extern bool common_verbose;
 char *pcre_code_str(int errnumber);
 
 const char *koh_bin2hex(const void *data, size_t data_len);
+
+// Возвращает массив целых случайных чисел. Максимальное значение rand() % up
+// Длина массива num
+// Память необходимо освобождать
+// Максимальное значение num - INT16_MAX
+int *koh_rand_uniq_arr_alloc(int up, int num);
