@@ -59,6 +59,15 @@ static char **str_repr_shape_render_opts(void *payload, de_entity e) {
 }
 #undef STR_NUM
 
+// транспорт, боевая машина
+de_cp_type cp_type_vehicle = {
+    .cp_id = 0,
+    .cp_sizeof = 1,
+    .name = "vehicle",
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 100,
+};
+
 // Физическое тело
 de_cp_type cp_type_body = {
     .cp_id = 0,
@@ -108,6 +117,7 @@ de_cp_type cp_type_border_sensor = {
 };
 
 void koh_cp_types_register(de_ecs *r) {
+    de_ecs_register(r, cp_type_vehicle);
     de_ecs_register(r, cp_type_body);
     de_ecs_register(r, cp_type_shape_render_opts);
     /*de_ecs_register(r, cp_type_hero);*/

@@ -11,6 +11,7 @@ extern bool koh_components_verbose;
 
 // XXX: Убрал модификатор константности для правки типов на лету.
 // В частности правится cp_type_body.initial_cap = 10000;
+extern de_cp_type cp_type_vehicle;
 extern de_cp_type cp_type_body;
 extern de_cp_type cp_type_border_sensor;
 extern de_cp_type cp_type_shape_render_opts;
