@@ -299,63 +299,107 @@ typedef struct {
 } EachCtx;
 
 bool iter_each(ecs_t *r, e_id e, void *ud) {
-    /*EachCtx *ctx = ud;*/
     HTable *set = ud;
-    htable_remove(set, &e, sizeof(e));
+
+    printf("iter_each: e %ld\n", e);
+    printf("htable_count: %ld\n", htable_count(set));
+
+    printf(
+        "iter_eac: exist %s\n", 
+        htable_exist(set, &e, sizeof(e)) ? "true" : "false"
+    );
+    printf(
+        "htable_remove_i64: %s\n\n",
+        htable_remove_i64(set, e) ? "true" : "false"
+    );
+    // */
+
+    /*htable_remove_i64(set, e);*/
     return false;
 }
 
-// XXX: Дописать, долелать, лалала
+// Проход по всем сущностям
 MunitResult test_each(const MunitParameter params[], void* userdata) {
 
     {
         ecs_t *r = e_new(NULL);
         const int num = 10;
-        e_id ids[num];
-        memset(ids, 0, sizeof(ids));
-        HTable *set = htable_new(NULL);
+        HTable *set = htable_new(&(HTableSetup) {
+            .f_key2str = htable_i64_str,
+        });
 
-        // создать сущностей
+        // создать сущности
         for (int j = 0; j < num; ++j) {
-            ids[j] = e_create(r);
+            e_id e = e_create(r);
+            htable_add_i64(set, e, NULL, 0);
         }
 
+        printf("htable_count: %ld\n", htable_count(set));
         printf("test_each: before removing\n");
         e_print_entities(r);
 
-        const int num2 = num / 2;
+        // удаляю половину элементов
+        /*const int num_2remove = num / ((rand() % 3) + 1);*/
+        const int num_2remove = num / 2;
+        printf("test_each: num_2remove %d\n", num_2remove);
+
+        /*
+        char *s = htable_print_tabular_alloc(set);
+        if (s) {
+            printf("%s\n", s);
+            free(s);
+        }
+        */
+
+        {
+            koh_term_color_set(KOH_TERM_YELLOW);
+            HTableIterator i = htable_iter_new(set);
+            for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                int64_t *val = htable_iter_key(&i, NULL);
+                assert(val);
+                printf("%ld ", *val);
+            }
+            printf("\n");
+            koh_term_color_reset();
+        }
+
         // индексы для удаления
-        e_id ids_2remove[num2];
-
-        int *int_ids = koh_rand_uniq_arr_alloc(num, num2);
-        for (int i = 0; i < num2; i++) {
-            ids_2remove[i] = int_ids[i];
-        }
-        free(int_ids);
-
+        int *ids_2remove = koh_rand_uniq_arr_alloc(num, num_2remove);
         // удалить случайные
-        for (int i = 0; i < num2; i++) {
-            e_destroy(r, ids_2remove[i]);
+        for (int i = 0; i < num_2remove; i++) {
+            e_id e = ids_2remove[i];
+            printf("%ld ", e);
+            e_destroy(r, e);
+            htable_remove_i64(set, e);
+            /*munit_assert(htable_remove_i64(set, ids_2remove[i]) == true);*/
         }
+        printf("\n");
+
+        free(ids_2remove);
+
+{
+    koh_term_color_set(KOH_TERM_YELLOW);
+    HTableIterator i = htable_iter_new(set);
+    for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+        int64_t *val = htable_iter_key(&i, NULL);
+        assert(val);
+        printf("%ld ", *val);
+    }
+    printf("\n");
+    koh_term_color_reset();
+}
+
 
         printf("test_each: after removing\n");
         e_print_entities(r);
+        printf("entts_num %zu\n", r->entities_num);
 
-        /*
-        EachCtx ctx = {
-            .num = num,
-            .taken = taken,
-            .ids = ids,
-        };
-        */
         e_each(r, iter_each, set);
 
-        munit_assert_int(htable_count(set), ==, 0);
-        for (int i = 0; i < num; i++) {
-            /*munit_assert(taken[i] == false);*/
-        }
+        printf("htable_count: %ld\n", htable_count(set));
 
-        // пройтись по всем оставшимся и сопоставить
+        e_print_entities(r); // сколько осталось элементов?
+        munit_assert_int(htable_count(set), ==, 0);
         
         htable_free(set);
         e_free(r);
@@ -1732,14 +1776,28 @@ void e_each(ecs_t* r, e_each_function fun, void* udata) {
     ecs_assert(r);
     assert(fun);
 
-    for (int i = 0; i < r->entities_num + 1
-         /* еденица на случай пробела в заполнении r->entities */;
+    /*
+    for (int i = 0; i < r->entities_num + 1;
+          // еденица на случай пробела в заполнении r->entities 
          i++) {
         if (r->entities[i]) {
             if (fun(r, i, udata)) 
                 return;
         }
     }
+    */
+
+    int num = 0;
+    for (int i = 0; i < r->max_id; i++) {
+        if (r->entities[i]) {
+            num++;
+            if (fun(r, i, udata)) 
+                return;
+        }
+        if (num == r->entities_num) 
+            break;
+    }
+
 }
 
 bool e_orphan(ecs_t* r, e_id e) {
@@ -1829,7 +1887,7 @@ e_id e_view_entity(e_view* v) {
 }
 
 
-int e_view_get_index_safe(e_view* v, e_cp_type cp_type) {
+static int e_view_get_index_safe(e_view* v, e_cp_type cp_type) {
     assert(v);
     assert(e_view_valid(v));
     for (size_t i = 0; i < v->pool_count; i++) {
@@ -1867,7 +1925,7 @@ void* e_view_get_by_index(e_view* v, size_t pool_index) {
     return e_storage_get(v->all_pools[pool_index], v->current_entity);
 }
 
-void* de_view_get_safe(e_view *v, e_cp_type cp_type) {
+static void* de_view_get_safe(e_view *v, e_cp_type cp_type) {
     int index = e_view_get_index_safe(v, cp_type);
     return index != -1 ? e_view_get_by_index(v, index) : NULL;
 }
