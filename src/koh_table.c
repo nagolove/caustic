@@ -2440,6 +2440,38 @@ static void S_on_remove(
     S_free(*s);
 }
 
+// недописанный тест возникший при тестировании e_each()
+static MunitResult test_htable_internal_remove(
+    const MunitParameter params[], void* udata
+) {
+    HTable *h = htable_new(NULL);
+
+    int64_t 
+            data_in[] = { 2, 3, 1, 0, 6, 8, 9, 4, 5, 7, },
+            data_2remove[] = { 3, 6, 7, 5, 2, },
+            data_rest[] = { 9, 4, 1, 0, };
+    int data_in_num = sizeof(data_in) / sizeof(data_in[0]),
+        data_2remove_num = sizeof(data_2remove) / sizeof(data_2remove[0]),
+        data_rest_num = sizeof(data_rest) / sizeof(data_rest[0]);
+
+    for (int i = 0; i < data_in_num; i++) {
+        htable_add_i64(h, data_in[i], NULL, 0);
+    }
+
+    for (int i = 0; i < data_2remove_num; i++) {
+        htable_remove_i64(h, data_2remove[i]);
+    }
+
+    for (int i = 0; i < data_rest_num; i++) {
+        int64_t x = data_rest[i];
+        munit_assert(htable_exist(h, &x, sizeof(x)) == true);
+    }
+
+    htable_free(h);
+    return MUNIT_OK;
+}
+
+
 static MunitResult test_htable_internal_keycmp(
     const MunitParameter params[], void* data
 ) {
@@ -2905,6 +2937,12 @@ static MunitTest test_htable_internal[] = {
     {
         "/test_htable_internal_keycmp",
         test_htable_internal_keycmp,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
+
+    {
+        "/test_htable_internal_remove_i64",
+        test_htable_internal_remove,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 

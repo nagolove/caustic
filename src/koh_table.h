@@ -56,10 +56,10 @@ static inline void *htable_add_f32(
     HTable *ht, float key, void *value, int value_len
 );
 static inline void *htable_add_i32(
-    HTable *ht, int key, void *value, int value_len
+    HTable *ht, int32_t key, void *value, int value_len
 );
 static inline void *htable_add_u32(
-    HTable *ht, int key, void *value, int value_len
+    HTable *ht, uint32_t key, void *value, int value_len
 );
 static inline void *htable_add_i64(
     HTable *ht, int64_t key, void *value, int value_len
@@ -210,18 +210,20 @@ static inline const char *htable_char_str(const void *data, int len) {
 // }}}
 
 // {{{ Inlines
-static inline void *htable_add_f32(HTable *ht, float key, void *value, int value_len) {
+static inline void *htable_add_f32(
+    HTable *ht, float key, void *value, int value_len
+) {
     return htable_add(ht, &key, sizeof(key), value, value_len);
 }
 
 static inline void *htable_add_i32(
-    HTable *ht, int key, void *value, int value_len
+    HTable *ht, int32_t key, void *value, int value_len
 ) {
     return htable_add(ht, &key, sizeof(key), value, value_len);
 }
 
 static inline void *htable_add_u32(
-    HTable *ht, int key, void *value, int value_len
+    HTable *ht, uint32_t key, void *value, int value_len
 ) {
     return htable_add(ht, &key, sizeof(key), value, value_len);
 }
