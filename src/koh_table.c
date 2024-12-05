@@ -487,6 +487,7 @@ void htable_free(HTable *ht) {
     htable_clear(ht);
     if (ht->arr)
         free(ht->arr);
+    memset(ht, 0, sizeof(*ht));
     free(ht);
 }
 
@@ -626,8 +627,17 @@ HTable *htable_new(struct HTableSetup *setup) {
         ht->f_keycmp = setup->f_keycmp ? setup->f_keycmp : memcmp;
     }
 
-    if (!ht->f_hash)
-        ht->f_hash = koh_hasher_mum;
+    if (!ht->f_hash) {
+        // XXX: Смотри тест test_htable_internal_remove_i64()
+        // ht->f_hash = koh_hasher_mum;
+
+        // также дает ошибку на test_each() в koh_ecs.c
+        // Детерминированная
+        //ht->f_hash = koh_hasher_fnv64;
+        
+        // Использование детерминированной хеш функции
+        ht->f_hash = koh_hasher_djb2;
+    }
 
     if (htable_verbose)
         printf(
@@ -2441,33 +2451,83 @@ static void S_on_remove(
 }
 
 // недописанный тест возникший при тестировании e_each()
-static MunitResult test_htable_internal_remove(
+// таблица имеет непредсказуемое поведение с использованием хеш функции mum
+static MunitResult test_htable_internal_remove_i64(
     const MunitParameter params[], void* udata
 ) {
+
     HTable *h = htable_new(NULL);
 
-    int64_t 
-            data_in[] = { 2, 3, 1, 0, 6, 8, 9, 4, 5, 7, },
-            data_2remove[] = { 3, 6, 7, 5, 2, },
-            data_rest[] = { 9, 4, 1, 0, };
-    int data_in_num = sizeof(data_in) / sizeof(data_in[0]),
-        data_2remove_num = sizeof(data_2remove) / sizeof(data_2remove[0]),
-        data_rest_num = sizeof(data_rest) / sizeof(data_rest[0]);
+    for (int i = 0; i < 100; i++) {
 
-    for (int i = 0; i < data_in_num; i++) {
-        htable_add_i64(h, data_in[i], NULL, 0);
-    }
+        int64_t 
+                data_in[] = { 2, 3, 1, 0, 6, 8, 9, 4, 5, 7, },
+                data_2remove[] = { 3, 6, 7, 5, 2, },
+                data_rest[] = { 9, 4, 1, 0, 8 };
+        int data_in_num = sizeof(data_in) / sizeof(data_in[0]),
+            data_2remove_num = sizeof(data_2remove) / sizeof(data_2remove[0]),
+            data_rest_num = sizeof(data_rest) / sizeof(data_rest[0]);
 
-    for (int i = 0; i < data_2remove_num; i++) {
-        htable_remove_i64(h, data_2remove[i]);
-    }
 
-    for (int i = 0; i < data_rest_num; i++) {
-        int64_t x = data_rest[i];
-        munit_assert(htable_exist(h, &x, sizeof(x)) == true);
+        // добавление
+        for (int i = 0; i < data_in_num; i++) {
+            htable_add_i64(h, data_in[i], NULL, 0);
+        }
+
+        /*
+    printf("\n");
+    printf("\n");
+        {
+            koh_term_color_set(KOH_TERM_BLUE);
+            HTableIterator i = htable_iter_new(h);
+            for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                int64_t *val = htable_iter_key(&i, NULL);
+                assert(val);
+                printf("%ld ", *val);
+            }
+            printf("\n");
+            koh_term_color_reset();
+        }
+*/
+
+
+        // удаление
+        for (int i = 0; i < data_2remove_num; i++) {
+            bool removed = htable_remove_i64(h, data_2remove[i]);
+            /*
+            printf(
+                "removed %s, val %ld\n",
+                removed ? "true" : "false", data_2remove[i]
+            );
+            */
+        }
+
+        /*
+        printf("\n");
+            {
+                koh_term_color_set(KOH_TERM_YELLOW);
+                HTableIterator i = htable_iter_new(h);
+                for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                    int64_t *val = htable_iter_key(&i, NULL);
+                    assert(val);
+                    printf("%ld ", *val);
+                }
+                printf("\n");
+                koh_term_color_reset();
+            }
+*/
+
+        // проверка оставшихся элементов
+        for (int i = 0; i < data_rest_num; i++) {
+            int64_t x = data_rest[i];
+            munit_assert(htable_exist(h, &x, sizeof(x)) == true);
+        }
+
+        htable_clear(h);
     }
 
     htable_free(h);
+
     return MUNIT_OK;
 }
 
@@ -2942,7 +3002,7 @@ static MunitTest test_htable_internal[] = {
 
     {
         "/test_htable_internal_remove_i64",
-        test_htable_internal_remove,
+        test_htable_internal_remove_i64,
         NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
     },
 
