@@ -693,7 +693,7 @@ local function update_box2c(dep: Dependency)
         print(ansicolors("%{green}repository in clean state%{reset}"))
         cmd_do("git config pull.rebase false")
         -- TODO: Проверка на существование записи
-        cmd_do("git remote add erin  https://github.com/erincatto/box2c.git")
+        cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
         cmd_do("git pull erin main")
     else
         print(ansicolors("%{red}repository is dirty%{reset}"))
@@ -1003,7 +1003,7 @@ dependencies = {
         links = { "box2d:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
-        url = "https://github.com/erincatto/box2c.git",
+        url = "https://github.com/erincatto/box2d.git",
         url_action = 'git',
     },
 
