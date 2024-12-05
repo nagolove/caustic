@@ -88,8 +88,8 @@ typedef struct {
 } type_two;
 
 typedef struct {
-    float  a, b, c;
     char str[32];
+    float  a, b, c;
 } type_three;
 
 // тип для тестирования
@@ -158,14 +158,7 @@ typedef struct ecs_t {
                     // Представляет собой вместимость entities и параметр 
                     // при создании ss_alloc()
     e_id            max_id; 
-                    // Индекс в entities, по нему создается новая сущность.
-                    /*avaible_index;*/
 
-    /*
-    // зарегистрированные через e_register() компоненты
-    e_cp_type       registry[E_REGISTRY_MAX];
-    int             registry_num;
-    */
                     // de_cp_type.name => e_cp_type
     HTable          *cp_types,
                     // set of e_cp_type
@@ -292,15 +285,10 @@ void ss_remove( SparseSet *ss, e_id id )
 
 // {{{ tests implementation
 
-typedef struct {
-    e_id *ids;
-    int *taken;
-    int  num;
-} EachCtx;
-
 bool iter_each(ecs_t *r, e_id e, void *ud) {
     HTable *set = ud;
 
+    /*
     printf("iter_each: e %ld\n", e);
     printf("htable_count: %ld\n", htable_count(set));
 
@@ -314,18 +302,20 @@ bool iter_each(ecs_t *r, e_id e, void *ud) {
     );
     // */
 
-    /*htable_remove_i64(set, e);*/
+    htable_remove_i64(set, e);
     return false;
 }
 
 // Проход по всем сущностям
 MunitResult test_each(const MunitParameter params[], void* userdata) {
 
+    for (int i = 0; i < 2; i++) {
     {
         ecs_t *r = e_new(NULL);
         const int num = 10;
         HTable *set = htable_new(&(HTableSetup) {
             .f_key2str = htable_i64_str,
+            .f_hash = koh_hasher_djb2,
         });
 
         // создать сущности
@@ -334,23 +324,18 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
             htable_add_i64(set, e, NULL, 0);
         }
 
+        /*
         printf("htable_count: %ld\n", htable_count(set));
         printf("test_each: before removing\n");
         e_print_entities(r);
+        */
 
         // удаляю половину элементов
         /*const int num_2remove = num / ((rand() % 3) + 1);*/
         const int num_2remove = num / 2;
-        printf("test_each: num_2remove %d\n", num_2remove);
+        //printf("test_each: num_2remove %d\n", num_2remove);
 
         /*
-        char *s = htable_print_tabular_alloc(set);
-        if (s) {
-            printf("%s\n", s);
-            free(s);
-        }
-        */
-
         {
             koh_term_color_set(KOH_TERM_YELLOW);
             HTableIterator i = htable_iter_new(set);
@@ -362,13 +347,14 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
             printf("\n");
             koh_term_color_reset();
         }
+        */
 
         // индексы для удаления
         int *ids_2remove = koh_rand_uniq_arr_alloc(num, num_2remove);
         // удалить случайные
         for (int i = 0; i < num_2remove; i++) {
             e_id e = ids_2remove[i];
-            printf("%ld ", e);
+            /*printf("%ld ", e);*/
             e_destroy(r, e);
             htable_remove_i64(set, e);
             /*munit_assert(htable_remove_i64(set, ids_2remove[i]) == true);*/
@@ -377,33 +363,56 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
 
         free(ids_2remove);
 
-{
-    koh_term_color_set(KOH_TERM_YELLOW);
-    HTableIterator i = htable_iter_new(set);
-    for (; htable_iter_valid(&i); htable_iter_next(&i)) {
-        int64_t *val = htable_iter_key(&i, NULL);
-        assert(val);
-        printf("%ld ", *val);
-    }
-    printf("\n");
-    koh_term_color_reset();
-}
+        ////////////////////////////////////////
+        /*
+        {
+            koh_term_color_set(KOH_TERM_YELLOW);
+            HTableIterator i = htable_iter_new(set);
+            for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                int64_t *val = htable_iter_key(&i, NULL);
+                assert(val);
+                printf("%ld ", *val);
+            }
+            printf("\n");
+            koh_term_color_reset();
+        }
+        */
+        ////////////////////////////////////////
 
-
+        /*
         printf("test_each: after removing\n");
         e_print_entities(r);
         printf("entts_num %zu\n", r->entities_num);
+        */
 
         e_each(r, iter_each, set);
 
-        printf("htable_count: %ld\n", htable_count(set));
+        //////////////////////////////////////////
+        /*
+        {
+            koh_term_color_set(KOH_TERM_MAGENTA);
+            HTableIterator i = htable_iter_new(set);
+            for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                int64_t *val = htable_iter_key(&i, NULL);
+                assert(val);
+                printf("%ld ", *val);
+            }
+            printf("\n");
+            koh_term_color_reset();
+        }
+        */
+        //////////////////////////////////////////
 
-        e_print_entities(r); // сколько осталось элементов?
+        // printf("htable_count: %ld\n", htable_count(set));
+
+        // e_print_entities(r); // сколько осталось элементов?
         munit_assert_int(htable_count(set), ==, 0);
         
         htable_free(set);
         e_free(r);
     }
+
+}
 
     return MUNIT_OK;
 }
@@ -580,6 +589,353 @@ MunitResult test_has(const MunitParameter params[], void* userdata) {
 
         e_free(r);
     }
+
+    return MUNIT_OK;
+}
+
+// Проверка e_get()
+MunitResult test_view_get(const MunitParameter params[], void* userdata) {
+    ecs_t *r = e_new(NULL);
+    // type_two => e_id
+    HTable *set = htable_new(NULL);
+    e_register(r, &cp_type_one);
+    e_register(r, &cp_type_two);
+    e_register(r, &cp_type_three);
+
+    for (int i = 0; i < 10; i++) {
+        e_id e = e_create(r);
+        type_two *two = e_emplace(r, e, cp_type_two);
+        munit_assert_not_null(two);
+
+        two->x = rand() % 10;
+        two->y = rand() % 10;
+        two->z = rand() % 10;
+
+        htable_add(set, two, sizeof(*two), &e, sizeof(e));
+    }
+
+    size_t num = 0;
+    e_id *entts = e_entities_alloc(r, &num);
+    for (int i = 0; i < num; i++) {
+        e_id e = entts[i];
+        munit_assert(e_valid(r, e));
+        munit_assert(e_has(r, e, cp_type_two));
+        type_two *two = e_get(r, e, cp_type_two);
+        e_id *e_fr_set = htable_get(set, two, sizeof(*two), NULL);
+        munit_assert(e_fr_set != NULL);
+        munit_assert(*e_fr_set == e);
+    }
+    free(entts);
+
+    e_free(r);
+    htable_free(set);
+
+    return MUNIT_OK;
+}
+
+MunitResult test_view(const MunitParameter params[], void* userdata) {
+
+    // проверка с прикреплением компонента одного типа {{{
+    {
+        ecs_t *r = e_new(NULL);
+        // type_two => e_id
+        HTable *set1 = htable_new(NULL),
+               *set2 = htable_new(NULL),
+               *set3 = htable_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+        // счетчик количества прикреплений каждого типа
+        int cnt1 = 0, cnt2 = 0, cnt3 = 0;
+
+        // создать и прикрепить
+        for (int i = 0; i < 10; i++) {
+            e_id e = e_create(r);
+
+            if (koh_maybe()) {
+                type_one *one = e_emplace(r, e, cp_type_one);
+                munit_assert_not_null(one);
+                *one = rand() % 127;
+                htable_add(set1, one, sizeof(*one), &e, sizeof(e));
+                cnt1++;
+            }
+
+            if (koh_maybe()) {
+                type_two *two = e_emplace(r, e, cp_type_two);
+                munit_assert_not_null(two);
+                two->x = rand() % 10;
+                two->y = rand() % 10;
+                two->z = rand() % 10;
+                htable_add(set2, two, sizeof(*two), &e, sizeof(e));
+                cnt2++;
+            }
+
+            if (koh_maybe()) {
+                type_three *three = e_emplace(r, e, cp_type_three);
+                munit_assert_not_null(three);
+                three->a = 0.5 + rand() % 10;
+                three->b = 0.5 + rand() % 10;
+                three->c = 0.5 + rand() % 10;
+                htable_add(set3, three, sizeof(*three), &e, sizeof(e));
+                cnt3++;
+            }
+
+        }
+
+        e_view v = {};
+    
+        // цикл по все трем
+        e_cp_type types[] = { cp_type_one, cp_type_two, cp_type_three };
+        int types_num = sizeof(types) / sizeof(types[0]);
+        v = e_view_create(r, types_num, types);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            e_id e_view = e_null, *e = NULL;
+
+            /////////////////////////////////////////////
+            // полученное значение
+            type_one *one = e_view_get(&v, cp_type_one);
+            munit_assert_not_null(one);
+
+            // беру e_id из таблицы
+            e = htable_get(set1, one, sizeof(*one), NULL);
+            munit_assert_not_null(e);
+
+            e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+            /////////////////////////////////////////////
+            
+    
+            /////////////////////////////////////////////
+            // полученное значение
+            type_two *two = e_view_get(&v, cp_type_two);
+            munit_assert_not_null(two);
+
+            // беру e_id из таблицы
+            e = htable_get(set2, two, sizeof(*two), NULL);
+            munit_assert_not_null(e);
+
+            e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+            /////////////////////////////////////////////
+
+
+            /////////////////////////////////////////////
+            // полученное значение
+            type_three *three = e_view_get(&v, cp_type_three);
+            munit_assert_not_null(three);
+
+            // беру e_id из таблицы
+            e = htable_get(set3, three, sizeof(*three), NULL);
+            munit_assert_not_null(e);
+
+            e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+            /////////////////////////////////////////////
+
+        }
+
+
+        // цикл по двум
+        v = e_view_create(r, types_num, types);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            e_id e_view = e_null, *e = NULL;
+
+            /////////////////////////////////////////////
+            // полученное значение
+            type_one *one = e_view_get(&v, cp_type_one);
+            munit_assert_not_null(one);
+
+            // беру e_id из таблицы
+            e = htable_get(set1, one, sizeof(*one), NULL);
+            munit_assert_not_null(e);
+
+            e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+            /////////////////////////////////////////////
+            
+    
+            /////////////////////////////////////////////
+            // полученное значение
+            type_two *two = e_view_get(&v, cp_type_two);
+            munit_assert_not_null(two);
+
+            // беру e_id из таблицы
+            e = htable_get(set2, two, sizeof(*two), NULL);
+            munit_assert_not_null(e);
+
+            e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+            /////////////////////////////////////////////
+
+
+            /////////////////////////////////////////////
+            // полученное значение
+            type_three *three = e_view_get(&v, cp_type_three);
+            munit_assert_null(three);
+        }
+
+        // цикл по одному
+        types_num = 1;
+        v = e_view_create(r, types_num, types);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            e_id e_view = e_null, *e = NULL;
+    
+            /////////////////////////////////////////////
+            // полученное значение
+            type_one *one = e_view_get(&v, cp_type_one);
+            munit_assert_not_null(one);
+
+            // беру e_id из таблицы
+            e = htable_get(set1, one, sizeof(*one), NULL);
+            munit_assert_not_null(e);
+
+            e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+            /////////////////////////////////////////////
+            
+    
+            type_two *two = e_view_get(&v, cp_type_two);
+            munit_assert_null(two);
+            type_three *three = e_view_get(&v, cp_type_three);
+            munit_assert_null(three);
+        }
+
+
+        htable_free(set1);
+        htable_free(set2);
+        htable_free(set3);
+        e_free(r);
+    } // }}}
+
+    return MUNIT_OK;
+}
+
+MunitResult test_view_single(const MunitParameter params[], void* userdata) {
+
+    // компоненты не цепляются, только создание сущностей {{{
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        for (int i = 0; i < 10; i++)
+            e_create(r);
+        e_view v = e_view_create_single(r, cp_type_one);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            munit_assert(false);
+        }
+        e_free(r);
+    }
+    // }}}
+
+    // компоненты цепляются других типов, только создание сущностей {{{
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        for (int i = 0; i < 10; i++) {
+            e_id e = e_create(r);
+            void *p1 = e_emplace(r, e, cp_type_two);
+            munit_assert_not_null(p1);
+            void *p2 = e_emplace(r, e, cp_type_three);
+            munit_assert_not_null(p2);
+        }
+
+        e_view v = {};
+        int cnt;
+
+        v = e_view_create_single(r, cp_type_one);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            munit_assert(false);
+        }
+
+        cnt = 0;
+        v = e_view_create_single(r, cp_type_two);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            cnt++;
+        }
+        munit_assert_int(cnt, ==, 10);
+
+        cnt = 0;
+        v = e_view_create_single(r, cp_type_three);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            cnt++;
+        }
+        munit_assert_int(cnt, ==, 10);
+
+        e_free(r);
+    } // }}}
+
+    // проверка с прикреплением компонента одного типа {{{
+    {
+        ecs_t *r = e_new(NULL);
+        // type_two => e_id
+        HTable *set = htable_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        // создать и прикрепить
+        for (int i = 0; i < 10; i++) {
+            e_id e = e_create(r);
+            type_two *two = e_emplace(r, e, cp_type_two);
+            munit_assert_not_null(two);
+
+            two->x = rand() % 10;
+            two->y = rand() % 10;
+            two->z = rand() % 10;
+
+            htable_add(set, two, sizeof(*two), &e, sizeof(e));
+        }
+
+        e_view v = {};
+
+        // пустой цикл, не заходит ни разу
+        v = e_view_create_single(r, cp_type_one);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            munit_assert(false);
+        }
+
+        // пустой цикл, не заходит ни разу
+        v = e_view_create_single(r, cp_type_three);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            munit_assert(false);
+        }
+
+        // счетчик количества
+        int cnt = 0;
+
+        //////////////////////////////////////////////////////////////
+        v = e_view_create_single(r, cp_type_two);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+        //////////////////////////////////////////////////////////////
+
+            // полученное значение
+            type_two *two = e_view_get(&v, cp_type_two);
+            munit_assert_not_null(two);
+
+            // беру e_id из таблицы
+            e_id *e = htable_get(set, two, sizeof(*two), NULL);
+            munit_assert_not_null(e);
+
+            e_id e_view = e_view_entity(&v);
+            // должно совпасть
+            munit_assert(*e == e_view);
+
+            cnt++;
+        }
+
+        munit_assert_int(cnt, ==, 10);
+
+        htable_free(set);
+        e_free(r);
+    } // }}}
 
     return MUNIT_OK;
 }
@@ -1345,6 +1701,33 @@ static MunitTest test_e_internal[] = {
       NULL
     },
 
+    {
+      (char*) "/view_get",
+      test_view_get,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    {
+      (char*) "/view_single",
+      test_view_single,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    {
+      (char*) "/view",
+      test_view,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
@@ -1506,7 +1889,7 @@ void e_free(ecs_t *r) {
     ecs_assert(r);
 
     if (r->storages) {
-        printf("e_free: storages_size %d\n", r->storages_size);
+        // printf("e_free: storages_size %d\n", r->storages_size);
         for (int i = 0; i < r->storages_size; i++) {
             storage_shutdown(&r->storages[i]);
         }
@@ -1703,6 +2086,10 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
     if (!e_valid(r, e))
         return NULL;
 
+    // XXX: какое поведение выбрать?
+    if (e_has(r, e, cp_type))
+        return NULL;
+
     e_storage *s = e_assure(r, cp_type);
 
     storage_assert(s);
@@ -1844,6 +2231,7 @@ e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types) {
 
     e_view v = {
         .pool_count = cp_count,
+        .r = r,
     };
 
     // setup pools pointer and find the smallest pool that we 
@@ -1887,6 +2275,7 @@ e_id e_view_entity(e_view* v) {
 }
 
 
+/*
 static int e_view_get_index_safe(e_view* v, e_cp_type cp_type) {
     assert(v);
     assert(e_view_valid(v));
@@ -1897,6 +2286,7 @@ static int e_view_get_index_safe(e_view* v, e_cp_type cp_type) {
     }
     return -1;
 }
+*/
 
 inline static void* e_storage_get_by_index(e_storage* s, size_t index) {
     assert(s);
@@ -1925,14 +2315,27 @@ void* e_view_get_by_index(e_view* v, size_t pool_index) {
     return e_storage_get(v->all_pools[pool_index], v->current_entity);
 }
 
+/*
 static void* de_view_get_safe(e_view *v, e_cp_type cp_type) {
     int index = e_view_get_index_safe(v, cp_type);
     return index != -1 ? e_view_get_by_index(v, index) : NULL;
 }
+*/
 
+// XXX: как работает с если тип не найден?
 void* e_view_get(e_view *v, e_cp_type cp_type) {
     assert(v);
-    return NULL;
+    /*return e_get(v->r, e_view_entity(v), cp_type);*/
+
+    int i = -1;
+    for (; i < v->pool_count; i++) {
+        if (v->to_pool_index[i] == cp_type.priv.cp_id) {
+            break;
+        }
+    }
+
+    e_storage *s = v->all_pools[i];
+    return (i != -1) ? e_storage_get(s, v->current_entity) : NULL;
 }
 
 void e_view_next(e_view* v) {
@@ -1965,10 +2368,15 @@ char *e_entities2table_alloc(ecs_t *r) {
          *ps = s;
     if (s) {
         ps += sprintf(ps, "{ ");
+        int cnt = 0;
         for (int64_t i = 0; i < r->max_id; i++) {
             if (r->entities[i]) {
                 ps += sprintf(ps, "%ld, ", i);
+                cnt++;
             }
+            // сократить количество итераций при малом заполнении массива
+            if (cnt > r->entities_num)
+                break;
         }
         sprintf(ps, " }");
         return s;
@@ -2104,6 +2512,27 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
         !r_name &&
         !r_desctiprion &&
         a.initial_cap == b.initial_cap);
+}
+
+e_id *e_entities_alloc(ecs_t *r, size_t *num) {
+    ecs_assert(r);
+
+    if (num)
+        *num = r->entities_num;
+
+    e_id *ret = calloc(r->entities_num + 1, sizeof(ret[0]));
+    assert(ret);
+    int cnt = 0;
+    for (int64_t i = 0; i < r->max_id; i++) {
+        if (r->entities[i]) {
+            ret[cnt++] = i;
+        }
+        // сократить количество итераций
+        if (cnt > r->entities_num)
+            break;
+    }
+
+    return ret;
 }
 
 // }}}

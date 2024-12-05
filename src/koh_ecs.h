@@ -5,35 +5,55 @@
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
-/* {{{ ECS - style aaaaa
+/* {{{ 
 
+typedef struct {
+    float x, y, z;
+} pos_t;
 
-   Based on:
-   destral_ecs.h -- simple ECS system
-   original code https://github.com/roig/destral_ecs
-   Copyright (c) 2020 Daniel Guzman
+e_cp_type cp_type_pos = {
+    .sizeof = sizeof(pos),
+}
 
-   //ecs_type_new("Tank");
+e_cp_type cp_type_health = {
+    .sizeof = sizeof(float),
+}
 
-   void *
-   int
-   float
-   double
-   bool
+ecs_t *r;
 
-   uint64t obj = ecs_object_new();
+e_id create_hero() {
+    e_id e = e_create(r);
 
-   uint64t TEAM = ecs_type_new(sizeof(int));
-   uint64t BODY = ecs_type_new(sizeof(cpBody));
+    pos_t *pos = e_emplace(r, e, cp_type_pos);
+    float *health = e_emplace(r, e, cp_type_health);
 
-   ecs_attach(obj, TEAM);
-   ecs_attach(obj, WEAPON);
-   // cpBody*
-   ecs_arrach(obj, BODY);
+    pos->x = rand() % 1024;
+    pos->y = rand() % 1024;
+    pos->z = rand() % 1024;
 
-   ecs_update();
+    *health = 1.;
 
-   ecs_attach_cb(obj, on_destroy);
+    return e;
+}
+
+void draw() {
+}
+
+int main() {
+    r = e_new();
+    e_free(r);
+
+    for (int i = 0; i < 100; i++) 
+        create_hero();
+
+    while(1) {
+        window_update();
+        draw();
+    }
+
+    return 0;
+}
+
 }}} */
 
 #include <stdbool.h>
@@ -61,7 +81,6 @@ typedef struct e_cp_type {
                           
     void        (*on_emplace)(void *payload, e_id e); 
     void        (*on_destroy)(void *payload, e_id e);
-    //void        (*on_create)(void *payload, e_id e);
 
     // Для компонентного проводника.
     // Массив строк заканчивается NULL
@@ -69,8 +88,8 @@ typedef struct e_cp_type {
     // TODO: Подумать над лучшим представлением данных.
     char        **(*str_repr)(void *payload, e_id e);
 
-    char        **(*str_repr_alloc)(void *payload, e_id e);
-    char        *(*lua_table)(void *payload, e_id e);
+    // Сериазизация в Луа таблицу. Память требует освобождения.
+    char        *(*str_repr_alloc)(void *payload, e_id e);
 
     const char  *name; // component name
     const char  *description;
@@ -148,6 +167,8 @@ void e_remove_all(ecs_t* r, e_id e);
 */
 // Нельзя создавать долгоживущие указатели на данные компонента сущности 
 // так как память может быть перераспределена при очередном вызове e_emplace()
+// XXX: Что будет если вызвать два раза подряд? 
+// Должен быть падение или возврат уже выделенной памяти?
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type);
 
 /*
@@ -232,6 +253,7 @@ typedef struct e_view {
     struct e_storage    *pool; // de_storage opaque pointer
     size_t              current_entity_index;
     e_id                current_entity;
+    ecs_t               *r;
 } e_view;
 
 e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
@@ -241,11 +263,19 @@ bool e_view_valid(e_view* v);
 e_id e_view_entity(e_view* v);
 void* e_view_get(e_view *v, e_cp_type cp_type);
 void e_view_next(e_view* v);
+
+// Выделяет память, возвращает массив сущностей находящихся в системе
+e_id *e_entities_alloc(ecs_t *r, size_t *num);
+
 ecs_t *e_clone(ecs_t *r);
+
+// Печатает содержимое e_entities2table_alloc()
 void e_print_entities(ecs_t *r);
+
 // Возвращает массив номеров сущностей в виде Луа таблицы. 
 // Память нужно освобождать.
 char *e_entities2table_alloc(ecs_t *r);
+
 void e_gui(ecs_t *r, e_id e);
 void e_print_storage(ecs_t *r, e_cp_type cp_type);
 
