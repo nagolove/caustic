@@ -186,6 +186,7 @@ const char *font2str(Font fnt);
 void koh_screenshot_incremental();
 void koh_trap();
 
+// Цвета терминала {{{
 #define KOH_TERM_BLACK        30         
 #define KOH_TERM_RED          31         
 #define KOH_TERM_GREEN        32         
@@ -194,6 +195,7 @@ void koh_trap();
 #define KOH_TERM_MAGENTA      35         
 #define KOH_TERM_CYAN         36         
 #define KOH_TERM_WHITE        37         
+// }}}
 
 void koh_term_color_set(int color);
 void koh_term_color_reset();
@@ -347,3 +349,6 @@ const char *koh_bin2hex(const void *data, size_t data_len);
 // Память необходимо освобождать
 // Максимальное значение num - INT16_MAX
 int *koh_rand_uniq_arr_alloc(int up, int num);
+
+// С вероятностью 50% вернет ложь или истину. Внутри - rand()
+bool koh_maybe();

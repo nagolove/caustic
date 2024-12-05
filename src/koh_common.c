@@ -2198,3 +2198,7 @@ int *koh_rand_uniq_arr_alloc(int up, int num) {
 
     return ret;
 }
+
+bool koh_maybe() {
+    return rand() % 2;
+}
