@@ -63,16 +63,28 @@ int main() {
 /* An item stored in a sparse set. */
 typedef int64_t e_id;
 
+/*
+Добавить поддержку уникалькости идентификаторов через версии:
+Добавить поддержку версии
+ */
+typedef union {
+    struct {
+        uint32_t id, ver;
+    };
+    int64_t x;
+} e_idu;
+
 typedef struct e_cp_type_private {
     // идентифатор, устанавливается внутри e_register()
     size_t      cp_id; 
     // выравненный на степень 2 размер
     // TODO: выравнять на размер указателя
+    // XXX: Не используется.
     size_t      cp_sizeof2; 
 } e_cp_type_private;
 
 typedef struct e_cp_type {
-    // Нельзя использовать один и тот-же e_cp_type в разных экземплярах
+    // WARN: Нельзя использовать один и тот-же e_cp_type в разных экземплярах
     // ecs так как e_cp_type_private возможно должны иметь разные значения
     // для разных ecs
     e_cp_type_private priv;
@@ -261,6 +273,7 @@ e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
 e_view e_view_create_single(ecs_t* r, e_cp_type cp_type);
 bool e_view_valid(e_view* v);
 e_id e_view_entity(e_view* v);
+// Если тип не найден, то возвращает NULL
 void* e_view_get(e_view *v, e_cp_type cp_type);
 void e_view_next(e_view* v);
 

@@ -13,6 +13,7 @@ static const e_id ss_id_max = INT64_MAX - 1;
 /** The sparse set. */
 // https://manenko.com/2021/05/23/sparse-sets.html
 // https://gitlab.com/manenko/rho-sparse-set/-/blob/master/include/rho/sparse_set.h
+// Сущности хранятся без номеров версии.
 typedef struct SparseSet {
     e_id *sparse; /**< Sparse array used to speed-optimise the set.    */
     e_id *dense;  /**< Dense array that stores the set's items.        */
@@ -149,6 +150,8 @@ typedef struct ecs_t {
     // если по индексу массива истина - то сущность с таким индексом 
     // использована
     bool            *entities;
+    // Хранит номер версии для каждого индекса entities
+    uint32_t        *entities_ver;
     // стек свободных индексов, вместимость - max_id
     e_id            *stack;
     // указывает на последний элемент в стеке
@@ -1857,6 +1860,8 @@ ecs_t *e_new(e_options *opts) {
     assert(r->entities);
     r->stack = calloc(r->max_id, sizeof(r->stack[0]));
     assert(r->stack);
+    r->entities_ver = calloc(r->max_id, sizeof(r->entities_ver[0]));
+    assert(r->entities_ver);
 
     // заполнить стек свободными доступными индексами сущностей
     for (int i = r->max_id - 1; i >= 0; i--) {
@@ -1912,6 +1917,11 @@ void e_free(ecs_t *r) {
         r->entities = NULL;
     }
 
+    if (r->entities_ver) {
+        free(r->entities_ver);
+        r->entities_ver = NULL;
+    }
+
     if (r->stack) {
         free(r->stack);
         r->stack = NULL;
@@ -1951,11 +1961,13 @@ e_id e_create(ecs_t* r) {
 
     //e_print_entities(r);
 
-    // Проверка, что можно создать сущность по данному индексу
-    /*assert(r->entities[r->avaible_index] == false);*/
-
     // проверка на наличие доступных индексов сущностей
     assert(r->stack_last > 0);
+
+    if (r->stack_last <= 0) {
+        printf("e_create: no entities in stack\n");
+        koh_trap();
+    }
 
     e_id avaible_index = r->stack[r->stack_last];
     // записываю не используемое значение для проверки корректности заполнения
@@ -1968,12 +1980,6 @@ e_id e_create(ecs_t* r) {
 
     r->entities[avaible_index] = true;
     r->entities_num++;
-
-    /*
-    if (r->avaible_index + 1 == r->entities_num) {
-        r->avaible_index = r->entities_num;
-    }
-    */
 
     /*
     printf("avaible_index %ld\n", r->avaible_index);
@@ -2306,14 +2312,17 @@ static void* e_storage_get(e_storage* s, e_id e) {
     assert(s);
     assert(e != e_null);
     return e_storage_get_by_index(s, s->sparse.sparse[e]);
+    // return e_storage_get_by_index(s, s->sparse.sparse[e]);
 }
 
+/*
 void* e_view_get_by_index(e_view* v, size_t pool_index) {
     assert(v);
     assert(pool_index >= 0 && pool_index < E_MAX_VIEW_COMPONENTS);
     assert(e_view_valid(v));
     return e_storage_get(v->all_pools[pool_index], v->current_entity);
 }
+*/
 
 /*
 static void* de_view_get_safe(e_view *v, e_cp_type cp_type) {
@@ -2322,10 +2331,8 @@ static void* de_view_get_safe(e_view *v, e_cp_type cp_type) {
 }
 */
 
-// XXX: как работает с если тип не найден?
 void* e_view_get(e_view *v, e_cp_type cp_type) {
     assert(v);
-    /*return e_get(v->r, e_view_entity(v), cp_type);*/
 
     int i = -1;
     for (; i < v->pool_count; i++) {
@@ -2356,6 +2363,35 @@ void e_view_next(e_view* v) {
 
 ecs_t *e_clone(ecs_t *r) {
     assert(r);
+    return NULL;
+}
+
+char *e_entities2table_alloc2(ecs_t *r) {
+    ecs_assert(r);
+
+    // количество байт, которого должно хватить для строкого представления числа
+    const int number_size = 8; 
+    char *s = calloc(number_size * (r->entities_num + 1), sizeof(char)), 
+         *ps = s;
+    if (s) {
+        ps += sprintf(ps, "{ ");
+        int cnt = 0;
+        for (int64_t i = 0; i < r->max_id; i++) {
+            if (r->entities[i]) {
+                ps += sprintf(
+                            ps,
+                            " { id = %ld, ver = %u } , ",
+                            i, r->entities_ver[i]
+                        );
+                cnt++;
+            }
+            // сократить количество итераций при малом заполнении массива
+            if (cnt > r->entities_num)
+                break;
+        }
+        sprintf(ps, " }");
+        return s;
+    }
     return NULL;
 }
 
