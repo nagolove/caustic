@@ -61,7 +61,7 @@ int main() {
 #include "munit.h"
 
 /* An item stored in a sparse set. */
-typedef int64_t e_id;
+/*typedef int64_t e_id;*/
 
 /*
 Добавить поддержку уникалькости идентификаторов через версии:
@@ -69,10 +69,18 @@ typedef int64_t e_id;
  */
 typedef union {
     struct {
-        uint32_t id, ver;
+                 // порядковый номер индекс в массиве
+        uint32_t ord,
+                 // номер версии, используется для проверки на устаревшесть
+                 // идентификаторов
+                 // XXX: С какого числа раздавать версии?
+                 // С нуля
+                 ver;
     };
-    int64_t x;
+    int64_t id;
 } e_idu;
+
+typedef e_idu e_id;
 
 typedef struct e_cp_type_private {
     // идентифатор, устанавливается внутри e_register()
@@ -116,7 +124,7 @@ void e_test_init();
 typedef struct ecs_t ecs_t;
 
 typedef struct e_options {
-    e_id max_id;
+    int64_t max_id;
 } e_options;
 
 // t+
@@ -320,3 +328,22 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b);
 
 // Недостижымый элемент, который всегда отсутствует в системе.
 extern const e_id e_null;
+
+static inline uint32_t e_id_ver(e_id e) {
+    return ((e_idu)e).ver;
+}
+
+static inline uint32_t e_id_ord(e_id e) {
+    return ((e_idu)e).ord;
+}
+
+static inline e_id e_build(uint32_t ord, uint32_t ver) {
+    e_idu e = {
+        .ord = ord,
+        .ver = ver,
+    };
+    return e;
+}
+
+// TODO: Возможность индексировать как Lua массив, а не хеш-таблицу
+const char *e_id2str(e_id e);
