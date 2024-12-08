@@ -1445,8 +1445,9 @@ static MunitResult test_htable_internal_strings_find(
 static MunitResult test_htable_internal_new_free(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
-    htable_verbose = true;
+    //printf("\n");
+    /*htable_verbose = true;*/
+    htable_verbose = false;
     HTable *t = htable_new(NULL);
     htable_free(t);
     htable_verbose = false;
@@ -1456,7 +1457,7 @@ static MunitResult test_htable_internal_new_free(
 static MunitResult test_htable_internal_get(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
+    //printf("\n");
     /*htable_verbose = true;*/
     htable_verbose = false;
 
@@ -1491,7 +1492,7 @@ static MunitResult test_htable_internal_exists(
 static MunitResult test_htable_internal_get2(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
+    /*printf("\n");*/
 
     // Создавать таблица с разной вместимостью
     //for (int j = 0; j < 100; j += 10) {
@@ -1884,7 +1885,7 @@ void _test_htable_internal_add_strings(
 
     //htable_print(t);
 
-    printf("\n");
+    //printf("\n");
 
     /*
     char *s = htable_print_tabular_alloc(t);
@@ -1979,7 +1980,7 @@ static MunitResult _test_htable_internal_extend(
 static MunitResult test_htable_internal_add_add(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
+    // printf("\n");
 
     HTable *t = htable_new(NULL);
     int i = -1, *i_g;
@@ -2010,7 +2011,7 @@ static MunitResult test_htable_internal_add_add(
 static MunitResult test_htable_internal_extend(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
+    // printf("\n");
 
     struct {
         int cap_initial,    // начальная вместимость;
@@ -2055,7 +2056,7 @@ static MunitResult test_htable_internal_extend(
 static MunitResult test_htable_internal_union(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
+    // printf("\n");
 
     struct {
         char *line;
@@ -2120,7 +2121,7 @@ static MunitResult test_htable_internal_union(
 static MunitResult test_htable_internal_add_strings(
     const MunitParameter params[], void* data
 ) {
-    printf("\n");
+    // printf("\n");
 
     TableNodeStr *strings_permuted = strings_permuted_alloc();
     /*_test_htable_internal_add_strings(strings_permuted, &(HTableSetup) {*/
@@ -2130,7 +2131,7 @@ static MunitResult test_htable_internal_add_strings(
         .f_key2str = htable_str_str,
     });
 
-    printf("\n\n\n\n\n");
+    // printf("\n\n\n\n\n");
 
     free(strings_permuted);
 
@@ -2493,7 +2494,8 @@ static MunitResult test_htable_internal_remove_i64(
 
         // удаление
         for (int i = 0; i < data_2remove_num; i++) {
-            bool removed = htable_remove_i64(h, data_2remove[i]);
+            htable_remove_i64(h, data_2remove[i]);
+            // bool removed = htable_remove_i64(h, data_2remove[i]);
             /*
             printf(
                 "removed %s, val %ld\n",
@@ -2735,7 +2737,7 @@ static MunitResult test_koh_hashers_search(
 static void _test_htable_singles(HTable *t) {
     // {{{
     htable_verbose = false;
-    printf("\n");
+    // printf("\n");
 
     // Добавить значение размера int(4)
     // Проверить существующее значение
@@ -2795,8 +2797,9 @@ static void _test_htable_singles(HTable *t) {
 #ifdef HTABLE_DEBUG_BUCKET
         char *key = "_123";
         int key_len = strlen(key) + 1;
-        int64_t index = _htable_get_index(t, key, key_len, NULL);
-        printf("bucket_size: %ld\n", t->arr[index]->bucket_size);
+        _htable_get_index(t, key, key_len, NULL);
+        //int64_t index = _htable_get_index(t, key, key_len, NULL);
+        //printf("bucket_size: %ld\n", t->arr[index]->bucket_size);
 #endif
 
         munit_assert_int16(*get_val, ==, 47);
@@ -2838,11 +2841,12 @@ static MunitResult test_htable_internal_singles(
     const MunitParameter params[], void* data
 ) {
 
-    printf("\n");
+    // printf("\n");
 
     // Проверка на всех хэшировщиках
     for (int i = 0; koh_hashers[i].f; i++) {
-        htable_verbose = true;
+        /*htable_verbose = true;*/
+        htable_verbose = false;
         HTable *t = htable_new(&(HTableSetup){
             .cap = 1,
             .f_hash = koh_hashers[i].f,
