@@ -49,7 +49,7 @@ Hash_t koh_hasher_fnv64(const void *data, size_t len) {
 
 Hash_t koh_hasher_djb2(const void *data, size_t len) {
     // {{{
-    // Обрати внимание на размер типа hash в 32 бита
+    // NOTE: Обрати внимание на размер типа hash в 32 бита
     uint32_t hash = 5381;
     const char *str = data;
 
