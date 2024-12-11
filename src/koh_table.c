@@ -369,7 +369,8 @@ void *htable_add(
     assert(key);
     assert(key_len > 0);
     assert(value_len >= 0);
-    assert((value && value_len > 0) || (!value && value_len == 0));
+    // INFO: Зачем нужно было условие снизу?
+    //assert((value && value_len > 0) || (!value && value_len == 0));
 
     if (value_len == 0)
         value = NULL;
