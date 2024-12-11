@@ -3,59 +3,6 @@
 
 #pragma once 
 
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-
-/* {{{ 
-
-typedef struct {
-    float x, y, z;
-} pos_t;
-
-e_cp_type cp_type_pos = {
-    .sizeof = sizeof(pos),
-}
-
-e_cp_type cp_type_health = {
-    .sizeof = sizeof(float),
-}
-
-ecs_t *r;
-
-e_id create_hero() {
-    e_id e = e_create(r);
-
-    pos_t *pos = e_emplace(r, e, cp_type_pos);
-    float *health = e_emplace(r, e, cp_type_health);
-
-    pos->x = rand() % 1024;
-    pos->y = rand() % 1024;
-    pos->z = rand() % 1024;
-
-    *health = 1.;
-
-    return e;
-}
-
-void draw() {
-}
-
-int main() {
-    r = e_new();
-    e_free(r);
-
-    for (int i = 0; i < 100; i++) 
-        create_hero();
-
-    while(1) {
-        window_update();
-        draw();
-    }
-
-    return 0;
-}
-
-}}} */
-
 #include <stdbool.h>
 #include <stdlib.h>
 #include "munit.h"
@@ -79,6 +26,8 @@ typedef union {
     };
     int64_t id;
 } e_idu;
+
+_Static_assert(sizeof(e_idu) == 8, "only 64 machines allowed");
 
 typedef e_idu e_id;
 
@@ -146,12 +95,6 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp);
      - Recycled identifier with an update version.
 */
 // Создатьет идентификатор сущности.
-// t+
-e_id e_create(ecs_t* r);
-
-/*
-    Удаляет сущность, со всеми компонентами
- */
 // t+
 e_id e_create(ecs_t* r);
 
@@ -253,7 +196,10 @@ void e_orphans_each(ecs_t* r, e_each_function fun, void* udata);
 
     Example usage with two components:
 
-    for (e_view v = e_create_view(r, 2, (e_cp_type[2]) {transform_type, velocity_type }); e_view_valid(&v); e_view_next(&v)) {
+    for (e_view v = e_create_view(
+            r, 2, 
+            (e_cp_type[2]) {transform_type, velocity_type });
+        e_view_valid(&v); e_view_next(&v)) {
         e_id e = e_view_entity(&v);
         transform* tr = e_view_get(&v, transform_type);
         velocity* tc = e_view_get(&v, velocity_type);
@@ -296,6 +242,10 @@ void e_print_entities(ecs_t *r);
 // Возвращает массив номеров сущностей в виде Луа таблицы. 
 // Память нужно освобождать.
 char *e_entities2table_alloc(ecs_t *r);
+// Возвращает массив номеров сущностей в виде Луа таблицы. 
+// { ord = 1, ver = 0 }, 
+// Память нужно освобождать. 
+char *e_entities2table_alloc2(ecs_t *r);
 
 void e_gui(ecs_t *r, e_id e);
 void e_print_storage(ecs_t *r, e_cp_type cp_type);
@@ -345,5 +295,57 @@ static inline e_id e_build(uint32_t ord, uint32_t ver) {
     return e;
 }
 
-// TODO: Возможность индексировать как Lua массив, а не хеш-таблицу
+// TODO: Возможность индексировать как Lua массив, возвращая { 1, 10}, 
+// а не хеш-таблицу { ord = 1, ver = 10, }
 const char *e_id2str(e_id e);
+
+/* {{{ 
+
+typedef struct {
+    float x, y, z;
+} pos_t;
+
+e_cp_type cp_type_pos = {
+    .sizeof = sizeof(pos),
+}
+
+e_cp_type cp_type_health = {
+    .sizeof = sizeof(float),
+}
+
+ecs_t *r;
+
+e_id create_hero() {
+    e_id e = e_create(r);
+
+    pos_t *pos = e_emplace(r, e, cp_type_pos);
+    float *health = e_emplace(r, e, cp_type_health);
+
+    pos->x = rand() % 1024;
+    pos->y = rand() % 1024;
+    pos->z = rand() % 1024;
+
+    *health = 1.;
+
+    return e;
+}
+
+void draw() {
+}
+
+int main() {
+    r = e_new();
+    e_free(r);
+
+    for (int i = 0; i < 100; i++) 
+        create_hero();
+
+    while(1) {
+        window_update();
+        draw();
+    }
+
+    return 0;
+}
+
+}}} */
