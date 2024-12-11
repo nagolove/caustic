@@ -327,16 +327,18 @@ static void bucket_free(HTable *ht, int64_t index) {
     assert(ht->taken >= 0);
     assert(index >= 0);
 
-    if (ht->arr[index]) {
+    Bucket *buck = ht->arr[index];
+    if (buck) {
         if (ht->f_on_remove)
             ht->f_on_remove(
-                bucket_get_key(ht->arr[index]), ht->arr[index]->key_len,
-                bucket_get_value(ht->arr[index]), ht->arr[index]->value_len,
+                bucket_get_key(buck), buck->key_len,
+                bucket_get_value(buck), buck->value_len,
                 ht->userdata
             );
-        free(ht->arr[index]);
+        free(buck);
         ht->arr[index] = NULL;
     }
+
 }
 
 // Добавляет указатель на корзинку в таблицу согласно значению индекса 
@@ -626,6 +628,7 @@ HTable *htable_new(struct HTableSetup *setup) {
         ht->f_key2str = setup->f_key2str;
         ht->f_val2str = setup->f_val2str;
         ht->f_keycmp = setup->f_keycmp ? setup->f_keycmp : memcmp;
+        ht->userdata = setup->userdata;
     }
 
     if (!ht->f_hash) {
