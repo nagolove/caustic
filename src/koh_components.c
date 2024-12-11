@@ -9,6 +9,10 @@ bool koh_components_verbose = false;
 char **str_repr_body(void *payload, de_entity e) {
     return b2BodyId_to_str(*(b2BodyId*)payload);
 }
+
+char **str_repr_body2(void *payload, e_id e) {
+    return b2BodyId_to_str(*(b2BodyId*)payload);
+}
 #undef STR_NUM
 
 // {{{ on_destroy
@@ -59,6 +63,7 @@ static char **str_repr_shape_render_opts(void *payload, de_entity e) {
 }
 #undef STR_NUM
 
+// XXX: не должно находится в этом файле, пусть лежит в каталоге koh-t80
 // транспорт, боевая машина
 de_cp_type cp_type_vehicle = {
     .cp_id = 0,
@@ -116,6 +121,64 @@ de_cp_type cp_type_border_sensor = {
     /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
 };
 
+//////////////////////////////////////////////////////////////////////
+
+// транспорт, боевая машина
+e_cp_type cp_type_vehicle2 = {
+    .cp_sizeof = 1,
+    .name = "vehicle",
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 100,
+};
+
+// Физическое тело
+e_cp_type cp_type_body2 = {
+    .cp_sizeof = sizeof(b2BodyId),
+    .name = "body",
+    .description = "b2BodyId structure",
+    .str_repr = str_repr_body2,
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 1000,
+    //.on_destroy = on_destroy_body,
+    //.on_emplace = on_emplace_body,
+    /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
+};
+
+e_cp_type cp_type_shape_render_opts2 = {
+    .cp_sizeof = sizeof(struct ShapeRenderOpts),
+    //.str_repr = str_repr_shape_render_opts,
+    .name = "shape_render_opts",
+    .description = "Texture pointer, uv rectangle, color",
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 1000,
+    //.on_destroy = on_destroy_shape_render_opts,
+    /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
+};
+
+e_cp_type cp_type_texture2 = {
+    .cp_sizeof = sizeof(Texture2D*),
+    .name = "texture",
+    .description = "holder for texture",
+    .str_repr = NULL,
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 100,
+    /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
+};
+
+e_cp_type cp_type_border_sensor2 = {
+    .cp_sizeof = sizeof(char),
+    .name = "border_sensor",
+    .description = "does this is map border?",
+    .str_repr = NULL,
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 100,
+    /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
+};
+
+
+//////////////////////////////////////////////////////////////////////
+
+
 void koh_cp_types_register(de_ecs *r) {
     de_ecs_register(r, cp_type_vehicle);
     de_ecs_register(r, cp_type_body);
@@ -124,6 +187,18 @@ void koh_cp_types_register(de_ecs *r) {
     de_ecs_register(r, cp_type_texture);
     /*de_ecs_register(r, cp_type_testing);*/
     de_ecs_register(r, cp_type_border_sensor);
+    /*de_ecs_register(r, cp_type_terr_segment);*/
+    /*de_ecs_register(r, cp_type_man);*/
+}
+
+void koh_cp_types_register2(ecs_t *r) {
+    e_register(r, &cp_type_vehicle2);
+    e_register(r, &cp_type_body2);
+    e_register(r, &cp_type_shape_render_opts2);
+    e_register(r, &cp_type_texture2);
+    e_register(r, &cp_type_border_sensor2);
+    /*de_ecs_register(r, cp_type_testing);*/
+    /*de_ecs_register(r, cp_type_hero);*/
     /*de_ecs_register(r, cp_type_terr_segment);*/
     /*de_ecs_register(r, cp_type_man);*/
 }
@@ -138,6 +213,70 @@ struct VelRot make_random_velrot(struct WorldCtx *wctx) {
             abs_linear_vel - xorshift32_rand(wctx->xrng) % (2 * abs_linear_vel),
         },
     };
+}
+
+e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
+    assert(wctx);
+    assert(setup.r);
+
+    b2Polygon poly = setup.poly;
+    assert(poly.count >= 3);
+
+    struct VelRot vr = make_random_velrot(wctx);
+
+    if (koh_components_verbose)
+        trace(
+            "spawn_poly: { pos = %s, poly = %s, v = %s, w = %f, }\n",
+            b2Vec2_to_str(setup.pos),
+            b2Polygon_to_str(&poly),
+            b2Vec2_to_str(vr.vel),
+            vr.w
+        );
+
+    de_entity               e = de_null;
+    struct b2BodyId         *cp_body_id = NULL;
+    struct ShapeRenderOpts  *cp_r_opts = NULL;
+
+    if (setup.r) {
+        e = e_create(setup.r);
+        cp_body_id = e_emplace(setup.r, e, cp_type_body);
+        cp_r_opts = e_emplace(setup.r, e, cp_type_shape_render_opts);
+        *cp_r_opts = setup.r_opts;
+    }
+
+    // {{{ b2 body & shape
+    b2BodyDef body_def = b2DefaultBodyDef();
+    //body_def.isEnabled = true;
+    body_def.position = setup.pos;
+    //body_def.isAwake = true;
+
+    if (setup.use_static)
+        body_def.type = b2_staticBody;
+    else
+        body_def.type = b2_dynamicBody;
+
+    b2BodyId body = body_create(wctx, &body_def);
+    if (cp_body_id)
+        *cp_body_id = body;
+    b2ShapeDef shape_def = b2DefaultShapeDef();
+    // Вынести в графическую настройку
+    shape_def.density = 1.0 * 0.1;
+    shape_def.friction = 0.5;
+    if (cp_r_opts)
+        shape_def.userData = (void*)(uintptr_t)e;
+    b2CreatePolygonShape(body, &shape_def, &poly);
+
+    b2Body_SetLinearVelocity(body, vr.vel);
+    b2Body_SetAngularVelocity(body, vr.w);
+
+    b2Body_Enable(body);
+
+    b2Vec2 pos = b2Body_GetPosition(body);
+    if (koh_components_verbose)
+        trace("spawn_poly: body { pos = %s, }\n", b2Vec2_to_str(pos));
+    // }}}
+
+    return e;
 }
 
 de_entity spawn_poly(
@@ -274,6 +413,24 @@ de_entity spawn_triangle(
 }
 
 // Границы игрового поля
+void spawn_borders2(
+    struct WorldCtx *wctx, ecs_t *r, e_id entts[4], int gap
+) {
+    struct SegmentSetup2 setup = {
+        .r = r,
+        .color = GREEN,
+        .sensor = false,
+    };
+    spawn_borders_internal2(wctx, r, entts, setup, gap);
+
+    for (int i = 0; i < 4; i++) {
+        assert(e_valid(r, entts[i]));
+        if (!e_has(r, entts[i], cp_type_border_sensor2))
+            e_emplace(r, entts[i], cp_type_border_sensor2);
+    }
+}
+
+// Границы игрового поля
 void spawn_borders(
     struct WorldCtx *wctx, de_ecs *r, de_entity entts[4], int gap
 ) {
@@ -348,6 +505,109 @@ const char *segment_type2str(enum SegmentType type) {
     return NULL;
 }
 
+e_id spawn_segment2(WorldCtx *wctx, SegmentSetup2 *setup) {
+
+    assert(wctx);
+    assert(setup);
+    assert(setup->r);
+
+    ecs_t      *r = setup->r;
+    e_id       e = e_create(r);
+
+    assert(e_valid(r, e));
+
+    b2BodyId *body = e_emplace(r, e, cp_type_body2);
+    assert(body);
+
+    if (koh_components_verbose)
+        trace(
+            "spawn_segment: p1 %s, p2 %s, type %s\n",
+            b2Vec2_to_str(setup->start),
+            b2Vec2_to_str(setup->end),
+            segment_type2str(setup->type)
+        );
+
+    b2BodyDef def = b2DefaultBodyDef();
+    def.userData = (void*)(uintptr_t)e.id;
+    def.isEnabled = true;
+    def.position = setup->start;
+    def.isAwake = true;
+    def.type = b2_staticBody;
+
+    *body = body_create(wctx, &def);
+
+    e_cp_type cp_type = cp_type_shape_render_opts2;
+    struct ShapeRenderOpts *r_opts = e_emplace(r, e, cp_type);
+    assert(setup->color.a > 0);
+    r_opts->color = setup->color;
+    r_opts->tex = NULL;
+
+    if (setup->type == ST_SEGMENT)
+        assert(setup->line_thick);
+
+    r_opts->thick = setup->line_thick;
+
+    b2ShapeDef shape_def = b2DefaultShapeDef();
+    shape_def.userData = (void*)(intptr_t)e.id;
+    shape_def.density = 1.0;
+    shape_def.friction = 0.5;
+    shape_def.isSensor = setup->sensor;
+    b2Polygon poly;
+
+    switch (setup->type) {
+        // Что за капсули?
+        case ST_CAPSULE: {
+            trace("spawn_segment: ST_CAPSULE not implemented\n");
+            abort();
+            /*
+            const float radius = 3.;
+            float len = b2Distance(setup->start, setup->end);
+            def.position = b2MulSV(len / 2., b2Sub(setup->end, setup->start));
+            poly = b2MakeCapsule(setup->start, setup->end, radius);
+            b2CreatePolygonShape(*body, &shape_def, &poly);
+            break;
+            */
+        }
+        case ST_POLYGON: {
+            //poly = b2MakeBox(5., 500.);
+
+            b2Vec2 start = setup->start, end = setup->end;
+            b2Vec2 dir = b2Sub(end, start);
+            float len = b2Length(dir);
+
+            //assert(len != 0.);
+
+            // XXX: Пришлось отключить при работе с nanosvg
+            //assert(len > 0.001);
+
+            b2Vec2 dir_unite = b2MulSV(1. / len, dir);
+            const float default_width = 20.;
+            const float width = setup->width == 0. ? 
+                                default_width : setup->width;
+
+            b2Vec2 vertices[4] = {
+                b2Add(start, b2MulSV(width, b2LeftPerp(dir_unite))),
+                b2Add(start, b2MulSV(width, b2RightPerp(dir_unite))),
+                b2Add(end, b2MulSV(width, b2LeftPerp(dir_unite))),
+                b2Add(end, b2MulSV(width, b2RightPerp(dir_unite))),
+            };
+            b2Hull hull = b2ComputeHull(vertices, 4);
+            assert(b2ValidateHull(&hull));
+            poly = b2MakePolygon(&hull, 0.0f);
+            b2CreatePolygonShape(*body, &shape_def, &poly);
+            break;
+        }
+        case ST_SEGMENT: {
+            b2Segment segment = {
+                .point1 = setup->start,
+                .point2 = setup->end,
+            };
+            b2CreateSegmentShape(*body, &shape_def, &segment);
+        }
+    }
+
+    return e;
+}
 
 // TODO: Рисовать позицию
 // Какую позицию?
@@ -511,6 +771,30 @@ void shape_render_poly(
     }
 }
 
+static void border_remove2(ecs_t *r, e_id e, struct WorldCtx *wctx) {
+    if (e.id == e_null.id)
+        return;
+    const e_cp_type cp_type = cp_type_body2;
+
+    if (!e_valid(r, e)) {
+        trace("border_remove2: invalid entity\n");
+        return;
+    }
+
+    if (e_has(r, e, cp_type)) {
+        b2BodyId *body_id = e_get(r, e, cp_type);
+        assert(body_id);
+
+        b2Body_user_data_reset(*body_id, (void*)(uintptr_t)de_null);
+
+        b2DestroyBody(*body_id);
+        e_destroy(r, e);
+        trace("border_remove2: done for %s\n", e_id2str(e));
+    } else {
+        trace("border_remove2: entity has not cp_type_body component\n");
+    }
+}
+
 static void border_remove(de_ecs *r, de_entity e, struct WorldCtx *wctx) {
     if (e == de_null)
         return;
@@ -534,6 +818,15 @@ static void border_remove(de_ecs *r, de_entity e, struct WorldCtx *wctx) {
         trace("border_remove: entity has not cp_type_body component\n");
     }
 }
+
+/*
+void remove_borders2(struct WorldCtx *wctx, ecs_t *r, e_id entts[4]);
+    border_remove2(r, entts[0], wctx);
+    border_remove2(r, entts[1], wctx);
+    border_remove2(r, entts[2], wctx);
+    border_remove2(r, entts[3], wctx);
+}
+*/
 
 void remove_borders(struct WorldCtx *wctx, de_ecs *r, de_entity entts[4]) {
     border_remove(r, entts[0], wctx);
@@ -698,6 +991,50 @@ void e_apply_random_impulse_to_bodies(de_ecs *r, WorldCtx *wctx) {
     }
     if (koh_components_verbose)
         trace("apply_random_impulse_to_bodies:\n");
+}
+
+void e_cp_body_draw2(ecs_t *r, WorldCtx *wctx) {
+    assert(wctx);
+    assert(r);
+    e_view v = e_view_create(r, 1, (e_cp_type[]) { cp_type_body2 });
+    for (; e_view_valid(&v); e_view_next(&v)) {
+        b2BodyId *bid = e_view_get(&v, cp_type_body2);
+
+        if (!b2Body_IsValid(*bid)) 
+            continue;
+
+        int shapes_num = b2Body_GetShapeCount(*bid);
+        b2ShapeId shapes[shapes_num + 1];
+        b2Body_GetShapes(*bid, shapes, shapes_num);
+        for (int i = 0; i < shapes_num; i++) {
+            if (!b2Shape_IsValid(shapes[i])) {
+                trace("e_cp_body_draw: invalid shape\n");
+                continue;
+            }
+            b2ShapeType type = b2Shape_GetType(shapes[i]);
+            switch (type) {
+                case b2_capsuleShape: 
+                    trace(
+                        "e_cp_body_draw: b2_capsuleShape is not implemented\n"
+                    );
+                    break;
+                case b2_circleShape: 
+                    world_shape_render_circle(shapes[i], wctx, r);
+                    break;
+                case b2_polygonShape:
+                    world_shape_render_poly(shapes[i], wctx, r);
+                    break;
+                case b2_segmentShape: 
+                    world_shape_render_segment(shapes[i], wctx, r);
+                    break;
+                default: 
+                    trace(
+                        "e_cp_body_draw: default branch, unknown shape type\n"
+                    );
+                    break;
+            }
+        }
+    }
 }
 
 void e_cp_body_draw(de_ecs *r, WorldCtx *wctx) {

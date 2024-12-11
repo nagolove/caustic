@@ -11,12 +11,20 @@ extern bool koh_components_verbose;
 
 // XXX: Убрал модификатор константности для правки типов на лету.
 // В частности правится cp_type_body.initial_cap = 10000;
+
 extern de_cp_type cp_type_vehicle;
 extern de_cp_type cp_type_body;
 extern de_cp_type cp_type_border_sensor;
 extern de_cp_type cp_type_shape_render_opts;
 extern de_cp_type cp_type_testing;
 extern de_cp_type cp_type_texture;
+
+extern e_cp_type cp_type_vehicle2;
+extern e_cp_type cp_type_body2;
+extern e_cp_type cp_type_border_sensor2;
+extern e_cp_type cp_type_shape_render_opts2;
+extern e_cp_type cp_type_testing2;
+extern e_cp_type cp_type_texture2;
 
 // Кто владеет текстурой?
 typedef struct ShapeRenderOpts {
@@ -31,6 +39,17 @@ enum SegmentType {
     ST_CAPSULE,
     ST_SEGMENT,
 };
+
+typedef struct SegmentSetup2 {
+    ecs_t              *r;
+    // Начало и конец отрезка
+    b2Vec2              start, end;
+    enum SegmentType    type;
+    float               width,      // Толщина сегмента если он полигон
+                        line_thick; // толщина линии рисования
+    Color               color;
+    bool                sensor;
+} SegmentSetup2;
 
 struct SegmentSetup {
     de_ecs              *r;
@@ -53,6 +72,15 @@ struct TriangleSetup {
     float                   radius;
 };
 
+struct PolySetup2 {
+    ecs_t                   *r;
+    bool                    use_static;
+    b2Vec2                  pos;
+    b2Polygon               poly;
+    // TODO: Как добавить проверку на правильность заполнения r_opts?
+    struct ShapeRenderOpts  r_opts;
+};
+
 struct PolySetup {
     de_ecs                  *r;
     bool                    use_static;
@@ -68,28 +96,42 @@ struct VelRot {
 };
 
 void koh_cp_types_register(de_ecs *r);
+void koh_cp_types_register2(ecs_t *r);
 
 char **str_repr_body(void *payload, de_entity e);
 
 struct VelRot make_random_velrot(struct WorldCtx *wctx);
 de_entity spawn_poly(struct WorldCtx *ctx, struct PolySetup setup);
+e_id spawn_poly2(struct WorldCtx *ctx, struct PolySetup2 setup);
 void spawn_polygons(
     struct WorldCtx *wctx, struct PolySetup setup, int num, de_entity *ret
 );
 void spawn_triangles(
     struct WorldCtx *wctx, struct TriangleSetup setup, int num, de_entity *ret
 );
+
 de_entity spawn_segment(
     struct WorldCtx *ctx, struct SegmentSetup *setup
 );
+e_id spawn_segment2(WorldCtx *ctx, SegmentSetup2 *setup);
+
+
 de_entity spawn_triangle(
     struct WorldCtx *ctx, struct TriangleSetup setup
 );
 b2BodyId body_create(struct WorldCtx *wctx, b2BodyDef *def);
+
 void spawn_borders(WorldCtx *wctx, de_ecs *r, de_entity entts[4], int gap);
+void spawn_borders2(WorldCtx *wctx, ecs_t *r, e_id entts[4], int gap);
+
 void spawn_borders_internal(
     struct WorldCtx *wctx, de_ecs *r,
     de_entity entts[4], struct SegmentSetup setup, int gap
+);
+
+void spawn_borders_internal2(
+    struct WorldCtx *wctx, ecs_t *r,
+    e_id entts[4], struct SegmentSetup2 setup, int gap
 );
 
 typedef bool (*BodiesFilterCallback)(b2BodyId *body_id, void *udata);
@@ -108,6 +150,58 @@ void shape_render_poly(
     b2ShapeId shape_id, struct WorldCtx *wctx, struct ShapeRenderOpts *opts
 );
 void remove_borders(struct WorldCtx *wctx, de_ecs *r, de_entity entts[4]);
+void remove_borders2(struct WorldCtx *wctx, ecs_t *r, e_id entts[4]);
+
+static inline struct ShapeRenderOpts *render_opts_get2(
+    b2ShapeId shape_id, ecs_t *r
+) {
+    // {{{
+    assert(r);
+    /*struct WorldCtx *wctx = &st->wctx;*/
+    /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
+    void *user_data = b2Shape_GetUserData(shape_id);
+
+    if (!user_data) {
+        trace("render_opts_get: shape->userData == NULL\n");
+        return NULL;
+    }
+
+    e_id e = e_from_void(user_data);
+
+    // Это сущность?
+    if (!e_valid(r, e))
+        return NULL;
+
+    e_cp_type cp_type = cp_type_shape_render_opts2;
+
+    // Есть ли требуемый компонент?
+    if (!e_has(r, e, cp_type)) {
+        trace(
+            "render_opts_get:"
+            "entity has not '%s'\n", cp_type.name
+        );
+        return NULL;
+    }
+
+    // Получить компонент без проверки
+    struct ShapeRenderOpts *r_opts = e_get(r, e, cp_type_shape_render_opts2);
+
+    /*
+    // {{{
+    shape_render_poly(shape_id, wctx, &(struct ShapeRenderOpts) {
+        .tex = &st->tex_example,
+        .color = WHITE,
+        .src = (Rectangle) {
+            0., 0., st->tex_example.width, st->tex_example.height
+        }
+    }); 
+    // }}}
+    */
+
+    //shape_render_poly(shape_id, wctx, r_opts);
+    return r_opts;
+    // }}}
+}
 
 static inline struct ShapeRenderOpts *render_opts_get(
     b2ShapeId shape_id, de_ecs *r
@@ -158,6 +252,94 @@ static inline struct ShapeRenderOpts *render_opts_get(
     //shape_render_poly(shape_id, wctx, r_opts);
     return r_opts;
     // }}}
+}
+
+inline static void world_shape_render_circle2(
+    b2ShapeId shape_id, struct WorldCtx *wctx, ecs_t *r
+) {
+    struct ShapeRenderOpts *r_opts = render_opts_get2(shape_id, r);
+
+    b2Circle circle = b2Shape_GetCircle(shape_id);
+    b2BodyId body_id = b2Shape_GetBody(shape_id);
+
+    b2ShapeType shape_type = b2Shape_GetType(shape_id);
+    assert(shape_type == b2_circleShape);
+
+    // Преобразования координаты из локальных в глобальные
+    Vector2 center = b2Vec2_to_Vector2(
+        b2Body_GetWorldPoint(body_id, circle.center)
+    );
+
+    Color color = r_opts->color;
+    if (b2Shape_IsSensor(shape_id))
+        color = GRAY;
+
+    if (r_opts->tex) {
+        b2BodyId bid =  b2Shape_GetBody(shape_id);
+        b2Vec2 pos = b2Body_GetPosition(bid);
+        b2Circle circle =  b2Shape_GetCircle(shape_id);
+
+        /*
+        trace(
+            "world_shape_render_circle: circle.center %s, circle.radius %f\n",
+            b2Vec2_to_str(circle.center),
+            circle.radius
+        );
+        */
+
+        /*trace("world_shape_render_circle: 1 pos %s\n", b2Vec2_to_str(pos));*/
+        /*pos = b2Body_GetWorldPoint(bid, b2Add(pos, circle.center));*/
+        /*trace("world_shape_render_circle: 2 pos %s\n", b2Vec2_to_str(pos));*/
+
+        Rectangle   src = r_opts->src, 
+                    dst = {
+                        .x = pos.x - circle.radius * 4.,
+                        .y = pos.y - circle.radius * 4.,
+                        /*.width = r_opts->tex->width,*/
+                        /*.height = r_opts->tex->height,*/
+                        .width = circle.radius * 2.,
+                        .height = circle.radius * 2.,
+                    };
+
+        /*
+        trace("world_shape_render_circle: src %s\n", rect2str(src));
+        trace(
+            "world_shape_render_circle: circle.radius %f\n",
+            circle.radius
+        );
+        */
+
+        /*Vector2 origin = Vector2Zero();*/
+
+        Vector2 origin = {
+            circle.radius,
+            circle.radius,
+        };
+        // */
+
+        /*float rot = b2Body_GetAngle(bid) * (180. / M_PI);*/
+        float rot = 0.;
+
+        DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+
+        // origin
+        origin.x = 0., origin.y = 0.;
+        color.a = 128;
+        color.b = 255;
+        DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+
+        // dst pos
+        dst.x = pos.x, dst.y = pos.y;
+        color = WHITE;
+        color.a = 128;
+        color.g = 255;
+        DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);
+
+        /*DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);*/
+    } else 
+        DrawCircleV(center, circle.radius, color);
+
+    DrawCircleV(center, circle.radius, GRAY);
 }
 
 inline static void world_shape_render_circle(
@@ -248,6 +430,7 @@ inline static void world_shape_render_circle(
     DrawCircleV(center, circle.radius, GRAY);
 }
 
+
 inline static void world_shape_render_poly(
     b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
 ) {
@@ -299,6 +482,50 @@ inline static void world_shape_render_poly(
 void shape_render_segment(
     b2ShapeId shape_id, struct WorldCtx *wctx, struct ShapeRenderOpts *opts
 );
+
+inline static void world_shape_render_segment2(
+    b2ShapeId shape_id, struct WorldCtx *wctx, ecs_t *r
+) {
+    // {{{
+    e_id e = e_from_void(b2Shape_GetUserData(shape_id));
+
+    if (!e_valid(r, e)) {
+        trace("world_shape_render_segment2: invalid entity\n");
+        return;
+    }
+
+    //de_cp_type cp_type = cp_type_shape_render_opts;
+
+    /*
+    // Есть ли требуемый компонент?
+    if (!de_has(r, e, cp_type)) {
+        if (verbose)
+            trace(
+                "world_shape_render_poly: "
+                "entity has not '%s'\n", cp_type.name
+            );
+        return;
+    }
+    */
+
+
+    // Получить компонент без проверки
+    struct ShapeRenderOpts *r_opts = e_get(
+        r, e, cp_type_shape_render_opts2
+    );
+
+    /*
+    char **lines = cp_type_shape_render_opts.str_repr(r_opts, de_null);
+    while (*lines) {
+        trace("world_shape_render_poly: %s\n", *lines);
+        lines++;
+    }
+    */
+
+    if (r_opts)
+        shape_render_segment(shape_id, wctx, r_opts);
+    // }}}
+}
 
 inline static void world_shape_render_segment(
     b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
@@ -362,7 +589,10 @@ void e_draw_box2d_bodies_positions(
     de_ecs *r, struct BodiesPosDrawer *setup
 );
 void e_apply_random_impulse_to_bodies(de_ecs *r, WorldCtx *wctx);
+// XXX: Что делает функция?
 void e_cp_body_draw(de_ecs *r, WorldCtx *wctx);
+// XXX: Что делает функция?
+void e_cp_body_draw2(ecs_t *r, WorldCtx *wctx);
 
 struct CheckUnderMouseOpts {
     de_ecs *r;
