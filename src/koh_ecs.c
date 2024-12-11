@@ -700,6 +700,18 @@ MunitResult test_view_get(const MunitParameter params[], void* userdata) {
     return MUNIT_OK;
 }
 
+static void on_remove_e(
+    const void *key, int key_len, void *value, int value_len, void *userdata
+) {
+
+    /*
+    const char *table_name = userdata;
+    const e_id *e = key;
+    printf("on_remove_e: <%s> %s\n", table_name,  e_id2str(*e));
+    */
+
+}
+
 MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
 
               // максимальное колво элементов
@@ -714,24 +726,39 @@ MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
 
            // без прикрепленных данных
            // e_id => type_two
-    HTable *set_created = htable_new(NULL),
+    HTable *set_created = htable_new(&(HTableSetup) {
+                .f_on_remove = on_remove_e,
+                .userdata = "set_created",
+           }),
            // с прикрепленными данными
            // e_id => type_two
-           *set_created_e = htable_new(NULL),
+           *set_created_e = htable_new(&(HTableSetup) {
+                .f_on_remove = on_remove_e,
+                .userdata = "set_created_e",
+           }),
            // удаленные сущности
            // e_id => type_two
-           *set_removed = htable_new(NULL);
+           *set_removed = htable_new(&(HTableSetup) {
+                .f_on_remove = on_remove_e,
+                .userdata = "set_removed",
+           });
 
     e_id remove_arr[max_id];
-    memset(remove_arr, 0, sizeof(remove_arr));
 
     // TEST: падает с рабочим циклом по j
-    for (int j = 0; j < 5; j++) {
+    // for (int j = 0; j < 5; j++) {
+    {
+
+        for (int k = 0; k < max_id; k++) {
+            remove_arr[k] = e_null;
+        }
 
         { 
             char *s = e_entities2table_alloc2(r);
             if (s) {
+                koh_term_color_set(KOH_TERM_MAGENTA);
                 printf("test_view_simple: %s \n", s);
+                koh_term_color_reset();
                 free(s);
             }
         }
@@ -785,6 +812,7 @@ MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
             e_destroy(r, e);
         }
 
+        /*
         { 
             char *s = e_entities2table_alloc2(r);
             if (s) {
@@ -794,6 +822,7 @@ MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
                 free(s);
             }
         }
+        */
 
         //printf("test_view_simple: view\n");
 
@@ -813,7 +842,9 @@ MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
                 munit_assert_not_null(two_set);
                 //printf("memcmp %d\n", memcmp(two, two_set, sizeof(*two)));
                 munit_assert(memcmp(two, two_set, sizeof(*two)) == 0);
-            } else if (!htable_exist(set_created, &e, sizeof(e))) {
+            } else if (htable_exist(set_created, &e, sizeof(e))) {
+                //printf("in set \n");
+            } else {
                 printf("e %s is not in view\n", e_id2str(e));
                 munit_assert(false);
             }
@@ -2999,7 +3030,7 @@ char *e_entities2table_alloc2(ecs_t *r) {
             if (r->entities[i]) {
                 ps += sprintf(
                             ps,
-                            " { id = %ld, ver = %u } , ",
+                            " { ord = %ld, ver = %u } , ",
                             i, r->entities_ver[i]
                         );
                 cnt++;

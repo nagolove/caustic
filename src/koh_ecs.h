@@ -24,6 +24,7 @@ typedef union {
                  // С нуля
                  ver;
     };
+    // поле для сравнения на равенство по значению
     int64_t id;
 } e_idu;
 
@@ -285,6 +286,10 @@ static inline uint32_t e_id_ver(e_id e) {
 
 static inline uint32_t e_id_ord(e_id e) {
     return ((e_idu)e).ord;
+}
+
+static inline e_id e_from_void(void *p) {
+    return (e_id) { .id = (intptr_t)p, };
 }
 
 static inline e_id e_build(uint32_t ord, uint32_t ver) {
