@@ -233,14 +233,14 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
             vr.w
         );
 
-    de_entity               e = de_null;
+    e_id                    e = e_null;
     struct b2BodyId         *cp_body_id = NULL;
     struct ShapeRenderOpts  *cp_r_opts = NULL;
 
     if (setup.r) {
         e = e_create(setup.r);
-        cp_body_id = e_emplace(setup.r, e, cp_type_body);
-        cp_r_opts = e_emplace(setup.r, e, cp_type_shape_render_opts);
+        cp_body_id = e_emplace(setup.r, e, cp_type_body2);
+        cp_r_opts = e_emplace(setup.r, e, cp_type_shape_render_opts2);
         *cp_r_opts = setup.r_opts;
     }
 
@@ -262,8 +262,10 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
     // Вынести в графическую настройку
     shape_def.density = 1.0 * 0.1;
     shape_def.friction = 0.5;
-    if (cp_r_opts)
-        shape_def.userData = (void*)(uintptr_t)e;
+    if (cp_r_opts) {
+        //shape_def.userData = (void*)(uintptr_t)e;
+        shape_def.userData = (void*)e.id;
+    }
     b2CreatePolygonShape(body, &shape_def, &poly);
 
     b2Body_SetLinearVelocity(body, vr.vel);
@@ -466,6 +468,28 @@ void spawn_triangles(
             .r_opts = setup.r_opts,
             //.angle = xorshift32_rand1(wctx->xrng) * M_PI * 2.,
             .radius = setup.radius,
+        });
+        if (ret)
+            ret[i] = e;
+    }
+}
+
+void spawn_polygons2(WorldCtx *wctx, PolySetup2 setup, int num, e_id *ret) {
+    assert(wctx);
+    assert(wctx->height > 0);
+    assert(wctx->width > 0);
+    assert(num >= 0);
+    if (koh_components_verbose)
+        trace("spawn_polygons: num = %d\n", num);
+    for (int i = 0; i < num; ++i) {
+        e_id e = spawn_poly2(wctx, (PolySetup2) {
+            .r = setup.r,
+            .pos = {
+                .x = xorshift32_rand(wctx->xrng) % wctx->width,
+                .y = xorshift32_rand(wctx->xrng) % wctx->height,
+            },
+            .r_opts = setup.r_opts,
+            .poly = setup.poly,
         });
         if (ret)
             ret[i] = e;
@@ -828,6 +852,13 @@ void remove_borders2(struct WorldCtx *wctx, ecs_t *r, e_id entts[4]);
 }
 */
 
+void remove_borders2(struct WorldCtx *wctx, ecs_t *r, e_id entts[4]) {
+    border_remove2(r, entts[0], wctx);
+    border_remove2(r, entts[1], wctx);
+    border_remove2(r, entts[2], wctx);
+    border_remove2(r, entts[3], wctx);
+}
+
 void remove_borders(struct WorldCtx *wctx, de_ecs *r, de_entity entts[4]) {
     border_remove(r, entts[0], wctx);
     border_remove(r, entts[1], wctx);
@@ -876,6 +907,39 @@ de_entity *bodies_filter(
     *entts_num = num;
 
     return entts;
+}
+
+void spawn_borders_internal2(
+    WorldCtx *wctx, ecs_t *r,
+    e_id entts[4], struct SegmentSetup2 setup, 
+    int gap
+) {
+    assert(wctx);
+    uint32_t w = wctx->width, h = wctx->height;
+    trace("spawn_borders_internal: w %u, h %u\n", w, h);
+    int i = 0;
+    /*int gap = borders_gap_px;*/
+    // Обход по часовой, от верхнего левого угла
+
+    // верхняя
+    setup.start = (b2Vec2){ 0. + gap, 0.};
+    setup.end = (b2Vec2){ w - gap, 0};
+    entts[i++] = spawn_segment2(wctx, &setup);
+
+    // правая
+    setup.start = (b2Vec2){ w / 2., 0.};
+    setup.end = (b2Vec2){ w / 2., h};
+    entts[i++] = spawn_segment2(wctx, &setup);
+
+    // нижняя
+    setup.start = (b2Vec2){ 0. + gap, h / 2.};
+    setup.end = (b2Vec2){ w - gap, h / 2.};
+    entts[i++] = spawn_segment2(wctx, &setup);
+
+    // левая
+    setup.end = (b2Vec2){ 0, h};
+    setup.start = (b2Vec2){ 0., 0};
+    entts[i++] = spawn_segment2(wctx, &setup);
 }
 
 // Границы игрового поля
@@ -960,6 +1024,38 @@ void e_draw_box2d_bodies_positions(
     }
 }
 
+void e_apply_random_impulse_to_bodies2(ecs_t *r, WorldCtx *wctx) {
+    assert(r);
+    assert(wctx);
+
+    e_cp_type types[] = { cp_type_body2 };
+    for (
+        e_view i = e_view_create(r, 1, types);
+        e_view_valid(&i); e_view_next(&i)
+    ) {
+        b2BodyId *body_id = e_view_get(&i, types[0]);
+
+        if (!b2Body_IsValid(*body_id))
+            continue;
+
+        b2Vec2 vec = {
+            0.5 - xorshift32_rand1(wctx->xrng),
+            0.5 - xorshift32_rand1(wctx->xrng),
+        };
+        float mass = b2Body_GetMass(*body_id);
+        vec = b2MulSV(mass * 200., vec);
+        if (koh_components_verbose)
+            trace(
+                "apply_random_impulse_to_bodies: "
+                "impulse %s to body with mass %f\n", 
+                b2Vec2_to_str(vec), mass
+            );
+        b2Body_ApplyLinearImpulseToCenter(*body_id, vec, true);
+    }
+    if (koh_components_verbose)
+        trace("apply_random_impulse_to_bodies:\n");
+}
+
 // TODO: Добавить фильтр (по типу тел?) и значение прикладываемого импулься
 void e_apply_random_impulse_to_bodies(de_ecs *r, WorldCtx *wctx) {
     assert(r);
@@ -1019,13 +1115,13 @@ void e_cp_body_draw2(ecs_t *r, WorldCtx *wctx) {
                     );
                     break;
                 case b2_circleShape: 
-                    world_shape_render_circle(shapes[i], wctx, r);
+                    world_shape_render_circle2(shapes[i], wctx, r);
                     break;
                 case b2_polygonShape:
-                    world_shape_render_poly(shapes[i], wctx, r);
+                    world_shape_render_poly2(shapes[i], wctx, r);
                     break;
                 case b2_segmentShape: 
-                    world_shape_render_segment(shapes[i], wctx, r);
+                    world_shape_render_segment2(shapes[i], wctx, r);
                     break;
                 default: 
                     trace(

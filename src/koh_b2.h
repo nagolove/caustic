@@ -69,6 +69,8 @@ typedef struct WorldCtx {
     float               timestep; // 1. / fps
 } WorldCtx;
 
+typedef WorldCtx WCtx;
+
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id) {
     assert(ss);
     if (ss->shapes_on_screen_num < ss->shapes_on_screen_cap) {

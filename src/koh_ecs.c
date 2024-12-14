@@ -5,81 +5,10 @@
 
 //#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
+#include "koh_sparse.h"
 #include "koh_table.h"
 #include <stdio.h>
 #include <assert.h>
-
-/** The sparse set. */
-// https://manenko.com/2021/05/23/sparse-sets.html
-// https://gitlab.com/manenko/rho-sparse-set/-/blob/master/include/rho/sparse_set.h
-// Сущности хранятся без номеров версии.
-typedef struct SparseSet {
-    int64_t  *sparse; /**< Sparse array used to speed-optimise the set.    */
-    int64_t  *dense;  /**< Dense array that stores the set's items.        */
-    int64_t  n;      /**< Number of items in the dense array.             */
-    int64_t  max;    /**< Maximum allowed item ID.                        */
-} SparseSet;
-
-// {{{ Sparse functions declarations
-
-/**
- * Allocate the sparse set that can hold IDs up to max_id.
- *
- * The set can contain up to (max_id + 1) items.
- */
-// test +
-SparseSet ss_alloc( int64_t max_id );
-
-/**
- * Free the sparse set resources, previously allocated with ss_alloc.
- */
-// test +
-void ss_free( SparseSet *ss );
-
-/**
- * Remove all items from the sparse set but do not free memory used by the set.
- */
-// test +
-void ss_clear( SparseSet *ss );
-
-/**
- * Return the number of items in the sparse set.
- */
-// test +
-size_t ss_size( SparseSet *ss );
-
-/**
- * Return a value indicating whether the sparse set is full and cannot add new
- * items.
- */
-// test +
-bool ss_full( SparseSet *ss );
-
-/**
- * Return a value indicating whether the sparse set has no items.
- */
-// test +
-bool ss_empty( SparseSet *ss );
-
-/**
- * Return a value indicating whether the sparse set contains the given item.
- */
-// test +
-bool ss_has( SparseSet *ss, int64_t id );
-
-/**
- * Add an item to the sparse set unless it is already there.
- */
-//test+
-void ss_add( SparseSet *ss, int64_t id );
-
-/**
- * Remove an item from the sparse set unless it is not there.
- */
-//test+
-void ss_remove( SparseSet *ss, int64_t id );
-
-// }}}
 
 // test types {{{
 typedef char type_one;
@@ -184,118 +113,6 @@ typedef struct ecs_t {
     // Фильтр в ImGui интерфейсе для поиска
     int             ref_filter_func;
 } ecs_t;
-
-// {{{ SparseSet implementation
-
-SparseSet ss_alloc( int64_t max_id )
-{
-    /* Maximum possible value of the ss_id_t. */
-    static const int64_t ss_id_max = INT64_MAX - 1;
-
-    assert( max_id > 0 && max_id <= ss_id_max );
-
-    size_t   array_size = sizeof( e_id ) * ( max_id + 1 );
-    SparseSet ss         = { 0 };
-
-    ss.dense  = calloc(1, array_size);
-    ss.sparse = calloc(1, array_size);
-
-    if ( !ss.dense || !ss.sparse ) {
-        free( ss.dense );
-        free( ss.sparse );
-
-        ss.dense  = NULL;
-        ss.sparse = NULL;
-    } else {
-        ss.max = max_id;
-    }
-
-    return ss;
-}
-
-void ss_free( SparseSet *ss )
-{
-    assert( ss );
-
-    free( ss->dense );
-    free( ss->sparse );
-
-    ss->dense  = NULL;
-    ss->sparse = NULL;
-    ss->max    = 0;
-    ss->n      = 0;
-}
-
-void ss_clear( SparseSet *ss )
-{
-    assert( ss );
-
-    ss->n = 0;
-}
-
-size_t ss_size( SparseSet *ss )
-{
-    assert( ss );
-
-    return ss->n;
-}
-
-bool ss_full( SparseSet *ss )
-{
-    assert( ss );
-
-    return ss->n > ss->max;
-}
-
-bool ss_empty( SparseSet *ss )
-{
-    assert( ss );
-
-    return ss->n == 0;
-}
-
-bool ss_has( SparseSet *ss, int64_t id )
-{
-    assert( ss );
-    assert( id <= ss->max );
-    assert(id >= 0);
-    assert(ss->dense);
-    assert(ss->sparse);
-
-    size_t dense_index = ss->sparse[id];
-    return dense_index < ss->n && ss->dense[dense_index] == id;
-}
-
-void ss_add( SparseSet *ss, int64_t id)
-{
-    assert( ss );
-    assert( id <= ss->max );
-
-    if ( ss_has( ss, id ) ) {
-        return;
-    }
-
-    ss->dense[ss->n] = id;
-    ss->sparse[id]   = ss->n;
-
-    ++ss->n;
-}
-
-void ss_remove( SparseSet *ss, int64_t id )
-{
-    assert( ss );
-    assert( id <= ss->max );
-
-    if ( ss_has( ss, id ) ) {
-        --ss->n;
-        int64_t dense_index = ss->sparse[id];
-        int64_t item        = ss->dense[ss->n];
-        ss->dense[dense_index]  = item;
-        ss->sparse[item]        = dense_index;
-    }
-}
-
-// }}}
 
 // {{{ tests implementation
 
@@ -2844,11 +2661,6 @@ void e_orphans_each(ecs_t* r, e_each_function fun, void* udata) {
             fun(r, e,  udata);
         }
     }
-}
-
-bool e_view_valid(e_view* v) {
-    assert(v);
-    return v->current_entity.id != e_null.id;
 }
 
 // XXX: Что делает эта функция?

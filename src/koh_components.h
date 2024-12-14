@@ -51,7 +51,7 @@ typedef struct SegmentSetup2 {
     bool                sensor;
 } SegmentSetup2;
 
-struct SegmentSetup {
+typedef struct SegmentSetup {
     de_ecs              *r;
     // Начало и конец отрезка
     b2Vec2              start, end;
@@ -60,35 +60,35 @@ struct SegmentSetup {
                         line_thick; // толщина линии рисования
     Color               color;
     bool                sensor;
-};
+} SegmentSetup;
 
 // Стоит-ли выносить общие для TriangleSetup и PolySetup поля в отдельную
 // структуру, которая будет вложена.
-struct TriangleSetup {
+typedef struct TriangleSetup {
     de_ecs                  *r;
     b2Vec2                  pos;
     struct ShapeRenderOpts  r_opts;
     bool                    use_static;
     float                   radius;
-};
+} TriangleSetup;
 
-struct PolySetup2 {
+typedef struct PolySetup2 {
     ecs_t                   *r;
     bool                    use_static;
     b2Vec2                  pos;
     b2Polygon               poly;
     // TODO: Как добавить проверку на правильность заполнения r_opts?
     struct ShapeRenderOpts  r_opts;
-};
+} PolySetup2;
 
-struct PolySetup {
+typedef struct PolySetup {
     de_ecs                  *r;
     bool                    use_static;
     b2Vec2                  pos;
     b2Polygon               poly;
     // TODO: Как добавить проверку на правильность заполнения r_opts?
     struct ShapeRenderOpts  r_opts;
-};
+} PolySetup;
 
 struct VelRot {
     float   w;
@@ -102,17 +102,16 @@ char **str_repr_body(void *payload, de_entity e);
 
 struct VelRot make_random_velrot(struct WorldCtx *wctx);
 de_entity spawn_poly(struct WorldCtx *ctx, struct PolySetup setup);
-e_id spawn_poly2(struct WorldCtx *ctx, struct PolySetup2 setup);
-void spawn_polygons(
-    struct WorldCtx *wctx, struct PolySetup setup, int num, de_entity *ret
-);
+e_id spawn_poly2(struct WorldCtx *ctx, PolySetup2 setup);
+
+void spawn_polygons(WorldCtx *wctx, PolySetup setup, int num, de_entity *ret);
+void spawn_polygons2(WorldCtx *wctx, PolySetup2 setup, int num, e_id *ret);
+
 void spawn_triangles(
-    struct WorldCtx *wctx, struct TriangleSetup setup, int num, de_entity *ret
+    WorldCtx *wctx, TriangleSetup setup, int num, de_entity *ret
 );
 
-de_entity spawn_segment(
-    struct WorldCtx *ctx, struct SegmentSetup *setup
-);
+de_entity spawn_segment(WorldCtx *ctx, SegmentSetup *setup);
 e_id spawn_segment2(WorldCtx *ctx, SegmentSetup2 *setup);
 
 
@@ -430,6 +429,51 @@ inline static void world_shape_render_circle(
     DrawCircleV(center, circle.radius, GRAY);
 }
 
+inline static void world_shape_render_poly2(
+    b2ShapeId shape_id, struct WorldCtx *wctx, ecs_t *r
+) {
+    // {{{
+    /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
+    e_id e = e_from_void(b2Shape_GetUserData(shape_id));
+    //shape->userData = (void*)(uintptr_t)e;
+
+    // Это сущность?
+    if (!e_valid(r, e)) {
+        //trace("world_shape_render_poly: invalid entity\n");
+        return;
+    }
+
+    //de_cp_type cp_type = cp_type_shape_render_opts;
+
+    /*
+    // Есть ли требуемый компонент?
+    if (!de_has(r, e, cp_type)) {
+        if (verbose)
+            trace(
+                "world_shape_render_poly: "
+                "entity has not '%s'\n", cp_type.name
+            );
+        return;
+    }
+    */
+
+
+    // Получить компонент без проверки
+    struct ShapeRenderOpts *r_opts = e_get(r, e, cp_type_shape_render_opts2);
+
+    /*
+    char **lines = cp_type_shape_render_opts.str_repr(r_opts, de_null);
+    while (*lines) {
+        trace("world_shape_render_poly: %s\n", *lines);
+        lines++;
+    }
+    */
+
+    if (r_opts)
+        shape_render_poly(shape_id, wctx, r_opts);
+    // }}}
+
+}
 
 inline static void world_shape_render_poly(
     b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
@@ -589,6 +633,7 @@ void e_draw_box2d_bodies_positions(
     de_ecs *r, struct BodiesPosDrawer *setup
 );
 void e_apply_random_impulse_to_bodies(de_ecs *r, WorldCtx *wctx);
+void e_apply_random_impulse_to_bodies2(ecs_t *r, WorldCtx *wctx);
 // XXX: Что делает функция?
 void e_cp_body_draw(de_ecs *r, WorldCtx *wctx);
 // XXX: Что делает функция?

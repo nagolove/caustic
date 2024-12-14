@@ -3,6 +3,7 @@
 
 #pragma once 
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include "munit.h"
@@ -226,7 +227,7 @@ typedef struct e_view {
 e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
 // Тоже, что и e_view_create(), но для одного типа
 e_view e_view_create_single(ecs_t* r, e_cp_type cp_type);
-bool e_view_valid(e_view* v);
+static inline bool e_view_valid(e_view* v);
 e_id e_view_entity(e_view* v);
 // Если тип не найден, то возвращает NULL
 void* e_view_get(e_view *v, e_cp_type cp_type);
@@ -354,3 +355,9 @@ int main() {
 }
 
 }}} */
+
+static inline bool e_view_valid(e_view* v) {
+    assert(v);
+    return v->current_entity.id != e_null.id;
+}
+
