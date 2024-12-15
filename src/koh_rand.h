@@ -10,6 +10,8 @@ typedef struct xorshift32_state {
 
 typedef xorshift32_state prng_32;
 
+// TODO: Написать функцию-переходник prng_64 => prng_32
+
 static inline xorshift32_state xorshift32_init(void) {
     return (xorshift32_state) { .a = (uint32_t)time(NULL) };
 }
@@ -34,6 +36,8 @@ static inline double xorshift32_rand1(xorshift32_state *state) {
 typedef struct xorshift64_state {
     uint64_t a;
 } prng;
+
+typedef struct xorshift64_state prng64_t;
 
 static inline prng prng_init(void) {
     return (prng) { .a = (uint64_t)time(NULL) };
