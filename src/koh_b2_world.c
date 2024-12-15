@@ -44,6 +44,71 @@ static void finish_task(void* taskPtr, void* userContext) {
     */
 }
 
+WorldCtx world_init2(WorldCtxSetup *setup) {
+    assert(setup);
+
+    WorldCtx wctx = {};
+
+    if (setup->wd) 
+        wctx.world_def = *setup->wd;
+    else {
+        wctx.world_def =  b2DefaultWorldDef();
+        wctx.world_def.enableContinous = true;
+        wctx.world_def.enableSleep = true;
+        wctx.world_def.gravity = b2Vec2_zero;
+    }
+
+    // TODO: шаг вынести в параметры. Или получать из GetFPS()?
+    wctx.timestep = 1. / 60.;
+    wctx.task_shed = enkiNewTaskScheduler();
+    enkiInitTaskScheduler(wctx.task_shed);
+    assert(wctx.task_shed);
+    wctx.task_set = enkiCreateTaskSet(wctx.task_shed, NULL);
+    assert(wctx.task_set);
+    wctx.world_def.enqueueTask = enqueue_task;
+    wctx.world_def.finishTask = finish_task;
+
+    wctx.world = b2CreateWorld(&wctx.world_def);
+
+    wctx.width = setup->width;
+    wctx.height = setup->height;
+
+    if (!setup->xrng) {
+        printf("world_init: xrng is NULL\n");
+        koh_trap();
+    }
+
+    wctx.xrng = setup->xrng;
+
+    if (!wctx.xrng) {
+        printf("world_init2: passed xrng is NULL, creating new prng\n");
+        static xorshift32_state xrng;
+        if (xrng.a != 0)
+            xrng = xorshift32_init();
+        wctx.xrng = &xrng;
+    }
+
+    wctx.substeps = 4;
+
+    wctx.world_dbg_draw = b2_world_dbg_draw_create();
+    wctx.is_dbg_draw = false;
+
+    assert(setup->xrng);
+    assert(setup->xrng->a);
+    trace(
+        "world_init2: width %u, height %u, "
+        "xorshift32_state seed %u,"
+        "xorshift64_state seed %lu,"
+        "gravity %s\n",
+        setup->width, setup->height, 
+        wctx.xrng->a,
+        wctx.xrng64.a,
+        b2Vec2_to_str(b2World_GetGravity(wctx.world))
+    );
+
+    return wctx;
+}
+
 void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
     assert(setup);
     assert(wctx);
@@ -73,7 +138,11 @@ void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
     wctx->width = setup->width;
     wctx->height = setup->height;
 
-    assert(setup->xrng);
+    if (!setup->xrng) {
+        printf("world_init: xrng is NULL\n");
+        koh_trap();
+    }
+
     wctx->xrng = setup->xrng;
     wctx->substeps = 4;
 
