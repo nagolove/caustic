@@ -65,7 +65,8 @@ typedef struct WorldCtx {
     int                 tasks_count;
     uint32_t            width, height; // размеры карты в пикселях?
     b2WorldId           world;
-    xorshift32_state    *xrng; // TODO Заменить на prng (64 бита)
+    xorshift32_state    *xrng; 
+    prng64_t            xrng64; 
     float               timestep; // 1. / fps
 } WorldCtx;
 
