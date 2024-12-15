@@ -89,6 +89,7 @@ Shader res_shader_load(Resource *res_list, const char *vertex_fname) {
 void res_reload_all(Resource *res_list) {
 }
 
+// TODO: протестировать создание и удаление ресурсов
 void res_unload_all(Resource *res_list) {
     Resource *allocated = res_list->next;
     for (Resource *cur = allocated, *next; cur; cur = next) {
