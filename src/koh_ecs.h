@@ -53,6 +53,13 @@ typedef struct e_cp_type {
     void        (*on_emplace)(void *payload, e_id e); 
     void        (*on_destroy)(void *payload, e_id e);
 
+    // вызывается один раз при e_register() и один раз при e_free()
+    void        (*on_init)(struct e_cp_type *type);
+    void        (*on_shutdown)(struct e_cp_type *type);
+
+    // какие-то пользовательские данные
+    void        *udata;
+
     // Для компонентного проводника.
     // Массив строк заканчивается NULL
     // payload - данные компонента
