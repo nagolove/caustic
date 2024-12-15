@@ -293,6 +293,7 @@ const char * koh_backtrace_get();
 char *Vector2_tostr_alloc(const Vector2 *verts, int num);
 
 char **Texture2D_to_str(Texture2D *tex);
+// Возвращает размер текстуры
 Rectangle rect_by_texture(Texture2D tex);
 
 // Принимает массив строк завершающийся NULL. Возвращает указатель на
