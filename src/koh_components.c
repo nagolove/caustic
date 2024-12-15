@@ -215,7 +215,7 @@ struct VelRot make_random_velrot(struct WorldCtx *wctx) {
     };
 }
 
-e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
+e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
     assert(wctx);
     assert(setup.r);
 
@@ -226,7 +226,7 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
 
     if (koh_components_verbose)
         trace(
-            "spawn_poly: { pos = %s, poly = %s, v = %s, w = %f, }\n",
+            "spawn_poly2: { pos = %s, poly = %s, v = %s, w = %f, }\n",
             b2Vec2_to_str(setup.pos),
             b2Polygon_to_str(&poly),
             b2Vec2_to_str(vr.vel),
@@ -238,7 +238,13 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
     struct ShapeRenderOpts  *cp_r_opts = NULL;
 
     if (setup.r) {
-        e = e_create(setup.r);
+
+        // создать или использовать готовую сущность?
+        if (_e)
+            e = *_e;
+        else
+            e = e_create(setup.r);
+
         cp_body_id = e_emplace(setup.r, e, cp_type_body2);
         cp_r_opts = e_emplace(setup.r, e, cp_type_shape_render_opts2);
         *cp_r_opts = setup.r_opts;
@@ -275,7 +281,7 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup) {
 
     b2Vec2 pos = b2Body_GetPosition(body);
     if (koh_components_verbose)
-        trace("spawn_poly: body { pos = %s, }\n", b2Vec2_to_str(pos));
+        trace("spawn_poly2: body { pos = %s, }\n", b2Vec2_to_str(pos));
     // }}}
 
     return e;
@@ -490,7 +496,7 @@ void spawn_polygons2(WorldCtx *wctx, PolySetup2 setup, int num, e_id *ret) {
             },
             .r_opts = setup.r_opts,
             .poly = setup.poly,
-        });
+        }, NULL);
         if (ret)
             ret[i] = e;
     }

@@ -26,8 +26,10 @@ extern e_cp_type cp_type_shape_render_opts2;
 extern e_cp_type cp_type_testing2;
 extern e_cp_type cp_type_texture2;
 
-// Кто владеет текстурой?
 typedef struct ShapeRenderOpts {
+    // XXX: Кто владеет текстурой? 
+    // Не лучше ли хранить структуру текстуры? Но кто тогда будет выгружать из
+    // нее данные?
     Texture     *tex;
     float       thick;
     Rectangle   src;
@@ -102,7 +104,8 @@ char **str_repr_body(void *payload, de_entity e);
 
 struct VelRot make_random_velrot(struct WorldCtx *wctx);
 de_entity spawn_poly(struct WorldCtx *ctx, struct PolySetup setup);
-e_id spawn_poly2(struct WorldCtx *ctx, PolySetup2 setup);
+// Если _e == NULL, то создается новаю сущность. Иначе используется переданная.
+e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e);
 
 void spawn_polygons(WorldCtx *wctx, PolySetup setup, int num, de_entity *ret);
 void spawn_polygons2(WorldCtx *wctx, PolySetup2 setup, int num, e_id *ret);
