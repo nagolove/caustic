@@ -2,7 +2,8 @@
 -- vim: fdm=marker
 
 return {
-    gen_target = "5.1",
+    gen_compat = 'off',
+    gen_target = "5.4",
     source_dir = "tl_src",
     include_dir = {
         "tl_src",
