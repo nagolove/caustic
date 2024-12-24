@@ -159,8 +159,8 @@ project dir -> bld.lua
 -- }}}
 --]]
 
--- Не использовать io.popen() так могут быть проблемы с кодом возврата
-local function cmd_do(_cmd: string|{string})
+-- FIXME: Не использовать io.popen() так могут быть проблемы с кодом возврата
+local function cmd_do_execute(_cmd: string|{string})
     if verbose then
         os.execute("echo `pwd`")
     end
@@ -198,16 +198,78 @@ local function cmd_do(_cmd: string|{string})
     end
 end
 
+------------------------------------------------------------
+-- TODO: Доделать работу через luv
+
+local uv = require("luv")
+
+local stdout = uv.new_pipe(false)
+local stderr = uv.new_pipe(false)
+
+local function cmd_do_uv(cmd: string|{string}) 
+
+    if (type(cmd) == 'table') then
+        for _, v in ipairs(cmd as {string}) do
+            cmd_do_uv(v)
+        end
+    end
+
+    local _, _ = uv.spawn(
+        cmd as string,
+        {
+            args = {"-c", "file.c"},
+            stdio = {nil, stdout, stderr},
+            --env = {"CC=gcc", "CFLAGS=-O2"},
+        },
+        function(code, signal)
+            print("Process exited with code " .. tostring(code) .. ", signal " .. tostring(signal))
+            stdout:read_stop()
+            stderr:read_stop()
+           
+            --if handle then
+                --print('handle', handle)
+                --uv.close(handle)
+            --end
+
+        end
+    )
+
+    --uv.read_start()
+    --uv.spawn(nil, nil, nil)
+
+    stdout:read_start(
+        function(err: string, data: string)
+            assert(not err, err)
+            if data then
+                print("STDOUT: " .. data)
+            end
+    end)
+
+    stderr:read_start(
+        function(err: string, data: string)
+            assert(not err, err)
+            if data then
+            print("STDERR: " .. data)
+        end
+    end)
+
+    print("before run")
+    uv.run('once')
+
+    print("after run")
+
+end
+
+--------------------------------------------------------------
+local cmd_do: function(cmd: string|{string}) = cmd_do_execute
+
 local function filter_sources_c(
-    path: string, cb: function(string), exclude: {string}
+    path: string, cb: function(string), exclude?: {string}
 ) 
     ut.filter_sources(".*%.c$", path, cb, exclude)
 end
 
-
---[[ TODO: Добавить загрузку зависимостей из bld.lua, через поле 
-    proj_dependencies так как dependendies занято.
---]]
+--
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
@@ -369,9 +431,10 @@ end
 
 local dependencies: {Dependency}
 
-local function get_deps_name_map(deps: {Dependency}): {string: Dependency}
+local function get_deps_name_map(deps?: {Dependency}): {string: Dependency}
     assert(deps)
     local map = {}
+    -- XXX: Что будет если deps == nil
     for _, dep in ipairs(deps) do
         if map[dep.name] then
             print("get_deps_name_map: name dublicated", dep.name)
@@ -488,7 +551,7 @@ local function guard()
 end
 
 local function paste_from_one_to_other(
-    src: string, dst: string, guard_coro: thread
+    src: string, dst: string, guard_coro?: thread
 )
     print(format("paste_from_one_to_other: src '%s', dst '%s'", src, dst))
     local file_src = io.open(src, "r")
@@ -1226,6 +1289,7 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
 
     if cfg and cfg.dependencies then
         for _, depname in ipairs(cfg.dependencies) do
+            -- XXX: куда делся параметр в get_deps_name_map()?
             table.insert(ready_deps, get_deps_name_map()[depname])
         end
     else
@@ -1650,7 +1714,7 @@ local record Actions
     dependencies: function(Args)
     deps: function(Args)
     init: function(Args)
-    luainit: function(Args)
+    --luainit: function(Args)
     make: function(Args)
     proj_init: function(Args)
     project: function(Args)
@@ -1739,10 +1803,12 @@ local parser_setup: {string:ParserSetup} = {
             { "list", 1, },
         },
     },
+    --[[
     luainit = {
         summary = "create 'assets' directory and copy there lua libraries",
         --options = { "-n --name", },
     },
+    --]]
     update = {
         summary = "call update() function to get latest git version of source",
         options = { "-n --name", },
@@ -2729,15 +2795,15 @@ function actions.compile_flags(_: Args)
         print(s)
     end
 
-    for _, v in ipairs(get_ready_includes()) do
-        put("-I" .. v)
-    end
-    put("-Isrc")
-    put("-I.")
-
     -- TODO: Предусмотреть флаги для релизной сборки
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     if cfgs and cfgs[0] and cfgs[0].debug_define then
+        for _, v in ipairs(get_ready_includes(cfgs[0])) do
+            put("-I" .. v)
+        end
+        put("-Isrc")
+        put("-I.")
+
         for define, value in pairs(cfgs[0].debug_define) do
             assert(type(define) == 'string');
             assert(type(value) == 'string');
@@ -3346,7 +3412,7 @@ end
 
 local function get_cores_num(): integer
     local file = io.open("/proc/cpuinfo", "r")
-    local num = 1
+    local num = 1.
     for line in file:lines() do
         local _num = string.match(line, "cpu cores.*%:.*(%d+)")
         if _num then
@@ -3354,9 +3420,10 @@ local function get_cores_num(): integer
             break
         end
     end
-    return num
+    return math.floor(num)
 end
 
+-- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel(queue: {string})
     local cores_num = get_cores_num() * 2
     if verbose then
@@ -3377,13 +3444,17 @@ local function run_parallel(queue: {string})
         tasks_num = cores_num
     end
 
-    local type THREAD_FUNC = function(string)
+    local type THREAD_FUNC = function(string): lanes.Thread
 
     local wait_iters = 1
+    -- цикл ожидания завершения все рабочих потоков
     repeat
+
+        -- создать столько потоков, сколько есть ядер процессора
         local new_threads: {lanes.Thread} = {}
         for _ = 1, tasks_num do
             local l = lanes.gen("*", build_fun) as THREAD_FUNC
+            -- удалить задачу
             local cmd = table.remove(queue, 1)
             if cmd then
                 table.insert(new_threads, l(cmd))
@@ -3391,12 +3462,14 @@ local function run_parallel(queue: {string})
         end
         tasks_num = 0
 
+        -- добавить в список задач
         for _, thread in ipairs(new_threads) do
             table.insert(threads, thread)
         end
 
         sleep(0.02 as integer)
 
+        -- проверка статусов запущенных задач
         local has_jobs = false
         local live_threads = {}
         for _, t in ipairs(threads) do
@@ -3406,6 +3479,7 @@ local function run_parallel(queue: {string})
                     tasks_num = tasks_num + 1
                 end
             else
+                -- если задача еще не выполнена, то добавить её в список живых
                 table.insert(live_threads, t)
                 has_jobs = true
             end
@@ -3747,7 +3821,7 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
         table.insert(flags, format("-DKOH_%s", dep.name:upper()))
         if dep.custom_defines then
             -- Функция может ничего не вернуть(вернуть nil)
-            local defines = dep.custom_defines()
+            local defines = dep.custom_defines(dep)
             if defines then
                 for define in ipairs(defines) do
                     table.insert(flags, format("-D%s", define))
@@ -3762,7 +3836,7 @@ end
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
-local function sub_make(_args: Args, cfg: Cfg, push_num: integer)
+local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
     if verbose then
         print(format(
             "sub_make: _args %s, cfg %s, push_num %d",
@@ -4083,6 +4157,7 @@ function actions.make(_args: Args)
     end
 end
 
+--[[
 local function sub_luainit(_args: Args, cfg: Cfg, push_num: integer)
     ut.push_current_dir()
     print('sub_luainit', lfs.currentdir())
@@ -4120,7 +4195,9 @@ local function sub_luainit(_args: Args, cfg: Cfg, push_num: integer)
     print('sub_luainit', lfs.currentdir())
     ut.pop_dir(push_num)
 end
+--]]
 
+--[[
 function actions.luainit(_args: Args)
     if verbose then
         print('luainit:')
@@ -4132,6 +4209,7 @@ function actions.luainit(_args: Args)
         sub_luainit(_args, cfg, push_num)
     end
 end
+--]]
 
 local function do_parser_setup(
     parser: argparse.Parser, setup: {string:ParserSetup}

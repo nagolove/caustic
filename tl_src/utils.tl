@@ -105,7 +105,7 @@ end
 -- В таблице исключаемых имен могут быть шаблоны string.match()
 -- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
 local function filter_sources(
-    pattern: string, path: string, cb: function(string), exclude: {string}
+    pattern: string, path: string, cb: function(string), exclude?: {string}
 )
     assert(cb)
 
@@ -241,7 +241,7 @@ local function push_current_dir(): string
     return dir
 end
 
-local function pop_dir(num: integer)
+local function pop_dir(num?: integer)
     num = num or 0
     for _ = 0, num do
         lfs.chdir(table.remove(dir_stack, #dir_stack))
@@ -262,7 +262,7 @@ end
 --]]
 
 local function git_is_repo_clean(
-    dirpath: string, skip_unknown: boolean
+    dirpath: string, skip_unknown?: boolean
 ): boolean
     push_current_dir()
     lfs.chdir(dirpath)
