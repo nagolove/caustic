@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local coroutine = _tl_compat and _tl_compat.coroutine or coroutine; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local loadfile = _tl_compat and _tl_compat.loadfile or loadfile; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local _tl_table_unpack = unpack or table.unpack
+
 
 
 
@@ -160,7 +160,7 @@ local cache
 
 
 
-local function cmd_do(_cmd)
+local function cmd_do_execute(_cmd)
    if verbose then
       os.execute("echo `pwd`")
    end
@@ -198,14 +198,76 @@ local function cmd_do(_cmd)
    end
 end
 
+
+
+
+local uv = require("luv")
+
+local stdout = uv.new_pipe(false)
+local stderr = uv.new_pipe(false)
+
+local function cmd_do_uv(cmd)
+
+   if (type(cmd) == 'table') then
+      for _, v in ipairs(cmd) do
+         cmd_do_uv(v)
+      end
+   end
+
+   local _, _ = uv.spawn(
+   cmd,
+   {
+      args = { "-c", "file.c" },
+      stdio = { nil, stdout, stderr },
+
+   },
+   function(code, signal)
+      print("Process exited with code " .. tostring(code) .. ", signal " .. tostring(signal))
+      stdout:read_stop()
+      stderr:read_stop()
+
+
+
+
+
+
+   end)
+
+
+
+
+
+   stdout:read_start(
+   function(err, data)
+      assert(not err, err)
+      if data then
+         print("STDOUT: " .. data)
+      end
+   end)
+
+   stderr:read_start(
+   function(err, data)
+      assert(not err, err)
+      if data then
+         print("STDERR: " .. data)
+      end
+   end)
+
+   print("before run")
+   uv.run('once')
+
+   print("after run")
+
+end
+
+
+local cmd_do = cmd_do_execute
+
 local function filter_sources_c(
    path, cb, exclude)
 
    ut.filter_sources(".*%.c$", path, cb, exclude)
 end
-
-
-
 
 
 
@@ -372,6 +434,7 @@ local dependencies
 local function get_deps_name_map(deps)
    assert(deps)
    local map = {}
+
    for _, dep in ipairs(deps) do
       if map[dep.name] then
          print("get_deps_name_map: name dublicated", dep.name)
@@ -693,7 +756,7 @@ local function update_box2c(dep)
       print(ansicolors("%{green}repository in clean state%{reset}"))
       cmd_do("git config pull.rebase false")
 
-      cmd_do("git remote add erin  https://github.com/erincatto/box2c.git")
+      cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
       cmd_do("git pull erin main")
    else
       print(ansicolors("%{red}repository is dirty%{reset}"))
@@ -748,13 +811,12 @@ end
 
 
 
+
+
+
+
+
 dependencies = {
-
-
-
-
-
-
 
    {
       disabled = false,
@@ -1003,7 +1065,7 @@ dependencies = {
       links = { "box2d:static" },
       links_internal = { "box2c:static" },
       name = 'box2c',
-      url = "https://github.com/erincatto/box2c.git",
+      url = "https://github.com/erincatto/box2d.git",
       url_action = 'git',
    },
 
@@ -1227,6 +1289,7 @@ local function get_ready_deps(cfg)
 
    if cfg and cfg.dependencies then
       for _, depname in ipairs(cfg.dependencies) do
+
          table.insert(ready_deps, get_deps_name_map()[depname])
       end
    else
@@ -1740,10 +1803,12 @@ local parser_setup = {
          { "list", 1 },
       },
    },
-   luainit = {
-      summary = "create 'assets' directory and copy there lua libraries",
 
-   },
+
+
+
+
+
    update = {
       summary = "call update() function to get latest git version of source",
       options = { "-n --name" },
@@ -2730,15 +2795,15 @@ function actions.compile_flags(_)
       print(s)
    end
 
-   for _, v in ipairs(get_ready_includes()) do
-      put("-I" .. v)
-   end
-   put("-Isrc")
-   put("-I.")
-
 
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    if cfgs and cfgs[0] and cfgs[0].debug_define then
+      for _, v in ipairs(get_ready_includes(cfgs[0])) do
+         put("-I" .. v)
+      end
+      put("-Isrc")
+      put("-I.")
+
       for define, value in pairs(cfgs[0].debug_define) do
          assert(type(define) == 'string');
          assert(type(value) == 'string');
@@ -3191,6 +3256,7 @@ end
 
 
 
+
 local function build_dep(dep)
 
    local map = {
@@ -3346,7 +3412,7 @@ end
 
 local function get_cores_num()
    local file = io.open("/proc/cpuinfo", "r")
-   local num = 1
+   local num = 1.
    for line in file:lines() do
       local _num = string.match(line, "cpu cores.*%:.*(%d+)")
       if _num then
@@ -3354,8 +3420,9 @@ local function get_cores_num()
          break
       end
    end
-   return num
+   return math.floor(num)
 end
+
 
 local function run_parallel(queue)
    local cores_num = get_cores_num() * 2
@@ -3380,10 +3447,14 @@ local function run_parallel(queue)
 
 
    local wait_iters = 1
+
    repeat
+
+
       local new_threads = {}
       for _ = 1, tasks_num do
          local l = lanes.gen("*", build_fun)
+
          local cmd = table.remove(queue, 1)
          if cmd then
             table.insert(new_threads, l(cmd))
@@ -3391,11 +3462,13 @@ local function run_parallel(queue)
       end
       tasks_num = 0
 
+
       for _, thread in ipairs(new_threads) do
          table.insert(threads, thread)
       end
 
       sleep(0.02)
+
 
       local has_jobs = false
       local live_threads = {}
@@ -3406,6 +3479,7 @@ local function run_parallel(queue)
                tasks_num = tasks_num + 1
             end
          else
+
             table.insert(live_threads, t)
             has_jobs = true
          end
@@ -3747,7 +3821,7 @@ local function get_ready_deps_defines(cfg)
       table.insert(flags, format("-DKOH_%s", dep.name:upper()))
       if dep.custom_defines then
 
-         local defines = dep.custom_defines()
+         local defines = dep.custom_defines(dep)
          if defines then
             for define in ipairs(defines) do
                table.insert(flags, format("-D%s", define))
@@ -4083,61 +4157,65 @@ function actions.make(_args)
    end
 end
 
-local function sub_luainit(_args, cfg, push_num)
-   ut.push_current_dir()
-   print('sub_luainit', lfs.currentdir())
 
-   mkdir('assets')
-   chdir('assets')
 
-   print('sub_luainit', lfs.currentdir())
 
-   mkdir('lualibs')
-   chdir('lualibs')
 
-   local to = lfs.currentdir()
 
-   for _, dep in ipairs(get_ready_deps(cfg)) do
-      if dep.lualibrary_install then
-         ut.push_current_dir()
 
-         chdir(path_abs_third_party)
-         chdir(dep.dir)
 
-         print("sub_luainit: before lualibrary_install", lfs.currentdir())
 
-         dep.lualibrary_install(to)
-         ut.pop_dir()
-      end
-   end
 
-   print('sub_luainit', lfs.currentdir())
 
-   if not chdir(path_rel_third_party) then
-      print('sub_luainit: problem with chdir(path_rel_third_party)')
-      os.exit(1)
-   end
-   print('sub_luainit', lfs.currentdir())
-   ut.pop_dir(push_num)
-end
 
-function actions.luainit(_args)
-   if verbose then
-      print('luainit:')
-      print(tabular(_args))
-   end
 
-   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
-   for _, cfg in ipairs(cfgs) do
-      sub_luainit(_args, cfg, push_num)
-   end
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function do_parser_setup(
    parser, setup)
 
    local prnt = function(...)
-      local x = _tl_table_unpack({ ... })
+      local x = table.unpack({ ... })
       x = nil
    end
 
