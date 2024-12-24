@@ -287,7 +287,9 @@ void koh_window_state_print();
 bool koh_window_is_point_in(Vector2 point, Camera2D *cam);
 
 void koh_backtrace_print();
-const char * koh_backtrace_get();
+// Возвращает указатель на статический массив со стеком вызовов.
+// XXX: Как получить названия функций, а не только адреса?
+const char *koh_backtrace_get();
 
 // Возвращает Луа строку { {x0, y0}, {x1, y1}, ...}
 char *Vector2_tostr_alloc(const Vector2 *verts, int num);

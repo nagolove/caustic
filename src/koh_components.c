@@ -265,9 +265,8 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
     if (cp_body_id)
         *cp_body_id = body;
     b2ShapeDef shape_def = b2DefaultShapeDef();
-    // Вынести в графическую настройку
-    shape_def.density = 1.0 * 0.1;
-    shape_def.friction = 0.5;
+    shape_def.density = setup.density ? *setup.density : 1.0 * 0.1;
+    shape_def.friction = setup.friction ? *setup.friction : 0.5;
     if (cp_r_opts) {
         //shape_def.userData = (void*)(uintptr_t)e;
         shape_def.userData = (void*)e.id;
@@ -333,9 +332,8 @@ de_entity spawn_poly(
     if (cp_body_id)
         *cp_body_id = body;
     b2ShapeDef shape_def = b2DefaultShapeDef();
-    // Вынести в графическую настройку
-    shape_def.density = 1.0 * 0.1;
-    shape_def.friction = 0.5;
+    shape_def.density = setup.density ? *setup.density : 1.0 * 0.1;
+    shape_def.friction = setup.friction ? *setup.friction : 0.5;
     if (cp_r_opts)
         shape_def.userData = (void*)(uintptr_t)e;
     b2CreatePolygonShape(body, &shape_def, &poly);

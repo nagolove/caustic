@@ -75,6 +75,9 @@ typedef struct TriangleSetup {
 } TriangleSetup;
 
 typedef struct PolySetup2 {
+    // Опциональные параметры
+    float                   *friction, *density;
+
     ecs_t                   *r;
     bool                    use_static;
     b2Vec2                  pos;
@@ -84,6 +87,9 @@ typedef struct PolySetup2 {
 } PolySetup2;
 
 typedef struct PolySetup {
+    // Опциональные параметры
+    float                   *friction, *density;
+
     de_ecs                  *r;
     bool                    use_static;
     b2Vec2                  pos;

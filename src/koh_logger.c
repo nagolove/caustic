@@ -79,6 +79,7 @@ void trace_filter_add(const char *pattern) {
     assert(fe->match_data);
 }
 
+// XXX: Что делает функция?
 bool filter_match(const char *string) {
     if (!string)
         return false;
@@ -188,12 +189,19 @@ int trace(const char * format, ...) {
         strset_add(traces_set, buf);
     }
 
+    /*
     if (!filter_match(buf)) {
         printf("%s", buf);
         if (log_stream) {
             fwrite(buf, strlen(buf), 1, log_stream);
             fflush(log_stream);
         }
+    }
+    */
+
+    if (log_stream) {
+        fwrite(buf, strlen(buf), 1, log_stream);
+        fflush(log_stream);
     }
 
     return ret;

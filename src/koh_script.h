@@ -10,9 +10,22 @@
 
 typedef struct ScriptFunc {
     lua_CFunction func;
-    char fname[64], desc[256];
+         // имя функции
+    char fname[64], 
+         // описание, краткая документация
+         desc[256];
     struct ScriptFunc *next;
 } ScriptFunc;
+
+/*
+TODO: Убрать глобальное состояние в переменную контекста
+
+typedef struct ScriptState {
+    lua_State  *l;
+    ScriptFunc *funcs;
+};
+
+ */
 
 void sc_init();
 void sc_shutdown();
