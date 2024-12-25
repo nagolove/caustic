@@ -59,6 +59,7 @@ local inspect    = require 'inspect'
 local argparse   = require 'argparse'
 local ut         = require "utils"
 local Cache      = require "cache"
+local uv         = require("luv")
 local lanes      = require "lanes".configure()
 local sleep      = require "socket".sleep
 --- }}}
@@ -201,8 +202,6 @@ end
 ------------------------------------------------------------
 -- TODO: Доделать работу через luv
 
-local uv = require("luv")
-
 local stdout = uv.new_pipe(false)
 local stderr = uv.new_pipe(false)
 
@@ -217,7 +216,7 @@ local function cmd_do_uv(cmd: string|{string})
     local _, _ = uv.spawn(
         cmd as string,
         {
-            args = {"-c", "file.c"},
+            --args = {"-c", "file.c"},
             stdio = {nil, stdout, stderr},
             --env = {"CC=gcc", "CFLAGS=-O2"},
         },
@@ -253,15 +252,15 @@ local function cmd_do_uv(cmd: string|{string})
         end
     end)
 
-    print("before run")
+    --print("before run")
     uv.run('once')
-
-    print("after run")
+    --print("after run")
 
 end
 
 --------------------------------------------------------------
 local cmd_do: function(cmd: string|{string}) = cmd_do_execute
+--local cmd_do: function(cmd: string|{string}) = cmd_do_uv
 
 local function filter_sources_c(
     path: string, cb: function(string), exclude?: {string}
@@ -1845,6 +1844,7 @@ local parser_setup: {string:ParserSetup} = {
         flags = {
             { "-g --nocodegen", "disable codegeneration step" },
             { "-j", "run compilation parallel" },
+            { "-u", "run compilation parallel with libuv" },
             { "-c", "full rebuild without cache info" },
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
@@ -2109,6 +2109,7 @@ local record Args
     minshell: string
     c: string           -- clean, полная пересборка
     j: string           -- паралленьная сборка
+    u: string           -- параллельная сборка через libuv
     name: string		-- dependency name
     make_type: MakeAction
     link: string        -- оптимизация времени линковки(работает долго)
@@ -3423,6 +3424,73 @@ local function get_cores_num(): integer
     return math.floor(num)
 end
 
+local record Task
+    cmd: string
+    args: {string}
+end
+
+-- queue - очередь задач в виде строк для запуска компилятора
+local function run_parallel_uv(queue: {Task})
+    --print(tabular(queue))
+
+    for _, t in ipairs(queue) do
+        local _stdout = uv.new_pipe(false)
+        local _stderr = uv.new_pipe(false)
+
+        --print(tabular(t))
+        local _, _ = uv.spawn(
+            --cmd as string,
+            t.cmd,
+            {
+                --args = {"-c", "file.c"},
+                args = t.args,
+                stdio = {nil, _stdout, _stderr},
+                --env = {"CC=gcc", "CFLAGS=-O2"},
+            },
+            function(code, signal)
+
+                --[[
+                print(
+                    "Process exited with code " .. tostring(code) .. 
+                    ", signal " .. tostring(signal)
+                )
+                --]]
+
+                _stdout:read_stop()
+                _stderr:read_stop()
+               
+                --if handle then
+                    --print('handle', handle)
+                    --uv.close(handle)
+                --end
+
+            end
+        )
+
+        _stdout:read_start(
+            function(err: string, data: string)
+                assert(not err, err)
+                if data then
+                    --print("STDOUT: " .. data)
+                    print(data)
+                end
+        end)
+
+        _stderr:read_start(
+            function(err: string, data: string)
+                assert(not err, err)
+                if data then
+                    --print("STDERR: " .. data)
+                    print(data)
+                end
+        end)
+
+    end
+
+    --uv.run('default')
+    uv.run('default')
+end
+
 -- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel(queue: {string})
     local cores_num = get_cores_num() * 2
@@ -3432,7 +3500,12 @@ local function run_parallel(queue: {string})
     end
 
     local function build_fun(cmd: string): any
-        cmd_do(cmd)
+        local ok, errmsg: boolean, string = pcall(function()
+            cmd_do(cmd)
+        end)
+        if not ok then
+            print(format('cmd_do: failed with %s', errmsg))
+        end
     end
 
     local threads: {lanes.Thread} = {}
@@ -3885,6 +3958,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
     local output_dir = "."
     local objfiles: {string} = {}
 
+    local defines: {string} = {
+        "-DGRAPHICS_API_OPENGL_43",
+        "-DPLATFORM=PLATFORM_DESKTOP",
+        "-DPLATFORM_DESKTOP",
+    }
     -- TODO: Дефайны через bld.lua
     local _defines: string = table.concat({
         "-DGRAPHICS_API_OPENGL_43",
@@ -3895,10 +3973,12 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
     local _includes: string = table.concat({
         --"/usr/include",
     }, " ")
-    local dirs = get_ready_includes(cfg)
+    local includes = {}
 
+    local dirs = get_ready_includes(cfg)
     for _, v in ipairs(dirs) do
         _includes = _includes .. " -I" .. v
+        table.insert(includes, "-I" .. v)
     end
 
     -- TODO: Отладочная и релизная сборка через команду
@@ -3921,11 +4001,17 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
 
     if not _args.release then
         table.insert(flags, "-ggdb3")
+
         _defines = _defines .. " " .. table.concat({
             "-DDEBUG",
             "-g3",
             "-fno-omit-frame-pointer",
         }, " ")
+
+        table.insert(defines, "-DDEBUG")
+        table.insert(defines, "-g3")
+        table.insert(defines, "-fno-omit-frame-pointer")
+
         if cfg.debug_define then
             print("sub_make: appling debug defines")
             for define, value in pairs(cfg.debug_define) do
@@ -3942,6 +4028,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
 
         end
     else
+        -- RELEAASE
         table.insert(flags, "-O3")
         if cfg.release_define then
             print("sub_make: appling release defines")
@@ -4002,6 +4089,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
     local _libs: string = table.concat(make_l(_links), " ")
 
     local queue = {}
+    -- массив с командами
+    local tasks: {Task} = {}
     local cwd = lfs.currentdir() .. "/"
 
     -- Список файлов для перекомпиляции выводимый пользователю
@@ -4021,6 +4110,41 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
             _defines, _includes, _libspath, _flags,
             _output, _input, _libs
         )
+
+        local args = {}
+
+        table.insert(args, "-lm ")
+
+        for _, define in ipairs(defines) do
+           table.insert(args, define)
+        end
+
+
+        for _, include in ipairs(includes) do
+            table.insert(args, include)
+        end
+
+        for _, libpath in ipairs(_libdirs) do
+            table.insert(args, libpath)
+        end
+
+        for _, flag in ipairs(flags) do
+            table.insert(args, flag)
+        end
+
+        table.insert(args, "-o")
+        table.insert(args, _output)
+        table.insert(args, "-c")
+        table.insert(args, _input)
+
+        for _, lib in ipairs(make_l(_links)) do
+            table.insert(args, lib)
+        end
+            
+        table.insert(tasks, {
+            cmd = "cc",
+            args = args,
+        })
         if cache:should_recompile(file, cmd) then
             table.insert(repr_queu, file)
             table.insert(queue, cmd)
@@ -4029,50 +4153,22 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         table.insert(objfiles, _output)
     end, exclude)
 
-    if _args.cpp then
-        print("cpp flags is not implemented")
-        os.exit(1)
-
-        --[[
-        -- {{{ С++ code support
-        filter_sources_cpp(".", function(file: string)
-            --print('file', file)
-            local _output = output_dir .. "/" .. 
-                            string.gsub(file, "(.*%.)cpp$", "%1o")
-            --local _input = output_dir .. "/" .. file
-            local _input = cwd .. file
-
-            --print("_input", _input)
-            --print('_input\'', cwd .. string.sub(_input, 3, -1))
-
-            -- TODO: Проверять отсутствие объектного файла
-            local cmd = format(
-                "cc -lm %s %s %s %s -o %s -c %s %s", 
-                _defines, _includes, _libspath, _flags,
-                _output, _input, _libs
-            )
-            if cache:should_recompile(file, cmd) then
-                table.insert(queue, cmd)
-            end
-
-            table.insert(objfiles, _output)
-        end, exclude)
-        -- }}}
-        --]]
-
-    end
-
     if verbose then
         print(tabular(repr_queu))
     end
 
-    if not _args.j then
-        print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
-        run_serial(queue)
-    else
+    if _args.u then
+        -- использовать libuv
+        run_parallel_uv(tasks)
+    elseif _args.j then
         print(ansicolors("%{blue}" .. "run_parallel" .. "%{reset}"))
         run_parallel(queue)
+    else
+        print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
+        run_serial(queue)
     end
+
+    print(ansicolors("%{red}" .. "after compilation" .. "%{reset}"))
 
     --print("os.exit(1)")
     --os.exit(1);
@@ -4110,6 +4206,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
                 make = true,
                 c = _args.c,
                 j = _args.j,
+                u = _args.u,
                 noasan = _args.noasan,
                 release = _args.release
             }
