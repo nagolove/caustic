@@ -59,6 +59,7 @@ local inspect = require('inspect')
 local argparse = require('argparse')
 local ut = require("utils")
 local Cache = require("cache")
+local uv = require("luv")
 local lanes = require("lanes").configure()
 local sleep = require("socket").sleep
 
@@ -201,8 +202,6 @@ end
 
 
 
-local uv = require("luv")
-
 local stdout = uv.new_pipe(false)
 local stderr = uv.new_pipe(false)
 
@@ -217,7 +216,7 @@ local function cmd_do_uv(cmd)
    local _, _ = uv.spawn(
    cmd,
    {
-      args = { "-c", "file.c" },
+
       stdio = { nil, stdout, stderr },
 
    },
@@ -253,15 +252,15 @@ local function cmd_do_uv(cmd)
       end
    end)
 
-   print("before run")
+
    uv.run('once')
 
-   print("after run")
 
 end
 
 
 local cmd_do = cmd_do_execute
+
 
 local function filter_sources_c(
    path, cb, exclude)
@@ -1845,6 +1844,7 @@ local parser_setup = {
       flags = {
          { "-g --nocodegen", "disable codegeneration step" },
          { "-j", "run compilation parallel" },
+         { "-u", "run compilation parallel with libuv" },
          { "-c", "full rebuild without cache info" },
          { "-r --release", "release" },
          { "-a --noasan", "no address sanitazer" },
@@ -2088,6 +2088,7 @@ local function _init(path, deps)
 
    ut.pop_dir()
 end
+
 
 
 
@@ -3424,6 +3425,73 @@ local function get_cores_num()
 end
 
 
+
+
+
+
+
+local function run_parallel_uv(queue)
+
+
+   for _, t in ipairs(queue) do
+      local _stdout = uv.new_pipe(false)
+      local _stderr = uv.new_pipe(false)
+
+
+      local _, _ = uv.spawn(
+
+      t.cmd,
+      {
+
+         args = t.args,
+         stdio = { nil, _stdout, _stderr },
+
+      },
+      function(code, signal)
+
+
+
+
+
+
+
+
+         _stdout:read_stop()
+         _stderr:read_stop()
+
+
+
+
+
+
+      end)
+
+
+      _stdout:read_start(
+      function(err, data)
+         assert(not err, err)
+         if data then
+
+            print(data)
+         end
+      end)
+
+      _stderr:read_start(
+      function(err, data)
+         assert(not err, err)
+         if data then
+
+            print(data)
+         end
+      end)
+
+   end
+
+
+   uv.run('default')
+end
+
+
 local function run_parallel(queue)
    local cores_num = get_cores_num() * 2
    if verbose then
@@ -3432,7 +3500,12 @@ local function run_parallel(queue)
    end
 
    local function build_fun(cmd)
-      cmd_do(cmd)
+      local ok, errmsg = pcall(function()
+         cmd_do(cmd)
+      end)
+      if not ok then
+         print(format('cmd_do: failed with %s', errmsg))
+      end
    end
 
    local threads = {}
@@ -3885,6 +3958,11 @@ local function sub_make(_args, cfg, push_num)
    local output_dir = "."
    local objfiles = {}
 
+   local defines = {
+      "-DGRAPHICS_API_OPENGL_43",
+      "-DPLATFORM=PLATFORM_DESKTOP",
+      "-DPLATFORM_DESKTOP",
+   }
 
    local _defines = table.concat({
       "-DGRAPHICS_API_OPENGL_43",
@@ -3895,10 +3973,12 @@ local function sub_make(_args, cfg, push_num)
    local _includes = table.concat({},
 
    " ")
-   local dirs = get_ready_includes(cfg)
+   local includes = {}
 
+   local dirs = get_ready_includes(cfg)
    for _, v in ipairs(dirs) do
       _includes = _includes .. " -I" .. v
+      table.insert(includes, "-I" .. v)
    end
 
 
@@ -3921,11 +4001,17 @@ local function sub_make(_args, cfg, push_num)
 
    if not _args.release then
       table.insert(flags, "-ggdb3")
+
       _defines = _defines .. " " .. table.concat({
          "-DDEBUG",
          "-g3",
          "-fno-omit-frame-pointer",
       }, " ")
+
+      table.insert(defines, "-DDEBUG")
+      table.insert(defines, "-g3")
+      table.insert(defines, "-fno-omit-frame-pointer")
+
       if cfg.debug_define then
          print("sub_make: appling debug defines")
          for define, value in pairs(cfg.debug_define) do
@@ -3942,6 +4028,7 @@ local function sub_make(_args, cfg, push_num)
 
       end
    else
+
       table.insert(flags, "-O3")
       if cfg.release_define then
          print("sub_make: appling release defines")
@@ -4002,6 +4089,8 @@ local function sub_make(_args, cfg, push_num)
    local _libs = table.concat(make_l(_links), " ")
 
    local queue = {}
+
+   local tasks = {}
    local cwd = lfs.currentdir() .. "/"
 
 
@@ -4021,6 +4110,41 @@ local function sub_make(_args, cfg, push_num)
       _defines, _includes, _libspath, _flags,
       _output, _input, _libs)
 
+
+      local args = {}
+
+      table.insert(args, "-lm ")
+
+      for _, define in ipairs(defines) do
+         table.insert(args, define)
+      end
+
+
+      for _, include in ipairs(includes) do
+         table.insert(args, include)
+      end
+
+      for _, libpath in ipairs(_libdirs) do
+         table.insert(args, libpath)
+      end
+
+      for _, flag in ipairs(flags) do
+         table.insert(args, flag)
+      end
+
+      table.insert(args, "-o")
+      table.insert(args, _output)
+      table.insert(args, "-c")
+      table.insert(args, _input)
+
+      for _, lib in ipairs(make_l(_links)) do
+         table.insert(args, lib)
+      end
+
+      table.insert(tasks, {
+         cmd = "cc",
+         args = args,
+      })
       if cache:should_recompile(file, cmd) then
          table.insert(repr_queu, file)
          table.insert(queue, cmd)
@@ -4029,50 +4153,22 @@ local function sub_make(_args, cfg, push_num)
       table.insert(objfiles, _output)
    end, exclude)
 
-   if _args.cpp then
-      print("cpp flags is not implemented")
-      os.exit(1)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   end
-
    if verbose then
       print(tabular(repr_queu))
    end
 
-   if not _args.j then
-      print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
-      run_serial(queue)
-   else
+   if _args.u then
+
+      run_parallel_uv(tasks)
+   elseif _args.j then
       print(ansicolors("%{blue}" .. "run_parallel" .. "%{reset}"))
       run_parallel(queue)
+   else
+      print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
+      run_serial(queue)
    end
+
+   print(ansicolors("%{red}" .. "after compilation" .. "%{reset}"))
 
 
 
@@ -4110,6 +4206,7 @@ local function sub_make(_args, cfg, push_num)
             make = true,
             c = _args.c,
             j = _args.j,
+            u = _args.u,
             noasan = _args.noasan,
             release = _args.release,
          }
