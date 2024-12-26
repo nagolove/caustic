@@ -50,6 +50,8 @@ assert(path_abs_third_party)
 assert(path_wasm_third_party)
 
 
+require("common")
+local gsub = string.gsub
 local tabular = require("tabular").show
 local lfs = require('lfs')
 local mkdir = lfs.mkdir
@@ -62,6 +64,7 @@ local Cache = require("cache")
 local uv = require("luv")
 local lanes = require("lanes").configure()
 local sleep = require("socket").sleep
+
 
 
 if string.match(lfs.currentdir(), "tl_dst") then
@@ -89,45 +92,6 @@ local errexit = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end = "{CAUSTIC_PASTE_END}"
 local cache
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -202,61 +166,59 @@ end
 
 
 
-local stdout = uv.new_pipe(false)
-local stderr = uv.new_pipe(false)
-
-local function cmd_do_uv(cmd)
-
-   if (type(cmd) == 'table') then
-      for _, v in ipairs(cmd) do
-         cmd_do_uv(v)
-      end
-   end
-
-   local _, _ = uv.spawn(
-   cmd,
-   {
-
-      stdio = { nil, stdout, stderr },
-
-   },
-   function(code, signal)
-      print("Process exited with code " .. tostring(code) .. ", signal " .. tostring(signal))
-      stdout:read_stop()
-      stderr:read_stop()
 
 
 
 
 
 
-   end)
 
 
 
 
 
-   stdout:read_start(
-   function(err, data)
-      assert(not err, err)
-      if data then
-         print("STDOUT: " .. data)
-      end
-   end)
-
-   stderr:read_start(
-   function(err, data)
-      assert(not err, err)
-      if data then
-         print("STDERR: " .. data)
-      end
-   end)
 
 
-   uv.run('once')
 
 
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 local cmd_do = cmd_do_execute
@@ -1416,7 +1378,7 @@ local function get_dir(dep)
    local url = dep.url
    if not string.match(url, "%.zip$") then
 
-      local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+      local dirname = gsub(url:match(".*/(.*)$"), "%.git", "")
       return dirname
    else
       return dep.dir
@@ -1438,7 +1400,7 @@ local function get_deps_map(deps)
       assert(type(dep.url) == 'string')
       local url = dep.url
       if not string.match(url, "%.zip$") then
-         local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+         local dirname = gsub(url:match(".*/(.*)$"), "%.git", "")
          res[dirname] = dep
       else
          res[dep.dir] = dep
@@ -1843,8 +1805,8 @@ local parser_setup = {
       },
       flags = {
          { "-g --nocodegen", "disable codegeneration step" },
-         { "-j", "run compilation parallel" },
-         { "-u", "run compilation parallel with libuv" },
+
+
          { "-c", "full rebuild without cache info" },
          { "-r --release", "release" },
          { "-a --noasan", "no address sanitazer" },
@@ -2568,7 +2530,7 @@ local function sub_publish(_args, cfg)
       print("Bad directory, no artifact value in bld.lua")
    end
 
-   local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+   local site_repo_tmp = gsub(site_repo, "~", os.getenv("HOME"))
    local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
    mkdir(game_dir)
    local cmd = format(
@@ -3073,7 +3035,7 @@ local function make_l(list)
    for _, v in ipairs(list) do
       if string.match(v, static_pattern) then
 
-         table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
+         table.insert(ret, "-l" .. gsub(v, static_pattern, ""))
       else
          table.insert(ret, "-l" .. v)
       end
@@ -3411,18 +3373,15 @@ function actions.deps(_args)
    end
 end
 
-local function get_cores_num()
-   local file = io.open("/proc/cpuinfo", "r")
-   local num = 1.
-   for line in file:lines() do
-      local _num = string.match(line, "cpu cores.*%:.*(%d+)")
-      if _num then
-         num = tonumber(_num)
-         break
-      end
-   end
-   return math.floor(num)
-end
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3433,6 +3392,7 @@ end
 local function run_parallel_uv(queue)
 
 
+   local errcode = 0
    for _, t in ipairs(queue) do
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
@@ -3442,12 +3402,15 @@ local function run_parallel_uv(queue)
 
       t.cmd,
       {
-
          args = t.args,
          stdio = { nil, _stdout, _stderr },
 
+
+
+
+
       },
-      function(code, signal)
+      function(code, _)
 
 
 
@@ -3456,14 +3419,9 @@ local function run_parallel_uv(queue)
 
 
 
+         errcode = errcode + code
          _stdout:read_stop()
          _stderr:read_stop()
-
-
-
-
-
-
       end)
 
 
@@ -3471,8 +3429,7 @@ local function run_parallel_uv(queue)
       function(err, data)
          assert(not err, err)
          if data then
-
-            print(data)
+            io.write(data)
          end
       end)
 
@@ -3480,101 +3437,110 @@ local function run_parallel_uv(queue)
       function(err, data)
          assert(not err, err)
          if data then
-
             print(data)
          end
       end)
 
    end
 
-
    uv.run('default')
-end
 
 
-local function run_parallel(queue)
-   local cores_num = get_cores_num() * 2
-   if verbose then
-      print('parallel_run:', #queue)
-      print('cores_num', cores_num)
-   end
-
-   local function build_fun(cmd)
-      local ok, errmsg = pcall(function()
-         cmd_do(cmd)
-      end)
-      if not ok then
-         print(format('cmd_do: failed with %s', errmsg))
-      end
-   end
-
-   local threads = {}
-   local stop = false
-   local tasks_num
-   if #queue < cores_num then
-      tasks_num = #queue
-   else
-      tasks_num = cores_num
-   end
-
-
-
-   local wait_iters = 1
-
-   repeat
-
-
-      local new_threads = {}
-      for _ = 1, tasks_num do
-         local l = lanes.gen("*", build_fun)
-
-         local cmd = table.remove(queue, 1)
-         if cmd then
-            table.insert(new_threads, l(cmd))
-         end
-      end
-      tasks_num = 0
-
-
-      for _, thread in ipairs(new_threads) do
-         table.insert(threads, thread)
-      end
-
-      sleep(0.02)
-
-
-      local has_jobs = false
-      local live_threads = {}
-      for _, t in ipairs(threads) do
-
-         if t.status == 'done' then
-            if tasks_num + 1 <= cores_num then
-               tasks_num = tasks_num + 1
-            end
-         else
-
-            table.insert(live_threads, t)
-            has_jobs = true
-         end
-      end
-      threads = live_threads
-
-      stop = not has_jobs
-      wait_iters = wait_iters + 1
-   until stop
-
-   if verbose then
-      print(ansicolors(
-      "%{red}" .. format("wait iterations done %d", wait_iters) .. "%{reset}"))
-
+   print('run_parallel_uv: errcode', errcode)
+   if errcode ~= 0 then
+      os.exit(1)
    end
 end
 
-local function run_serial(queue)
-   for _, cmd in ipairs(queue) do
-      cmd_do(cmd)
-   end
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function cache_remove()
    ut.push_current_dir()
@@ -3602,13 +3568,23 @@ end
 
 
 
+local flags_sanitazer = {
+
+
+
+
+
+
+   "-fsanitize=undefined,address",
+   "-fsanitize-address-use-after-scope",
+}
+
 
 
 local function project_link(ctx, cfg, _args)
    local flags = ""
    if not _args.noasan then
-
-      flags = flags .. " -fsanitize=undefined,address "
+      flags = flags .. table.concat(flags_sanitazer, " ")
    end
    if _args.make_type == 'release' then
       flags = ""
@@ -4047,13 +4023,12 @@ local function sub_make(_args, cfg, push_num)
       end
    end
 
-
-
    if not _args.noasan then
-
-      table.insert(flags, "-fsanitize=address,undefined")
-      table.insert(flags, "-fsanitize-address-use-after-scope")
+      for _, flag in ipairs(flags_sanitazer) do
+         table.insert(flags, flag)
+      end
    end
+
    flags = ut.merge_tables(flags, { "-Wall", "-fPIC" })
    flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
@@ -4088,7 +4063,7 @@ local function sub_make(_args, cfg, push_num)
    end
    local _libs = table.concat(make_l(_links), " ")
 
-   local queue = {}
+
 
    local tasks = {}
    local cwd = lfs.currentdir() .. "/"
@@ -4097,18 +4072,11 @@ local function sub_make(_args, cfg, push_num)
    local repr_queu = {}
 
    filter_sources_c(".", function(file)
-      local _output = output_dir .. "/" ..
-      string.gsub(file, "(.*%.)c$", "%1o")
+      local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
       local _input = cwd .. file
 
 
 
-
-      local cmd = format(
-      "cc -lm %s %s %s %s -o %s -c %s %s",
-
-      _defines, _includes, _libspath, _flags,
-      _output, _input, _libs)
 
 
       local args = {}
@@ -4118,7 +4086,6 @@ local function sub_make(_args, cfg, push_num)
       for _, define in ipairs(defines) do
          table.insert(args, define)
       end
-
 
       for _, include in ipairs(includes) do
          table.insert(args, include)
@@ -4141,13 +4108,12 @@ local function sub_make(_args, cfg, push_num)
          table.insert(args, lib)
       end
 
-      table.insert(tasks, {
-         cmd = "cc",
-         args = args,
-      })
-      if cache:should_recompile(file, cmd) then
+      local task = { cmd = "cc", args = args }
+      table.insert(tasks, task)
+
+
+      if cache:should_recompile(file, task) then
          table.insert(repr_queu, file)
-         table.insert(queue, cmd)
       end
 
       table.insert(objfiles, _output)
@@ -4157,21 +4123,8 @@ local function sub_make(_args, cfg, push_num)
       print(tabular(repr_queu))
    end
 
-   if _args.u then
 
-      run_parallel_uv(tasks)
-   elseif _args.j then
-      print(ansicolors("%{blue}" .. "run_parallel" .. "%{reset}"))
-      run_parallel(queue)
-   else
-      print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
-      run_serial(queue)
-   end
-
-   print(ansicolors("%{red}" .. "after compilation" .. "%{reset}"))
-
-
-
+   run_parallel_uv(tasks)
 
    cache:save()
    cache = nil
@@ -4205,8 +4158,8 @@ local function sub_make(_args, cfg, push_num)
          local args = {
             make = true,
             c = _args.c,
-            j = _args.j,
-            u = _args.u,
+
+
             noasan = _args.noasan,
             release = _args.release,
          }
