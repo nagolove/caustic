@@ -199,6 +199,7 @@ int trace(const char * format, ...) {
     }
     */
 
+    printf("%s", buf);
     if (log_stream) {
         fwrite(buf, strlen(buf), 1, log_stream);
         fflush(log_stream);
