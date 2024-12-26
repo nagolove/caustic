@@ -45,6 +45,7 @@ void dev_label_group_pop();
 
 typedef struct DevDraw DevDraw;
 
+// Не хватает описания зачем используется данный интерфейс
 struct DevDrawTrace {
     void   *data;
     size_t data_sz;
@@ -57,4 +58,5 @@ struct DevDrawTrace {
 DevDraw *dd_new();
 void dd_free(DevDraw* dd);
 void dd_draw(DevDraw *dd);
+// Что делает эта функция?
 void dd_attach(DevDraw *dd);

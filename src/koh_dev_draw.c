@@ -538,6 +538,7 @@ void dd_free(DevDraw* dd) {
         free(dd->traces);
         dd->traces = NULL;
     }
+    free(dd);
 }
 
 void dd_draw(DevDraw *dd) {
