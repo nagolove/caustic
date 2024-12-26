@@ -290,7 +290,6 @@ de_entity spawn_poly(
     struct WorldCtx *wctx, struct PolySetup setup
 ) {
     assert(wctx);
-    assert(setup.r);
 
     b2Polygon poly = setup.poly;
     assert(poly.count >= 3);
@@ -501,7 +500,10 @@ void spawn_polygons2(WorldCtx *wctx, PolySetup2 setup, int num, e_id *ret) {
 }
 
 void spawn_polygons(
-    struct WorldCtx *wctx, struct PolySetup setup, int num, de_entity *ret
+    WorldCtx *wctx,         // физический движок
+    const PolySetup setup, // параметры создавамых полигонов
+    int num,                // количество создавамых полигонов
+    de_entity *ret          // выходной массив сущностей
 ) {
     assert(wctx);
     assert(wctx->height > 0);

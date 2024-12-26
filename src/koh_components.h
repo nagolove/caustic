@@ -113,8 +113,12 @@ de_entity spawn_poly(struct WorldCtx *ctx, struct PolySetup setup);
 // Если _e == NULL, то создается новаю сущность. Иначе используется переданная.
 e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e);
 
-void spawn_polygons(WorldCtx *wctx, PolySetup setup, int num, de_entity *ret);
-void spawn_polygons2(WorldCtx *wctx, PolySetup2 setup, int num, e_id *ret);
+void spawn_polygons(
+    WorldCtx *wctx, const PolySetup setup, int num, de_entity *ret
+);
+void spawn_polygons2(
+    WorldCtx *wctx, const PolySetup2 setup, int num, e_id *ret
+);
 
 void spawn_triangles(
     WorldCtx *wctx, TriangleSetup setup, int num, de_entity *ret
