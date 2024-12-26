@@ -1806,26 +1806,33 @@ void koh_backtrace_print() {
 */
 
 const char * koh_backtrace_get() {
-    void *array[100];
-    static char buf[4096] = {}, *pbuf = buf;
+    void *array[200] = {};
+    static char buf[4096 * 10] = {}, *pbuf = buf;
+
+    memset(buf, 0, sizeof(buf));
 
     size_t frames;
     char **symbols;
     
     // Получаем указатели на адреса функций в стеке вызовов
-    frames = backtrace(array, 100);
+    frames = backtrace(array, 200);
+
+    printf("koh_backtrace_get: frames %zu\n", frames);
     
     // Получаем символы (строки) для каждого адреса
     symbols = backtrace_symbols(array, frames);
+
     if (!symbols)
         return NULL;
 
-    while (*symbols) {
+    //while (*symbols) {
+    for (int i = 0; i < frames; i++) {
+        //printf("*symbols %s\n", symbols[i]);
         pbuf += sprintf(pbuf, "%s\n", *symbols);
-        symbols++;
     }
 
     free(symbols);
+
     return buf;
 }
 
