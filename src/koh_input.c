@@ -425,7 +425,9 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 }
 
 void input_gp_free(InputGamepadDrawer *gp) {
+    assert(gp);
     res_unload_all(&gp->reslist);
+    free(gp);
 }
 
 void input_gp_update(InputGamepadDrawer *gp) {
