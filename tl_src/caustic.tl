@@ -50,6 +50,8 @@ assert(path_abs_third_party)
 assert(path_wasm_third_party)
 
 -- requires {{{
+require "common"
+local gsub       = string.gsub
 local tabular    = require "tabular".show
 local lfs        = require 'lfs'
 local mkdir      = lfs.mkdir
@@ -59,11 +61,12 @@ local inspect    = require 'inspect'
 local argparse   = require 'argparse'
 local ut         = require "utils"
 local Cache      = require "cache"
-local uv         = require("luv")
+local uv         = require "luv"
 local lanes      = require "lanes".configure()
 local sleep      = require "socket".sleep
 --- }}}
 
+-- XXX: Зачем этот код? Что он делает?
 if string.match(lfs.currentdir(), "tl_dst") then
     chdir("..")
 end
@@ -121,45 +124,6 @@ local record Cfg
     -- }}}
 end
 
---[[
-Пример структуры дерева проекта
--- {{{
--- Команда init копирует соответствующие файлы из каталога bld в каждый каталог
--- зависимости
-
-project dir -> bld.lua
-            -> bld
-                -> lua.lua              | копируется в каталог 3rd_party/dep.name
-                -> utf8proc.lua
-            -> src      -> main.c
-                        -> other_file.c
-                        -> header.р
-                        -> cache.lua [created by caustic]
-            -> assets
-
-            -> 3rd_party
-                -> lua
-                    -> bld.lua
-                -> chipmunk
-                    -> bld.lua
-                -> raylib
-                    -> bld.lua
-            -> wasm_3rd_party
-            -> win_3rd_party
-
-            -> linux_objects            | объектные файлы
-            -> win_objects              | объектные файлы
-            -> wasm_objects             | объектные файлы
-
-            -> bin  -> bin_d.linux
-                    -> bin_r.linux
-                    -> bin_d.exe
-                    -> bin_r.exe
-                    -> bin.html
-                    -> assets.zip
--- }}}
---]]
-
 -- FIXME: Не использовать io.popen() так могут быть проблемы с кодом возврата
 local function cmd_do_execute(_cmd: string|{string})
     if verbose then
@@ -199,26 +163,23 @@ local function cmd_do_execute(_cmd: string|{string})
     end
 end
 
-------------------------------------------------------------
--- TODO: Доделать работу через luv
-
-local stdout = uv.new_pipe(false)
-local stderr = uv.new_pipe(false)
-
-local function cmd_do_uv(cmd: string|{string}) 
-
-    if (type(cmd) == 'table') then
-        for _, v in ipairs(cmd as {string}) do
-            cmd_do_uv(v)
-        end
-    end
+--[[
+local function cmd_do_uv(cmd: string, args: {string}) 
+    local stdout = uv.new_pipe(false)
+    local stderr = uv.new_pipe(false)
 
     local _, _ = uv.spawn(
         cmd as string,
         {
             --args = {"-c", "file.c"},
+            args = args,
+            --stdio = {nil, stdout, stderr},
             stdio = {nil, stdout, stderr},
-            --env = {"CC=gcc", "CFLAGS=-O2"},
+            env = {
+                "COLORTERM=truecolor",
+                "TERM=xterm-kitty",
+                "LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.7z=01;31:*.ace=01;31:*.alz=01;31:*.apk=01;31:*.arc=01;31:*.arj=01;31:*.bz=01;31:*.bz2=01;31:*.cab=01;31:*.cpio=01;31:*.crate=01;31:*.deb=01;31:*.drpm=01;31:*.dwm=01;31:*.dz=01;31:*.ear=01;31:*.egg=01;31:*.esd=01;31:*.gz=01;31:*.jar=01;31:*.lha=01;31:*.lrz=01;31:*.lz=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.lzo=01;31:*.pyz=01;31:*.rar=01;31:*.rpm=01;31:*.rz=01;31:*.sar=01;31:*.swm=01;31:*.t7z=01;31:*.tar=01;31:*.taz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tgz=01;31:*.tlz=01;31:*.txz=01;31:*.tz=01;31:*.tzo=01;31:*.tzst=01;31:*.udeb=01;31:*.war=01;31:*.whl=01;31:*.wim=01;31:*.xz=01;31:*.z=01;31:*.zip=01;31:*.zoo=01;31:*.zst=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.crdownload=00;90:*.dpkg-dist=00;90:*.dpkg-new=00;90:*.dpkg-old=00;90:*.dpkg-tmp=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:*.swp=00;90:*.tmp=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:"
+            },
         },
         function(code, signal)
             print("Process exited with code " .. tostring(code) .. ", signal " .. tostring(signal))
@@ -257,6 +218,7 @@ local function cmd_do_uv(cmd: string|{string})
     --print("after run")
 
 end
+--]]
 
 --------------------------------------------------------------
 local cmd_do: function(cmd: string|{string}) = cmd_do_execute
@@ -1416,7 +1378,7 @@ local function get_dir(dep: Dependency): string
     local url = dep.url
     if not string.match(url, "%.zip$") then
         -- Вернуть имя каталога из строки url репозитория
-        local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+        local dirname = gsub(url:match(".*/(.*)$"), "%.git", "")
         return dirname
     else
         return dep.dir
@@ -1438,7 +1400,7 @@ local function get_deps_map(deps: {Dependency}): {string: Dependency}
         assert(type(dep.url) == 'string')
         local url = dep.url
         if not string.match(url, "%.zip$") then
-            local dirname = string.gsub(url:match(".*/(.*)$"), "%.git", "")
+            local dirname = gsub(url:match(".*/(.*)$"), "%.git", "")
             res[dirname] = dep
         else
             res[dep.dir] = dep
@@ -1843,8 +1805,8 @@ local parser_setup: {string:ParserSetup} = {
         },
         flags = {
             { "-g --nocodegen", "disable codegeneration step" },
-            { "-j", "run compilation parallel" },
-            { "-u", "run compilation parallel with libuv" },
+            --{ "-j", "run compilation parallel" },
+            --{ "-u", "run compilation parallel with libuv" },
             { "-c", "full rebuild without cache info" },
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
@@ -2108,8 +2070,8 @@ local record Args
     make: boolean       -- собрать
     minshell: string
     c: string           -- clean, полная пересборка
-    j: string           -- паралленьная сборка
-    u: string           -- параллельная сборка через libuv
+    --j: string           -- паралленьная сборка
+    --u: string           -- параллельная сборка через libuv
     name: string		-- dependency name
     make_type: MakeAction
     link: string        -- оптимизация времени линковки(работает долго)
@@ -2295,7 +2257,7 @@ local function sub_test(_args: Args, cfg: Cfg)
 
         --[[
         local _output = output_dir .. "/" .. 
-                        string.gsub(file, "(.*%.)c$", "%1o")
+                        gsub(file, "(.*%.)c$", "%1o")
         --local _input = output_dir .. "/" .. file
         local _input = cwd .. file
 
@@ -2433,7 +2395,7 @@ end
 
 --[[
 local function update_links(artifact: string)
-    local site_repo_tmp = string.gsub(site_repo_index, "~", os.getenv("HOME"))
+    local site_repo_tmp = gsub(site_repo_index, "~", os.getenv("HOME"))
     local file = io.open(site_repo_tmp, "r")
     if not file then
         print(format("Could not load '%s' file", site_repo_tmp));
@@ -2568,7 +2530,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
         print("Bad directory, no artifact value in bld.lua")
     end
 
-    local site_repo_tmp = string.gsub(site_repo, "~", os.getenv("HOME"))
+    local site_repo_tmp = gsub(site_repo, "~", os.getenv("HOME"))
     local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
     mkdir(game_dir)
     local cmd = format(
@@ -2837,7 +2799,7 @@ end
 
 --[[
 local function src2obj(filename: string): string
-    return table.pack(string.gsub(filename, "(.*%.)c$", "%1o"))[1] as string
+    return table.pack(gsub(filename, "(.*%.)c$", "%1o"))[1] as string
 end
 --]]
 
@@ -3003,7 +2965,7 @@ local function w_build_project(
     filter_sources_c(path, function(file: string)
         print(file)
         local output_path = output_dir .. 
-                            "/" ..string.gsub(file, "(.*%.)c$", "%1o")
+                            "/" ..gsub(file, "(.*%.)c$", "%1o")
 
         local cmd = format(
             "emcc -o %s -c %s/%s -Wall %s %s",
@@ -3073,7 +3035,7 @@ local function make_l(list: {string}): {string}
     for _, v in ipairs(list) do
         if string.match(v, static_pattern) then
             --table.insert(ret, "-Wl,-Bstatic")
-            table.insert(ret, "-l" .. string.gsub(v, static_pattern, ""))
+            table.insert(ret, "-l" .. gsub(v, static_pattern, ""))
         else
             table.insert(ret, "-l" .. v)
         end
@@ -3411,6 +3373,7 @@ function actions.deps(_args: Args)
     end
 end
 
+--[[
 local function get_cores_num(): integer
     local file = io.open("/proc/cpuinfo", "r")
     local num = 1.
@@ -3423,16 +3386,13 @@ local function get_cores_num(): integer
     end
     return math.floor(num)
 end
-
-local record Task
-    cmd: string
-    args: {string}
-end
+--]]
 
 -- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel_uv(queue: {Task})
-    --print(tabular(queue))
+    --uv.tty_set_vterm_state("unsupported")
 
+    local errcode = 0
     for _, t in ipairs(queue) do
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
@@ -3442,12 +3402,15 @@ local function run_parallel_uv(queue: {Task})
             --cmd as string,
             t.cmd,
             {
-                --args = {"-c", "file.c"},
                 args = t.args,
                 stdio = {nil, _stdout, _stderr},
-                --env = {"CC=gcc", "CFLAGS=-O2"},
+                --[[
+                env = {
+                    "COLORTERM=truecolor",
+                },
+                --]]
             },
-            function(code, signal)
+            function(code: integer, _: integer)
 
                 --[[
                 print(
@@ -3456,14 +3419,9 @@ local function run_parallel_uv(queue: {Task})
                 )
                 --]]
 
+                errcode = errcode + code
                 _stdout:read_stop()
                 _stderr:read_stop()
-               
-                --if handle then
-                    --print('handle', handle)
-                    --uv.close(handle)
-                --end
-
             end
         )
 
@@ -3471,8 +3429,7 @@ local function run_parallel_uv(queue: {Task})
             function(err: string, data: string)
                 assert(not err, err)
                 if data then
-                    --print("STDOUT: " .. data)
-                    print(data)
+                    io.write(data)
                 end
         end)
 
@@ -3480,18 +3437,23 @@ local function run_parallel_uv(queue: {Task})
             function(err: string, data: string)
                 assert(not err, err)
                 if data then
-                    --print("STDERR: " .. data)
                     print(data)
                 end
         end)
 
     end
 
-    --uv.run('default')
     uv.run('default')
+     --uv.tty_set_mode(tty, mode)
+
+    print('run_parallel_uv: errcode', errcode)
+    if errcode ~= 0 then
+        os.exit(1)
+    end
 end
 
 -- queue - очередь задач в виде строк для запуска компилятора
+--[[
 local function run_parallel(queue: {string})
     local cores_num = get_cores_num() * 2
     if verbose then
@@ -3570,12 +3532,15 @@ local function run_parallel(queue: {string})
         ))
     end
 end
+--]]
 
+--[[
 local function run_serial(queue: {string})
     for _, cmd in ipairs(queue) do
         cmd_do(cmd)
     end
 end
+--]]
 
 local function cache_remove()
     ut.push_current_dir()
@@ -3603,13 +3568,23 @@ local record LinkContext
     libs: string
 end
 
+local flags_sanitazer = {
+
+    --[[
+    "-fsanitize=thread,leak",
+    "-fsanitize-address-use-after-scope",
+    --]]
+
+    "-fsanitize=undefined,address",
+    "-fsanitize-address-use-after-scope"
+}
+
 -- TODO: link utf8proc statically
 -- TODO: link all libs statically
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local flags: string = ""
     if not _args.noasan then
-        --flags = flags .. " -fsanitize=address "
-        flags = flags .. " -fsanitize=undefined,address "
+        flags = flags .. table.concat(flags_sanitazer, " ")
     end
     if _args.make_type == 'release' then
         flags = ""
@@ -3763,7 +3738,7 @@ function actions.anim_convert(_args: Args)
         })
     end
 
-    local new_fname = string.gsub(_args.name, "%.json$", ".lua")
+    local new_fname = gsub(_args.name, "%.json$", ".lua")
     --print('new_fname', new_fname)
     io.open(new_fname, "w"):write(serpent.dump(res))
 end
@@ -4048,13 +4023,12 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         end
     end
 
-    --print("sub_make: flags", inspect(flags))
-
     if not _args.noasan then
-        --table.insert(flags, "-fsanitize=address")
-        table.insert(flags, "-fsanitize=address,undefined")
-        table.insert(flags, "-fsanitize-address-use-after-scope")
+        for _, flag in ipairs(flags_sanitazer) do
+            table.insert(flags, flag)
+        end
     end
+
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
@@ -4089,7 +4063,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
     end
     local _libs: string = table.concat(make_l(_links), " ")
 
-    local queue = {}
+    --local queue = {}
     -- массив с командами
     local tasks: {Task} = {}
     local cwd = lfs.currentdir() .. "/"
@@ -4098,19 +4072,12 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
     local repr_queu = {}
 
     filter_sources_c(".", function(file: string)
-        local _output = output_dir .. "/" .. 
-                        string.gsub(file, "(.*%.)c$", "%1o")
+        local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
         local _input = cwd .. file
 
         -- TODO: Проверять отсутствие объектного файла. 
         -- Каким образом проверять?
         -- Через lfs.attributes()?
-        local cmd = format(
-            "cc -lm %s %s %s %s -o %s -c %s %s", 
-            -- TODO: Объеденить _defines и _flags
-            _defines, _includes, _libspath, _flags,
-            _output, _input, _libs
-        )
 
         local args = {}
 
@@ -4119,7 +4086,6 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         for _, define in ipairs(defines) do
            table.insert(args, define)
         end
-
 
         for _, include in ipairs(includes) do
             table.insert(args, include)
@@ -4141,14 +4107,13 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         for _, lib in ipairs(make_l(_links)) do
             table.insert(args, lib)
         end
-            
-        table.insert(tasks, {
-            cmd = "cc",
-            args = args,
-        })
-        if cache:should_recompile(file, cmd) then
+           
+        local task = { cmd = "cc", args = args, }
+        table.insert(tasks, task)
+
+        -- XXX: Кэширование работает вообще?
+        if cache:should_recompile(file, task) then
             table.insert(repr_queu, file)
-            table.insert(queue, cmd)
         end
 
         table.insert(objfiles, _output)
@@ -4158,21 +4123,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         print(tabular(repr_queu))
     end
 
-    if _args.u then
-        -- использовать libuv
-        run_parallel_uv(tasks)
-    elseif _args.j then
-        print(ansicolors("%{blue}" .. "run_parallel" .. "%{reset}"))
-        run_parallel(queue)
-    else
-        print(ansicolors("%{blue}" .. "run_serial" .. "%{reset}"))
-        run_serial(queue)
-    end
-
-    print(ansicolors("%{red}" .. "after compilation" .. "%{reset}"))
-
-    --print("os.exit(1)")
-    --os.exit(1);
+    -- использовать libuv
+    run_parallel_uv(tasks)
 
     cache:save()
     cache = nil
@@ -4206,8 +4158,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
             local args = {
                 make = true,
                 c = _args.c,
-                j = _args.j,
-                u = _args.u,
+                --j = _args.j,
+                --u = _args.u,
                 noasan = _args.noasan,
                 release = _args.release
             }
