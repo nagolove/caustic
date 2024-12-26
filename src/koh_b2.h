@@ -63,7 +63,9 @@ typedef struct WorldCtx {
     b2DebugDraw         world_dbg_draw;
     bool                is_dbg_draw, is_paused;
     int                 tasks_count;
+
     uint32_t            width, height; // размеры карты в пикселях?
+                                       
     b2WorldId           world;
     xorshift32_state    *xrng; 
     prng64_t            xrng64; 
