@@ -123,6 +123,7 @@ Stage *stage_add(StagesStore *ss, Stage *st, const char *name) {
 
 void stage_shutdown(StagesStore *ss) {
     assert(ss);
+    trace("stage_shutdown:\n");
     for(int i = 0; i < ss->num; i++) {
         Stage *st = ss->stages[i];
 
@@ -141,12 +142,16 @@ void stage_active_update(StagesStore *ss) {
     assert(ss);
     Stage *st = ss->cur;
 
-    assert(st);
-    /*if (!st)*/
-        /*return;*/
+    // XXX: Какое поведение выбрать - молчать если нет активной сцены или
+    // падать?
 
-    if (st->update) st->update(st);
-    if (st->draw) st->draw(st);
+    if (!st) {
+        trace("stage_active_update: active stage == NULL\n");
+        koh_trap();
+    } else {
+        if (st->update) st->update(st);
+        if (st->draw) st->draw(st);
+    }
 }
 
 Stage *stage_find(StagesStore *ss, const char *name) {
@@ -162,7 +167,6 @@ Stage *stage_find(StagesStore *ss, const char *name) {
 
 void stage_active_set(StagesStore *ss, const char *name) {
     Stage *st = stage_find(ss, name);
-    assert(st);
 
     if (!st) {
         trace("stage_set_active: '%s' not found\n", name);
