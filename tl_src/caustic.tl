@@ -3565,7 +3565,8 @@ local function run_parallel(queue: {string})
 
     if verbose then
         print(ansicolors(
-            "%{red}" .. format("wait iterations done %d", wait_iters) .. "%{reset}"
+            "%{red}" .. 
+            format("wait iterations done %d", wait_iters) .. "%{reset}"
         ))
     end
 end
