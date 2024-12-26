@@ -157,7 +157,10 @@ MunitResult test_valid(const MunitParameter params[], void* userdata) {
         e = e_create(r);
         munit_assert(e_valid(r, e) == true);
         munit_assert(e_has(r, e, cp_type_one) == false);
+
         type_one *one = e_emplace(r, e, cp_type_one);
+        (void)one;
+
         munit_assert(e_has(r, e, cp_type_one) == true);
         munit_assert(e_valid(r, e) == true);
         e_remove(r, e, cp_type_one);
@@ -920,6 +923,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
             if (one2) {
                 munit_assert(memcmp(one, one2, sizeof(*one)) == 0);
                 size_t sz = sizeof(e_id);
+                (void)sz;
                 // void *ptr = htable_get(set_removed, &e_view, sz, NULL);
                 // munit_assert_not_null(ptr);
             }
@@ -993,6 +997,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
             if (one2) {
                 //munit_assert(memcmp(one, one2, sizeof(*one)) == 0);
                 size_t sz = sizeof(e_id);
+                (void)sz;
                 // void *ptr = htable_get(set_removed, &e_view, sz, NULL);
                 // munit_assert_not_null(ptr);
             }
