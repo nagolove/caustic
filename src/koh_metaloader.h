@@ -12,32 +12,32 @@ enum MetaLoaderType {
     MLT_SECTOR,
 };
 
-struct MetaLoaderReturn {
+typedef struct MetaLoaderReturn {
     enum MetaLoaderType type;
-};
+} MetaLoaderReturn;
 
-struct MetaLoaderPolyline {
+typedef struct MetaLoaderPolyline {
     struct MetaLoaderReturn ret;;
     Vector2                 *points;
     int                     num, cap;
-};
+} MetaLoaderPolyline;
 
-struct MetaLoaderRectangle {
+typedef struct MetaLoaderRectangle {
     struct MetaLoaderReturn ret;;
     Rectangle               rect;
-};
+} MetaLoaderRectangle;
 
-struct MetaLoaderRectangleOriented {
+typedef struct MetaLoaderRectangleOriented {
     struct MetaLoaderReturn ret;;
     Rectangle               rect;
     float                   a; // in radian
-};
+} MetaLoaderRectangleOriented;
 
-struct MetaLoaderSector {
+typedef struct MetaLoaderSector {
     struct MetaLoaderReturn ret;;
     float                   radius, angle1, angle2;
     Vector2                 position;
-};
+} MetaLoaderSector;
 
 /* {{{
 Какие задачи стоят по выделению спрайтов из текстуры?
@@ -89,11 +89,11 @@ for (int i = 0; i < 8; i++) {
 metaloader_shutdown(&mt);
 }}} */
 
-struct MetaLoaderSetup {
+typedef struct MetaLoaderSetup {
     // Подробный текстовый вывод в консоль в ходе операций. 
     // Желательно отключать в тестах.
     bool    verbose;
-};
+} MetaLoaderSetup;
 
 MetaLoader *metaloader_new(const struct MetaLoaderSetup *setup);
 void metaloader_free(MetaLoader *ml);
