@@ -104,13 +104,15 @@ typedef struct ecs_t {
                     // set of e_cp_type
                     *set_cp_types;
 
-    // TODO: Вынести GUI поля в отдельную струткурку
+    // TODO: Вынести GUI поля в отдельную струткурку.
+    // Зачем выносить в отдельную структуру?
     // Для ImGui таблицы
     bool            *selected;
     size_t          selected_num;
-    e_cp_type      selected_type;
+    e_cp_type       selected_type;
 
-    // Фильтр в ImGui интерфейсе для поиска
+    // Ссылка на Lua функцию которая используется для фильтрации сущностей
+    // в ImGui поиска
     int             ref_filter_func;
 } ecs_t;
 
@@ -2358,8 +2360,36 @@ void e_free(ecs_t *r) {
         r->stack = NULL;
     }
 
-    if (r)
-        free(r);
+    if (r->selected) {
+        free(r->selected);
+        r->selected = NULL;
+    }
+
+    free(r);
+}
+
+static void imgui_update(ecs_t *r, e_cp_type cp_type) {
+    size_t new_num = htable_count(r->cp_types);
+
+    // Выделить память под нужны ImGui если надо
+    if (r->selected_num != new_num) {
+        //de_trace("imgui_update: new type '%s'\n", cp_type.name);
+
+        size_t sz = new_num * sizeof(r->selected[0]);
+        if (!r->selected) {
+            r->selected_num = new_num;
+            r->selected = malloc(sz);
+        }
+
+        void *new_ptr = realloc(r->selected, sz);
+        assert(new_ptr);
+        r->selected = new_ptr;
+
+        memset(r->selected, 0, sz);
+        //trace("type_register: r->selected was zeroed\n");
+    }
+
+    r->selected_num = new_num;
 }
 
 e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
@@ -2372,6 +2402,8 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
         printf("e_register: type '%s' already registered\n", comp->name);
         abort();
     }
+
+    imgui_update(r, *comp);
 
     comp->priv.cp_id = htable_count(r->cp_types);
     comp->priv.cp_sizeof2 = next_eq_pow2(comp->cp_sizeof);
@@ -2898,8 +2930,233 @@ void e_print_entities(ecs_t *r) {
     }
 }
 
+struct TypeCtx {
+    ecs_t  *r;
+    // XXX: Зачем нужна переменная i?
+    int    i;
+};
+
+/* 
+// {{{ Колонки:
+0 cp_id
+1 cp_sizeof
+2 name
+3 num
+4 initial_cap
+5 on_destroy
+6 on_emplace
+7 description
+// }}}
+*/
+static HTableAction iter_type( 
+    const void *key, int key_len, void *value, int value_len, void *udata
+) {
+    struct TypeCtx* ctx = udata;
+    ecs_t *r = ctx->r;
+    int *i = &ctx->i;
+    e_cp_type *type = value;
+    ImGuiTableFlags row_flags = 0;
+    igTableNextRow(row_flags, 0);
+
+    igTableSetColumnIndex(0);
+    igText("%zu", type->priv.cp_id);
+
+    igTableSetColumnIndex(1);
+    igText("%zu", type->cp_sizeof);
+
+    igTableSetColumnIndex(2);
+    if (igSelectable_BoolPtr(
+        type->name, &r->selected[*i],
+        ImGuiSelectableFlags_SpanAllColumns,
+        (ImVec2){0, 0}
+    )) {
+        r->selected_type = *type;
+        for (int j = 0; j < r->selected_num; ++j) {
+            if (j != *i)
+                r->selected[j] = false;
+        }
+    }
+    
+    (*i)++;
+
+    igTableSetColumnIndex(3);
+    igText("%zu", type->cp_sizeof);
+
+    igTableSetColumnIndex(4);
+    igText("%zu", type->initial_cap);
+
+    // NOTE: Почему закомменчено? Что происходит в этом коде?
+    /*
+    igTableSetColumnIndex(5);
+    bool use_on_destroy = type->callbacks_flags & DE_CB_ON_DESTROY;
+    igCheckbox("", &use_on_destroy);
+    if (use_on_destroy)
+        type->callbacks_flags |= DE_CB_ON_DESTROY;
+    else
+        type->callbacks_flags &=  ~DE_CB_ON_DESTROY;
+
+    igTableSetColumnIndex(6);
+    bool use_on_emplace = type->callbacks_flags & DE_CB_ON_EMPLACE;
+    igCheckbox("", &use_on_emplace);
+    if (use_on_emplace)
+        type->callbacks_flags |= DE_CB_ON_EMPLACE;
+    else
+        type->callbacks_flags &=  ~DE_CB_ON_EMPLACE;
+        */
+
+    igTableSetColumnIndex(7);
+    igText("%s", type->description);
+
+    return HTABLE_ACTION_NEXT;
+}
+
+static int get_selected(const ecs_t *r) {
+    for (int i = 0; i < r->selected_num; i++) {
+        if (r->selected[i])
+            return i;
+    }
+    return -1;
+}
+
+// TODO: Написать функцию более аккуратно
+static void lines_print(char **lines) {
+    while (*lines) {
+        igText("%s", *lines);
+        lines++;
+    }
+}
+
+static void entity_print(ecs_t *r) {
+    /*trace("de_gui: explore table\n");*/
+    if (igTreeNode_Str("explore")) {
+        assert(r->selected_type.name);
+        assert(r->selected_type.cp_sizeof);
+        assert(r->selected_type.str_repr);
+
+        //de_view_single v = de_view_single_create(r, r->selected_type);
+        e_view v = e_view_create_single(r, r->selected_type);
+        int i = 0;
+        for (; e_view_valid(&v); e_view_next(&v), i++) {
+            if (igTreeNode_Ptr((void*)(uintptr_t)i, "%d", i)) {
+                void *payload = e_view_get(&v, r->selected_type);
+                e_id e = e_view_entity(&v);
+
+                //if (de_ecs_verbose)
+                    //trace("entity_print: name %s\n", r->selected_type.name);
+
+                if (r->selected_type.str_repr(payload, e)) {
+                    char **lines = r->selected_type.str_repr(payload, e);
+
+                    /*if (de_ecs_verbose)*/
+                        /*trace("entity_print: lines %p\n", lines);*/
+
+                    /*
+                    if (r->l && r->ref_filter_func)
+                        lines_print_filter(r, lines);
+                    else
+                    */
+                    lines_print(lines);
+                }
+                igTreePop();
+            }
+        }
+        igTreePop();
+    }
+}
+
 void e_gui(ecs_t *r, e_id e) {
     assert(r);
+
+    bool wnd_open = true;
+    ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
+
+    igBegin("ecs", &wnd_open, wnd_flags);
+
+    ImGuiTableFlags table_flags = 
+        // {{{
+        ImGuiTableFlags_SizingStretchSame |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_BordersOuter |
+        ImGuiTableFlags_BordersV |
+        ImGuiTableFlags_ContextMenuInBody;
+    // }}}
+
+    //ImGuiInputTextFlags input_flags = 0;
+    static bool use_lua_filter = false;
+    static bool show_hightlight = false;
+    igCheckbox("lua filter", &use_lua_filter);
+    igSameLine(0., 5.);
+    igCheckbox("show hightlight", &show_hightlight);
+
+/*
+    if (use_lua_filter) {
+        if (!r->l) {
+            r->l = sc_state_new(true);
+        }
+    } else {
+        if (r->l) {
+            lua_close(r->l);
+            r->l = NULL;
+        }
+    }
+
+    if (use_lua_filter) {
+        static char buf[512] = {};
+        // XXX: Как пользоваться запросом?
+        if (igInputText("query", buf, sizeof(buf) - 1, 0, NULL, NULL)) {
+            lua_settop(r->l, 0);
+            if (luaL_loadstring(r->l, buf) == LUA_OK) {
+                // XXX: Не происходит-ли создания новой ссылки на каждом 
+                // обновлении?
+                r->ref_filter_func = luaL_ref(r->l, -1);
+            } else {
+                igText("%", lua_tostring(r->l, -1));
+            }
+        }
+    }
+*/
+
+    igText("r->ref_filter_func %d\n", r->ref_filter_func);
+
+    ImVec2 outer_size = {0., 0.};
+    const int columns_num = 8;
+    if (igBeginTable("components", columns_num, table_flags, outer_size, 0.)) {
+
+        igTableSetupColumn("cp_id", 0, 0, 0);
+        igTableSetupColumn("cp_sizeof", 0, 0, 1);
+        igTableSetupColumn("name", 0, 0, 2);
+        igTableSetupColumn("num", 0, 0, 3);
+        igTableSetupColumn("initial_cap", 0, 0, 4);
+        igTableSetupColumn("on_destroy", 0, 0, 5);
+        igTableSetupColumn("on_emplace", 0, 0, 6);
+        igTableSetupColumn("description", 0, 0, 7);
+        igTableHeadersRow();
+
+        struct TypeCtx ctx = {
+            .i = 0,
+            .r = r, 
+        };
+        htable_each(r->cp_types, iter_type, &ctx);
+
+        igEndTable();
+    }
+
+    if (show_hightlight) {
+        // Как получить строковое представление о сущности, если не известны
+        // составляющие ее компоненты?
+        // Ответ - через e_types()
+
+        // Проверь используя сождержимое хэштаблицы cp_type
+    } else {
+        int index = get_selected(r);
+        //trace("de_gui: index %d\n", index);
+        if (index != -1 && r->selected_type.str_repr) {
+            entity_print(r);
+        }
+    }
+
+
+    igEnd();
 }
 
 void e_print_storage(ecs_t *r, e_cp_type cp_type) {
