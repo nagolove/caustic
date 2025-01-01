@@ -1918,6 +1918,17 @@ Rectangle rect_by_texture(Texture2D tex) {
     };
 }
 
+/*
+Rectangle rect_by_texture1(Texture2D tex) {
+    return (Rectangle) {
+        .x = 0,
+        .y = 0,
+        .width = tex.width,
+        .height = -tex.height,
+    };
+}
+*/
+
 // TODO: Почему-бы не сделать итератор в виде структуры?
 /*
 struct StrIter {

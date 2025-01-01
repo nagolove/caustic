@@ -300,6 +300,7 @@ void* de_view_get_safe(de_view *v, de_cp_type cp_type);
 void* de_view_get_by_index(de_view* v, size_t pool_index);
 void de_view_next(de_view* v);
 
+// Возвращает размер структуры компонента для данного типа cp_type
 size_t de_typeof_num(de_ecs* r, de_cp_type cp_type);
 
 de_ecs *de_ecs_clone(de_ecs *r);

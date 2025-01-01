@@ -299,6 +299,7 @@ char *Vector2_tostr_alloc(const Vector2 *verts, int num);
 char **Texture2D_to_str(Texture2D *tex);
 // Возвращает размер текстуры
 Rectangle rect_by_texture(Texture2D tex);
+/*Rectangle rect_by_texture1(Texture2D tex);*/
 
 // Принимает массив строк завершающийся NULL. Возвращает указатель на
 // склеенные строки. Нужно вызывать free()

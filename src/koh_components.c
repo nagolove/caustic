@@ -203,10 +203,27 @@ void koh_cp_types_register2(ecs_t *r) {
     /*de_ecs_register(r, cp_type_man);*/
 }
 
+VelRot make_random_velrot2(WorldCtx *wctx, FloatRange w, FloatRange vel) {
+    float rnd = xorshift32_rand1(wctx->xrng);
+    assert(w.from <= w.to);
+    assert(vel.from <= vel.to);
+    int rest_of = floor(w.to - vel.from + 1);
+    int tmp = floor(vel.to - vel.from + 1);
+    return (VelRot) {
+        .w = w.from + ((int)(rnd * 100) % rest_of) / 100,
+        .vel = {
+            vel.from + xorshift32_rand(wctx->xrng) % tmp,
+            vel.from + xorshift32_rand(wctx->xrng) % tmp,
+        },
+    };
+}
+
 struct VelRot make_random_velrot(struct WorldCtx *wctx) {
     float rnd = xorshift32_rand1(wctx->xrng);
     const int64_t abs_linear_vel = 100;
     return (struct VelRot) {
+        // TODO: напиши диапазон по человечески
+        // -2 * PI .. 2 * PI
         .w = 2. * (M_PI - rnd * M_PI * 2.),
         .vel = {
             abs_linear_vel - xorshift32_rand(wctx->xrng) % (2 * abs_linear_vel),
@@ -215,6 +232,8 @@ struct VelRot make_random_velrot(struct WorldCtx *wctx) {
     };
 }
 
+float _poly_rot_angle = 0.f;
+
 e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
     assert(wctx);
     assert(setup.r);
@@ -222,15 +241,13 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
     b2Polygon poly = setup.poly;
     assert(poly.count >= 3);
 
-    struct VelRot vr = make_random_velrot(wctx);
+    //struct VelRot vr = make_random_velrot(wctx);
 
     if (koh_components_verbose)
         trace(
-            "spawn_poly2: { pos = %s, poly = %s, v = %s, w = %f, }\n",
+            "spawn_poly2: { pos = %s, poly = %s, }\n",
             b2Vec2_to_str(setup.pos),
-            b2Polygon_to_str(&poly),
-            b2Vec2_to_str(vr.vel),
-            vr.w
+            b2Polygon_to_str(&poly)
         );
 
     e_id                    e = e_null;
@@ -268,13 +285,20 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
     shape_def.density = setup.density ? *setup.density : 1.0 * 0.1;
     shape_def.friction = setup.friction ? *setup.friction : 0.5;
     if (cp_r_opts) {
-        //shape_def.userData = (void*)(uintptr_t)e;
         shape_def.userData = (void*)e.id;
     }
-    b2CreatePolygonShape(body, &shape_def, &poly);
 
-    b2Body_SetLinearVelocity(body, vr.vel);
-    b2Body_SetAngularVelocity(body, vr.w);
+    /*
+    b2Transform t = {
+        .p = {},
+        .q = b2NormalizeRot(b2MakeRot(_poly_rot_angle)),
+    };
+    poly = b2TransformPolygon(t, &poly);
+    b2CreatePolygonShape(body, &shape_def, &poly);
+    */
+
+    /*b2Body_SetLinearVelocity(body, vr.vel);*/
+    /*b2Body_SetAngularVelocity(body, vr.w);*/
 
     b2Body_Enable(body);
 

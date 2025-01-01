@@ -98,20 +98,30 @@ typedef struct PolySetup {
     struct ShapeRenderOpts  r_opts;
 } PolySetup;
 
-struct VelRot {
+typedef struct VelRot {
     float   w;
     b2Vec2  vel;
-};
+} VelRot;
 
 void koh_cp_types_register(de_ecs *r);
 void koh_cp_types_register2(ecs_t *r);
 
 char **str_repr_body(void *payload, de_entity e);
 
-struct VelRot make_random_velrot(struct WorldCtx *wctx);
-de_entity spawn_poly(struct WorldCtx *ctx, struct PolySetup setup);
+typedef struct FloatRange {
+    float from, to;
+} FloatRange;
+
+typedef struct Vec2Range {
+    b2Vec2 from, to;
+} Vec2Range;
+
+VelRot make_random_velrot(WorldCtx *wctx);
+VelRot make_random_velrot2(WorldCtx *wctx, FloatRange w, FloatRange vel);
+
+de_entity spawn_poly(WorldCtx *ctx, struct PolySetup setup);
 // Если _e == NULL, то создается новаю сущность. Иначе используется переданная.
-e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e);
+e_id spawn_poly2(WorldCtx *wctx, struct PolySetup2 setup, e_id *_e);
 
 void spawn_polygons(
     WorldCtx *wctx, const PolySetup setup, int num, de_entity *ret
@@ -128,21 +138,19 @@ de_entity spawn_segment(WorldCtx *ctx, SegmentSetup *setup);
 e_id spawn_segment2(WorldCtx *ctx, SegmentSetup2 *setup);
 
 
-de_entity spawn_triangle(
-    struct WorldCtx *ctx, struct TriangleSetup setup
-);
-b2BodyId body_create(struct WorldCtx *wctx, b2BodyDef *def);
+de_entity spawn_triangle(WorldCtx *ctx, struct TriangleSetup setup);
+b2BodyId body_create(WorldCtx *wctx, b2BodyDef *def);
 
 void spawn_borders(WorldCtx *wctx, de_ecs *r, de_entity entts[4], int gap);
 void spawn_borders2(WorldCtx *wctx, ecs_t *r, e_id entts[4], int gap);
 
 void spawn_borders_internal(
-    struct WorldCtx *wctx, de_ecs *r,
+    WorldCtx *wctx, de_ecs *r,
     de_entity entts[4], struct SegmentSetup setup, int gap
 );
 
 void spawn_borders_internal2(
-    struct WorldCtx *wctx, ecs_t *r,
+    WorldCtx *wctx, ecs_t *r,
     e_id entts[4], struct SegmentSetup2 setup, int gap
 );
 
@@ -155,21 +163,21 @@ typedef bool (*BodiesFilterCallback)(b2BodyId *body_id, void *udata);
 // значение вместимости entts
 de_entity *bodies_filter(
     de_entity *entts, size_t *entts_num, BodiesFilterCallback cb,
-    struct WorldCtx *wctx, de_ecs *r, void *udata
+    WorldCtx *wctx, de_ecs *r, void *udata
 );
 
 void shape_render_poly(
-    b2ShapeId shape_id, struct WorldCtx *wctx, struct ShapeRenderOpts *opts
+    b2ShapeId shape_id, WorldCtx *wctx, struct ShapeRenderOpts *opts
 );
-void remove_borders(struct WorldCtx *wctx, de_ecs *r, de_entity entts[4]);
-void remove_borders2(struct WorldCtx *wctx, ecs_t *r, e_id entts[4]);
+void remove_borders(WorldCtx *wctx, de_ecs *r, de_entity entts[4]);
+void remove_borders2(WorldCtx *wctx, ecs_t *r, e_id entts[4]);
 
 static inline struct ShapeRenderOpts *render_opts_get2(
     b2ShapeId shape_id, ecs_t *r
 ) {
     // {{{
     assert(r);
-    /*struct WorldCtx *wctx = &st->wctx;*/
+    /*WorldCtx *wctx = &st->wctx;*/
     /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
     void *user_data = b2Shape_GetUserData(shape_id);
 
@@ -220,7 +228,7 @@ static inline struct ShapeRenderOpts *render_opts_get(
 ) {
     // {{{
     assert(r);
-    /*struct WorldCtx *wctx = &st->wctx;*/
+    /*WorldCtx *wctx = &st->wctx;*/
     /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
     void *user_data = b2Shape_GetUserData(shape_id);
 
@@ -267,7 +275,7 @@ static inline struct ShapeRenderOpts *render_opts_get(
 }
 
 inline static void world_shape_render_circle2(
-    b2ShapeId shape_id, struct WorldCtx *wctx, ecs_t *r
+    b2ShapeId shape_id, WorldCtx *wctx, ecs_t *r
 ) {
     struct ShapeRenderOpts *r_opts = render_opts_get2(shape_id, r);
 
@@ -355,7 +363,7 @@ inline static void world_shape_render_circle2(
 }
 
 inline static void world_shape_render_circle(
-    b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
+    b2ShapeId shape_id, WorldCtx *wctx, de_ecs *r
 ) {
     struct ShapeRenderOpts *r_opts = render_opts_get(shape_id, r);
 
@@ -443,12 +451,11 @@ inline static void world_shape_render_circle(
 }
 
 inline static void world_shape_render_poly2(
-    b2ShapeId shape_id, struct WorldCtx *wctx, ecs_t *r
+    b2ShapeId shape_id, WorldCtx *wctx, ecs_t *r
 ) {
     // {{{
     /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
     e_id e = e_from_void(b2Shape_GetUserData(shape_id));
-    //shape->userData = (void*)(uintptr_t)e;
 
     // Это сущность?
     if (!e_valid(r, e)) {
@@ -456,22 +463,7 @@ inline static void world_shape_render_poly2(
         return;
     }
 
-    //de_cp_type cp_type = cp_type_shape_render_opts;
-
-    /*
-    // Есть ли требуемый компонент?
-    if (!de_has(r, e, cp_type)) {
-        if (verbose)
-            trace(
-                "world_shape_render_poly: "
-                "entity has not '%s'\n", cp_type.name
-            );
-        return;
-    }
-    */
-
-
-    // Получить компонент без проверки
+    // Получить компонент с проверкой
     struct ShapeRenderOpts *r_opts = e_get(r, e, cp_type_shape_render_opts2);
 
     /*
@@ -489,7 +481,7 @@ inline static void world_shape_render_poly2(
 }
 
 inline static void world_shape_render_poly(
-    b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
+    b2ShapeId shape_id, WorldCtx *wctx, de_ecs *r
 ) {
     // {{{
     /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
@@ -537,11 +529,11 @@ inline static void world_shape_render_poly(
 }
 
 void shape_render_segment(
-    b2ShapeId shape_id, struct WorldCtx *wctx, struct ShapeRenderOpts *opts
+    b2ShapeId shape_id, WorldCtx *wctx, struct ShapeRenderOpts *opts
 );
 
 inline static void world_shape_render_segment2(
-    b2ShapeId shape_id, struct WorldCtx *wctx, ecs_t *r
+    b2ShapeId shape_id, WorldCtx *wctx, ecs_t *r
 ) {
     // {{{
     e_id e = e_from_void(b2Shape_GetUserData(shape_id));
@@ -585,7 +577,7 @@ inline static void world_shape_render_segment2(
 }
 
 inline static void world_shape_render_segment(
-    b2ShapeId shape_id, struct WorldCtx *wctx, de_ecs *r
+    b2ShapeId shape_id, WorldCtx *wctx, de_ecs *r
 ) {
     // {{{
     de_entity e = (uintptr_t)b2Shape_GetUserData(shape_id);
@@ -665,3 +657,5 @@ void beh_check_under_mouse(struct CheckUnderMouseOpts *opts);
 /*void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx);*/
 void e_destroy_border_sensors(de_ecs *r, WorldCtx *wctx);
 
+// NOTE: Временные переменные, удалить
+extern float _poly_rot_angle;
