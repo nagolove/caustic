@@ -602,7 +602,7 @@ static void hk_exec(Hotkey *hk) {
     tabe_break(&con.tabe);
 }
 
-static bool tmr_backspace(Timer *tmr) {
+static bool tmr_backspace(koh_Timer *tmr) {
     char_remove(con.cursor_pos - 1);
     if (con.cursor_pos > 0) {
         con.cursor_pos--;
@@ -720,7 +720,7 @@ static void hk_home(Hotkey *hk) {
     printf("home\n");
 }
 
-static bool tmr_left(Timer *tmr) {
+static bool tmr_left(koh_Timer *tmr) {
     //printf("tmr_left %ld\n", (int64_t)tmr->data);
     if (con.cursor_pos > 0)
         con.cursor_pos--;
@@ -737,7 +737,7 @@ static void hk_left(Hotkey *hk) {
     }
 }
 
-static bool tmr_right(Timer *tmr) {
+static bool tmr_right(koh_Timer *tmr) {
     //printf("tmr_right %ld\n", (int64_t)tmr->data);
     if (con.cursor_pos < strlen(con.input_line)) {
         con.cursor_pos++;

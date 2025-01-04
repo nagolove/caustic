@@ -26,7 +26,7 @@ struct Menu {
     MenuAction  render_before;
     MenuItem    *items;
     Rectangle   scroll_rect;
-    Timer       *tmr_arrow_blink;
+    koh_Timer   *tmr_arrow_blink;
     koh_TimerStore  timers;
     Vector2     pos;
     bool        font_owned, input_active, is_builded;
@@ -40,7 +40,7 @@ struct Menu {
 
 static const char *left_bracket = "[[", *right_bracket = "]]";
 
-bool tmr_timer_blink(Timer *t) {
+bool tmr_timer_blink(koh_Timer *t) {
     //trace("timer_blink\n");
     Menu *mnu = t->data;
 

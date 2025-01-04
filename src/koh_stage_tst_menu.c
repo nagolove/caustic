@@ -94,7 +94,7 @@ const char *lines[] = {
 // }}}
 };
 
-bool tmr_space(Timer *t) {
+bool tmr_space(koh_Timer *t) {
     Stage_TestMenu *st = (Stage_TestMenu*)t->data;
     Vector2 textsize = MeasureTextEx(st->fnt, st->message, st->fnt.baseSize, 0);
     DrawTextEx(
