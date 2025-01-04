@@ -11,6 +11,8 @@
 #include "box2d/debug_draw.h"
 #endif
 
+#include <lua.h>
+#include <lauxlib.h>
 #include "box2d/id.h"
 #include "box2d/types.h"
 #include "koh_common.h"
@@ -601,10 +603,149 @@ void box2d_gui(struct WorldCtx *wctx) {
     igBegin("box2d", &wnd_open, wnd_flags);
     box2d_setup_gui(wctx);
     igCheckbox("draw debug faces", &wctx->is_dbg_draw);
+    // Что за 5. ? Дай комментарий
     igSameLine(0., 5.);
     igCheckbox("pause", &wctx->is_paused);
     stat_gui(wctx);
     world_def_gui(wctx->world_def);
     igEnd();
 
+}
+
+char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
+    int len = 32 * // количество бит в uint32_t
+              4 *  // пробелы и запятые на символ
+              2 +  // оба поля(maskBits и categoryBits) структуры b2QueryFilter
+              10;  // обрамление массивов скобками
+    char *ret = calloc(len, sizeof(char)), *pret = ret;
+
+    pret += sprintf(pret, "{ maskBits = { ");
+
+    for (const char *m_bits = to_bitstr_uint32_t(filter.maskBits);
+        *m_bits; m_bits++
+    ) {
+        pret += sprintf(pret, "%c, ", *m_bits);
+    }
+
+    pret += sprintf(pret, "}, categoryBits = { ");
+
+    for (const char *c_bits = to_bitstr_uint32_t(filter.categoryBits);
+        *c_bits; c_bits++
+    ) {
+        pret += sprintf(pret, "%c, ", *c_bits);
+    }
+
+    sprintf(pret, "}, }\n");
+
+    /*
+    koh_term_color_set(KOH_TERM_BLUE);
+    trace("\nb2Vec2_tostr_alloc: %s\n", ret);
+    koh_term_color_reset();
+    */
+
+    return ret;
+}
+
+uint32_t bit_set(uint32_t n, char num, bool val) {
+    return val ? n | (unsigned)1 << num : n & ~(unsigned)1 << num;
+}
+
+// Читает field_name поле Lua таблицы на вершине стека, разбирает значение поля
+// в виде таблицы { 0, 1, 0, 1, 1, }
+// Записывает данных вектор битор в ret. Предварительно ret обнуляется.
+// Обязательно указывать значения всех 32 бит, не добавлять других полей и т.д.
+// Принимаются только значения 0 и 1
+static bool array2bits(lua_State *l, const char *field_name, uint32_t *ret) {
+    assert(l);
+    assert(field_name);
+    assert(ret);
+    *ret = 0;
+
+    // Проверяем наличие поля field_name
+    lua_getfield(l, -1, field_name);
+    if (!lua_istable(l, -1)) {
+        trace("b2QueryFilter_from_str: categoryBits is not a table\n");
+        return false;
+    }
+
+    //printf("%s: ", field_name);
+
+    // Извлекаем элементы field_name
+    lua_pushnil(l); // Первый ключ для lua_next
+    int num = 0;
+    while (lua_next(l, -2) != 0) {
+        if (!lua_isinteger(l, -1)) {
+            trace("b2QueryFilter_from_str: not a number in table\n");
+            return false;
+        }
+
+        long long int bit = lua_tointeger(l, -1);
+        if (bit != 0 && bit != 1) {
+            trace(
+                "b2QueryFilter_from_str: %lld is bad value, use 0 or 1\n",
+                bit
+            );
+            return false;
+        }
+
+        // XXX: Проверить границу, возможно некорректное условие
+        if (num >= 32) {
+            lua_pop(l, 1);
+            // XXX: Что со стеком, будет ли Lua система работать корректно?
+            return false;
+        }
+
+        /*printf("%lld ", bit);*/
+
+        *ret = bit_set(*ret, 32 - ++num, bit);
+        lua_pop(l, 1); // Убираем значение, оставляем ключ
+    }
+
+    // printf("\n");
+    lua_pop(l, 1); // Убираем field_name
+
+    return true;
+}
+
+// TODO: Добавить обработку ошибок и значение по умолчанию.
+b2QueryFilter b2QueryFilter_from_str(const char *tbl_str, bool *is_ok) {
+    bool null_ret = false;
+    if (!is_ok)
+        is_ok = &null_ret;
+
+    *is_ok = false;
+
+    size_t len = strlen(tbl_str);
+    const int reserve = 20;
+    char *str = calloc(len + reserve, sizeof(str[0]));
+
+    sprintf(str, "return %s", tbl_str);
+
+    lua_State *l = luaL_newstate();
+    int ok = luaL_dostring(l, str);
+
+    if (ok != LUA_OK) {
+        trace(
+            "b2Filter_to_str: failed to load code '%s' with '%s'\n",
+            str, lua_tostring(l, -1)
+        );
+        *is_ok = false;
+        free(str);
+        return b2DefaultQueryFilter();
+    }
+
+    free(str);
+    b2QueryFilter r = {};
+
+    // Проверяем, что возвращенное значение - таблица
+    if (!lua_istable(l, -1)) {
+        trace("b2QueryFilter_from_str: expected a table\n");
+        *is_ok = false;
+    }
+
+    *is_ok &= array2bits(l, "categoryBits", &r.categoryBits);
+    *is_ok &= array2bits(l, "maskBits", &r.maskBits);
+
+    lua_close(l);
+    return r;
 }

@@ -265,4 +265,13 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
 }
 */
 
-
+/* Выгрузить или загрузить в Луа строку вида
+[[
+{
+    categoryBits = { 0, 1, 0, 1, },
+    maskBits = { 0, 0, },
+}
+]]
+*/
+char *b2QueryFilter_2str_alloc(b2QueryFilter filter);
+b2QueryFilter b2QueryFilter_from_str(const char *str, bool *is_ok);
