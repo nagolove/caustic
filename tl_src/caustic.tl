@@ -4020,7 +4020,12 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         end
     else
         -- RELEAASE
+
+        -- скорость кода
         table.insert(flags, "-O3")
+        -- отключить assert()
+        table.insert(flags, "-DNDEBUG")
+
         if cfg.release_define then
             print("sub_make: appling release defines")
             for define, value in pairs(cfg.release_define) do
