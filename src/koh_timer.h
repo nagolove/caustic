@@ -30,7 +30,7 @@ typedef struct koh_Timer {
     // рабочая функция и функция вызываемая по завершению
     koh_TimerFunc   func, end;
     void *data;
-} Timer;
+} koh_Timer;
 
 typedef struct koh_Timer_Def {
     // Сколько минимум секунд ждать до первого запуска
@@ -56,8 +56,8 @@ void koh_timerstore_init(koh_TimerStore *ts, int capacity);
 void koh_timerstore_shutdown(koh_TimerStore *ts);
 
 void koh_timerstore_update(koh_TimerStore *ts);
-Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def);
-void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm);
+koh_Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def);
+void koh_timerstore_remove(koh_TimerStore *ts, koh_Timer *tm);
 
-const char *koh_timer2str(Timer *tmr);
+const char *koh_timer2str(koh_Timer *tmr);
 

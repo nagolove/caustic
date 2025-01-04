@@ -16,7 +16,7 @@ void koh_timerstore_init(koh_TimerStore *ts, int capacity) {
     assert(ts);
     memset(ts, 0, sizeof(*ts));
     ts->timerscap = capacity ? capacity : TIMER_STORE_CAPACITY;
-    ts->timers = calloc(ts->timerscap, sizeof(Timer));
+    ts->timers = calloc(ts->timerscap, sizeof(koh_Timer));
 
     for (int i = 0; i < ts->timerscap - 1; i++) {
         ts->timers[i].next_free = &ts->timers[i + 1];
@@ -39,7 +39,7 @@ void koh_timerstore_shutdown(koh_TimerStore *ts) {
     }
 }
 
-void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
+void koh_timerstore_remove(koh_TimerStore *ts, koh_Timer *tm) {
     assert(ts);
     assert(tm);
 
@@ -49,8 +49,8 @@ void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
     assert(tm->id < id);
 
     if (tm != ts->allocated) {
-        Timer *next = tm->next;
-        Timer *prev = tm->prev;
+        koh_Timer *next = tm->next;
+        koh_Timer *prev = tm->prev;
 
         if (tm->next)
             tm->next->prev = prev;
@@ -71,12 +71,12 @@ void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
     //tm->next = NULL;
     //tm->prev = NULL;
 
-    Timer *next_free = tm->next_free, *prev_free = tm->prev_free;
+    koh_Timer *next_free = tm->next_free, *prev_free = tm->prev_free;
     memset(tm, 0, sizeof(*tm));
     tm->next_free = next_free;
     tm->prev_free = prev_free;
 
-    Timer *new = tm;
+    koh_Timer *new = tm;
     if (!ts->free) {
         ts->free = new;
         new->next_free = NULL;
@@ -89,7 +89,7 @@ void koh_timerstore_remove(koh_TimerStore *ts, Timer *tm) {
     }
 }
 
-static void run(koh_TimerStore *ts, Timer *cur) {
+static void run(koh_TimerStore *ts, koh_Timer *cur) {
     if (cur->func) {
         if (cur->every == 0.) {
             if (!cur->func(cur)) {
@@ -112,7 +112,7 @@ static void run(koh_TimerStore *ts, Timer *cur) {
     }
 }
 
-static void end(koh_TimerStore *ts, Timer *cur) {
+static void end(koh_TimerStore *ts, koh_Timer *cur) {
     if (cur->end) {
         cur->end(cur);
         koh_timerstore_remove(ts, cur);
@@ -121,7 +121,7 @@ static void end(koh_TimerStore *ts, Timer *cur) {
 
 void koh_timerstore_update(koh_TimerStore *ts) {
     assert(ts);
-    Timer *cur = ts->allocated;
+    koh_Timer *cur = ts->allocated;
     while(cur) {
         double now = GetTime();
         
@@ -164,7 +164,7 @@ void koh_timerstore_update(koh_TimerStore *ts) {
     }
 }
 
-Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def) {
+koh_Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def) {
     assert(ts);
     assert(def);
     assert(ts->initited);
@@ -186,7 +186,7 @@ Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def) {
         exit(1);
     }
 
-    Timer *new = ts->free;
+    koh_Timer *new = ts->free;
     ts->free = ts->free->next_free;
 
     if (ts->free)
@@ -223,7 +223,7 @@ Timer *koh_timerstore_new(koh_TimerStore *ts, Timer_Def *def) {
     return new;
 }
 
-const char *koh_timer2str(Timer *tmr) {
+const char *koh_timer2str(koh_Timer *tmr) {
     if (!tmr) return NULL;
 
     static char buf[128] = {0};
