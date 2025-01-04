@@ -2747,6 +2747,8 @@ function actions.verbose(_)
 
 end
 
+
+
 function actions.compile_flags(_)
    print("current directory", lfs.currentdir())
    cmd_do("cp compile_flags.txt compile_flags.txt.bak")
@@ -2758,20 +2760,41 @@ function actions.compile_flags(_)
       print(s)
    end
 
-
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
-   if cfgs and cfgs[0] and cfgs[0].debug_define then
+
+   print('cfgs', inspect(cfgs))
+
+   if cfgs and cfgs[1] then
       for _, v in ipairs(get_ready_includes(cfgs[0])) do
          put("-I" .. v)
       end
       put("-Isrc")
       put("-I.")
 
-      for define, value in pairs(cfgs[0].debug_define) do
-         assert(type(define) == 'string');
-         assert(type(value) == 'string');
-         put(format("-D%s=%s", string.upper(define), string.upper(value)))
+      if cfgs[1].debug_define then
+         for define, value in pairs(cfgs[0].debug_define) do
+            assert(type(define) == 'string');
+            assert(type(value) == 'string');
+            put(format("-D%s=%s", string.upper(define), string.upper(value)))
+         end
       end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   else
+      print(ansicolors("%{red}could not generate compile_flags.txt%{reset}"))
    end
 end
 

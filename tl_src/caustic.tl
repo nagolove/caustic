@@ -2747,6 +2747,8 @@ function actions.verbose(_: Args)
     --]]
 end
 
+-- XXX: Работает только с одной, первой сборочной целью. 
+-- Что же делать с остальными?
 function actions.compile_flags(_: Args)
     print("current directory", lfs.currentdir())
     cmd_do("cp compile_flags.txt compile_flags.txt.bak")
@@ -2758,20 +2760,41 @@ function actions.compile_flags(_: Args)
         print(s)
     end
 
-    -- TODO: Предусмотреть флаги для релизной сборки
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    if cfgs and cfgs[0] and cfgs[0].debug_define then
+
+    print('cfgs', inspect(cfgs))
+
+    if cfgs and cfgs[1] then
         for _, v in ipairs(get_ready_includes(cfgs[0])) do
             put("-I" .. v)
         end
         put("-Isrc")
         put("-I.")
 
-        for define, value in pairs(cfgs[0].debug_define) do
-            assert(type(define) == 'string');
-            assert(type(value) == 'string');
-            put(format("-D%s=%s", string.upper(define), string.upper(value)))
+        if cfgs[1].debug_define then
+            for define, value in pairs(cfgs[0].debug_define) do
+                assert(type(define) == 'string');
+                assert(type(value) == 'string');
+                put(format("-D%s=%s", string.upper(define), string.upper(value)))
+            end
         end
+
+        --[[ XXX: Когда включать определения макропроцессора для релизной 
+        сборки?
+        --]]
+
+        --[[
+        if cfgs[1].release_define then
+            for define, value in pairs(cfgs[0].release_define) do
+                assert(type(define) == 'string');
+                assert(type(value) == 'string');
+                put(format("-D%s=%s", string.upper(define), string.upper(value)))
+            end
+        end
+        --]]
+
+    else
+        print(ansicolors("%{red}could not generate compile_flags.txt%{reset}"))
     end
 end
 
@@ -3397,28 +3420,20 @@ local function run_parallel_uv(queue: {Task})
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
 
-        --print(tabular(t))
         local _, _ = uv.spawn(
-            --cmd as string,
             t.cmd,
             {
                 args = t.args,
                 stdio = {nil, _stdout, _stderr},
-                --[[
-                env = {
-                    "COLORTERM=truecolor",
-                },
-                --]]
+                --env = { "COLORTERM=truecolor", },
             },
             function(code: integer, _: integer)
-
                 --[[
                 print(
                     "Process exited with code " .. tostring(code) .. 
                     ", signal " .. tostring(signal)
                 )
                 --]]
-
                 errcode = errcode + code
                 _stdout:read_stop()
                 _stderr:read_stop()
@@ -3445,8 +3460,8 @@ local function run_parallel_uv(queue: {Task})
 
     uv.run('default')
      --uv.tty_set_mode(tty, mode)
-
     print('run_parallel_uv: errcode', errcode)
+
     if errcode ~= 0 then
         os.exit(1)
     end
