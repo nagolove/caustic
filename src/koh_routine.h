@@ -5,6 +5,7 @@
 #include "cimgui.h"
 #include "cimgui_impl.h"
 
+#include "koh_logger.h"
 #include "koh_common.h"
 /*#include "chipmunk/cpBB.h"*/
 #include "raylib.h"
