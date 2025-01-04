@@ -69,18 +69,37 @@ static const char *timerdef2str(struct TimerDef td) {
     pbuf += r;
     r = sprintf(pbuf, "on_stop = \"%p\",\n", td.on_stop);
     pbuf += r;
-    r = sprintf(pbuf, "}\n");
+    sprintf(pbuf, "}\n");
     //pbuf += r;
 
     return buf;
+}
+
+bool search(TimerMan *tm, const char *name) {
+    assert(tm);
+    assert(name);
+
+    for (int i = 0; i < tm->timers_size; i++) {
+        const char *cur_name = tm->timers[i].uniq_name;
+        if (cur_name && !strcmp(cur_name, name))
+            return true;
+    }
+
+    return false;
 }
 
 bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     assert(tm);
     if (tm->timers_size + 1 >= tm->timers_cap) 
         return false;
+
     if (!td.on_update)
         trace("timerman_add: timer without on_update callback\n");
+
+    if (td.uniq_name && search(tm, td.uniq_name)) {
+        return false;
+    }
+
     struct Timer *tmr = &tm->timers[tm->timers_size++];
     static size_t id = 0;
     tmr->id = id++;
@@ -91,6 +110,7 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     if (timerman_verbose)
         trace("timerman_add: td = %s \n", timerdef2str(td));
 
+    tmr->uniq_name = td.uniq_name;
     tmr->sz = td.sz;
 
     if (0 != td.sz) {

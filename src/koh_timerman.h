@@ -5,7 +5,7 @@
 
 typedef struct TimerMan TimerMan;
 
-struct Timer {
+typedef struct Timer {
     struct TimerMan *tm; // Заполняется автоматически при вызове update()
     double          start_time; // GetTime()
     double          duration;   // in seconds
@@ -18,16 +18,18 @@ struct Timer {
     // возвращает истину для удаления таймера
     bool            (*on_update)(struct Timer *tmr); 
     void            (*on_stop)(struct Timer *tmr);
-};
+    const char      *uniq_name;
+} Timer;
 
-struct TimerDef {
-    void    *data;    // источник для копирования данных
-    size_t  sz;      // размер копируемых данных
-    double  duration;
+typedef struct TimerDef {
+    void            *data;    // источник для копирования данных
+    size_t          sz;      // размер копируемых данных
+    double          duration;
     // возвращает истину для удаления таймера
-    bool    (*on_update)(struct Timer *tmr);
-    void    (*on_stop)(struct Timer *tmr);
-};
+    bool            (*on_update)(struct Timer *tmr);
+    void            (*on_stop)(struct Timer *tmr);
+    const char      *uniq_name;
+} TimerDef;
 
 enum TimerManAction {
     TMA_NEXT,
@@ -41,7 +43,10 @@ extern bool timerman_verbose;
 struct TimerMan *timerman_new(int cap, const char *name);
 void timerman_free(struct TimerMan *tm);
 
+// Как создать таймер только если такой таймер еще не создан?
+// Возвращает истину если таймер получилось создать
 bool timerman_add(struct TimerMan *tm, struct TimerDef td);
+
 // Производит обновление. Возвращает количество таймеров.
 int timerman_update(struct TimerMan *tm);
 struct TimerMan *timerman_clone(struct TimerMan *tm);
