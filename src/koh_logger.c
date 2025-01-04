@@ -368,3 +368,7 @@ void koh_log_custom_null(int msgType, const char *text, va_list args) {
     printf("\n");
 }
 
+int trace_null(const char *format, ...) {
+    // do nothing
+    return 0;
+}
