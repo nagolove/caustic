@@ -16,6 +16,11 @@ typedef struct Resource {
     void                *data, *source_data;
 } Resource;
 
+/*
+ * NOTE: Для первого элемента списка Resource не вызывается free() так как он
+ * может и должен располагаться в автоматической памяти.
+ */
+
 // Как добавить подсчет ссылок на загруженные текстуры?
 Texture2D res_tex_load(Resource *res_list, const char *fname);
 Font res_font_load(Resource *res_list, const char *fname, int font_size);
@@ -27,7 +32,7 @@ RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h);
 //void res_shader_load2(Resource *res_list, Shader **dest, const char *vertex_fname);
 
 void res_reload_all(Resource *res_list);
-void res_unload_all(Resource *res_list);
+void res_unload_all(Resource *res_list, bool no_log);
 
 // Добавить ресурс в список
 Resource *res_add(

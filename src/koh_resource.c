@@ -46,9 +46,17 @@ Texture2D res_tex_load(Resource *res_list, const char *fname) {
     return tex;
 }
 
+struct RtSize {
+    int w, h;
+};
+
 RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h) {
     RenderTexture2D tex_rt = LoadRenderTexture(w, h);
-    res_add(res_list, RT_TEXTURE, &tex_rt, sizeof(RenderTexture2D), NULL, 0);
+    res_add(
+        res_list, RT_TEXTURE_RT,
+        &tex_rt, sizeof(RenderTexture2D),
+        NULL, 0
+    );
     return tex_rt;
 }
 
@@ -90,42 +98,73 @@ void res_reload_all(Resource *res_list) {
 }
 
 // TODO: протестировать создание и удаление ресурсов
-void res_unload_all(Resource *res_list) {
+void res_unload_all(Resource *res_list, bool no_log) {
     Resource *allocated = res_list->next;
-    for (Resource *cur = allocated, *next; cur; cur = next) {
+
+    // Сколько всего элементов?
+    int num = 0;
+    for (Resource *cur = allocated; cur; cur = cur->next, num++);
+    trace("res_unload_all: list of %d resources\n", num);
+
+    int (*qtrace)(const char *fmt, ...) = no_log ? trace_null : trace;
+
+    koh_term_color_set(KOH_TERM_GREEN);
+    SetTraceLogLevel(LOG_FATAL);
+
+    for (Resource *cur = allocated, *next = NULL; cur; cur = next) {
         next = cur->next;
-        if (cur->data) {
-            switch (cur->type) {
-                case RT_FONT: {
-                    trace("res_unload_all: RT_FONT\n");
-                    UnloadFont(*(Font*)cur->data);
-                    break;
-                }
-                case RT_TEXTURE: {
-                    trace("res_unload_all: RT_TEXTURE\n");
-                    UnloadTexture(*(Texture2D*)cur->data);
-                    break;
-                }
-                case RT_SHADER: {
-                    trace("res_unload_all: RT_SHADER\n");
-                    UnloadShader(*(Shader*)cur->data);
-                    break;
-                }
-                case RT_TEXTURE_RT: {
-                    trace("res_unload_all: RT_TEXTURE_RT\n");
-                    break;
-                }
-                default:
-                    break;
+
+        if (!cur->data) 
+            continue;
+
+        switch (cur->type) {
+            case RT_FONT: {
+                qtrace(
+                    "res_unload_all: RT_FONT '%s'\n",
+                    (char*)cur->source_data
+                );
+                UnloadFont(*(Font*)cur->data);
+                break;
             }
-            free(cur->data);
+            case RT_TEXTURE: {
+                qtrace(
+                    "res_unload_all: RT_TEXTURE '%s'\n",
+                    (char*)cur->source_data
+                );
+                UnloadTexture(*(Texture2D*)cur->data);
+                break;
+            }
+            case RT_SHADER: {
+                qtrace(
+                    "res_unload_all: RT_SHADER '%s'\n",
+                    (char*)cur->source_data
+                );
+                UnloadShader(*(Shader*)cur->data);
+                break;
+            }
+            case RT_TEXTURE_RT: {
+                RenderTexture2D rt = *(RenderTexture2D*)cur->data;
+                qtrace(
+                    "res_unload_all: RT_TEXTURE_RT %dx%d\n",
+                    rt.texture.width, rt.texture.height
+                );
+                UnloadRenderTexture(rt);
+                break;
+            }
+            default:
+                break;
         }
+
+        free(cur->data);
         if (cur->source_data) {
             free(cur->source_data);
             cur->source_data = NULL;
         }
         free(cur);
     }
+
+    koh_term_color_reset();
+    SetTraceLogLevel(LOG_FATAL);
     res_list->next = NULL;
 }
 
