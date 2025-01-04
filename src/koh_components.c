@@ -294,8 +294,9 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
         .q = b2NormalizeRot(b2MakeRot(_poly_rot_angle)),
     };
     poly = b2TransformPolygon(t, &poly);
-    b2CreatePolygonShape(body, &shape_def, &poly);
     */
+
+    b2CreatePolygonShape(body, &shape_def, &poly);
 
     /*b2Body_SetLinearVelocity(body, vr.vel);*/
     /*b2Body_SetAngularVelocity(body, vr.w);*/
@@ -778,7 +779,7 @@ b2BodyId body_create(struct WorldCtx *wctx, b2BodyDef *def) {
 
 // FIXME: Передача b2ShapeId, b2Shape, b2WorldId ?
 void shape_render_poly(
-    b2ShapeId shape_id, struct WorldCtx *wctx, struct ShapeRenderOpts *opts
+    b2ShapeId shape_id, WorldCtx *wctx, ShapeRenderOpts *opts
 ) {
     //b2Shape *shape = b2Shape_get(wctx->world, shape_id);
     //b2Polygon *poly = &shape->polygon;

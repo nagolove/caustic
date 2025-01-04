@@ -453,8 +453,6 @@ inline static void world_shape_render_circle(
 inline static void world_shape_render_poly2(
     b2ShapeId shape_id, WorldCtx *wctx, ecs_t *r
 ) {
-    // {{{
-    /*b2Shape *shape = b2Shape_get(wctx->world, shape_id);*/
     e_id e = e_from_void(b2Shape_GetUserData(shape_id));
 
     // Это сущность?
@@ -476,8 +474,6 @@ inline static void world_shape_render_poly2(
 
     if (r_opts)
         shape_render_poly(shape_id, wctx, r_opts);
-    // }}}
-
 }
 
 inline static void world_shape_render_poly(
@@ -653,6 +649,79 @@ struct CheckUnderMouseOpts {
 };
 
 // behaviour
+// XXX: Не работает, приводит к падению
+/* // {{{
+on_destroy_body: e.id 84
+on_destroy_body: e.id 96
+on_destroy_body: e.id 110
+on_destroy_body: e.id 128
+on_destroy_body: e.id 130
+on_destroy_body: e.id 93
+on_destroy_body: e.id 155
+on_destroy_body: e.id 178
+on_destroy_body: e.id 144
+=================================================================
+==25729==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x5020006b77d1 at pc 0x7acade6fa740 bp 0x7ffe8cd12800 sp 0x7ffe8cd11fa8
+WRITE of size 8 at 0x5020006b77d1 thread T0
+    #0 0x7acade6fa73f in memset /usr/src/debug/gcc/gcc/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:87
+    #1 0x5d8e36850d92 in de_emplace /home/nagolove/caustic/src/koh_destral_ecs.c:1067
+    #2 0x5d8e368c75a7 in beh_check_under_mouse /home/nagolove/caustic/src/koh_components.c:1309
+    #3 0x5d8e3678b5f2 in stage_box2d_update /home/nagolove/koh-t80/src/t80_stage_box2d_borders.c:342
+    #4 0x5d8e3683a371 in stage_active_update /home/nagolove/caustic/src/koh_stages.c:152
+    #5 0x5d8e36736548 in update /home/nagolove/koh-t80/src/t80_main.c:333
+    #6 0x5d8e36737e88 in main /home/nagolove/koh-t80/src/t80_main.c:578
+    #7 0x7acadd834e07  (/usr/lib/libc.so.6+0x25e07) (BuildId: 98b3d8e0b8c534c769cb871c438b4f8f3a8e4bf3)
+    #8 0x7acadd834ecb in __libc_start_main (/usr/lib/libc.so.6+0x25ecb) (BuildId: 98b3d8e0b8c534c769cb871c438b4f8f3a8e4bf3)
+    #9 0x5d8e366ca7b4 in _start (/home/nagolove/koh-t80/t80+0x31c7b4) (BuildId: 6338169d0dd88600ae89ef153a2b3859eae2d2b0)
+
+0x5020006b77d1 is located 0 bytes after 1-byte region [0x5020006b77d0,0x5020006b77d1)
+allocated by thread T0 here:
+    #0 0x7acade6fc542 in realloc /usr/src/debug/gcc/gcc/libsanitizer/asan/asan_malloc_linux.cpp:85
+    #1 0x5d8e36849eca in de_storage_emplace /home/nagolove/caustic/src/koh_destral_ecs.c:459
+    #2 0x5d8e36850cfb in de_emplace /home/nagolove/caustic/src/koh_destral_ecs.c:1065
+    #3 0x5d8e368c75a7 in beh_check_under_mouse /home/nagolove/caustic/src/koh_components.c:1309
+    #4 0x5d8e3678b5f2 in stage_box2d_update /home/nagolove/koh-t80/src/t80_stage_box2d_borders.c:342
+    #5 0x5d8e3683a371 in stage_active_update /home/nagolove/caustic/src/koh_stages.c:152
+    #6 0x5d8e36736548 in update /home/nagolove/koh-t80/src/t80_main.c:333
+    #7 0x5d8e36737e88 in main /home/nagolove/koh-t80/src/t80_main.c:578
+    #8 0x7acadd834e07  (/usr/lib/libc.so.6+0x25e07) (BuildId: 98b3d8e0b8c534c769cb871c438b4f8f3a8e4bf3)
+    #9 0x7acadd834ecb in __libc_start_main (/usr/lib/libc.so.6+0x25ecb) (BuildId: 98b3d8e0b8c534c769cb871c438b4f8f3a8e4bf3)
+    #10 0x5d8e366ca7b4 in _start (/home/nagolove/koh-t80/t80+0x31c7b4) (BuildId: 6338169d0dd88600ae89ef153a2b3859eae2d2b0)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /usr/src/debug/gcc/gcc/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:87 in memset
+Shadow bytes around the buggy address:
+  0x5020006b7500: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x5020006b7580: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x5020006b7600: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x5020006b7680: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x5020006b7700: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fd
+=>0x5020006b7780: fa fa fd fd fa fa fd fd fa fa[01]fa fa fa 04 fa
+  0x5020006b7800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x5020006b7880: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x5020006b7900: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x5020006b7980: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x5020006b7a00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==25729==ABORTING
+*/ // }}}
 void beh_check_under_mouse(struct CheckUnderMouseOpts *opts);
 /*void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx);*/
 void e_destroy_border_sensors(de_ecs *r, WorldCtx *wctx);

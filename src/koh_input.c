@@ -168,7 +168,7 @@ typedef struct InputKbMouseDrawer {
 
 void input_kb_free(InputKbMouseDrawer *kb) {
     assert(kb);
-    res_unload_all(&kb->reslist);
+    res_unload_all(&kb->reslist, false);
     free(kb);
 }
 
@@ -426,7 +426,7 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 
 void input_gp_free(InputGamepadDrawer *gp) {
     assert(gp);
-    res_unload_all(&gp->reslist);
+    res_unload_all(&gp->reslist, false);
     free(gp);
 }
 

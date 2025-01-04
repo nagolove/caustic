@@ -290,6 +290,8 @@ void render_verts4(Vector2 verts[4], Color tint) {
 void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
 ) {
+    //trace("render_v4_with_tex:\n");
+
     // Check if texture is valid
     if (texture.id > 0)
     {
