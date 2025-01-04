@@ -254,7 +254,12 @@ char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num) {
     const int vert_buf_sz = 32;
     size_t sz = vert_buf_sz * sizeof(char) * num;
     char *buf = malloc(sz);
-    assert(buf);
+
+    if (!buf) {
+        trace("b2Vec2_tostr_alloc: not enough memory\n");
+        koh_trap();
+    }
+
     char *pbuf = buf;
     pbuf += sprintf(pbuf, "{ ");
     for (int i = 0; i < num; i++) {
