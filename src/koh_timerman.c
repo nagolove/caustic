@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include "koh_common.h"
 
 bool timerman_verbose = false;
 
@@ -26,6 +27,12 @@ struct TimerMan *timerman_new(int cap, const char *name) {
     assert(cap < 2048 && "too many timers, 2048 is ceil");
     tm->timers = calloc(cap, sizeof(tm->timers[0]));
     tm->timers_cap = cap;
+
+    if (strlen(name) >= sizeof(tm->name)) {
+        trace("timerman_new: name is too long\n");
+        koh_trap();
+    }
+
     strncpy(tm->name, name, sizeof(tm->name));
     return tm;
 }
@@ -96,6 +103,7 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     if (!td.on_update)
         trace("timerman_add: timer without on_update callback\n");
 
+    // Если таймер с таким именем существует, то новый не создается
     if (td.uniq_name && search(tm, td.uniq_name)) {
         return false;
     }
@@ -103,14 +111,13 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     struct Timer *tmr = &tm->timers[tm->timers_size++];
     static size_t id = 0;
     tmr->id = id++;
-    tmr->start_time = tmr->last_now = GetTime();
+    tmr->add_time = tmr->last_now = GetTime();
     assert(td.duration > 0);
     tmr->duration = td.duration;
 
     if (timerman_verbose)
         trace("timerman_add: td = %s \n", timerdef2str(td));
 
-    tmr->uniq_name = td.uniq_name;
     tmr->sz = td.sz;
 
     if (0 != td.sz) {
@@ -127,6 +134,9 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
 
     tmr->on_update = td.on_update;
     tmr->on_stop = td.on_stop;
+    tmr->on_start = td.on_start;
+    tmr->uniq_name = td.uniq_name;
+
     return true;
 }
 
@@ -157,10 +167,12 @@ int timerman_remove_expired(struct TimerMan *tm) {
 static void timer_shutdown(struct Timer *timer) {
     if (timer->on_stop) 
         timer->on_stop(timer);
+    // Если нужно, то освободить память
     if (timer->data && timer->sz) {
         free(timer->data);
         timer->data = NULL;
     }
+    timer->started = false;
 }
 
 int timerman_update(struct TimerMan *tm) {
@@ -171,19 +183,26 @@ int timerman_update(struct TimerMan *tm) {
 
     for (int i = 0; i < tm->timers_size; i++) {
         struct Timer *timer = &tm->timers[i];
+        timer->tm = tm;
 
         // XXX: Почему такой таймер не удаляется?
         if (timer->duration < 0) continue;
 
         double now = GetTime();
-        timer->amount = (now - timer->start_time) / timer->duration;
+        timer->amount = (now - timer->add_time) / timer->duration;
 
-        // Сделать установку паузы и снятие с нее
+        // TODO: Сделать установку паузы и снятие с нее
 
-        if (now - timer->start_time > timer->duration) {
+        if (now - timer->add_time > timer->duration) {
             //timer->expired = true;
             timer_shutdown(timer);
         } else {
+
+            if (!timer->started && timer->on_start) {
+                timer->on_start(timer);
+                timer->started = true;
+            }
+
             if (timer->on_update) {
                 if (timer->on_update(timer)) {
                     timer_shutdown(timer);
@@ -249,7 +268,7 @@ void timerman_window_gui(struct TimerMan *tm) {
 
         igTableSetupColumn("#", ImGuiTableColumnFlags_DefaultSort, 0., 0);
         igTableSetupColumn("id", ImGuiTableColumnFlags_DefaultSort, 0., 1);
-        igTableSetupColumn("start time", column_flags, 0., 2);
+        igTableSetupColumn("add time", column_flags, 0., 2);
         igTableSetupColumn("duration time", column_flags, 0., 3);
         igTableSetupColumn("amount", column_flags, 0., 4);
         //igTableSetupColumn("expired", column_flags, 0., 5);
@@ -273,7 +292,7 @@ void timerman_window_gui(struct TimerMan *tm) {
             igText(line);
 
             igTableSetColumnIndex(2);
-            sprintf(line, "%f", tmr->start_time);
+            sprintf(line, "%f", tmr->add_time);
             igText(line);
 
             igTableSetColumnIndex(3);

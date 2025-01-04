@@ -6,28 +6,42 @@
 typedef struct TimerMan TimerMan;
 
 typedef struct Timer {
-    struct TimerMan *tm; // Заполняется автоматически при вызове update()
-    double          start_time; // GetTime()
-    double          duration;   // in seconds
-    double          amount;     // 0..1
+    // Заполняется автоматически при вызове timerman_update()
+    struct TimerMan *tm; 
+    // GetTime() 
+    double          add_time; 
+    // in seconds
+    double          duration;   
+    // 0..1
+    // XXX: amount не достигает 1.
+    double          amount;     
     double          last_now;
     //bool            expired;
-    size_t          id; // уникальный номер, присваивается автоматически
-    size_t          sz; // если == 0, то для data не выделяется память
-    void            *data;  // динамически выделяемая память если sz != 0
+    // уникальный номер, присваивается автоматически
+    size_t          id; 
+    // если == 0, то для data не выделяется память
+    size_t          sz; 
+    // динамически выделяемая память если sz != 0
+    void            *data;  
     // возвращает истину для удаления таймера
     bool            (*on_update)(struct Timer *tmr); 
     void            (*on_stop)(struct Timer *tmr);
+    void            (*on_start)(struct Timer *tmr);
     const char      *uniq_name;
+    // Была ли запущена функция on_start
+    bool            started;
 } Timer;
 
 typedef struct TimerDef {
     void            *data;    // источник для копирования данных
     size_t          sz;      // размер копируемых данных
     double          duration;
-    // возвращает истину для удаления таймера
+
+    // Возвращает истину для удаления таймера
     bool            (*on_update)(struct Timer *tmr);
+    // TODO: Как лучше сделать сигнатуры on_update() и on_stop() одинаковыми?
     void            (*on_stop)(struct Timer *tmr);
+    void            (*on_start)(struct Timer *tmr);
     const char      *uniq_name;
 } TimerDef;
 
