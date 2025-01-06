@@ -1,3 +1,5 @@
+local lfs = require 'lfs'
+
 return {
     {
         not_dependencies = {
@@ -11,14 +13,20 @@ return {
         },
         codegen = { {
             external = function()
-                --os.execute("cd src")
+                --print('currentdir', lfs.currentdir())
+
+                --[[
                 os.execute(
                     "cd src && bin2c -t -d koh_lua_tabular.h " ..
                     "-o koh_lua_tabular.c ../tl_dst/tabular.lua"
                 )
-                --print("HELLO")
-                --os.exit()
-                --print(lfs.currentdir())
+                --]]
+
+                os.execute(
+                    "bin2c -t -d koh_lua_tabular.h " ..
+                    "-o koh_lua_tabular.c ../tl_dst/tabular.lua"
+                )
+
             end
         }, }
     },
