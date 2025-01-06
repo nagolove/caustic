@@ -287,6 +287,84 @@ void render_verts4(Vector2 verts[4], Color tint) {
     rlSetTexture(0);
 }
 
+void render_v4_with_tex2(RenderTexOpts opts) {
+    //trace("render_v4_with_tex:\n");
+
+    Texture2D texture = opts.texture;
+    Rectangle source = opts.source;
+    Vector2   *verts = opts.verts;
+    Color     tint = opts.tint;
+    int       vertex_disp = opts.vertex_disp;
+
+    // Check if texture is valid
+    if (texture.id <= 0)
+        return;
+
+    float width = (float)texture.width;
+    float height = (float)texture.height;
+
+    bool flipX = false;
+
+    if (source.width < 0) { flipX = true; source.width *= -1; }
+    if (source.height < 0) source.y -= source.height;
+
+    //Vector2 topLeft = { 0 };
+    //Vector2 topRight = { 0 };
+    //Vector2 bottomLeft = { 0 };
+    //Vector2 bottomRight = { 0 };
+
+    //topLeft = from_Vect(cpTransformPoint(mat, from_Vector2(topLeft)));
+    //topRight = from_Vect(cpTransformPoint(mat, from_Vector2(topRight)));
+    //bottomLeft = from_Vect(cpTransformPoint(mat, from_Vector2(bottomLeft)));
+    //bottomRight = from_Vect(cpTransformPoint(mat, from_Vector2(bottomRight)));
+
+    rlSetTexture(texture.id);
+    rlBegin(RL_QUADS);
+
+    {
+        rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+        rlNormal3f(0.0f, 0.0f, 1.0f);                          // Normal vector pointing towards viewer
+
+        // Top-left corner for texture and quad
+        if (flipX) 
+            rlTexCoord2f((source.x + source.width)/width, source.y/height);
+        else
+            rlTexCoord2f(source.x/width, source.y/height);
+        rlVertex2f(verts[0].x, verts[0].y);
+
+        // Bottom-left corner for texture and quad
+        if (flipX) 
+            rlTexCoord2f(
+                (source.x + source.width)/width,
+                (source.y + source.height)/height
+            );
+        else 
+            rlTexCoord2f(source.x/width, (source.y + source.height)/height);
+        rlVertex2f(verts[3].x, verts[3].y);
+
+        // Bottom-right corner for texture and quad
+        if (flipX) 
+            rlTexCoord2f(source.x/width, (source.y + source.height)/height);
+        else 
+            rlTexCoord2f(
+                (source.x + source.width)/width,
+                (source.y + source.height)/height
+            );
+        rlVertex2f(verts[2].x, verts[2].y);
+
+        // Top-right corner for texture and quad
+        if (flipX) 
+            rlTexCoord2f(source.x/width, source.y/height);
+        else 
+            rlTexCoord2f((source.x + source.width)/width, source.y/height);
+        rlVertex2f(verts[1].x, verts[1].y);
+    }
+
+    rlEnd();
+    rlSetTexture(0);
+
+}
+
 void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
 ) {

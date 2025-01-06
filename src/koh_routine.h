@@ -76,6 +76,11 @@ static inline const char *Rectangle_tostr(Rectangle r) {
     return buf;
 }
 
+static inline Vector2 Vector2_from_str(const char *str) {
+    Vector2 r = {};
+    return r;
+}
+
 static inline const char *Vector2_tostr(Vector2 v) {
     static char buf[100] = {0};
     /*snprintf(buf, sizeof(buf) - 1, "{%6.5f, %6.5f}", v.x, v.y);*/

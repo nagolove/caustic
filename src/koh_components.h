@@ -34,6 +34,8 @@ typedef struct ShapeRenderOpts {
     float       thick;
     Rectangle   src;
     Color       color;
+    // Указывает на сколько вершин повернуть многоугольник при текстурировании.
+    int         vertex_disp;
 } ShapeRenderOpts;
 
 enum SegmentType {
@@ -462,7 +464,7 @@ inline static void world_shape_render_poly2(
     }
 
     // Получить компонент с проверкой
-    struct ShapeRenderOpts *r_opts = e_get(r, e, cp_type_shape_render_opts2);
+    ShapeRenderOpts *r_opts = e_get(r, e, cp_type_shape_render_opts2);
 
     /*
     char **lines = cp_type_shape_render_opts.str_repr(r_opts, de_null);

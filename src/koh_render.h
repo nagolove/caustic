@@ -29,6 +29,17 @@ void render_circle(Vector2 center, float radius, Color color);
 void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
 );
+
+typedef struct RenderTexOpts {
+    Texture2D texture;
+    Rectangle source;
+    Vector2   verts[4];
+    Color     tint;
+    int       vertex_disp;
+} RenderTexOpts;
+
+void render_v4_with_tex2(RenderTexOpts opts);
+
 void render_v3_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[3], Color tint, int order
 );

@@ -790,13 +790,60 @@ void shape_render_poly(
     b2BodyId body_id = b2Shape_GetBody(shape_id);
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
 
+    /*
+    if (opts->vertex_disp < 0) {
+        trace("shape_render_poly: vertex_disp < 0\n");
+        koh_trap();
+    }
+    */
+    if (opts->vertex_disp < 0)
+        opts->vertex_disp = 0;
+
+    opts->vertex_disp = opts->vertex_disp % poly.count;
+
+    if (opts->vertex_disp >= poly.count) {
+        trace(
+            "shape_render_poly: vertex_disp %d is much than %d\n",
+            opts->vertex_disp, poly.count
+        );
+        koh_trap();
+    }
+
     // Преобразования координаты из локальных в глобальные
     Vector2 w_verts[poly.count + 1];
+    memset(w_verts, 0, sizeof(w_verts));
+
     for (int i = 0; i < poly.count; i++) {
         w_verts[i] = b2Vec2_to_Vector2(
             b2Body_GetWorldPoint(body_id, poly.vertices[i])
         );
     }
+
+    int count = poly.count, vertex_disp = opts->vertex_disp;
+    trace("shape_render_poly: vertex_disp %d, count %d\n", vertex_disp, count);
+
+    printf("before ");
+    for (int i = 0; i < count; i++) {
+        printf("%s ", Vector2_tostr(w_verts[i]));
+    }
+    printf("\n");
+
+    for (int i = 0; i < vertex_disp; i++) {
+        Vector2 last = w_verts[count - 1], tmp = w_verts[1];
+        for (int j = 1; j < count; j++) {
+            /*w_verts[j] = w_verts[j - 1];*/
+            w_verts[j] = tmp;
+            tmp = w_verts[j - 1];
+        }
+        w_verts[0] = last;
+    }
+
+    printf("after ");
+    for (int i = 0; i < count; i++) {
+        printf("%s ", Vector2_tostr(w_verts[i]));
+    }
+    printf("\n");
+
 
     if (opts->tex) {
         if (poly.count == 4) 
