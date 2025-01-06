@@ -4185,8 +4185,8 @@ local function sub_make(_args, cfg, push_num)
 
       local local_cfgs = search_and_load_cfgs_up('bld.lua')
 
-      print(ansicolors("%{blue}local_cfg%{reset}"))
-      print(tabular(cfg))
+
+
 
       for _, local_cfg in ipairs(local_cfgs) do
          local args = {
@@ -4202,7 +4202,7 @@ local function sub_make(_args, cfg, push_num)
 
          local_cfg.release_define = cfg.release_define
          local_cfg.debug_define = cfg.debug_define
-         print(tabular(local_cfg))
+
 
          sub_make(args, local_cfg)
       end

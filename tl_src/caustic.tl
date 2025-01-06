@@ -4185,8 +4185,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         -- Проверка каустики на необходимость пересборки
         local local_cfgs = search_and_load_cfgs_up('bld.lua')
 
-        print(ansicolors("%{blue}local_cfg%{reset}"))
-        print(tabular(cfg))
+        --print(ansicolors("%{blue}local_cfg%{reset}"))
+        --print(tabular(cfg))
 
         for _, local_cfg in ipairs(local_cfgs) do
             local args = {
@@ -4198,11 +4198,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
                 release = _args.release
             }
 
-            -- BUG: release_define из текущего проекта не передается в 
-            -- данный конфиг библиотеки
+            -- XXX: Дефайны полностью замещаются, сделать обновление, а не 
+            -- перезапись
             local_cfg.release_define = cfg.release_define
             local_cfg.debug_define = cfg.debug_define
-            print(tabular(local_cfg))
+            --print(tabular(local_cfg))
 
             sub_make(args, local_cfg)
         end
