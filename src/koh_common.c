@@ -398,6 +398,8 @@ const char *to_bitstr_uint64_t(uint64_t value) {
         last += sprintf(last, "%d", (int)bp.b[i]._3);
         last += sprintf(last, "%d", (int)bp.b[i]._2);
         last += sprintf(last, "%d", (int)bp.b[i]._1);
+        if (!last)
+            break;
         last += sprintf(last, "%d", (int)bp.b[i]._0);
         /*last += sprintf(last, " ");*/
     }
@@ -432,6 +434,8 @@ const char *to_bitstr_uint32_t(uint32_t value) {
         last += sprintf(last, "%d", (int)bp.b[i]._3);
         last += sprintf(last, "%d", (int)bp.b[i]._2);
         last += sprintf(last, "%d", (int)bp.b[i]._1);
+        if (!last)
+            break;
         last += sprintf(last, "%d", (int)bp.b[i]._0);
         /*last += sprintf(last, " ");*/
     }
@@ -1828,6 +1832,8 @@ const char * koh_backtrace_get() {
     //while (*symbols) {
     for (int i = 0; i < frames; i++) {
         //printf("*symbols %s\n", symbols[i]);
+        if (!pbuf)
+            break;
         pbuf += sprintf(pbuf, "%s\n", *symbols);
     }
 
@@ -1849,6 +1855,8 @@ char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
     char *pbuf = buf;
     pbuf += sprintf(pbuf, "{ ");
     for (int i = 0; i < num; i++) {
+        if (!pbuf)
+            break;
         pbuf += sprintf(pbuf, "{ %f, %f },", verts[i].x, verts[i].y);
     }
     sprintf(pbuf, " }");
@@ -2073,9 +2081,11 @@ char *points2table_allocated(const Vector2 *points, int points_num) {
     assert(buf);
     pbuf += sprintf(pbuf, "{ ");
     for (int i = 0; i < points_num; i++) {
-         pbuf += sprintf(pbuf, "{%f, %f},", points[i].x, points[i].y);
+        if (!pbuf)
+            break;
+        pbuf += sprintf(pbuf, "{%f, %f},", points[i].x, points[i].y);
     }
-    pbuf += sprintf(pbuf, "} ");
+    sprintf(pbuf, "} ");
     //trace("table_push_points_as_arr: %s\n", buf);
     return buf;
 }

@@ -33,7 +33,8 @@ struct TimerMan *timerman_new(int cap, const char *name) {
         koh_trap();
     }
 
-    strncpy(tm->name, name, sizeof(tm->name));
+    strncpy(tm->name, name, sizeof(tm->name) - 1);
+    tm->name[sizeof(tm->name) - 1] = 0;
     return tm;
 }
 

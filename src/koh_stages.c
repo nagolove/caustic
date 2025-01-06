@@ -246,8 +246,9 @@ void stage_print(StagesStore *ss) {
     lua_State *l = luaL_newstate();
     luaL_openlibs(l);
     const size_t len = 1024;
-    char *table_str = malloc(len * ss->num);
-    char *p = table_str;
+    size_t sz = len * ss->num;
+    char *table_str = malloc(sz);
+    char *p = table_str; 
 
     for (int i = 0; i < ss->num; i++) {
         const Stage *st = ss->stages[i];
@@ -261,6 +262,8 @@ void stage_print(StagesStore *ss) {
         p += sprintf(p, "gui = %p", st->gui);
         p += sprintf(p, "data = %p", st->data);
         p += sprintf(p, "name = '%s'", st->name);
+        if (!p)
+            break;
         p += sprintf(p, "}");
     }
 

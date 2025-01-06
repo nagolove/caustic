@@ -263,6 +263,8 @@ char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num) {
     char *pbuf = buf;
     pbuf += sprintf(pbuf, "{ ");
     for (int i = 0; i < num; i++) {
+        if (!pbuf)
+            break;
         pbuf += sprintf(pbuf, "{ %f, %f },", verts[i].x, verts[i].y);
     }
     sprintf(pbuf, " }");
@@ -562,6 +564,8 @@ const char *b2Polygon_to_str(const b2Polygon *poly) {
     assert(poly);
     pbuf += sprintf(pbuf, "{ ");
     for (int i = 0; i < poly->count; i++) {
+        if (!pbuf)
+            break;
         pbuf += sprintf(pbuf, "%s, ", b2Vec2_to_str(poly->vertices[i]));
     }
     pbuf += sprintf(pbuf, "} ");
@@ -629,6 +633,8 @@ char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
     for (const char *m_bits = to_bitstr_uint32_t(filter.maskBits);
         *m_bits; m_bits++
     ) {
+        if (!pret)
+            break;
         pret += sprintf(pret, "%c, ", *m_bits);
     }
 
@@ -637,6 +643,8 @@ char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
     for (const char *c_bits = to_bitstr_uint32_t(filter.categoryBits);
         *c_bits; c_bits++
     ) {
+        if (!pret)
+            break;
         pret += sprintf(pret, "%c, ", *c_bits);
     }
 

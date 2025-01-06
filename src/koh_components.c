@@ -53,7 +53,10 @@ static char **str_repr_shape_render_opts(void *payload, de_entity e) {
         char **tex_lines = Texture2D_to_str(opts->tex);
         sprintf(lines[i++], "\ttex = %s", *tex_lines);
         while (*tex_lines) {
-            sprintf(lines[i++], "\t\t%s", *tex_lines);
+            if (lines[i])
+                sprintf(lines[i++], "\t\t%s", *tex_lines);
+            else
+                break;
         }
     }
 

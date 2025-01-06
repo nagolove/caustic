@@ -2203,7 +2203,9 @@ static bool cp_is_registered(ecs_t *r, e_cp_type cp_type) {
     return htable_get_s(r->cp_types, cp_type.name, NULL);
 }
 
+// TODO: Сделать проверку отключаемой
 static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
+#ifndef KOH_ECS_NO_ERROR_HANDLING
     if (!cp_is_registered(r, cp_type)) {
         printf(
             "e_cp_is_registered: '%s' type is not registered\n",
@@ -2211,6 +2213,11 @@ static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
         );
         abort();
     }
+#else
+    koh_term_color_set(KOH_TERM_RED);
+    printf("cp_is_registered_assert: disabled\n");
+    koh_term_color_reset();
+#endif
 }
 
 static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
@@ -2253,7 +2260,10 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         s->cp_sizeof2 = cp_type.priv.cp_sizeof2;
         s->on_emplace = cp_type.on_emplace;
         s->on_destroy = cp_type.on_destroy;
-        strncpy(s->name, cp_type.name, sizeof(s->name));
+
+        strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
+        s->name[sizeof(s->name) - 1] = 0;
+
         s->sparse = ss_alloc(r->max_id);
     }
 

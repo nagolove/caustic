@@ -1316,6 +1316,8 @@ struct MetaLoaderObject2Str metaloader_object2str(
             int pos = snprintf(buf, sizeof(buf) - 1,  fmt_beg, pl->num);
             char *ptr = buf + pos;
             for (int i = 0; i < pl->num; i++) {
+                if (!ptr)
+                    break;
                 ptr += sprintf(
                     ptr, "%f, %f, ", 
                     pl->points[i].x,

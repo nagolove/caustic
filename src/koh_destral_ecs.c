@@ -1624,6 +1624,16 @@ static void lines_print_filter(de_ecs *r, char **lines) {
     char halfmegabuf[1024 * 512] = {};
     char *p = halfmegabuf;
     while (*lines) {
+
+        // NOTE: Непроверенный код. Попытка проверки достаточности размера
+        // буфера
+        size_t line_len = strlen(*lines);
+        if (sizeof(halfmegabuf) -  (p - halfmegabuf) <= line_len)
+            break;
+
+        if (!p)
+            break;
+
         p += sprintf(p, "%s", *lines);
         lines++;
     }

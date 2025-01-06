@@ -4,7 +4,7 @@
 
 /* Contents of file ../tl_dst/tabular.lua */
 extern const long int ___tl_dst_tabular_lua_size;
-extern const unsigned char ___tl_dst_tabular_lua[7422];
+extern const unsigned char ___tl_dst_tabular_lua[6893];
 
 /* File table comprising original file name, address and size */
 typedef struct {
