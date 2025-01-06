@@ -3,13 +3,15 @@
 #include "body.h"
 #include "box2d/box2d.h"
 
+/*
 #ifndef BOX2C_SENSOR_SLEEP
-#include "box2d/math_functions.h"
+//#include "box2d/math_functions.h"
 #else
 #include "box2d/math_types.h"
 #include "box2d/geometry.h"
 #include "box2d/debug_draw.h"
 #endif
+*/
 
 #include <lua.h>
 #include <lauxlib.h>
