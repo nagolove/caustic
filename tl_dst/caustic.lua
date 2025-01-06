@@ -4002,15 +4002,16 @@ local function sub_make(_args, cfg, push_num)
    if not _args.release then
       table.insert(flags, "-ggdb3")
 
-      _defines = _defines .. " " .. table.concat({
+      local debugs = {
          "-DDEBUG",
          "-g3",
          "-fno-omit-frame-pointer",
-      }, " ")
+      }
 
-      table.insert(defines, "-DDEBUG")
-      table.insert(defines, "-g3")
-      table.insert(defines, "-fno-omit-frame-pointer")
+      _defines = _defines .. " " .. table.concat(debugs, " ")
+      for _, define in ipairs(debugs) do
+         table.insert(defines, define)
+      end
 
       if cfg.debug_define then
          print("sub_make: appling debug defines")
@@ -4185,7 +4186,7 @@ local function sub_make(_args, cfg, push_num)
       local local_cfgs = search_and_load_cfgs_up('bld.lua')
 
       print(ansicolors("%{blue}local_cfg%{reset}"))
-      print(tabular(local_cfgs))
+      print(tabular(cfg))
 
       for _, local_cfg in ipairs(local_cfgs) do
          local args = {
@@ -4197,6 +4198,11 @@ local function sub_make(_args, cfg, push_num)
             release = _args.release,
          }
 
+
+
+         local_cfg.release_define = cfg.release_define
+         local_cfg.debug_define = cfg.debug_define
+         print(tabular(local_cfg))
 
          sub_make(args, local_cfg)
       end
