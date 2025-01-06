@@ -27,6 +27,10 @@ return {
                     "-o koh_lua_tabular.c ../tl_dst/tabular.lua"
                 )
 
+                os.execute(
+                    [[ sed -i "s/\(const \)\(unsigned\)\( char ___tl_dst_tabular_lua\)/\1\3/g" koh_lua_tabular.c koh_lua_tabular.h ]]
+                )
+
             end
         }, }
     },
