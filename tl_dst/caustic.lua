@@ -21,11 +21,24 @@ else
    path_caustic = remove_last_backslash(path_caustic)
 end
 
+
 local path_rel_third_party = remove_last_backslash(
 os.getenv("3rd_party") or "3rd_party")
 
+
 local path_wasm_third_party = remove_last_backslash(
 os.getenv("wasm_3rd_party") or "wasm_3rd_party")
+
+
+
+
+
+
+
+
+
+
+
 
 
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
@@ -1945,6 +1958,7 @@ local actions = {}
 
 
 
+
 local function _init(path, deps)
    print("_init", path)
 
@@ -3420,22 +3434,14 @@ local function run_parallel_uv(queue)
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
 
-
       local _, _ = uv.spawn(
-
       t.cmd,
       {
          args = t.args,
          stdio = { nil, _stdout, _stderr },
 
-
-
-
-
       },
       function(code, _)
-
-
 
 
 
@@ -3468,8 +3474,8 @@ local function run_parallel_uv(queue)
 
    uv.run('default')
 
-
    print('run_parallel_uv: errcode', errcode)
+
    if errcode ~= 0 then
       os.exit(1)
    end
@@ -3963,15 +3969,10 @@ local function sub_make(_args, cfg, push_num)
       "-DPLATFORM_DESKTOP",
    }
 
-   local _defines = table.concat({
-      "-DGRAPHICS_API_OPENGL_43",
-      "-DPLATFORM=PLATFORM_DESKTOP",
-      "-DPLATFORM_DESKTOP",
-   }, " ")
 
-   local _includes = table.concat({},
+   local _defines = table.concat(defines, " ")
 
-   " ")
+   local _includes = table.concat({}, " ")
    local includes = {}
 
    local dirs = get_ready_includes(cfg)
@@ -4028,7 +4029,12 @@ local function sub_make(_args, cfg, push_num)
       end
    else
 
+
+
       table.insert(flags, "-O3")
+
+      table.insert(flags, "-DNDEBUG")
+
       if cfg.release_define then
          print("sub_make: appling release defines")
          for define, value in pairs(cfg.release_define) do
@@ -4177,6 +4183,10 @@ local function sub_make(_args, cfg, push_num)
 
 
       local local_cfgs = search_and_load_cfgs_up('bld.lua')
+
+      print(ansicolors("%{blue}local_cfg%{reset}"))
+      print(tabular(local_cfgs))
+
       for _, local_cfg in ipairs(local_cfgs) do
          local args = {
             make = true,
@@ -4186,6 +4196,8 @@ local function sub_make(_args, cfg, push_num)
             noasan = _args.noasan,
             release = _args.release,
          }
+
+
          sub_make(args, local_cfg)
       end
 

@@ -21,12 +21,25 @@ else
     path_caustic = remove_last_backslash(path_caustic)
 end
 
+-- каталог для библиотек x86_64 собранных в отладочном режиме
 local path_rel_third_party = remove_last_backslash(
     os.getenv("3rd_party") or "3rd_party"
 )
+-- каталог для библиотек wasm, собранных в отладочном режиме
 local path_wasm_third_party = remove_last_backslash(
     os.getenv("wasm_3rd_party") or "wasm_3rd_party"
 )
+
+--[[
+-- каталог для библиотек x86_64 собранных в релизном режиме
+local path_rel_third_party_release = remove_last_backslash(
+    os.getenv("3rd_party") or "3rd_party"
+)
+-- каталог для библиотек wasm, собранных в релизном режиме
+local path_wasm_third_party_release = remove_last_backslash(
+    os.getenv("wasm_3rd_party") or "wasm_3rd_party"
+)
+--]]
 
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
 
@@ -1945,6 +1958,7 @@ local function _init_smart(path: string, deps: {Dependency})
 end
 --]]
 
+-- XXX: ЧТо делает эта функция?
 local function _init(path: string, deps: {Dependency})
     print("_init", path)
 	--print(tabular(deps))
@@ -3954,16 +3968,11 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         "-DPLATFORM=PLATFORM_DESKTOP",
         "-DPLATFORM_DESKTOP",
     }
-    -- TODO: Дефайны через bld.lua
-    local _defines: string = table.concat({
-        "-DGRAPHICS_API_OPENGL_43",
-        "-DPLATFORM=PLATFORM_DESKTOP",
-        "-DPLATFORM_DESKTOP",
-    }, " ")
 
-    local _includes: string = table.concat({
-        --"/usr/include",
-    }, " ")
+    -- TODO: Дефайны через bld.lua
+    local _defines: string = table.concat(defines, " ")
+
+    local _includes: string = table.concat({ --[[ "/usr/include", --]] }, " ")
     local includes = {}
 
     local dirs = get_ready_includes(cfg)
@@ -4174,6 +4183,10 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
 
         -- Проверка каустики на необходимость пересборки
         local local_cfgs = search_and_load_cfgs_up('bld.lua')
+
+        print(ansicolors("%{blue}local_cfg%{reset}"))
+        print(tabular(local_cfgs))
+
         for _, local_cfg in ipairs(local_cfgs) do
             local args = {
                 make = true,
@@ -4183,6 +4196,8 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
                 noasan = _args.noasan,
                 release = _args.release
             }
+            -- BUG: release_define из текущего проекта не передается в 
+            -- данный конфиг библиотеки
             sub_make(args, local_cfg)
         end
 
