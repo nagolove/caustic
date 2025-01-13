@@ -21,6 +21,7 @@ else
     path_caustic = remove_last_backslash(path_caustic)
 end
 
+-- {{{ env vars
 -- каталог для библиотек x86_64 собранных в отладочном режиме
 local path_rel_third_party = remove_last_backslash(
     os.getenv("3rd_party") or "3rd_party"
@@ -30,22 +31,22 @@ local path_wasm_third_party = remove_last_backslash(
     os.getenv("wasm_3rd_party") or "wasm_3rd_party"
 )
 
---[[
 -- каталог для библиотек x86_64 собранных в релизном режиме
 local path_rel_third_party_release = remove_last_backslash(
-    os.getenv("3rd_party") or "3rd_party"
+    os.getenv("3rd_party_release") or "3rd_party_release"
 )
 -- каталог для библиотек wasm, собранных в релизном режиме
 local path_wasm_third_party_release = remove_last_backslash(
-    os.getenv("wasm_3rd_party") or "wasm_3rd_party"
+    os.getenv("wasm_3rd_party_release") or "wasm_3rd_party_release"
 )
---]]
 
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
+-- }}}
 
 --local lua_ver = "5.1"
 local lua_ver = "5.4"
 
+-- {{{ package.path, package.cpath
 package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
 package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
@@ -56,13 +57,18 @@ package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
 package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
+-- }}}
 
+-- {{{  pre requirements assertions
 assert(path_caustic)
 assert(path_rel_third_party)
 assert(path_abs_third_party)
 assert(path_wasm_third_party)
+assert(path_rel_third_party_release)
+assert(path_wasm_third_party_release)
+-- }}}
 
--- requires {{{
+-- requires and aliases {{{
 require "common"
 local gsub       = string.gsub
 local tabular    = require "tabular".show
@@ -77,6 +83,8 @@ local Cache      = require "cache"
 local uv         = require "luv"
 local lanes      = require "lanes".configure()
 local sleep      = require "socket".sleep
+local format        = string.format
+local match         = string.match
 --- }}}
 
 -- XXX: Зачем этот код? Что он делает?
@@ -84,15 +92,21 @@ if string.match(lfs.currentdir(), "tl_dst") then
     chdir("..")
 end
 
--- TODO: Как-то предохранить каталог caustic с рабочей средой от затирания
--- при ошибочно выставленной переменной окружения CAUSTIC_PATH
-
+-- globals {{{
 local site_repo = "~/nagolove.github.io"
 --local site_repo_index = site_repo .. "/index.html"
-
-local format        = string.format
-local match         = string.match
 local cache_name    = "cache.lua"
+local verbose       = false
+-- Если истина, то при ошибках будет выход из программы сборки. 
+-- Иначе происходит замалчивание
+local errexit       = false
+local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
+local pattern_end   = "{CAUSTIC_PASTE_END}"
+local cache: Cache
+-- TODO: Как-то предохранить каталог caustic с рабочей средой от затирания
+-- при ошибочно выставленной переменной окружения CAUSTIC_PATH
+-- }}}
+
 -- Добавить разные уровни многословности?
 --[[
 local enum VerboseMode
@@ -100,11 +114,15 @@ local enum VerboseMode
     "error"
 end
 --]]
-local verbose       = false
-local errexit       = false
-local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
-local pattern_end   = "{CAUSTIC_PASTE_END}"
-local cache: Cache
+
+if verbose then
+    tabular(path_caustic)
+    tabular(path_rel_third_party)
+    tabular(path_abs_third_party)
+    tabular(path_wasm_third_party)
+    tabular(path_rel_third_party_release)
+    tabular(path_wasm_third_party_release)
+end
 
 local record Cfg
     -- {{{
@@ -137,8 +155,8 @@ local record Cfg
     -- }}}
 end
 
--- FIXME: Не использовать io.popen() так могут быть проблемы с кодом возврата
 local function cmd_do_execute(_cmd: string|{string})
+-- NOTE: Не использовать io.popen() так могут быть проблемы с кодом возврата
     if verbose then
         os.execute("echo `pwd`")
     end
@@ -177,6 +195,7 @@ local function cmd_do_execute(_cmd: string|{string})
 end
 
 --[[
+-- {{{
 local function cmd_do_uv(cmd: string, args: {string}) 
     local stdout = uv.new_pipe(false)
     local stderr = uv.new_pipe(false)
@@ -231,6 +250,7 @@ local function cmd_do_uv(cmd: string, args: {string})
     --print("after run")
 
 end
+-- }}}
 --]]
 
 --------------------------------------------------------------
@@ -242,8 +262,6 @@ local function filter_sources_c(
 ) 
     ut.filter_sources(".*%.c$", path, cb, exclude)
 end
-
---
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
@@ -333,7 +351,9 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
 end
 
 local enum UrlAction
+    -- склонировать 
 	"git"
+    -- скачать и распаковать
 	"zip"
 end
 
@@ -783,6 +803,14 @@ local function build_resvg(_: Dependency)
     ut.pop_dir()
 end
 
+local function update_default(dep: Dependency) 
+    print("update_default")
+    print("current directory", lfs.currentdir())
+
+    local cmd = "git pull origin master"
+    cmd_do(cmd)
+end
+
 -- XXX:  Любые сборки которые попадают в сеть должны быть без отладочной 
 -- информации, с максимальной оптимизацией. В целях безопасности
 -- TODO: Определить действие для Lua библиотек, которые должны быть 
@@ -791,6 +819,26 @@ end
 -- TODO: Добавить возможность добавления библиотекой дефайнов для 
 -- компилятора, в частности для разрешения пути.
 dependencies = {
+
+    {
+        disabled = false,
+        description = "color worms moving on texture",
+        custom_defines = nil,
+        lualibrary_install = nil,
+        dir = "wormseffect",
+        includes = { 
+            "wormseffect",
+        },
+        libdirs = { "wormseffect" },
+        links = { "worms_effect" },
+        links_internal = {},
+        name = "wormseffect",
+        url_action = "git",
+        build = build_with_make,
+        url = "git@github.com:nagolove/raylib_colorwormseffect.git",
+        update = update_default,
+    },
+
 
     {
         disabled = false,
@@ -1571,6 +1619,7 @@ end
 
 local function dependency_init(dep: Dependency, destdir: string): any
 	assert(destdir)
+    -- XXX: Кажется строчка с копированием в каталог wasm не нужна
     -- Копирую в wasm каталог только если установлени специальный флажок
     if string.match(destdir, "wasm_") then 
         if dep.copy_for_wasm then
@@ -1703,9 +1752,9 @@ local record Actions
     selftest_status: function(Args)
     stage: function(Args)
     test: function(Args)
-    update: function(Args)
     verbose: function(Args)
     wasm_build: function(Args)
+    update: function(Args)
     -- }}}
 end
 
@@ -1718,6 +1767,7 @@ local enum ActionsEnum
     "compile_flags"
     "dependencies"
     "deps"
+    "update"
 
     -- FIXME: Как добавить поддержку зависимотей для текущего проекта?
     -- Значить нужно добавлять пути и опции компилятора от текущего проекта
@@ -1736,9 +1786,7 @@ local enum ActionsEnum
     "selftest_status"
     "selftest_push"
     "test"
-    "update"
     "verbose"
-    --"updates"
     "wasm_build"
     -- }}}
 end
@@ -1783,22 +1831,33 @@ local parser_setup: {string:ParserSetup} = {
         --options = { "-n --name", },
     },
     --]]
-    update = {
-        summary = "call update() function to get latest git version of source",
+
+    --[[
+    updates_check = {
+        --summary = "call update() function to get latest git version of source",
+        summary = "print new avaible sources versions for all dependencies",
         options = { "-n --name", },
     },
+    --]]
+
+    update = {
+        --summary = "call update() function to get latest git version of source",
+        summary = "make backup and reinit dependency by name",
+        options = { "-n --name", },
+    },
+
     dependencies = {
-        summary = "print dependendies table",
+        summary = "print dependencies table",
     },
     build = {
-        summary = "build dependendies for native platform",
+        summary = "build dependencies for native platform",
         options = { "-n --name" },
     },
     compile_flags = {
         summary = "print compile_flags.txt to stdout",
     },
     deps = {
-        summary = "list of dependendies",
+        summary = "list of dependencies",
         flags = { 
             { "-f --full", "full nodes info" },
         },
@@ -1878,7 +1937,7 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-n --name" },
     },
     build_smart = {
-        summary = "build dependendies for native platform",
+        summary = "build dependencies for native platform",
         options = { "n --name" },
     },
     updates = {
@@ -2779,14 +2838,19 @@ function actions.compile_flags(_: Args)
     print('cfgs', inspect(cfgs))
 
     if cfgs and cfgs[1] then
-        for _, v in ipairs(get_ready_includes(cfgs[0])) do
+        for _, v in ipairs(get_ready_includes(cfgs[1])) do
             put("-I" .. v)
         end
         put("-Isrc")
         put("-I.")
 
         if cfgs[1].debug_define then
-            for define, value in pairs(cfgs[0].debug_define) do
+            --for define, value in pairs(cfgs[0].debug_define) do
+
+            --print(ansicolors("%{red}INSPECTION%{reset}"))
+            --print(inspect(pairs(cfgs[1].debug_define)))
+
+            for define, value in pairs(cfgs[1].debug_define) do
                 assert(type(define) == 'string');
                 assert(type(value) == 'string');
                 put(format("-D%s=%s", string.upper(define), string.upper(value)))
@@ -3669,10 +3733,69 @@ local record Aseprite
 end
 --]]
 
+local enum Answer
+    "yes"
+    "no"
+end
+
+local function yes_or_no(input: string): Answer
+    local yes = { "yes", "y", }
+    local no = { "no", "n" }
+    for _, v in ipairs(yes) do
+        if input:lower() == v then
+            return "yes"
+        end
+    end
+    for _, v in ipairs(no) do
+        if input:lower() == v then
+            return "no"
+        end
+    end
+    print("yes_or_no: bad value", input)
+    os.exit(1)
+end
+
+local function backup(dep: Dependency)
+    ut.push_current_dir()
+    lfs.chdir(path_rel_third_party)
+
+    print('backup')
+    print('currentdir', lfs.currentdir())
+    local backup_name = dep.name .. ".bak"
+
+    --[[
+    -- TODO: Задать вопрос по перезаписи существующего каталога с бэкапом
+    -- или сделать версионированную запись
+    local attr = lfs.attributes(backup_name)
+    if attr and attr.mode == 'directory' then
+        print(ansicolors("%{red}" .. backup_name .. " already exists%{reset}"))
+        print(ansicolors("%{red}rewrite?{reset}"))
+
+        local inp = io.read()
+            if yes_or_no(inp) == 'no' then
+
+            end
+
+        print(ansicolors("%{red}-=aborting=-%{reset}"))
+        --os.exit(1)
+    end
+    --]]
+
+    local cmd = "cp -r " .. dep.name .. " " .. backup_name
+    cmd_do(cmd)
+    print("cmd", cmd)
+
+    ut.pop_dir()
+end
+
 local function _update(dep: Dependency)
+    ut.push_current_dir()
     if dep.update then
+        backup(dep)
+        lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
         dep.update(dep)
     end
+    ut.pop_dir()
 end
 
 function actions.update(_args: Args)
@@ -3689,6 +3812,24 @@ function actions.update(_args: Args)
     else
         print("use only with --name option")
     end
+
+    --[[
+    for _, dep in ipairs(dependencies) do
+        ut.push_current_dir()
+        lfs.chdir(dep.dir)
+
+        local attr = lfs.attributes(".git")
+        if attr and attr.mode == 'directory' then
+            --print('attr', inspect(attr))
+            print(ansicolors("%{blue}" .. dep.name .. "%{reset}")) 
+            os.execute("git fetch")
+            -- XXX: Что делать дальше?
+            -- Посмотреть разницу в виде сообщений
+        end
+        
+        ut.pop_dir()
+    end
+    --]]
 end
 
 --[[
