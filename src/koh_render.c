@@ -365,6 +365,8 @@ void render_v4_with_tex2(RenderTexOpts opts) {
 
 }
 
+// TODO: Сделать и проверить рисование точно вырезанного куска текстуры
+// на примере ~/koh-t80/assets/cut-from-texture.png
 void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint
 ) {

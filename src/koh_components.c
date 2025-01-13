@@ -829,21 +829,21 @@ void shape_render_poly(
     printf("\n");
 
     for (int i = 0; i < vertex_disp; i++) {
-        Vector2 last = w_verts[count - 1], tmp = w_verts[1];
-        for (int j = 1; j < count; j++) {
-            /*w_verts[j] = w_verts[j - 1];*/
-            w_verts[j] = tmp;
-            tmp = w_verts[j - 1];
+        Vector2 last = w_verts[count - 1];
+        for (int j = 0; j < count; j++) {
+            Vector2 tmp = w_verts[j];
+            w_verts[j] = last;
+            last = tmp;
         }
-        w_verts[0] = last;
     }
 
+    /*
     printf("after ");
     for (int i = 0; i < count; i++) {
         printf("%s ", Vector2_tostr(w_verts[i]));
     }
     printf("\n");
-
+    */
 
     if (opts->tex) {
         if (poly.count == 4) 
