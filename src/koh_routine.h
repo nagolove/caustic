@@ -22,6 +22,10 @@
 #include "box2d/math_functions.h"
 #endif
 
+static inline Vector2 Im2Vec2(ImVec2 v) {
+    return (Vector2) { .x = v.x, .y = v.y, };
+}
+
 static inline void vec4_from_color(float vec[4], Color c) {
     assert(vec);
     vec[0] = c.r / 255.;

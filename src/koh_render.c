@@ -287,14 +287,14 @@ void render_verts4(Vector2 verts[4], Color tint) {
     rlSetTexture(0);
 }
 
-void render_v4_with_tex2(RenderTexOpts opts) {
+void render_v4_with_tex2(const RenderTexOpts *opts) {
     //trace("render_v4_with_tex:\n");
 
-    Texture2D texture = opts.texture;
-    Rectangle source = opts.source;
-    Vector2   *verts = opts.verts;
-    Color     tint = opts.tint;
-    int       vertex_disp = opts.vertex_disp;
+    Texture2D       texture = opts->texture;
+    Rectangle       source = opts->source;
+    const Vector2   *verts = opts->verts;
+    Color           tint = opts->tint;
+    //int           vertex_disp = opts.vertex_disp;
 
     // Check if texture is valid
     if (texture.id <= 0)

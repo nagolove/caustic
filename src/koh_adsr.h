@@ -5,14 +5,17 @@
 
 #define ADSR_EPSILON    0.001
 
-struct ADSR {
+typedef struct ADSR {
     double attack, decay, sustain, release;
     double amp_attack, amp_sustain;
+
+    // TODO: Сделать непрозрачный указатель на служебную текстуру в 
+    // динамической памяти
     // private:
     double time_start, time_last;
     Color  color;
     bool   inited;
-};
+} ADSR;
 
 void adsr_init(struct ADSR *envelope);
 // Возвращает ложь когда движение по огибающей закончено

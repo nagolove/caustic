@@ -29,7 +29,7 @@ typedef union {
     int64_t id;
 } e_idu;
 
-_Static_assert(sizeof(e_idu) == 8, "only 64 machines allowed");
+_Static_assert(sizeof(e_idu) == 8, "only 64bit machines allowed");
 
 typedef e_idu e_id;
 
@@ -92,8 +92,8 @@ void e_free(ecs_t *r);
 
 // Зарегистрировать тип компонента до того, как использовать его в каких-либо
 // операциях. 
-// Функция изменяет значения поля priv в comp и возвращает измененный результат
-// который должен быт сохранен.
+// Функция изменяет значения поля структуры priv по указателю comp и 
+// возвращает измененный результат который должен быт сохранен.
 // t+
 e_cp_type e_register(ecs_t *r, e_cp_type *comp);
 
@@ -243,6 +243,7 @@ void e_view_next(e_view* v);
 // Выделяет память, возвращает массив сущностей находящихся в системе
 e_id *e_entities_alloc(ecs_t *r, size_t *num);
 
+// XXX: Not implemented
 ecs_t *e_clone(ecs_t *r);
 
 // Печатает содержимое e_entities2table_alloc()
