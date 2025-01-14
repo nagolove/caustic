@@ -13,15 +13,6 @@ return {
         },
         codegen = { {
             external = function()
-                --print('currentdir', lfs.currentdir())
-
-                --[[
-                os.execute(
-                    "cd src && bin2c -t -d koh_lua_tabular.h " ..
-                    "-o koh_lua_tabular.c ../tl_dst/tabular.lua"
-                )
-                --]]
-
                 os.execute(
                     "bin2c -t -d koh_lua_tabular.h " ..
                     "-o koh_lua_tabular.c ../tl_dst/tabular.lua"
