@@ -2230,3 +2230,35 @@ int *koh_rand_uniq_arr_alloc(int up, int num) {
 bool koh_maybe() {
     return rand() % 2;
 }
+
+void koh_qsort(
+    void *arr, 
+    int num, int size,
+    int (*cmp)(const void *a, const void *b, void *ud),
+    void *ud
+) {
+    /*
+  if (num < 2) return;
+
+  char *_arr = arr;
+  //int pivot = arr[num / 2];
+  char *pivot = (char*)_arr + size * (num / 2);
+
+  int i, j;
+  for (i = 0, j = num - 1; ; i++, j--) {
+//    while (arr[i] < pivot) i++;
+ //   while (arr[j] > pivot) j--;
+    while (cmp((const void*)(arr[i]), (const void*)(pivot), ud)) i++;
+    while (cmp((const void*)(arr[j]), (const void*)(pivot), ud)) j--;
+
+    if (i >= j) break;
+
+    int temp = arr[i];
+    arr[i]     = arr[j];
+    arr[j]     = temp;
+  }
+
+  koh_qsort(_arr, i);
+  koh_qsort(_arr + i, num - i);
+  */
+}
