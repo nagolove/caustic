@@ -22,6 +22,7 @@ else
 end
 
 
+
 local path_rel_third_party = remove_last_backslash(
 os.getenv("3rd_party") or "3rd_party")
 
@@ -31,20 +32,20 @@ os.getenv("wasm_3rd_party") or "wasm_3rd_party")
 
 
 
+local path_rel_third_party_release = remove_last_backslash(
+os.getenv("3rd_party_release") or "3rd_party_release")
 
 
-
-
-
-
-
-
+local path_wasm_third_party_release = remove_last_backslash(
+os.getenv("wasm_3rd_party_release") or "wasm_3rd_party_release")
 
 
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
 
 
+
 local lua_ver = "5.4"
+
 
 package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
@@ -57,10 +58,15 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
 
+
+
 assert(path_caustic)
 assert(path_rel_third_party)
 assert(path_abs_third_party)
 assert(path_wasm_third_party)
+assert(path_rel_third_party_release)
+assert(path_wasm_third_party_release)
+
 
 
 require("common")
@@ -77,6 +83,8 @@ local Cache = require("cache")
 local uv = require("luv")
 local lanes = require("lanes").configure()
 local sleep = require("socket").sleep
+local format = string.format
+local match = string.match
 
 
 
@@ -85,22 +93,12 @@ if string.match(lfs.currentdir(), "tl_dst") then
 end
 
 
-
-
 local site_repo = "~/nagolove.github.io"
 
-
-local format = string.format
-local match = string.match
 local cache_name = "cache.lua"
-
-
-
-
-
-
-
 local verbose = false
+
+
 local errexit = false
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end = "{CAUSTIC_PASTE_END}"
@@ -117,6 +115,14 @@ local cache
 
 
 
+if verbose then
+   tabular(path_caustic)
+   tabular(path_rel_third_party)
+   tabular(path_abs_third_party)
+   tabular(path_wasm_third_party)
+   tabular(path_rel_third_party_release)
+   tabular(path_wasm_third_party_release)
+end
 
 
 
@@ -137,8 +143,25 @@ local cache
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function printc(text)
+   print(ansicolors(text))
+end
 
 local function cmd_do_execute(_cmd)
+
    if verbose then
       os.execute("echo `pwd`")
    end
@@ -234,6 +257,8 @@ end
 
 
 
+
+
 local cmd_do = cmd_do_execute
 
 
@@ -242,8 +267,6 @@ local function filter_sources_c(
 
    ut.filter_sources(".*%.c$", path, cb, exclude)
 end
-
-
 
 
 local function search_and_load_cfgs_up(fname)
@@ -331,6 +354,8 @@ local function search_and_load_cfgs_up(fname)
 
    return cfgs, push_num
 end
+
+
 
 
 
@@ -727,13 +752,13 @@ local function update_box2c(dep)
    print("update_box2c", lfs.currentdir())
 
    if ut.git_is_repo_clean(".", true) then
-      print(ansicolors("%{green}repository in clean state%{reset}"))
+      printc("%{green}repository in clean state%{reset}")
       cmd_do("git config pull.rebase false")
 
       cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
       cmd_do("git pull erin main")
    else
-      print(ansicolors("%{red}repository is dirty%{reset}"))
+      printc("%{red}repository is dirty%{reset}")
    end
 
    ut.pop_dir()
@@ -783,6 +808,19 @@ local function build_resvg(_)
    ut.pop_dir()
 end
 
+local _dependecy_init
+
+local function update_default(dep)
+   print("update_default")
+   print("current directory", lfs.currentdir())
+
+   local cmd = "git pull origin master"
+   cmd_do(cmd)
+
+
+
+end
+
 
 
 
@@ -791,6 +829,26 @@ end
 
 
 dependencies = {
+
+   {
+      disabled = false,
+      description = "color worms moving on texture",
+      custom_defines = nil,
+      lualibrary_install = nil,
+      dir = "wormseffect",
+      includes = {
+         "wormseffect",
+      },
+      libdirs = { "wormseffect" },
+      links = { "worms_effect" },
+      links_internal = {},
+      name = "wormseffect",
+      url_action = "git",
+      build = build_with_make,
+      url = "git@github.com:nagolove/raylib_colorwormseffect.git",
+      update = update_default,
+   },
+
 
    {
       disabled = false,
@@ -1440,7 +1498,7 @@ local function after_init(dep)
    end)
    if not ok then
       local msg = 'after_init() failed with ' .. errmsg
-      print(ansicolors("%{red}" .. msg .. "%{reset}"))
+      printc("%{red}" .. msg .. "%{reset}")
       print(debug.traceback())
    end
    ut.pop_dir()
@@ -1460,7 +1518,7 @@ local function git_clone_with_checkout(dep, checkout_arg)
          "Could not access through ssh to github.com with '%s'",
          errcode)
 
-         print(ansicolors("%{red}" .. msg .. "%{reset}"))
+         printc("%{red}" .. msg .. "%{reset}")
          error()
       else
          ssh_github_active = true
@@ -1571,6 +1629,7 @@ end
 
 local function dependency_init(dep, destdir)
    assert(destdir)
+
 
    if string.match(destdir, "wasm_") then
       if dep.copy_for_wasm then
@@ -1750,7 +1809,6 @@ end
 
 
 
-
 local parser_setup = {
 
 
@@ -1783,22 +1841,33 @@ local parser_setup = {
 
 
 
+
+
+
+
+
+
+
+
+
    update = {
-      summary = "call update() function to get latest git version of source",
+
+      summary = "make backup and reinit dependency by name",
       options = { "-n --name" },
    },
+
    dependencies = {
-      summary = "print dependendies table",
+      summary = "print dependencies table",
    },
    build = {
-      summary = "build dependendies for native platform",
+      summary = "build dependencies for native platform",
       options = { "-n --name" },
    },
    compile_flags = {
       summary = "print compile_flags.txt to stdout",
    },
    deps = {
-      summary = "list of dependendies",
+      summary = "list of dependencies",
       flags = {
          { "-f --full", "full nodes info" },
       },
@@ -1977,7 +2046,7 @@ local function _init(path, deps)
    if not ut.git_is_repo_clean(".") then
       local curdir = lfs.currentdir()
       local msg = format("_init: git index is dirty in '%s'", curdir)
-      print(ansicolors("%{red}" .. msg .. "%{reset}"))
+      printc("%{red}" .. msg .. "%{reset}")
    end
 
    require('compat53')
@@ -2306,7 +2375,7 @@ function actions.selftest_lg(_args)
       ut.push_current_dir()
       for _, dir in ipairs(test_dirs) do
          chdir(dir)
-         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
          if not ut.git_is_repo_clean(".") then
             cmd_do("lazygit")
             cmd_do("git push origin master")
@@ -2329,7 +2398,7 @@ function actions.selftest_push(_args)
       ut.push_current_dir()
       for _, dir in ipairs(test_dirs) do
          chdir(dir)
-         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
          cmd_do("git push")
       end
       ut.pop_dir()
@@ -2350,7 +2419,7 @@ function actions.selftest_status(_args)
       ut.push_current_dir()
       for _, dir in ipairs(test_dirs) do
          chdir(dir)
-         print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
          cmd_do("git status")
       end
       ut.pop_dir()
@@ -2779,14 +2848,19 @@ function actions.compile_flags(_)
    print('cfgs', inspect(cfgs))
 
    if cfgs and cfgs[1] then
-      for _, v in ipairs(get_ready_includes(cfgs[0])) do
+      for _, v in ipairs(get_ready_includes(cfgs[1])) do
          put("-I" .. v)
       end
       put("-Isrc")
       put("-I.")
 
       if cfgs[1].debug_define then
-         for define, value in pairs(cfgs[0].debug_define) do
+
+
+
+
+
+         for define, value in pairs(cfgs[1].debug_define) do
             assert(type(define) == 'string');
             assert(type(value) == 'string');
             put(format("-D%s=%s", string.upper(define), string.upper(value)))
@@ -2808,7 +2882,7 @@ function actions.compile_flags(_)
 
 
    else
-      print(ansicolors("%{red}could not generate compile_flags.txt%{reset}"))
+      printc("%{red}could not generate compile_flags.txt%{reset}")
    end
 end
 
@@ -3330,7 +3404,7 @@ local function _build(dep)
       "_build: could not do chdir('%s') dependency with %s",
       dep.dir, errmsg_chd)
 
-      print(ansicolors("%{red}" .. msg .. "%{reset}"))
+      printc("%{red}" .. msg .. "%{reset}")
       ut.pop_dir()
       return
    else
@@ -3380,7 +3454,7 @@ function actions.build(_args)
             "could not get '%s' dependency with %s",
             _args.name, errmsg)
 
-            print(ansicolors("%{red}" .. msg .. "%{reset}"))
+            printc("%{red}" .. msg .. "%{reset}")
          end
       else
          print("bad dependency name", _args.name)
@@ -3614,6 +3688,10 @@ local function project_link(ctx, cfg, _args)
    local flags = ""
    if not _args.noasan then
       flags = flags .. table.concat(flags_sanitazer, " ")
+      flags = flags .. " "
+      if cfg.flags and type(cfg.flags) == 'table' then
+         flags = flags .. table.concat(cfg.flags, " ")
+      end
    end
    if _args.make_type == 'release' then
       flags = ""
@@ -3628,8 +3706,8 @@ local function project_link(ctx, cfg, _args)
    ctx.libs)
 
    if verbose then
-      print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
-      print(ansicolors("project_link: %{blue}" .. cmd .. "%{reset}"))
+      printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+      printc("project_link: %{blue}" .. cmd .. "%{reset}")
    end
    cmd_do(cmd)
 end
@@ -3669,11 +3747,78 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function backup(dep)
+   ut.push_current_dir()
+   lfs.chdir(path_rel_third_party)
+
+   print('backup')
+   print('currentdir', lfs.currentdir())
+   local backup_name = dep.name .. ".bak"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   local cmd = "rsync -a --info=progress2 " .. dep.name .. " " .. backup_name
+
+
+   cmd_do(cmd)
+   print("cmd", cmd)
+
+   ut.pop_dir()
+end
+
 local function _update(dep)
+   ut.push_current_dir()
+   lfs.chdir(path_caustic)
    if dep.update then
+      backup(dep)
+      lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
       dep.update(dep)
    end
+   ut.pop_dir()
 end
+
 
 function actions.update(_args)
    if _args.name then
@@ -3689,6 +3834,24 @@ function actions.update(_args)
    else
       print("use only with --name option")
    end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end
 
 
@@ -4057,6 +4220,13 @@ local function sub_make(_args, cfg, push_num)
       for _, flag in ipairs(flags_sanitazer) do
          table.insert(flags, flag)
       end
+
+      if cfg.flags and type(cfg.flags) == 'table' then
+         for _, flag in ipairs(cfg.flags) do
+            assert(type(flag) == 'string')
+            table.insert(flags, flag)
+         end
+      end
    end
 
    flags = ut.merge_tables(flags, { "-Wall", "-fPIC" })
@@ -4407,7 +4577,7 @@ local function main()
 
 
       if verbose then
-         print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
+         printc("%{blue}" .. "VERBOSE_MODE" .. "%{reset}")
       end
 
       if not _args.no_verbose_path then
