@@ -130,6 +130,7 @@ local record Cfg
     not_dependencies: {string}
     src: string
     artifact: string
+    flags: {string}
     main: string
     -- Выполняется перед компиляцией
     codegen: {Codegen}
@@ -153,6 +154,10 @@ local record Cfg
         on_finish: function() -- XXX: Почему только для отладки?
     end
     -- }}}
+end
+
+local function printc(text: string)
+    print(ansicolors(text))
 end
 
 local function cmd_do_execute(_cmd: string|{string})
@@ -747,13 +752,13 @@ local function update_box2c(dep: Dependency)
     print("update_box2c", lfs.currentdir())
 
     if ut.git_is_repo_clean(".", true) then
-        print(ansicolors("%{green}repository in clean state%{reset}"))
+        printc("%{green}repository in clean state%{reset}")
         cmd_do("git config pull.rebase false")
         -- TODO: Проверка на существование записи
         cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
         cmd_do("git pull erin main")
     else
-        print(ansicolors("%{red}repository is dirty%{reset}"))
+        printc("%{red}repository is dirty%{reset}")
     end
 
     ut.pop_dir()
@@ -803,12 +808,17 @@ local function build_resvg(_: Dependency)
     ut.pop_dir()
 end
 
+local _dependecy_init: function(dep: Dependency)
+
 local function update_default(dep: Dependency) 
     print("update_default")
     print("current directory", lfs.currentdir())
 
     local cmd = "git pull origin master"
     cmd_do(cmd)
+
+    -- XXX: Не работает переинициализация
+    --_dependecy_init(dep)
 end
 
 -- XXX:  Любые сборки которые попадают в сеть должны быть без отладочной 
@@ -1488,7 +1498,7 @@ local function after_init(dep: Dependency)
     end)
     if not ok then
         local msg = 'after_init() failed with ' .. errmsg
-        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        printc("%{red}" .. msg .. "%{reset}")
         print(debug.traceback())
     end
     ut.pop_dir()
@@ -1508,7 +1518,7 @@ local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
                 "Could not access through ssh to github.com with '%s'",
                 errcode as string
             )
-            print(ansicolors("%{red}" .. msg .. "%{reset}"))
+            printc("%{red}" .. msg .. "%{reset}")
             error()
         else
             ssh_github_active = true
@@ -2036,7 +2046,7 @@ local function _init(path: string, deps: {Dependency})
     if not ut.git_is_repo_clean(".") then
         local curdir = lfs.currentdir()
         local msg = format("_init: git index is dirty in '%s'", curdir)
-        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        printc("%{red}" .. msg .. "%{reset}")
     end
 
 	require 'compat53'
@@ -2365,7 +2375,7 @@ function actions.selftest_lg(_args: Args)
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             chdir(dir)
-            print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+            printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
             if not ut.git_is_repo_clean(".") then
                 cmd_do("lazygit")
                 cmd_do("git push origin master")
@@ -2388,7 +2398,7 @@ function actions.selftest_push(_args: Args)
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             chdir(dir)
-            print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+            printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
             cmd_do("git push")
         end
         ut.pop_dir()
@@ -2409,7 +2419,7 @@ function actions.selftest_status(_args: Args)
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             chdir(dir)
-            print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
+            printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
             cmd_do("git status")
         end
         ut.pop_dir()
@@ -2653,7 +2663,7 @@ local function rec_remove_dir(dirname: string)
             local msg = format(
                 "rec_remove_dir: git index is dirty '%s'", curdir
             )
-            print(ansicolors("%{red}" .. msg .. "%{reset}"))
+            printc("%{red}" .. msg .. "%{reset}")
             ut.pop_dir()
             return
         end
@@ -2662,7 +2672,7 @@ local function rec_remove_dir(dirname: string)
         local msg = format(
             "rec_remove_dir: could not change directory to '%s'", dirname
         )
-        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        printc("%{red}" .. msg .. "%{reset}")
         ut.pop_dir()
         return
     end
@@ -2847,7 +2857,7 @@ function actions.compile_flags(_: Args)
         if cfgs[1].debug_define then
             --for define, value in pairs(cfgs[0].debug_define) do
 
-            --print(ansicolors("%{red}INSPECTION%{reset}"))
+            --printc("%{red}INSPECTION%{reset}")
             --print(inspect(pairs(cfgs[1].debug_define)))
 
             for define, value in pairs(cfgs[1].debug_define) do
@@ -2872,7 +2882,7 @@ function actions.compile_flags(_: Args)
         --]]
 
     else
-        print(ansicolors("%{red}could not generate compile_flags.txt%{reset}"))
+        printc("%{red}could not generate compile_flags.txt%{reset}")
     end
 end
 
@@ -3394,7 +3404,7 @@ local function _build(dep: Dependency)
             "_build: could not do chdir('%s') dependency with %s",
             dep.dir, errmsg_chd
         )
-        print(ansicolors("%{red}" .. msg .. "%{reset}"))
+        printc("%{red}" .. msg .. "%{reset}")
         ut.pop_dir()
         return
     else
@@ -3444,7 +3454,7 @@ function actions.build(_args: Args)
                     "could not get '%s' dependency with %s",
                     _args.name, errmsg
                 )
-                print(ansicolors("%{red}" .. msg .. "%{reset}"))
+                printc("%{red}" .. msg .. "%{reset}")
             end
         else
             print("bad dependency name", _args.name)
@@ -3619,7 +3629,7 @@ local function run_parallel(queue: {string})
     until stop
 
     if verbose then
-        print(ansicolors(
+        printc(
             "%{red}" .. 
             format("wait iterations done %d", wait_iters) .. "%{reset}"
         ))
@@ -3678,6 +3688,10 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local flags: string = ""
     if not _args.noasan then
         flags = flags .. table.concat(flags_sanitazer, " ")
+        flags = flags .. " "
+        if cfg.flags and type(cfg.flags) == 'table' then
+            flags = flags .. table.concat(cfg.flags, " ")
+        end
     end
     if _args.make_type == 'release' then
         flags = ""
@@ -3692,8 +3706,8 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         ctx.libs
     )
     if verbose then
-        print(ansicolors("%{blue}" .. lfs.currentdir() .. "%{reset}"))
-        print(ansicolors("project_link: %{blue}" .. cmd .. "%{reset}"))
+        printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+        printc("project_link: %{blue}" .. cmd .. "%{reset}")
     end
     cmd_do(cmd)
 end
@@ -3733,6 +3747,8 @@ local record Aseprite
 end
 --]]
 
+
+--[[
 local enum Answer
     "yes"
     "no"
@@ -3754,6 +3770,7 @@ local function yes_or_no(input: string): Answer
     print("yes_or_no: bad value", input)
     os.exit(1)
 end
+--]]
 
 local function backup(dep: Dependency)
     ut.push_current_dir()
@@ -3768,20 +3785,21 @@ local function backup(dep: Dependency)
     -- или сделать версионированную запись
     local attr = lfs.attributes(backup_name)
     if attr and attr.mode == 'directory' then
-        print(ansicolors("%{red}" .. backup_name .. " already exists%{reset}"))
-        print(ansicolors("%{red}rewrite?{reset}"))
+        printc("%{red}" .. backup_name .. " already exists%{reset}")
+        printc("%{red}rewrite?{reset}")
 
         local inp = io.read()
             if yes_or_no(inp) == 'no' then
 
             end
 
-        print(ansicolors("%{red}-=aborting=-%{reset}"))
+        printc("%{red}-=aborting=-%{reset}")
         --os.exit(1)
     end
     --]]
 
-    local cmd = "cp -r " .. dep.name .. " " .. backup_name
+    local cmd = "rsync -a --info=progress2 " .. dep.name .. " " .. backup_name
+
     cmd_do(cmd)
     print("cmd", cmd)
 
@@ -3790,6 +3808,7 @@ end
 
 local function _update(dep: Dependency)
     ut.push_current_dir()
+    lfs.chdir(path_caustic)
     if dep.update then
         backup(dep)
         lfs.chdir(path_rel_third_party .. "/" .. dep.dir)
@@ -3798,6 +3817,7 @@ local function _update(dep: Dependency)
     ut.pop_dir()
 end
 
+-- XXX: Работает только из каталога ~/caustic
 function actions.update(_args: Args)
     if _args.name then
         local dependencies_name_map = get_deps_name_map(dependencies)
@@ -3821,7 +3841,7 @@ function actions.update(_args: Args)
         local attr = lfs.attributes(".git")
         if attr and attr.mode == 'directory' then
             --print('attr', inspect(attr))
-            print(ansicolors("%{blue}" .. dep.name .. "%{reset}")) 
+            printc("%{blue}" .. dep.name .. "%{reset}") 
             os.execute("git fetch")
             -- XXX: Что делать дальше?
             -- Посмотреть разницу в виде сообщений
@@ -4198,6 +4218,13 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         for _, flag in ipairs(flags_sanitazer) do
             table.insert(flags, flag)
         end
+
+        if cfg.flags and type(cfg.flags) == 'table' then
+            for _, flag in ipairs(cfg.flags) do
+                assert(type(flag) == 'string')
+                table.insert(flags, flag)
+            end
+        end
     end
 
     flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
@@ -4326,7 +4353,7 @@ local function sub_make(_args: Args, cfg: Cfg, push_num?: integer)
         -- Проверка каустики на необходимость пересборки
         local local_cfgs = search_and_load_cfgs_up('bld.lua')
 
-        --print(ansicolors("%{blue}local_cfg%{reset}"))
+        --printc("%{blue}local_cfg%{reset}")
         --print(tabular(cfg))
 
         for _, local_cfg in ipairs(local_cfgs) do
@@ -4548,7 +4575,7 @@ local function main()
         --verbose = _args.verbose == true
 
         if verbose then
-            print(ansicolors("%{blue}" .. "VERBOSE_MODE" .. "%{reset}"))
+            printc("%{blue}" .. "VERBOSE_MODE" .. "%{reset}")
         end
 
         if not _args.no_verbose_path then
