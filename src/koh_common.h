@@ -368,3 +368,6 @@ void koh_qsort(
     void *ud
 );
 
+// Возвращает строковое имя цвета, цвета используются только из raylib.h
+// Если значение не найдено, возвращается "unknown"
+const char *Color2name(Color c);

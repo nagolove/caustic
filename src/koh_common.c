@@ -2267,3 +2267,46 @@ void koh_qsort(
     koh_qsort(_arr + i * size, num - i, size, cmp, ud);
 }
 
+static const struct {
+    Color      c;
+    const char *name;
+} _color2name[] = {
+    { LIGHTGRAY  ,"Light Gray" },
+    { GRAY       ,"Gray" },
+    { DARKGRAY   ,"Dark Gray" },
+    { YELLOW     ,"Yellow" },
+    { GOLD       ,"Gold" },
+    { ORANGE     ,"Orange" },
+    { PINK       ,"Pink" },
+    { RED        ,"Red" },
+    { MAROON     ,"Maroon" },
+    { GREEN      ,"Green" },
+    { LIME       ,"Lime" },
+    { DARKGREEN  ,"Dark Green" },
+    { SKYBLUE    ,"Sky Blue" },
+    { BLUE       ,"Blue" },
+    { DARKBLUE   ,"Dark Blue" },
+    { PURPLE     ,"Purple" },
+    { VIOLET     ,"Violet" },
+    { DARKPURPLE ,"Dark Purple" },
+    { BEIGE      ,"Beige" },
+    { BROWN      ,"Brown" },
+    { DARKBROWN  ,"Dark Brown" },
+    { WHITE      ,"White" },
+    { BLACK      ,"Black" },
+    { BLANK      ,"Blank (Transparent)" },
+    { MAGENTA    ,"Magenta" },
+    { RAYWHITE   ,"My own White (raylib logo)" },
+    // последний элемент должен быть с пустым именем
+    { RED, NULL },
+};
+
+const char *Color2name(Color c) {
+    for (int i = 0; _color2name[i].name; i++) {
+        if (memcmp(&c, &_color2name[i].c, sizeof(c)) == 0) {
+            return _color2name[i].name;
+        }
+    }
+
+    return "unknown";
+}
