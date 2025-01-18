@@ -359,6 +359,8 @@ int *koh_rand_uniq_arr_alloc(int up, int num);
 // С вероятностью 50% вернет ложь или истину. Внутри - rand()
 bool koh_maybe();
 
+// Быстрая сортировка, аналогичная qsort(), но с передачей в функцию сравнения
+// указателя на данные пользователя.
 void koh_qsort(
     void *arr, 
     int num, int size,

@@ -2237,28 +2237,33 @@ void koh_qsort(
     int (*cmp)(const void *a, const void *b, void *ud),
     void *ud
 ) {
-    /*
-  if (num < 2) return;
+    if (num < 2) return;
 
-  char *_arr = arr;
-  //int pivot = arr[num / 2];
-  char *pivot = (char*)_arr + size * (num / 2);
+    char *_arr = arr;
+    char *pivot = (char*)_arr + size * (num / 2);
 
-  int i, j;
-  for (i = 0, j = num - 1; ; i++, j--) {
-//    while (arr[i] < pivot) i++;
- //   while (arr[j] > pivot) j--;
-    while (cmp((const void*)(arr[i]), (const void*)(pivot), ud)) i++;
-    while (cmp((const void*)(arr[j]), (const void*)(pivot), ud)) j--;
+    int i, j;
+    for (i = 0, j = num - 1; ; i++, j--) {
 
-    if (i >= j) break;
+        /*
+        //    while (arr[i] < pivot) i++;
+        //   while (arr[j] > pivot) j--;
+        */
 
-    int temp = arr[i];
-    arr[i]     = arr[j];
-    arr[j]     = temp;
-  }
+        while (cmp((const void*)(_arr + i * size), (const void*)pivot, ud)) 
+            i++;
+        while (cmp((const void*)(_arr + j * size), (const void*)(pivot), ud)) 
+            j--;
 
-  koh_qsort(_arr, i);
-  koh_qsort(_arr + i, num - i);
-  */
+        if (i >= j) break;
+
+        char tmp[size];
+        memcpy(tmp, arr + i * size, size);
+        memcpy(arr + i * size, arr + j * size, size);
+        memcpy(arr + j * size, tmp, size);
+    }
+
+    koh_qsort(_arr, i, size, cmp, ud);
+    koh_qsort(_arr + i * size, num - i, size, cmp, ud);
 }
+
