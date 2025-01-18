@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "munit.h"
+#include "koh_strbuf.h"
 
 /* An item stored in a sparse set. */
 /*typedef int64_t e_id;*/
@@ -67,7 +68,8 @@ typedef struct e_cp_type {
     char        **(*str_repr)(void *payload, e_id e);
 
     // Сериазизация в Луа таблицу. Память требует освобождения.
-    char        *(*str_repr_alloc)(void *payload, e_id e);
+    /*char        *(*str_repr_alloc)(void *payload, e_id e);*/
+    StrBuf        (*str_repr_buf)(void *payload, e_id e);
 
     const char  *name; // component name
     const char  *description;
