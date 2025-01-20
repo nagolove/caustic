@@ -438,9 +438,10 @@ void sc_shutdown() {
     cur = NULL;
 
     if (lua) {
-        /*lua_close(lua);*/
 #ifdef KOH_DEP_RLWR
         rlwr_free(rlwr);
+#else
+        lua_close(lua);
 #endif
         lua = NULL;
     }
