@@ -259,6 +259,9 @@ static int l_trace_enable(lua_State *lua) {
 }
 
 void logger_register_functions() {
+    if (!sc_get_state())
+        return;
+
     sc_register_function(
         l_filter,
         "filter",
