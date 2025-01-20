@@ -17,6 +17,8 @@ typedef struct Char {
 struct FntVector {
     Vector2 cursor;
     HTable  *char2vector;
+    float   line_thick;
+    int     advance;
 };
 
 static int move_to(const FT_Vector* to, void* user);
@@ -43,6 +45,11 @@ static void char_render(FntVector *fv, Char *c) {
 
     FT_Outline outline = c->face->glyph->outline;
     FT_Outline_Decompose(&outline, &outline_funcs, fv);
+
+
+    // Добавляем смещение (ширину символа)
+    /*fv->advance += c->face->glyph->advance.x >> 6;*/
+    fv->cursor.x += c->face->glyph->advance.x >> 6;
 }
 
 static Char char_load(FntVector *fv, const char *ttf_file, int char_code) {
@@ -55,6 +62,7 @@ static Char char_load(FntVector *fv, const char *ttf_file, int char_code) {
 
     // Устанавливаем размер шрифта
     FT_Set_Pixel_Sizes(c.face, 0, 48);
+    /*FT_Set_Pixel_Sizes(c.face, 0, 48 / 2);*/
 
     // Загружаем глиф символа char_code
     if (FT_Load_Char(c.face, char_code, FT_LOAD_NO_BITMAP)) {
@@ -87,8 +95,11 @@ void fnt_vector_init() {
 void fnt_vector_free(FntVector *fv) {
     assert(fv);
 
+    trace("fnt_vector_free:\n");
+
     if (fv->char2vector) {
         htable_free(fv->char2vector);
+        fv->char2vector = NULL;
     }
 }
 
@@ -102,11 +113,13 @@ void on_remove_char(
 }
 
 FntVector *fnt_vector_new(const char *ttf_file) {
-    FntVector fv = {
-        .char2vector = htable_new(&(HTableSetup) {
-            /*.f_on_remove = on_remove_char,*/
-        }),
-    };
+    FntVector *fv = calloc(1, sizeof(*fv));
+    fv->line_thick = 5.;
+    assert(fv);
+
+    fv->char2vector = htable_new(&(HTableSetup) {
+        .f_on_remove = on_remove_char,
+    });
 
     if (!library) {
         fnt_vector_init();
@@ -120,19 +133,21 @@ FntVector *fnt_vector_new(const char *ttf_file) {
 
     // Загрузка базовых и долнительных символов
     for (int i = ascii_first; i < ascii_last; i++) {
-        char_load(&fv, ttf_file, i);
+        char_load(fv, ttf_file, i);
     }
     for (int i = cyrillic_first; i < cyrillic_last; i++) {
-        char_load(&fv, ttf_file, i);
+        char_load(fv, ttf_file, i);
     }
     for (int i = pseudo_gr_first; i < pseudo_gr_last; i++) {
-        char_load(&fv, ttf_file, i);
+        char_load(fv, ttf_file, i);
     }
     for (int i = arrows_first; i < arrows_last; i++) {
-        char_load(&fv, ttf_file, i);
+        char_load(fv, ttf_file, i);
     }
 
-    return 0;
+    trace("fnt_vector_new: %p\n", fv);
+
+    return fv;
 }
 
 // Проверка для аргумента utf8proc_iterate()
@@ -147,6 +162,8 @@ void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos) {
     const uint8_t *ptr = (const uint8_t *)text;
     int codepoint;
     utf8proc_ssize_t bytes;
+
+    fv->advance = 0;
 
     while (*ptr) {
         bytes = utf8proc_iterate(ptr, -1, &codepoint);
@@ -184,7 +201,14 @@ static int line_to(const FT_Vector* to, void* user) {
     /*std::cout << "Line to: (" << to->x / 64.0 << ", " << to->y / 64.0 << ")\n";*/
     trace("line_to:\n");
     FntVector *fv = user;
-    DrawLine(fv->cursor.x, fv->cursor.y, to->x, to->y, RED);
+    DrawLineEx(
+        (Vector2) { fv->cursor.x, fv->cursor.y },
+        (Vector2) { to->x, to->y, },
+        fv->line_thick, BLUE
+    );
+    fv->cursor.x = to->x;
+    fv->cursor.y = to->y;
+
     return 0;
 }
 
@@ -204,6 +228,9 @@ static int conic_to(
         BLUE
     );
 
+    fv->cursor.x = to->x;
+    fv->cursor.y = to->y;
+
     return 0;
 }
 
@@ -222,6 +249,9 @@ static int cubic_to(
             thick,
             BLUE
     );
+
+    fv->cursor.x = to->x;
+    fv->cursor.y = to->y;
 
     /*std::cout << "Cubic curve to: (" << control1->x / 64.0 << ", " << control1->y / 64.0 << ") -> ("*/
     /*<< control2->x / 64.0 << ", " << control2->y / 64.0 << ") -> ("*/
