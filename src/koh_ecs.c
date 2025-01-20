@@ -3067,8 +3067,7 @@ static void entity_print_buf(ecs_t *r) {
 
         // TODO: сделать меню по клику для копирования текста
         if (igBeginPopup("copy", 0)) {
-            static bool selected = false, enabled = false;
-            if (igMenuItem_Bool("copy", NULL, &selected, &enabled)) {
+            if (igMenuItem_Bool("copy", NULL, false, false)) {
                 char *tmp = strbuf_concat_alloc(&buf, "\n");
                 if (tmp) {
                     SetClipboardText(tmp);
