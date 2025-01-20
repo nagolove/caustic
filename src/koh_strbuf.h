@@ -4,6 +4,7 @@ typedef struct StrBufOpts {
     int cap;
 } StrBufOpts;
 
+// Строковый буфер для хранения динамически выделенных строк.
 typedef struct StrBuf {
     //TODO: Хранить длины и емкость строк
     // int *s_len, *s_cap;
@@ -27,4 +28,4 @@ __attribute__((__format__ (__printf__, 2, 3)))
 void strbuf_addf(StrBuf *s, const char *fmt, ...);
 
 // Возвращает склейку всех строк буфера. Память нужно освобождать.
-char *strbuf_concat_alloc(StrBuf *s);
+char *strbuf_concat_alloc(StrBuf *s, const char *sep);

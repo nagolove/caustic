@@ -41,9 +41,12 @@ void strbuf_realloc(StrBuf *s, float c) {
     assert(s);
     assert(c >= 1);
 
+    /*trace("strbuf_realloc: c %f\n", c);*/
+
     /* двойка - на случай первого выделения + NULL элемент в конце */;
     int new_cap = s->cap * c + 2; 
-    trace("strbuf_realloc: new_cap %d\n", new_cap);
+
+    /*trace("strbuf_realloc: new_cap %d\n", new_cap);*/
    
     void *p = realloc(s->s, new_cap * sizeof(s->s[0]));
     if (!p) {
@@ -58,16 +61,19 @@ void strbuf_realloc(StrBuf *s, float c) {
 void strbuf_add(StrBuf *s, const char *str) {
     assert(s);
 
+    /*printf("strbuf_add: str '%s', num %d\n", str, s->num);*/
+
     if (!str)
         return;
 
-    if (s->num + 1 == s->cap) {
+    if (s->num + 1 >= s->cap) {
         strbuf_realloc(s, 1.5);
     }
 
     s->s[s->num] = strdup(str);
     s->s[s->num + 1] = NULL;
     s->num++;
+
 }
 
 void strbuf_addf(StrBuf *s, const char *fmt, ...) {
@@ -86,35 +92,42 @@ void strbuf_addf(StrBuf *s, const char *fmt, ...) {
     int require_len = vsnprintf(NULL, 0, fmt, args);
     va_end(args);
 
-    trace("strbuf_addf: len %d\n", require_len);
+    //trace("strbuf_addf: len %d\n", require_len);
 
     char *str = calloc(require_len + 1, sizeof(str[0]));
 
     va_start(args, fmt);
-    int last_len = vsnprintf(str, require_len + 1, fmt, args);
+    /*int last_len = */
+    vsnprintf(str, require_len + 1, fmt, args);
     va_end(args);
 
-    trace("strbuf_addf: last_len %d\n", last_len);
+    /*trace("strbuf_addf: last_len %d\n", last_len);*/
 
     s->s[s->num] = str;
     s->s[s->num + 1] = NULL;
     s->num++;
 }
 
-char *strbuf_concat_alloc(StrBuf *s) {
-    size_t required_len = 0;
+char *strbuf_concat_alloc(StrBuf *s, const char *sep) {
+    size_t required_len = 0, 
+           sep_len = sep ? strlen(sep) : 0;
 
     for (int i = 0; i < s->num; i++)
         if (s->s[i])
-            required_len += strlen(s->s[i]);
+            required_len += strlen(s->s[i]) + sep_len;
 
     char *ret = calloc(required_len + 1, sizeof(ret[0])), *pret = ret;
 
     for (int i = 0; i < s->num; i++)
         if (s->s[i]) {
             size_t len = strlen(s->s[i]);
-            memcpy(pret, s[i].s, len);
+            if (!len) continue;
+            memcpy(pret, s->s[i], len);
             pret += len * sizeof(char);
+            if (sep && i + 1 != s->num) {
+                memcpy(pret, sep, sep_len);
+                pret += sep_len * sizeof(char);
+            }
         }
 
     return ret;
