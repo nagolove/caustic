@@ -2245,15 +2245,12 @@ void koh_qsort(
     int i, j;
     for (i = 0, j = num - 1; ; i++, j--) {
 
-        /*
-        //    while (arr[i] < pivot) i++;
-        //   while (arr[j] > pivot) j--;
-        */
-
-        while (cmp((const void*)(_arr + i * size), (const void*)pivot, ud)) 
-            i++;
-        while (cmp((const void*)(_arr + j * size), (const void*)(pivot), ud)) 
-            j--;
+        while (0 > cmp(
+            (const void*)(_arr + i * size), (const void*)pivot, ud)
+        ) i++;
+        while (0 < cmp(
+            (const void*)(_arr + j * size), (const void*)(pivot), ud)
+        ) j--;
 
         if (i >= j) break;
 
