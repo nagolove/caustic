@@ -5,6 +5,7 @@
 
 //#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
+#include "koh_strbuf.h"
 #include "koh_sparse.h"
 #include "koh_table.h"
 #include <stdio.h>
@@ -3036,6 +3037,59 @@ static void lines_print(char **lines) {
     }
 }
 
+static void entity_print_buf(ecs_t *r) {
+    assert(r->selected_type.str_repr_buf);
+
+    if (igTreeNode_Str("explore")) {
+        assert(r->selected_type.name);
+        assert(r->selected_type.cp_sizeof);
+
+        //de_view_single v = de_view_single_create(r, r->selected_type);
+        e_view v = e_view_create_single(r, r->selected_type);
+        int i = 0;
+        for (; e_view_valid(&v); e_view_next(&v), i++) {
+            if (igTreeNode_Ptr((void*)(uintptr_t)i, "%d", i)) {
+                void *payload = e_view_get(&v, r->selected_type);
+                e_id e = e_view_entity(&v);
+
+                StrBuf buf = r->selected_type.str_repr_buf(payload, e);
+
+                for (int i = 0; i < buf.num; i++) {
+                    //igText("%s", buf.s[i]);
+
+
+                    if (igSelectable_Bool(buf.s[i], false, 0, (ImVec2){0, 0})) {
+                        igOpenPopup_Str("copy", 0);
+                }
+
+
+                }
+
+        // TODO: сделать меню по клику для копирования текста
+        if (igBeginPopup("copy", 0)) {
+            static bool selected = false, enabled = false;
+            if (igMenuItem_Bool("copy", NULL, &selected, &enabled)) {
+                char *tmp = strbuf_concat_alloc(&buf, "\n");
+                if (tmp) {
+                    SetClipboardText(tmp);
+                    free(tmp);
+                }
+            }
+            igEndPopup();
+        }
+
+
+
+                strbuf_shutdown(&buf);
+                igTreePop();
+            }
+        }
+
+        igTreePop();
+    }
+
+}
+
 static void entity_print(ecs_t *r) {
     /*trace("de_gui: explore table\n");*/
     if (igTreeNode_Str("explore")) {
@@ -3072,6 +3126,55 @@ static void entity_print(ecs_t *r) {
         }
         igTreePop();
     }
+}
+
+void e_gui_buf(ecs_t *r) {
+    assert(r);
+
+    bool wnd_open = true;
+    ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
+
+    igBegin("ecs", &wnd_open, wnd_flags);
+
+    ImGuiTableFlags table_flags = 
+        // {{{
+        ImGuiTableFlags_SizingStretchSame |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_BordersOuter |
+        ImGuiTableFlags_BordersV |
+        ImGuiTableFlags_ContextMenuInBody;
+    // }}}
+
+    ImVec2 outer_size = {0., 0.};
+    const int columns_num = 8;
+    if (igBeginTable("components", columns_num, table_flags, outer_size, 0.)) {
+
+        igTableSetupColumn("cp_id", 0, 0, 0);
+        igTableSetupColumn("cp_sizeof", 0, 0, 1);
+        igTableSetupColumn("name", 0, 0, 2);
+        igTableSetupColumn("num", 0, 0, 3);
+        igTableSetupColumn("initial_cap", 0, 0, 4);
+        igTableSetupColumn("on_destroy", 0, 0, 5);
+        igTableSetupColumn("on_emplace", 0, 0, 6);
+        igTableSetupColumn("description", 0, 0, 7);
+        igTableHeadersRow();
+
+        struct TypeCtx ctx = {
+            .i = 0,
+            .r = r, 
+        };
+        htable_each(r->cp_types, iter_type, &ctx);
+
+        igEndTable();
+    }
+
+    int index = get_selected(r);
+    //trace("de_gui: index %d\n", index);
+    if (index != -1 && r->selected_type.str_repr_buf) {
+        entity_print_buf(r);
+    }
+
+    igEnd();
 }
 
 void e_gui(ecs_t *r, e_id e) {

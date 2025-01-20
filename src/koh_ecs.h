@@ -260,6 +260,7 @@ char *e_entities2table_alloc(ecs_t *r);
 char *e_entities2table_alloc2(ecs_t *r);
 
 void e_gui(ecs_t *r, e_id e);
+void e_gui_buf(ecs_t *r);
 void e_print_storage(ecs_t *r, e_cp_type cp_type);
 
 // Функция для итерации по всем типам компонентов прикрепленных к сущности.
