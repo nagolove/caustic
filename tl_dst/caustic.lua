@@ -451,6 +451,13 @@ local function build_with_cmake(dep)
    cmd_do("make -j")
 end
 
+local function build_with_autotool(_)
+   print('currentdir', lfs.currentdir())
+   cmd_do("./autogen.sh")
+   cmd_do("./configure")
+   cmd_do("make -j")
+end
+
 local function build_with_make(_)
    cmd_do("make -j")
 end
@@ -829,6 +836,24 @@ end
 
 
 dependencies = {
+
+   {
+      disabled = false,
+      description = "ttf fonts manipulation",
+      custom_defines = nil,
+      dir = "freetype",
+      includes = {
+         "freetype/include",
+      },
+      libdirs = { "objs/.libs/" },
+      links = { "freetype" },
+      links_internal = {},
+      name = "freetype",
+      url_action = "git",
+      build = build_with_autotool,
+      url = "https://github.com/freetype/freetype.git",
+
+   },
 
    {
       disabled = false,
@@ -3798,9 +3823,7 @@ local function backup(dep)
 
 
 
-
    local cmd = "rsync -a --info=progress2 " .. dep.name .. " " .. backup_name
-
 
    cmd_do(cmd)
    print("cmd", cmd)

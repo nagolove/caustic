@@ -451,6 +451,13 @@ local function build_with_cmake(dep: Dependency)
     cmd_do("make -j")
 end
 
+local function build_with_autotool(_: Dependency)
+    print('currentdir', lfs.currentdir())
+    cmd_do("./autogen.sh")
+    cmd_do("./configure")
+    cmd_do("make -j")
+end
+
 local function build_with_make(_: Dependency)
     cmd_do("make -j")
 end
@@ -829,6 +836,24 @@ end
 -- TODO: Добавить возможность добавления библиотекой дефайнов для 
 -- компилятора, в частности для разрешения пути.
 dependencies = {
+
+    {
+        disabled = false,
+        description = "ttf fonts manipulation",
+        custom_defines = nil,
+        dir = "freetype",
+        includes = { 
+            "freetype/include",
+        },
+        libdirs = { "objs/.libs/", },
+        links = { "freetype" },
+        links_internal = {},
+        name = "freetype",
+        url_action = "git",
+        build = build_with_autotool,
+        url = "https://github.com/freetype/freetype.git",
+        --update = update_default,
+    },
 
     {
         disabled = false,
