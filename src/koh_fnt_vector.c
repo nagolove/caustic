@@ -10,54 +10,13 @@
 #include "koh_table.h"
 #include "utf8proc.h"
 
-typedef enum OutlineMode {
-    OM_MOVE,
-    OM_LINE,
-    OM_CONIC,
-    OM_CUBIC,
-} OutlineMode;
-
-typedef struct Outline {
-    OutlineMode mode;
-    union {
-        struct Move {
-            FT_Vector to;
-        } move;
-        struct Line {
-            FT_Vector to;
-        } line;
-        struct Conic {
-            FT_Vector control, to;
-        } conic;
-        struct Cubic {
-            FT_Vector control1, control2, to;
-        } cubic;
-    };
-} Outline;
-
-typedef struct {
-    Outline *outlines;
-    int     outlines_cap, outlines_num;
-} FntChar;
-
 struct FntVector {
+    // Последняя позиция курсора
     Vector2 cursor;
-    // int char_code => struct FntChar*
     FT_Face face;
-    HTable  *char2vector;
     float   line_thick;
-    int     advance;
+    /*int     advance;*/
 };
-
-// TODO: Написать функции для формирования массивов Outline
-static int _move_to(const FT_Vector* to, void* user);
-static int _line_to(const FT_Vector* to, void* user);
-static int _conic_to(const FT_Vector* control, const FT_Vector* to, void* user);
-static int _cubic_to(
-    const FT_Vector* control1, const FT_Vector* control2, 
-    const FT_Vector* to, void* user
-);
-
 
 // TODO: Переписать квадратные и кубические кривые на отрезки линий
 // Как хранить их?
@@ -71,48 +30,11 @@ static int cubic_to(
 
 static FT_Library library = NULL;
 
-static void char_render(FntVector *fv, FntChar *c) {
+static void char_render(FntVector *fv, int char_code) {
     assert(fv);
-    assert(c);
-    assert(c->outlines);
 
-    for (int i = 0; i < c->outlines_num; i++) {
-        Outline *o = &c->outlines[i];
-        switch (o->mode) {
-            case OM_MOVE: 
-                move_to(&o->move.to, fv);
-                break;
-            case OM_LINE: 
-                line_to(&o->line.to, fv);
-                break;
-            case OM_CONIC: 
-                conic_to(&o->conic.control, &o->conic.to, fv);
-                break;
-            case OM_CUBIC: 
-                cubic_to(
-                    &o->cubic.control1, &o->cubic.control2,
-                    &o->cubic.to, fv
-                );
-                break;
-        };
-    }
-}
-
-static FntChar char_load(FntVector *fv, const char *ttf_file, int char_code) {
-    /*FntChar c = {};*/
-
-    // Добавляем смещение (ширину символа)
-    /*fv->cursor.x += c->face->glyph->advance.x >> 6;*/
-
-    /*FT_Get_Char_Index();*/
-
-    // Устанавливаем размер шрифта
-    FT_Set_Pixel_Sizes(fv->face, 0, 48);
-    /*FT_Set_Pixel_Sizes(c.face, 0, 48 / 2);*/
-
-    // Загружаем глиф символа char_code
     if (FT_Load_Char(fv->face, char_code, FT_LOAD_NO_BITMAP)) {
-        trace("char_load: error loading glyph\n");
+        trace("char_render: error loading glyph\n");
     }
 
     FT_Outline_Funcs outline_funcs;
@@ -124,28 +46,24 @@ static FntChar char_load(FntVector *fv, const char *ttf_file, int char_code) {
     outline_funcs.delta = 0;
 
     FT_Outline outline = fv->face->glyph->outline;
+    int advance = 1 * (fv->face->glyph->advance.x >> 6);
+
+    float scale = (float)fv->face->size->metrics.y_ppem / (float)fv->face->units_per_EM;
+    trace("char_render: advance %d, scale %f\n", advance, scale);
+
+    fv->cursor.x += advance;
     FT_Outline_Decompose(&outline, &outline_funcs, fv);
 
-    // Очистка ресурсов
-    /*FT_Done_Face(c.face);*/
-
-    Outline o = {
-        .mode = 
-    };
-
-    htable_add(fv->char2vector, &char_code, sizeof(char_code), &c, sizeof(c));
-
-    return c;
 }
 
-void fnt_vector_shutdown() {
+void fnt_vector_shutdown_freetype() {
     if (library) {
         FT_Done_FreeType(library);
         library = NULL;
     }
 }
 
-void fnt_vector_init() {
+void fnt_vector_init_freetype() {
     // Инициализация FreeType
     if (!library && FT_Init_FreeType(&library)) {
         trace("Error initializing FreeType\n");
@@ -158,28 +76,10 @@ void fnt_vector_free(FntVector *fv) {
 
     trace("fnt_vector_free:\n");
 
-    if (fv->char2vector) {
-
-        HTableIterator i = htable_iter_new(fv->char2vector);
-        for (; htable_iter_valid(&i); htable_iter_next(&i)) {
-            const int *key = htable_iter_key(&i, NULL);
-            const FntChar *c = htable_iter_value(&i, NULL);
-            trace("fnt_vector_free: char %c, face %p\n", *key, c->face);
-        }
-
-        htable_free(fv->char2vector);
-        fv->char2vector = NULL;
+    if (fv->face) {
+        FT_Done_Face(fv->face);
+        fv->face = NULL;
     }
-}
-
-void on_remove_char(
-    const void *key, int key_len, void *value, int value_len, void *userdata
-) {
-    trace("on_remove_char:\n");
-    const FntChar *c = key;
-
-    if (c->face)
-        FT_Done_Face(c->face);
 }
 
 FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts) {
@@ -191,40 +91,21 @@ FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts) {
     else
         fv->line_thick = 5.;
 
-    fv->char2vector = htable_new(&(HTableSetup) {
-        //.f_on_remove = on_remove_char,
-    });
-
+    /*
     if (!library) {
         fnt_vector_init();
     }
+    */
 
     if (FT_New_Face(library, ttf_file, 0, &fv->face)) {
         trace("Error loading font\n");
         koh_trap();
     }
 
-    const int ascii_last = 256, ascii_first = 32;
-    // Константы из таблиц Юникода
-    const int cyrillic_last = 0x450, cyrillic_first = 0x410;
-    const int pseudo_gr_last = 0x25FF, pseudo_gr_first = 0x2500;
-    const int arrows_last = 0x21FF, arrows_first = 0x2190;
+    // Устанавливаем размер шрифта
+    FT_Set_Pixel_Sizes(fv->face, 0, 48);
 
-    // Загрузка базовых и долнительных символов
-    for (int i = ascii_first; i < ascii_last; i++) {
-        char_load(fv, ttf_file, i);
-    }
-    for (int i = cyrillic_first; i < cyrillic_last; i++) {
-        char_load(fv, ttf_file, i);
-    }
-    for (int i = pseudo_gr_first; i < pseudo_gr_last; i++) {
-        char_load(fv, ttf_file, i);
-    }
-    for (int i = arrows_first; i < arrows_last; i++) {
-        char_load(fv, ttf_file, i);
-    }
-
-    trace("fnt_vector_new: %p\n", fv);
+    trace("fnt_vector_new: line_thick %f\n", fv->line_thick);
 
     return fv;
 }
@@ -236,13 +117,15 @@ _Static_assert(
 
 void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos) {
     assert(fv);
-    assert(fv->char2vector);
+
+    trace("fnt_vector_draw: text '%s'\n", text);
 
     const uint8_t *ptr = (const uint8_t *)text;
     int codepoint;
     utf8proc_ssize_t bytes;
 
-    fv->advance = 0;
+    fv->cursor.x = 0;
+    fv->cursor.y = 0;
 
     while (*ptr) {
         bytes = utf8proc_iterate(ptr, -1, &codepoint);
@@ -256,11 +139,7 @@ void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos) {
             codepoint, codepoint
         );
 
-        FntChar *c = htable_get(
-            fv->char2vector, &codepoint, sizeof(codepoint), NULL
-        );
-
-        if (c) char_render(fv, c);
+        char_render(fv, codepoint);
 
         ptr += bytes;
     }
@@ -268,8 +147,8 @@ void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos) {
 }
 
 static int move_to(const FT_Vector* to, void* user) {
-    //std::cout << "Move to: (" << to->x / 64.0 << ", " << to->y / 64.0 << ")\n";
-    trace("move_to:\n");
+    /*trace("move_to:\n");*/
+
     FntVector *fv = user;
     fv->cursor.x = to->x;
     fv->cursor.y = to->y;
@@ -277,8 +156,8 @@ static int move_to(const FT_Vector* to, void* user) {
 }
 
 static int line_to(const FT_Vector* to, void* user) {
-    /*std::cout << "Line to: (" << to->x / 64.0 << ", " << to->y / 64.0 << ")\n";*/
-    trace("line_to:\n");
+    /*trace("line_to:\n");*/
+
     FntVector *fv = user;
     DrawLineEx(
         (Vector2) { fv->cursor.x, fv->cursor.y },
@@ -294,16 +173,14 @@ static int line_to(const FT_Vector* to, void* user) {
 static int conic_to(
     const FT_Vector* control, const FT_Vector* to, void* user
 ) {
-    /*std::cout << "Quadratic curve to: (" << control->x / 64.0 << ", " << control->y / 64.0 << ") -> (" << to->x / 64.0 << ", " << to->y / 64.0 << ")\n";*/
-    trace("conic_to:\n");
+    /*trace("conic_to:\n");*/
 
     FntVector *fv = user;
-    const float thick = 5.;
     DrawSplineSegmentBezierQuadratic(
         fv->cursor,
         (Vector2) { control->x, control->y },
         (Vector2) { to->x, to->y },
-        thick,
+        fv->line_thick,
         BLUE
     );
 
@@ -319,22 +196,65 @@ static int cubic_to(
 ) {
 
     FntVector *fv = user;
-    const float thick = 5.;
     DrawSplineSegmentBezierCubic(
             fv->cursor,
             (Vector2) { control1->x, control1->y },
             (Vector2) { control2->x, control2->y },
             (Vector2) { to->x, to->y },
-            thick,
+            fv->line_thick,
             BLUE
     );
 
     fv->cursor.x = to->x;
     fv->cursor.y = to->y;
 
-    /*std::cout << "Cubic curve to: (" << control1->x / 64.0 << ", " << control1->y / 64.0 << ") -> ("*/
-    /*<< control2->x / 64.0 << ", " << control2->y / 64.0 << ") -> ("*/
-    /*<< to->x / 64.0 << ", " << to->y / 64.0 << ")\n";*/
-    trace("cubic_to:\n");
+    /*trace("cubic_to:\n");*/
     return 0;
 }
+
+/*
+void DrawSplineSegmentBezierCubic(Vector2 p1, Vector2 c2, Vector2 c3, Vector2 p4, float thick, Color color)
+{
+    const float step = 1.0f/SPLINE_SEGMENT_DIVISIONS;
+
+    Vector2 previous = p1;
+    Vector2 current = { 0 };
+    float t = 0.0f;
+
+    Vector2 points[2*SPLINE_SEGMENT_DIVISIONS + 2] = { 0 };
+
+    for (int i = 1; i <= SPLINE_SEGMENT_DIVISIONS; i++)
+    {
+        t = step*(float)i;
+
+        float a = powf(1.0f - t, 3);
+        float b = 3.0f*powf(1.0f - t, 2)*t;
+        float c = 3.0f*(1.0f - t)*powf(t, 2);
+        float d = powf(t, 3);
+
+        current.y = a*p1.y + b*c2.y + c*c3.y + d*p4.y;
+        current.x = a*p1.x + b*c2.x + c*c3.x + d*p4.x;
+
+        float dy = current.y - previous.y;
+        float dx = current.x - previous.x;
+        float size = 0.5f*thick/sqrtf(dx*dx+dy*dy);
+
+        if (i == 1)
+        {
+            points[0].x = previous.x + dy*size;
+            points[0].y = previous.y - dx*size;
+            points[1].x = previous.x - dy*size;
+            points[1].y = previous.y + dx*size;
+        }
+
+        points[2*i + 1].x = current.x - dy*size;
+        points[2*i + 1].y = current.y + dx*size;
+        points[2*i].x = current.x + dy*size;
+        points[2*i].y = current.y - dx*size;
+
+        previous = current;
+    }
+
+    DrawTriangleStrip(points, 2*SPLINE_SEGMENT_DIVISIONS + 2, color);
+}
+*/

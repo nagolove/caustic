@@ -15,4 +15,5 @@ void fnt_vector_free(FntVector *fv);
 void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos);
 
 /*void fnt_vector_init();*/
-void fnt_vector_shutdown();
+void fnt_vector_shutdown_freetype();
+void fnt_vector_init_freetype();
