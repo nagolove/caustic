@@ -5,7 +5,11 @@
 
 typedef struct FntVector FntVector;
 
-FntVector *fnt_vector_new(const char *ttf_file);
+typedef struct FntVectorOpts {
+    float line_thick;
+} FntVectorOpts;
+
+FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts);
 void fnt_vector_free(FntVector *fv);
 
 void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos);
