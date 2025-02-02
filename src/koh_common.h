@@ -371,3 +371,12 @@ void koh_qsort(
 // Возвращает строковое имя цвета, цвета используются только из raylib.h
 // Если значение не найдено, возвращается "unknown"
 const char *Color2name(Color c);
+
+typedef struct CoSysOpts {
+    Rectangle dest;
+    int       step;
+    Color     color;
+} CoSysOpts;
+
+// Рисовать сетку для системы координат или чего-то такого.
+void cosys_draw(CoSysOpts opts);

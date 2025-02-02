@@ -2307,3 +2307,17 @@ const char *Color2name(Color c) {
 
     return "unknown";
 }
+
+void cosys_draw(CoSysOpts opts) {
+    assert(opts.step > 0);
+
+    for (int x = opts.dest.x; x < opts.dest.width; x += opts.step) {
+        DrawLine(x, opts.dest.y, x, opts.dest.height, opts.color);
+    }
+
+    for (int y = opts.dest.y; y < opts.dest.width; y += opts.step) {
+        DrawLine(opts.dest.x, y, opts.dest.width, y, opts.color);
+    }
+
+}
+
