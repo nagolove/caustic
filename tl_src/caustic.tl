@@ -21,23 +21,25 @@ else
     path_caustic = remove_last_backslash(path_caustic)
 end
 
+local getenv = os.getenv
+
 -- {{{ env vars
 -- каталог для библиотек x86_64 собранных в отладочном режиме
 local path_rel_third_party = remove_last_backslash(
-    os.getenv("3rd_party") or "3rd_party"
+    getenv("3rd_party") or "3rd_party"
 )
 -- каталог для библиотек wasm, собранных в отладочном режиме
 local path_wasm_third_party = remove_last_backslash(
-    os.getenv("wasm_3rd_party") or "wasm_3rd_party"
+    getenv("wasm_3rd_party") or "wasm_3rd_party"
 )
 
 -- каталог для библиотек x86_64 собранных в релизном режиме
 local path_rel_third_party_release = remove_last_backslash(
-    os.getenv("3rd_party_release") or "3rd_party_release"
+    getenv("3rd_party_release") or "3rd_party_release"
 )
 -- каталог для библиотек wasm, собранных в релизном режиме
 local path_wasm_third_party_release = remove_last_backslash(
-    os.getenv("wasm_3rd_party_release") or "wasm_3rd_party_release"
+    getenv("wasm_3rd_party_release") or "wasm_3rd_party_release"
 )
 
 local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
@@ -420,7 +422,8 @@ local record Dependency
     -- Значения коллбэка - build_make, build_cmake, etc
     build: function(dep: Dependency)
 
-    wasm_build: function(dep: Dependency) 
+    --wasm_build: function(dep: Dependency) 
+    build_w: function(dep: Dependency) 
 
     after_build: function(dep: Dependency)
     -- }}}
@@ -817,7 +820,7 @@ end
 
 local _dependecy_init: function(dep: Dependency)
 
-local function update_default(dep: Dependency) 
+local function update_default(_: Dependency) 
     print("update_default")
     print("current directory", lfs.currentdir())
 
@@ -828,6 +831,15 @@ local function update_default(dep: Dependency)
     --_dependecy_init(dep)
 end
 
+local function build_remotery(_: Dependency) 
+    print('build_remotery', lfs.currentdir())
+    ut.push_current_dir()
+    lfs.chdir("lib")
+    cmd_do("gcc -c Remotery.c  -I lib -pthread -lm")
+    cmd_do("ar -rcs  \"libremotery.a\" Remotery.o")
+    ut.pop_dir()
+end
+
 -- XXX:  Любые сборки которые попадают в сеть должны быть без отладочной 
 -- информации, с максимальной оптимизацией. В целях безопасности
 -- TODO: Определить действие для Lua библиотек, которые должны быть 
@@ -836,6 +848,24 @@ end
 -- TODO: Добавить возможность добавления библиотекой дефайнов для 
 -- компилятора, в частности для разрешения пути.
 dependencies = {
+
+    {
+        disabled = false,
+        description = "online profiler",
+        custom_defines = nil,
+        dir = "remotery",
+        includes = { 
+            "remotery/lib",
+        },
+        libdirs = { "remotery/lib", },
+        links = { "remotery" },
+        links_internal = {},
+        name = "remotery",
+        url_action = "git",
+        build = build_remotery,
+        url = "https://github.com/Celtoys/Remotery.git",
+        --update = update_default,
+    },
 
     {
         disabled = false,
@@ -1550,7 +1580,7 @@ local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
         end
     end
 
-    cmd_do("git clone --depth=1" .. dep.url .. " " ..dst)
+    cmd_do("git clone --depth=1 " .. dep.url .. " " ..dst)
     if dep.dir then
         chdir(dep.dir)
     else
@@ -1767,6 +1797,7 @@ local record Actions
     -- {{{
     --anim_convert: function(Args)
     build: function(Args)
+    build_w: function(Args)
     build_smart: function(Args)
     compile_flags: function(Args)
     dependencies: function(Args)
@@ -1790,14 +1821,17 @@ local record Actions
     verbose: function(Args)
     wasm_build: function(Args)
     update: function(Args)
+    init_w: function(Args)
     -- }}}
 end
 
 local enum ActionsEnum
     -- {{{
+    "init_w"
     "stage"
     "project"
     "build"
+    "build_w"
     "build_smart"
     "compile_flags"
     "dependencies"
@@ -1900,11 +1934,17 @@ local parser_setup: {string:ParserSetup} = {
     rmdirs = {
         summary = "remove empty directories in path_third_party",
     },
+
     init = {
         -- TODO: указать куда будут скопированы файлы
         summary = "download dependencies from network",
         options = { "-n --name" },
     },
+    init_w = {
+        summary = "download dependencies from network. for WASM",
+        options = { "-n --name" },
+    },
+
     make = {
         summary = "build libcaustic or current project",
         arguments = { 
@@ -2300,6 +2340,30 @@ function actions.proj_init(_args: Args)
     _init(project_path, deps)
 
     --_init(path_wasm_third_party, deps)
+    --_init(win_third_party, deps)
+end
+
+function actions.init_w(_args: Args)
+    local deps = {}
+    if _args.name then
+        local dependencies_name_map = get_deps_name_map(dependencies)
+        print('partial init for dependency', _args.name)
+        if dependencies_name_map[_args.name] then
+            table.insert(deps, dependencies_name_map[_args.name])
+        else
+            print("bad dependency name", _args.name)
+            return
+        end
+    else
+        for _, dep in ipairs(dependencies) do
+            table.insert(deps, dep)
+        end
+    end
+
+    --print('deps', inspect(deps))
+    --check_for_unstaged(deps)
+    --_init(path_rel_third_party, deps)
+    _init(path_wasm_third_party, deps)
     --_init(win_third_party, deps)
 end
 
@@ -3356,6 +3420,59 @@ local function _build_smart(dep: Dependency)
 end
 --]]
 
+local function build_dep_w(dep: Dependency)
+    print("build_dep_w:")
+
+    local map: {string: function} = {
+        ["function"] = function()
+            dep.build(dep)
+        end,
+        ["string"] = function()
+            local capture = match(dep.build as string, "@(%a+)")
+            print(format("_build_w capture '%s'", capture))
+            if capture then
+                local glo = _G as {string:string}
+                local ptr = glo[capture as string] as function(dep: Dependency)
+                if not ptr then
+                    error(format(
+                        "_build_w could not find capture '%s' if _G",
+                        capture
+                    ))
+                else
+                    if type(ptr) == 'function' then
+                        ptr(dep)
+                    else
+                        error("_build_w bad type for ptr")
+                    end
+                end
+            else
+                error("_build_w bad build string format")
+            end
+        end,
+    }
+
+    -- TODO: перенести в аргумент функции
+    if not dep.build_w then
+        print(format('%s has no build method', dep.name))
+        return
+    end
+
+    local ok, errmsg: boolean, string = pcall(function()
+        local tp = type(dep.build)
+        print("_build_w dep.build type is", tp)
+
+        local func = map[tp]
+        if not func then
+            error("_build_w bad type for 'tp'")
+        end
+        func()
+    end)
+    if not ok then
+        print('build error:', errmsg)
+    end
+
+end
+
 local function build_dep(dep: Dependency)
 
     local map: {string: function} = {
@@ -3407,6 +3524,49 @@ local function build_dep(dep: Dependency)
 
 end
 
+local function _build_w(dep: Dependency)
+    print("_build_w:", dep.name)
+    if dep.disabled then
+        print(format("%s is disabled", dep.name))
+        return
+    end
+
+    ut.push_current_dir()
+
+    if not dep.dir then
+        print("dep.dir == nil")
+        print(inspect(dep))
+        os.exit(1)
+    end
+
+    local ok_chd, errmsg_chd = chdir(dep.dir)
+    if not ok_chd then
+        print("current directory", lfs.currentdir())
+        local msg = format(
+            "_build_w: could not do chdir('%s') dependency with %s",
+            dep.dir, errmsg_chd
+        )
+        printc("%{red}" .. msg .. "%{reset}")
+        ut.pop_dir()
+        return
+    else
+        print("_build_w: current directory is", lfs.currentdir())
+    end
+
+    build_dep_w(dep)
+
+    if dep and dep.after_build then
+        local ok, errmsg: boolean, string = pcall(function()
+            dep.after_build(dep)
+        end)
+        if not ok then
+            print(inspect(dep), 'failed with', errmsg)
+        end
+    end
+
+    ut.pop_dir()
+end
+
 local function _build(dep: Dependency)
     print("_build:", dep.name)
     if dep.disabled then
@@ -3449,6 +3609,52 @@ local function _build(dep: Dependency)
 
     ut.pop_dir()
 end
+
+function actions.build_w(_args: Args)
+    ut.push_current_dir()
+
+    -- Путь к развернутой системе
+    chdir(path_caustic)
+    -- Путь к библиотекам
+    chdir(path_wasm_third_party)
+
+    print("actions.build: current directory", lfs.currentdir())
+
+    if _args.name then
+        print(format("build '%s'", _args.name))
+        local dependencies_name_map = get_deps_name_map(dependencies)
+        if dependencies_name_map[_args.name] then
+            local dir = get_dir(dependencies_name_map[_args.name])
+            --print('dir', dir)
+            local deps_map = get_deps_map(dependencies)
+            --print('deps_map', inspect(deps_map))
+            local dep: Dependency
+            local ok, errmsg: boolean, string = pcall(function()
+                dep = deps_map[dir]
+            end)
+            if ok then 
+                _build_w(dep)
+            else
+                local msg = format(
+                    "could not get '%s' dependency with %s",
+                    _args.name, errmsg
+                )
+                printc("%{red}" .. msg .. "%{reset}")
+            end
+        else
+            print("bad dependency name", _args.name)
+        ut.pop_dir()
+            return
+        end
+    else
+        for _, dep in ipairs(dependencies) do
+            _build(dep)
+        end
+    end
+
+    ut.pop_dir()
+end
+
 
 function actions.build(_args: Args)
     ut.push_current_dir()
@@ -3707,8 +3913,6 @@ local flags_sanitazer = {
     "-fsanitize-address-use-after-scope"
 }
 
--- TODO: link utf8proc statically
--- TODO: link all libs statically
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local flags: string = ""
     if not _args.noasan then
@@ -3718,9 +3922,17 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
             flags = flags .. table.concat(cfg.flags, " ")
         end
     end
+
+    -- XXX: Нужно ли убирать флаги при релизной сборке?
     if _args.make_type == 'release' then
         flags = ""
     end
+
+    -- TODO: Разведать связывание, какие данные приходят, разобраться 
+    -- с применением флагов.
+    --print('project_link')
+    --print(tabular(ctx.libspath))
+
     local artifact = "../" .. cfg.artifact
     local cmd = format(
         "gcc -o \"%s\" %s %s %s %s", 
