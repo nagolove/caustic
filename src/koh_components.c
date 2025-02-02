@@ -820,13 +820,16 @@ void shape_render_poly(
     }
 
     int count = poly.count, vertex_disp = opts->vertex_disp;
-    trace("shape_render_poly: vertex_disp %d, count %d\n", vertex_disp, count);
 
+    //trace("shape_render_poly: vertex_disp %d, count %d\n", vertex_disp, count);
+
+    /*
     printf("before ");
     for (int i = 0; i < count; i++) {
         printf("%s ", Vector2_tostr(w_verts[i]));
     }
     printf("\n");
+    */
 
     for (int i = 0; i < vertex_disp; i++) {
         Vector2 last = w_verts[count - 1];
