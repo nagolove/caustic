@@ -83,7 +83,7 @@ static const char *timerdef2str(struct TimerDef td) {
     return buf;
 }
 
-bool search(TimerMan *tm, const char *name) {
+static bool search(TimerMan *tm, const char *name) {
     assert(tm);
     assert(name);
 
@@ -98,8 +98,10 @@ bool search(TimerMan *tm, const char *name) {
 
 bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     assert(tm);
-    if (tm->timers_size + 1 >= tm->timers_cap) 
+    if (tm->timers_size >= tm->timers_cap) {
+        trace("timerman_add: could not create, not enough memory\n");
         return false;
+    }
 
     if (!td.on_update)
         trace("timerman_add: timer without on_update callback\n");

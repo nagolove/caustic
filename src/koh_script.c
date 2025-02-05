@@ -49,7 +49,7 @@ struct Pair {
     const char *name, *desc;
 };
 
-int cmp(const void *a, const void * b) {
+static int cmp(const void *a, const void * b) {
     return strcmp(((struct Pair*)a)->name, ((struct Pair*)b)->name);
 }
 
