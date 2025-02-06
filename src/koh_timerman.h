@@ -65,6 +65,7 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td);
 int timerman_update(struct TimerMan *tm);
 struct TimerMan *timerman_clone(struct TimerMan *tm);
 void timerman_pause(struct TimerMan *tm, bool is_paused);
+bool timerman_is_paused(TimerMan *tm);
 void timerman_window_gui(struct TimerMan *tm);
 void timerman_clear(struct TimerMan *tm);
 // Удаляет закончившиеся таймеры

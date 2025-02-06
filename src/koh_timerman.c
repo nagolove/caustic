@@ -184,17 +184,19 @@ int timerman_update(struct TimerMan *tm) {
     memset(tmp, 0, sizeof(tmp));
     int tmp_size = 0;
 
+    if (tm->paused)
+        return tm->timers_size;
+
     for (int i = 0; i < tm->timers_size; i++) {
         struct Timer *timer = &tm->timers[i];
         timer->tm = tm;
 
         // XXX: Почему такой таймер не удаляется?
+        // Бесконечный таймер. Но он ни как не обрабатывается, не вызывается.
         if (timer->duration < 0) continue;
 
         double now = GetTime();
         timer->amount = (now - timer->add_time) / timer->duration;
-
-        // TODO: Сделать установку паузы и снятие с нее
 
         if (now - timer->add_time > timer->duration) {
             //timer->expired = true;
@@ -226,8 +228,7 @@ int timerman_update(struct TimerMan *tm) {
 }
 
 void timerman_pause(struct TimerMan *tm, bool is_paused) {
-    tm->paused = is_paused;
-/*
+    //tm->paused = is_paused;
    if (is_paused) {
         if (!tm->paused) {
             // enable -> disable
@@ -244,12 +245,11 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
             double shift = GetTime() - tm->pause_time;
             trace("timerman_pause: disable -> enable, shift %f\n", shift);
             for (int i = 0; i < tm->timers_size; ++i) {
-                tm->timers[i].start_time += shift;
+                tm->timers[i].add_time += shift;
             }
             tm->paused = is_paused;
         }
     }
-*/
 }
 
 void timerman_window_gui(struct TimerMan *tm) {
@@ -335,6 +335,8 @@ void timerman_window_gui(struct TimerMan *tm) {
 void timerman_clear(struct TimerMan *tm) {
     assert(tm);
     tm->timers_size = 0;
+    // XXX: Нужно здесь?
+    /*tm->paused = false;*/
 }
 
 /*
@@ -415,4 +417,9 @@ struct TimerMan *timerman_clone(struct TimerMan *tm) {
     size_t sz = sizeof(tm->timers[0]) * tm->timers_size;
     memcpy(ret->timers, tm->timers, sz);
     return ret;
+}
+
+bool timerman_is_paused(TimerMan *tm) {
+    assert(tm);
+    return tm->paused;
 }
