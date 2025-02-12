@@ -1696,6 +1696,14 @@ const char *koh_extract_path(const char *fname) {
     assert(fname);
     static char buf[1024] = {};
     memset(buf, 0, sizeof(buf));
+#define SLOTS 5
+#define BUF_LEN 1024
+    static char slots[SLOTS /* количество слотов */ ][BUF_LEN] = {};
+    static int index = 0;
+    index = (index + 1) % SLOTS;
+    char *buf = slots[index];
+
+    memset(buf, 0, sizeof(BUF_LEN));
     const char *start = fname;
     while (*fname)
         fname++;
@@ -1706,6 +1714,8 @@ const char *koh_extract_path(const char *fname) {
         *pbuf++ = *start++;
     }
     return buf;
+#undef SLOTS
+#undef BUF_LEN
 }
 
 int koh_cpu_count() {

@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <float.h>
 #include <stdio.h>
+#include <string.h>
 
 #ifndef BOX2C_SENSOR_SLEEP
 #include "box2d/math_functions.h"
@@ -66,14 +67,6 @@ static inline struct Polar to_polar(float x, float y) {
     };
 }
 
-/*
-static inline const char *cpVect_tostr(cpVect v) {
-    static char buf[100] = {0};
-    sprintf(buf, "{%11.5f, %11.5f}", v.x, v.y);
-    return buf;
-}
-*/
-
 static inline const char *Rectangle_tostr(Rectangle r) {
     static char buf[100] = {0};
     sprintf(buf, "{%6.5f, %6.5f, %6.5f, %6.5f}", r.x, r.y, r.width, r.height);
@@ -85,11 +78,13 @@ static inline Vector2 Vector2_from_str(const char *str) {
     return r;
 }
 
+// TODO: Переписать все функции преобразования буфера на слоты со счетчиком.
 static inline const char *Vector2_tostr(Vector2 v) {
-    static char buf[100] = {0};
-    /*snprintf(buf, sizeof(buf) - 1, "{%6.5f, %6.5f}", v.x, v.y);*/
-    snprintf(buf, sizeof(buf) - 1, "{%f, %f}", v.x, v.y);
-    return buf;
+    static char buf[10][100] = {};
+    static int cnt = 0;
+    cnt = (cnt + 1) % 10;
+    snprintf(buf[cnt], sizeof(buf) - 1, "{%f, %f}", v.x, v.y);
+    return buf[cnt];
 }
 
 /*
