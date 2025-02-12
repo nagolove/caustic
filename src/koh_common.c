@@ -1694,8 +1694,6 @@ void koh_search_files_exclude_pcre(
 
 const char *koh_extract_path(const char *fname) {
     assert(fname);
-    static char buf[1024] = {};
-    memset(buf, 0, sizeof(buf));
 #define SLOTS 5
 #define BUF_LEN 1024
     static char slots[SLOTS /* количество слотов */ ][BUF_LEN] = {};
@@ -2331,3 +2329,44 @@ void cosys_draw(CoSysOpts opts) {
 
 }
 
+bool koh_file_read_alloc(const char *fname, char **data, size_t *data_len) {
+    assert(fname);
+    assert(data);
+
+    if (!data)
+        return false;
+
+    FILE *f = fopen(fname, "r");
+    if (!f) {
+        *data = NULL;
+        return false;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    *data = calloc(1, size + 1);
+    assert(*data);
+    int num = fread(*data, size, 1, f);
+    if (data_len)
+        *data_len = size;
+
+    fclose(f);
+    return num == 1;
+}
+
+bool koh_file_write(const char *fname, const char *data, size_t data_len) {
+    assert(fname);
+
+    if (!data)
+        return false;
+
+    FILE *f = fopen(fname, "w");
+    if (!f) 
+        return false;
+
+    int num = fwrite(data, data_len, 1, f);
+
+    fclose(f);
+    return num == 1;
+}

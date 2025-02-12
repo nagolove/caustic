@@ -239,6 +239,7 @@ typedef struct FilesSearchSetup {
 // Возвращает указатель на статискую строчку
 char *koh_files_search_setup_2str(FilesSearchSetup *setup);
 // Заполняет структуру.
+// TODO: Возможность поиска в отдельном потоке
 struct FilesSearchResult koh_search_files(FilesSearchSetup *setup);
 // Освобождает память, зануляет содержимое структуры. 
 // Можно вызывать несколько раз.
@@ -380,3 +381,6 @@ typedef struct CoSysOpts {
 
 // Рисовать сетку для системы координат или чего-то такого.
 void cosys_draw(CoSysOpts opts);
+
+bool koh_file_read_alloc(const char *fname, char **data, size_t *data_len);
+bool koh_file_write(const char *fname, const char *data, size_t data_len);
