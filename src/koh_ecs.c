@@ -3094,7 +3094,7 @@ static void entity_print(ecs_t *r) {
     if (igTreeNode_Str("explore")) {
         assert(r->selected_type.name);
         assert(r->selected_type.cp_sizeof);
-        assert(r->selected_type.str_repr);
+        //assert(r->selected_type.str_repr);
 
         //de_view_single v = de_view_single_create(r, r->selected_type);
         e_view v = e_view_create_single(r, r->selected_type);

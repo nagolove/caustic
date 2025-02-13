@@ -65,7 +65,7 @@ typedef struct e_cp_type {
     // Массив строк заканчивается NULL
     // payload - данные компонента
     // TODO: Подумать над лучшим представлением данных.
-    __attribute_deprecated__
+    /*__attribute_deprecated__*/
     char        **(*str_repr)(void *payload, e_id e);
 
     // Сериазизация в Луа таблицу. Память требует освобождения.
