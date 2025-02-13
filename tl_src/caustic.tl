@@ -2376,9 +2376,6 @@ return {
 
 Color color_background_clear = GRAY;
 
-struct Input2 *input2 = NULL;
-//struct t80_args app_args;
-
 //#define LAPTOP  1
 
 static double last_time = 0.;
@@ -2395,6 +2392,7 @@ static const int screen_height_desk = 1080 * 2;
 static const int screen_width_web = 1920;
 static const int screen_height_web = 1080;
 #endif
+
 static HotkeyStorage hk_store = {};
 static StagesStore *ss = NULL;
 static Camera2D cam = {
@@ -2444,9 +2442,6 @@ static void update(void) {
     hotkey_process(&hk_store);
     console_check_editor_mode();
 
-    // XXX: Почему не отображается?
-    console_write("fps %d\n", GetFPS());
-
     koh_fpsmeter_draw();
 
     Vector2 mp = Vector2Add(
@@ -2466,12 +2461,6 @@ static void update(void) {
 
 void sig_handler(int sig) {
     printf("sig_handler: %d signal catched\n", sig);
-    /*
-    // XXX:
-    if (__STDC_VERSION__ >=201710L) {
-    } else
-        printf("sig_handler: %s signal catched\n", strsignal(sig));
-    */
     koh_backtrace_print();
     KOH_EXIT(EXIT_FAILURE);
 }
@@ -2512,7 +2501,6 @@ int main(int argc, char **argv) {
 
     sc_init();
     inotifier_init();
-    logger_register_functions();
 
     koh_fpsmeter_init();
     sc_init_script();
@@ -2525,9 +2513,7 @@ int main(int argc, char **argv) {
 
     hotkey_init(&hk_store);
 
-    // XXX: Требуется включение и выключение
     InitAudioDevice();
-    CloseAudioDevice();
 
     sfx_init();
     koh_music_init();
