@@ -258,7 +258,7 @@ static int l_trace_enable(lua_State *lua) {
     return 0;
 }
 
-void logger_register_functions() {
+void logger_register_lua_functions() {
     if (!sc_get_state())
         return;
 

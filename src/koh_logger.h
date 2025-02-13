@@ -20,7 +20,7 @@ extern LogPoints logger;
 */
 
 void logger_init(void);
-void logger_register_functions();
+void logger_register_lua_functions();
 void logger_shutdown();
 
 __attribute__((__format__ (__printf__, 1, 2)))
