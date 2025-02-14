@@ -25,7 +25,7 @@
 #define MAX_TRACE_LEN       120
 
 //LogPoints logger;
-static StrSet *traces_set = NULL;
+//static StrSet *traces_set = NULL;
 static bool is_trace_enabled = true;
 
 struct FilterEntry {
@@ -141,20 +141,23 @@ void logger_init(void) {
     if (!log_stream)
         printf("logger_init: log fopen error %s\n", strerror(errno));
 
-    traces_set = strset_new(NULL);
+    /*traces_set = strset_new(NULL);*/
+
     filter_init();
 }
 
+/*
 static StrSetAction iter_trace(const char *key, void *udata) {
     FILE *file = udata;
     fwrite(key, strlen(key), 1, file);
     return SSA_next;
 }
+*/
 
 void traces_dump() {
     FILE *file = fopen("traces.txt", "w");
     assert(file);
-    strset_each(traces_set, iter_trace, file);
+    /*strset_each(traces_set, iter_trace, file);*/
     fclose(file);
 }
 
@@ -163,7 +166,7 @@ void logger_shutdown() {
         fclose(log_stream);
     filter_free();
     traces_dump();
-    strset_free(traces_set);
+    /*strset_free(traces_set);*/
 }
 
 FILE *tmp_file = NULL;
@@ -185,9 +188,11 @@ int trace(const char * format, ...) {
     fflush(tmp_file);
 */
 
+    /*
     if (traces_set) {
         strset_add(traces_set, buf);
     }
+    */
 
     /*
     if (!filter_match(buf)) {
@@ -324,7 +329,7 @@ void traceg(const char *format, ...) {
     vsnprintf(buf_ptr, sizeof(buf), format, args);
     va_end(args);
 
-    strset_add(traces_set, buf);
+    /*strset_add(traces_set, buf);*/
 
     if (!filter_match(buf))
         printf("%s", buf);
