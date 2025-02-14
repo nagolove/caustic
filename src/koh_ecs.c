@@ -3271,8 +3271,15 @@ void e_gui(ecs_t *r, e_id e) {
     igEnd();
 }
 
-void e_print_storage(ecs_t *r, e_cp_type cp_type) {
+void e_types_print(ecs_t *r) {
     assert(r);
+
+    printf("{\n");
+    for (int i = 0; i < r->storages_size; i++) {
+        e_storage s = r->storages[i];
+        printf("\"%s\", ", s.name);
+    }
+    printf("}\n");
 }
 
 e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
