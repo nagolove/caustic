@@ -821,7 +821,10 @@ const char *extract_filename(const char *fname, const char *ext) {
 }
 
 const char *rect2str(Rectangle rect) {
-    static char buf[64] = {0};
+    static char slots[5][64] = {0};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
     sprintf(buf, "{%f, %f, %f, %f}", rect.x, rect.y, rect.width, rect.height);
     return buf;
 }
