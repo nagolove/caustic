@@ -84,6 +84,7 @@ local ut         = require "utils"
 local Cache      = require "cache"
 local uv         = require "luv"
 local lanes      = require "lanes".configure()
+local rl         = require "readline"
 local sleep      = require "socket".sleep
 local format        = string.format
 local match         = string.match
@@ -160,6 +161,36 @@ end
 
 local function printc(text: string)
     print(ansicolors(text))
+end
+
+local function _write_file_bak(fname: string, data: string, bak_cnt: integer)
+    local b = io.open(fname, "r")
+
+    local max_bak <const> = 3
+    if bak_cnt >= max_bak then
+        local baks = fname
+        for _ = 1, max_bak do
+            baks = baks .. ".bak"
+        end
+        local cmd = format("rm %s", baks) 
+        os.execute(cmd)
+    end
+
+    if b then
+        local t: string = b:read("all")
+        b:close()
+        _write_file_bak(fname .. ".bak", t, bak_cnt + 1)
+    end
+
+    local f = io.open(fname, "w")
+    if f then
+        f:write(data)
+        f:close()
+    end
+end
+
+local function write_file_bak(fname: string, data: string)
+    _write_file_bak(fname, data, 0)
 end
 
 local function cmd_do_execute(_cmd: string|{string})
@@ -1879,15 +1910,7 @@ local parser_setup: {string:ParserSetup} = {
 
     stage = {
         options = { "-n --name", },
-        summary = [[Work with stages.
-    list - get list of all avaible stages
-    new - create header and source from template
-    copy - copy stage from other project here]],
-        arguments = { 
-            { "new", 1, },
-            { "copy", 1, },
-            { "list", 1, },
-        },
+        summary = [[Create stage in project]]
     },
     --[[
     luainit = {
@@ -2223,17 +2246,6 @@ local record Args
     -- }}}
 end
 
-local function stage_new(_: string) 
-    -- Составить путь назначения
-    -- Составить имена файлов источника
-
-    -- Проверить наличие файлов с именем источника в пути назначения.
-    -- Если такие есть, то переименовать их в bla_bla_bla.h.bak
-
-    -- Скопировать файлы шаблонной сцены
-    -- Сделать замену по $PREFIX$ на имя
-end
-
 function actions.project(_args: Args)
     print("actions.project:", inspect(_args))
 
@@ -2306,7 +2318,7 @@ return {
         -- }}}
 
         -- результат компиляции и линковки
-        artifact = "lapsha",
+        artifact = "$ARTIFACT$",
         -- файл с функцикй main()
         main = "main.c",
         -- каталог с исходными текстами
@@ -2331,13 +2343,29 @@ return {
 ]]
 -- }}}
 
+    local artifact = "e"
+
+    printc(
+        "%{green}" .. 
+        "enter artifact name or press 'enter' for default value" .. 
+        "%{reset}"
+    )
+    local inp = io.read()
+
+    printc("artifact name: %{blue}" .. inp .. "%{reset}")
+    if (#inp < 1) then
+        print("Too short input. Using default name")
+    else
+        artifact = inp
+    end
+
+    bld_tl = gsub(bld_tl, "$(.-)$", artifact)
+
     local f = io.open("tlconfig.lua", "w")
     f:write(tlconfig_lua)
     f:close()
 
-    f = io.open("bld.tl", "w")
-    f:write(bld_tl)
-    f:close()
+    write_file_bak("bld.tl", bld_tl)
 
     cmd_do("cyan build")
 
@@ -2622,9 +2650,114 @@ function actions.stage(_args: Args)
         error("No project bld.lua in current directory")
     end
 
-    if _args.new == "new" and type(_args.name) == "string" then
-        stage_new(_args.name)
+    ut.push_current_dir()
+    local ok = chdir("src")
+    if not ok then
+        print("Could not find 'src' directory")
     end
+
+    local inp = rl.readline(ansicolors("%{green}enter stage name%{reset}"))
+
+    printc("stage name: %{blue}" .. inp .. "%{reset}")
+    if #inp <= 3 then
+        print("Stage name should be more than 3 symbols")
+        ut.pop_dir()
+        return
+    end
+
+    chdir('src')
+
+    local stage = inp
+    local Stage = inp:sub(1, 1):upper() .. inp:sub(2, #inp)
+
+    local stage_c = 
+[[// vim: set colorcolumn=85
+// vim: fdm=marker
+
+#include "stage_$stage$.h"
+
+#include "koh_stages.h"
+
+typedef struct Stage_$Stage$ {
+    Stage               parent;
+    Camera2D            cam;
+} Stage_$Stage$;
+
+static void stage_$stage$_init(Stage_$Stage$ *st) {
+    trace("stage_$stage$_new:\n");
+    st->cam.zoom = 1.f;
+}
+
+static void stage_$stage$_update(Stage_$Stage$ *st) {
+    trace("stage_$stage$_update:\n");
+}
+
+static void stage_$stage$_gui(Stage_$Stage$ *st) {
+    trace("stage_$stage$_gui:\n");
+
+    ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
+    bool wnd_open = true;
+    igBegin("$stage$", &wnd_open, wnd_flags);
+    igEnd();
+}
+
+static void stage_$stage$_draw(Stage_$Stage$ *st) {
+    BeginMode2D(st->cam);
+    EndMode2D();
+}
+
+static void stage_$stage$_shutdown(Stage_$Stage$ *st) {
+    trace("stage_$stage$_shutdown:\n");
+}
+
+static void stage_$stage$_enter(Stage_$Stage$ *st) {
+    trace("stage_$stage$_enter:\n");
+}
+
+static void stage_$stage$_leave(Stage_$Stage$ *st) {
+    trace("stage_$stage$_leave:\n");
+}
+
+Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
+    assert(hk_store);
+    Stage_$Stage$ *st = calloc(1, sizeof(*st));
+    st->parent.data = hk_store;
+
+    st->parent.init = (Stage_callback)stage_$stage$_init;
+    st->parent.enter = (Stage_callback)stage_$stage$_enter;
+    st->parent.leave = (Stage_callback)stage_$stage$_leave;
+
+    st->parent.update = (Stage_callback)stage_$stage$_update;
+    st->parent.draw = (Stage_callback)stage_$stage$_draw;
+    st->parent.gui = (Stage_callback)stage_$stage$_gui;
+    st->parent.shutdown = (Stage_callback)stage_$stage$_shutdown;
+    return (Stage*)st;
+}
+]]
+    stage_c = gsub(stage_c, "%$stage%$", stage)
+    stage_c = gsub(stage_c, "%$Stage%$", Stage)
+
+    local stage_h = 
+    [[// vim: set colorcolumn=85
+// vim: fdm=marker
+
+#pragma once
+
+#include "koh.h"
+
+Stage *stage_$stage$_new(HotkeyStorage *hk_store);
+]]
+
+    stage_h = gsub(stage_h, "%$stage%$", stage)
+
+    write_file_bak("stage_" .. stage .. ".c", stage_c)
+    write_file_bak("stage_" .. stage .. ".h", stage_h)
+
+    -- Если такие есть, то переименовать их в bla_bla_bla.h.bak
+    -- Скопировать файлы шаблонной сцены
+    -- Сделать замену по $PREFIX$ на имя
+
+    ut.pop_dir()
 end
 
 function actions.rmdirs(_args: Args)
