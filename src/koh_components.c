@@ -2,6 +2,7 @@
 
 #include "koh_b2.h"
 #include "koh_timerman.h"
+#include "koh_ecs.h"
 
 bool koh_components_verbose = false;
 
@@ -147,6 +148,18 @@ e_cp_type cp_type_body2 = {
     /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
 };
 
+e_cp_type cp_type_RenderTexOpts = {
+    .cp_sizeof = sizeof(struct RenderTexOpts),
+    //.str_repr = str_repr_shape_render_opts,
+    .name = "render_tex_opts",
+    .description = "arbitrary 4 vertex render",
+    // XXX: Падает при initial_cap = 0
+    .initial_cap = 1000,
+    //.on_destroy = on_destroy_shape_render_opts,
+    /*.callbacks_flags = DE_CB_ON_DESTROY | DE_CB_ON_EMPLACE,*/
+};
+
+
 e_cp_type cp_type_shape_render_opts2 = {
     .cp_sizeof = sizeof(struct ShapeRenderOpts),
     //.str_repr = str_repr_shape_render_opts,
@@ -161,7 +174,7 @@ e_cp_type cp_type_shape_render_opts2 = {
 e_cp_type cp_type_texture2 = {
     .cp_sizeof = sizeof(Texture2D*),
     .name = "texture",
-    .description = "holder for texture",
+    .description = "pointer holder for texture",
     .str_repr = NULL,
     // XXX: Падает при initial_cap = 0
     .initial_cap = 100,
@@ -182,28 +195,13 @@ e_cp_type cp_type_border_sensor2 = {
 //////////////////////////////////////////////////////////////////////
 
 
-void koh_cp_types_register(de_ecs *r) {
-    de_ecs_register(r, cp_type_vehicle);
-    de_ecs_register(r, cp_type_body);
-    de_ecs_register(r, cp_type_shape_render_opts);
-    /*de_ecs_register(r, cp_type_hero);*/
-    de_ecs_register(r, cp_type_texture);
-    /*de_ecs_register(r, cp_type_testing);*/
-    de_ecs_register(r, cp_type_border_sensor);
-    /*de_ecs_register(r, cp_type_terr_segment);*/
-    /*de_ecs_register(r, cp_type_man);*/
-}
-
 void koh_cp_types_register2(ecs_t *r) {
     e_register(r, &cp_type_vehicle2);
     e_register(r, &cp_type_body2);
     e_register(r, &cp_type_shape_render_opts2);
+    e_register(r, &cp_type_RenderTexOpts);
     e_register(r, &cp_type_texture2);
-    e_register(r, &cp_type_border_sensor2);
-    /*de_ecs_register(r, cp_type_testing);*/
-    /*de_ecs_register(r, cp_type_hero);*/
-    /*de_ecs_register(r, cp_type_terr_segment);*/
-    /*de_ecs_register(r, cp_type_man);*/
+    //e_register(r, &cp_type_border_sensor2);
 }
 
 VelRot make_random_velrot2(WorldCtx *wctx, FloatRange w, FloatRange vel) {
@@ -310,6 +308,69 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
     if (koh_components_verbose)
         trace("spawn_poly2: body { pos = %s, }\n", b2Vec2_to_str(pos));
     // }}}
+
+    return e;
+}
+
+e_id spawn_triangle2(struct WorldCtx *wctx, struct TriangleSetup2 setup) {
+    struct b2BodyId         *cp_body_id = NULL;
+    struct ShapeRenderOpts  *cp_r_opts = NULL;
+    e_id                    e = e_null;
+
+    if (setup.r) {
+        e = e_create(setup.r);
+        cp_body_id = e_emplace(setup.r, e, cp_type_body2);
+        cp_r_opts = e_emplace(setup.r, e, cp_type_shape_render_opts2);
+        *cp_r_opts = setup.r_opts;
+    }
+
+    assert(wctx);
+    b2BodyDef body_def = b2DefaultBodyDef();
+    body_def.isEnabled = true;
+    body_def.position = setup.pos;
+    body_def.isAwake = true;
+    body_def.userData = (void*)e.id;
+
+    if (setup.use_static)
+        body_def.type = b2_staticBody;
+    else
+        body_def.type = b2_dynamicBody;
+
+    b2BodyId body = body_create(wctx, &body_def);
+    if (cp_body_id)
+        *cp_body_id = body;
+    b2ShapeDef shape_def = b2DefaultShapeDef();
+    if (cp_r_opts)
+        shape_def.userData = (void*)e.id;
+    shape_def.density = 1.0;
+    shape_def.friction = 0.5;
+
+    // XXX: Направление обхода вершин?
+    b2Vec2 vertices[3] = {
+        {-50., 0.0},
+        {50., 0.0},
+        {0.0, 50.}
+    };
+    float alpha = 0, radius = setup.radius;
+    assert(radius > 0.);
+    size_t verts_num = sizeof(vertices) / sizeof(vertices[0]);
+    for (int i = 0; i < verts_num; i++) {
+        vertices[i].x = cos(alpha) * radius;
+        vertices[i].y = sin(alpha) * radius;
+        alpha += M_PI * 2. / verts_num;
+    }
+
+    b2Hull hull = b2ComputeHull(vertices, 3);
+    assert(b2ValidateHull(&hull));
+    b2Polygon triangle = b2MakePolygon(&hull, 0.0f);
+
+    b2CreatePolygonShape(body, &shape_def, &triangle);
+
+    struct VelRot vr = make_random_velrot(wctx);
+    b2Body_SetLinearVelocity(body, vr.vel);
+    b2Body_SetAngularVelocity(body, vr.w);
+
+    b2Body_Enable(body);
 
     return e;
 }
@@ -809,6 +870,8 @@ void shape_render_poly(
         koh_trap();
     }
 
+    assert(poly.count >= 0);
+
     // Преобразования координаты из локальных в глобальные
     Vector2 w_verts[poly.count + 1];
     memset(w_verts, 0, sizeof(w_verts));
@@ -821,16 +884,6 @@ void shape_render_poly(
 
     int count = poly.count, vertex_disp = opts->vertex_disp;
 
-    //trace("shape_render_poly: vertex_disp %d, count %d\n", vertex_disp, count);
-
-    /*
-    printf("before ");
-    for (int i = 0; i < count; i++) {
-        printf("%s ", Vector2_tostr(w_verts[i]));
-    }
-    printf("\n");
-    */
-
     for (int i = 0; i < vertex_disp; i++) {
         Vector2 last = w_verts[count - 1];
         for (int j = 0; j < count; j++) {
@@ -839,14 +892,6 @@ void shape_render_poly(
             last = tmp;
         }
     }
-
-    /*
-    printf("after ");
-    for (int i = 0; i < count; i++) {
-        printf("%s ", Vector2_tostr(w_verts[i]));
-    }
-    printf("\n");
-    */
 
     if (opts->tex) {
         if (poly.count == 4) 
@@ -948,6 +993,49 @@ void remove_borders(struct WorldCtx *wctx, de_ecs *r, de_entity entts[4]) {
     border_remove(r, entts[1], wctx);
     border_remove(r, entts[2], wctx);
     border_remove(r, entts[3], wctx);
+}
+
+e_id *bodies_filter2(
+    e_id *entts, size_t *entts_num, BodiesFilterCallback cb,
+    WorldCtx *wctx, ecs_t *r, void *udata
+) {
+    assert(entts_num);
+    assert(cb);
+    assert(wctx);
+    assert(r);
+
+    size_t cap = *entts_num;
+
+    if (!entts) {
+        cap = 1000;
+        entts = calloc(cap, sizeof(entts[0]));
+        assert(entts);
+        *entts_num = 0;
+    }
+
+    const e_cp_type cp_type = cp_type_body2;
+
+    trace("bodies_filter:\n");
+    int num = 0;
+    e_view v = e_view_create(r, 1, (e_cp_type[]){ cp_type });
+    for (; e_view_valid(&v); e_view_next(&v)) {
+        b2BodyId *body_id = e_view_get(&v, cp_type);
+
+        trace("bodies_filter: iter %d\n", num);
+        if (cb(body_id, udata)) {
+            if (num == cap) {
+                cap += cap + 1;
+                size_t new_sz = sizeof(entts[0]) * cap;
+                void *new_ptr = realloc(entts, new_sz);
+                assert(new_ptr);
+                entts = new_ptr;
+            }
+            entts[num++] = e_view_entity(&v);
+        }
+    }
+    *entts_num = num;
+
+    return entts;
 }
 
 de_entity *bodies_filter(
@@ -1076,6 +1164,22 @@ void shape_render_segment(
     DrawLineEx(w_verts[0], w_verts[1], opts->thick, VIOLET);
 }
 
+void e_reset_all_velocities2(ecs_t *r) {
+    assert(r);
+    e_cp_type types[] = { cp_type_body2 };
+    for (
+        e_view i = e_view_create(r, 1, types);
+        e_view_valid(&i); e_view_next(&i)
+    ) {
+        b2BodyId *body_id = e_view_get(&i, types[0]);
+        b2Vec2 vel = {};
+        float w = 0.;
+        b2Body_SetLinearVelocity(*body_id, vel);
+        b2Body_SetAngularVelocity(*body_id, w);
+    }
+}
+
+
 void e_reset_all_velocities(de_ecs *r) {
     assert(r);
     de_cp_type types[] = { cp_type_body };
@@ -1138,6 +1242,29 @@ void e_apply_random_impulse_to_bodies2(ecs_t *r, WorldCtx *wctx) {
     }
     if (koh_components_verbose)
         trace("apply_random_impulse_to_bodies:\n");
+}
+
+void spawn_triangles2(
+    WorldCtx *wctx, TriangleSetup2 setup, int num, e_id *ret
+) {
+    assert(wctx);
+    assert(wctx->height > 0);
+    assert(wctx->width > 0);
+
+    for (int i = 0; i < num; ++i) {
+        e_id e = spawn_triangle2(wctx, (struct TriangleSetup2) {
+            .r = setup.r,
+            .pos = {
+                .x = xorshift32_rand(wctx->xrng) % wctx->width,
+                .y = xorshift32_rand(wctx->xrng) % wctx->height,
+            },
+            .r_opts = setup.r_opts,
+            //.angle = xorshift32_rand1(wctx->xrng) * M_PI * 2.,
+            .radius = setup.radius,
+        });
+        if (ret)
+            ret[i] = e;
+    }
 }
 
 // TODO: Добавить фильтр (по типу тел?) и значение прикладываемого импулься
@@ -1267,6 +1394,11 @@ static bool test_point(b2ShapeId sid, void* context) {
     return false;
 }
 
+struct CheckUnderMouse2 {
+    ecs_t *r;
+    e_id  e;
+};
+
 struct CheckUnderMouse {
     de_ecs    *r;
     de_entity e;
@@ -1323,6 +1455,70 @@ bool update_shape_under_mouse(struct Timer *tmr) {
     r_opts->color = YELLOW;
     // Как покрасить выделенную форму?
     return false;
+}
+
+void beh_check_under_mouse2(struct CheckUnderMouseOpts2 *opts) {
+    assert(opts);
+    assert(opts->r);
+    assert(opts->tm);
+    assert(opts->wctx);
+    assert(opts->duration >= 0);
+
+    b2ShapeId shape_under_mouse = {};
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        Vector2 mp = GetScreenToWorld2D(GetMousePosition(), opts->cam);
+        b2Circle circle = {
+            .center = { mp.x, mp.y, },
+            .radius = 2.,
+        };
+        b2World_OverlapCircle(
+            opts->wctx->world, &circle,
+            b2Transform_identity, b2DefaultQueryFilter(),
+            test_point, &shape_under_mouse
+        );
+    }
+
+    if (B2_IS_NULL(shape_under_mouse))
+        return;
+
+    /*trace("stage_box2d_update: timer shape_under_mouse was added\n");*/
+
+    e_id e;
+    e.id = (int64_t)b2Shape_GetUserData(shape_under_mouse);
+
+    if (!e_valid(opts->r, e)) 
+        return;
+
+    Texture2D **tex = NULL;
+    tex = e_get(opts->r, e, cp_type_texture2);
+
+    if (!tex) {
+        tex = e_emplace(opts->r, e, cp_type_texture2);
+    }
+
+    struct ShapeRenderOpts *r_opts = NULL;
+    r_opts = e_get(opts->r, e, cp_type_shape_render_opts2);
+
+    if (!r_opts)
+        return;
+
+    *tex =r_opts->tex;
+
+    r_opts->tex = NULL;
+    r_opts->color = YELLOW;
+
+    struct CheckUnderMouse2 ctx = {
+        .r = opts->r,
+        .e = e,
+    };
+
+    timerman_add(opts->tm, (struct TimerDef) {
+        .duration = opts->duration,
+        .on_update = update_shape_under_mouse,
+        .on_stop = stop_shape_under_mouse,
+        .data = &ctx,
+        .sz = sizeof(ctx),
+    });
 }
 
 void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
@@ -1429,6 +1625,16 @@ void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx) {
     // */
 }
 
+static void destroy_e_body2(b2ShapeId sid, ecs_t *r) {
+    e_id e;
+    e.id = (int64_t)b2Shape_GetUserData(sid);
+    if (e.id != e_null.id) {
+        e_destroy(r, e);
+    }
+    b2BodyId bid = b2Shape_GetBody(sid);
+    b2DestroyBody(bid);
+}
+
 static void destroy_e_body(b2ShapeId sid, de_ecs *r) {
     de_entity e = (uintptr_t)b2Shape_GetUserData(sid);
     //trace("destroy_e_body: %u\n", e);
@@ -1439,17 +1645,20 @@ static void destroy_e_body(b2ShapeId sid, de_ecs *r) {
     b2DestroyBody(bid);
 }
 
+static bool shape_is_border_sensor2(ecs_t *r, b2ShapeId sid) {
+    e_id e;
+    e.id = (int64_t)b2Shape_GetUserData(sid);
+    if (e.id != e_null.id) {
+        assert(e_valid(r, e));
+        if (e_has(r, e, cp_type_border_sensor2)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool shape_is_border_sensor(de_ecs *r, b2ShapeId sid) {
     de_entity e;
-
-    /*
-    trace("shape_is_border_sensor: sid %s\n", b2ShapeId_id_to_str(sid));
-    if (b2Shape_GetUserData(sid) == NULL) {
-        trace("shape_is_border_sensor: user data == NULL\n");
-        return false;
-    }
-    */
-
     e = (uintptr_t)b2Shape_GetUserData(sid);
     if (e != de_null) {
         assert(de_valid(r, e));
@@ -1458,6 +1667,26 @@ static bool shape_is_border_sensor(de_ecs *r, b2ShapeId sid) {
         }
     }
     return false;
+}
+
+void e_destroy_border_sensors2(ecs_t *r, WorldCtx *wctx) {
+    assert(r);
+    assert(wctx);
+    b2ContactEvents c_events = b2World_GetContactEvents(wctx->world);
+    for (int i = 0; i < c_events.beginCount; i++) {
+        b2ContactBeginTouchEvent *ev = &c_events.beginEvents[i];
+
+        if (!b2Shape_IsValid(ev->shapeIdA) || !b2Shape_IsValid(ev->shapeIdB)) {
+            trace("e_destroy_border_sensors: invalid shape\n");
+            continue;
+        }
+
+        if (shape_is_border_sensor2(r, ev->shapeIdA)) {
+            destroy_e_body2(ev->shapeIdB, r);
+        } else if (shape_is_border_sensor2(r, ev->shapeIdB)) {
+            destroy_e_body2(ev->shapeIdA, r);
+        }
+    }
 }
 
 void e_destroy_border_sensors(de_ecs *r, WorldCtx *wctx) {

@@ -2,6 +2,7 @@
 // vim: fdm=marker
 #pragma once
 
+#include "koh_timerman.h"
 #include "koh_b2.h"
 #include "box2d/box2d.h"
 #include "koh_destral_ecs.h"
@@ -12,6 +13,7 @@ extern bool koh_components_verbose;
 // XXX: Убрал модификатор константности для правки типов на лету.
 // В частности правится cp_type_body.initial_cap = 10000;
 
+// TODO: Удалить все, что de_**
 extern de_cp_type cp_type_vehicle;
 extern de_cp_type cp_type_body;
 extern de_cp_type cp_type_border_sensor;
@@ -19,10 +21,12 @@ extern de_cp_type cp_type_shape_render_opts;
 extern de_cp_type cp_type_testing;
 extern de_cp_type cp_type_texture;
 
+// TODO: Убрать на хуй из общего файла типы компонентов
 extern e_cp_type cp_type_vehicle2;
 extern e_cp_type cp_type_body2;
 extern e_cp_type cp_type_border_sensor2;
 extern e_cp_type cp_type_shape_render_opts2;
+extern e_cp_type cp_type_RenderTexOpts;
 extern e_cp_type cp_type_testing2;
 extern e_cp_type cp_type_texture2;
 
@@ -76,6 +80,14 @@ typedef struct TriangleSetup {
     float                   radius;
 } TriangleSetup;
 
+typedef struct TriangleSetup2 {
+    ecs_t                   *r;
+    b2Vec2                  pos;
+    struct ShapeRenderOpts  r_opts;
+    bool                    use_static;
+    float                   radius;
+} TriangleSetup2;
+
 typedef struct PolySetup2 {
     // Опциональные параметры
     float                   *friction, *density;
@@ -105,7 +117,6 @@ typedef struct VelRot {
     b2Vec2  vel;
 } VelRot;
 
-void koh_cp_types_register(de_ecs *r);
 void koh_cp_types_register2(ecs_t *r);
 
 char **str_repr_body(void *payload, de_entity e);
@@ -132,6 +143,9 @@ void spawn_polygons2(
     WorldCtx *wctx, const PolySetup2 setup, int num, e_id *ret
 );
 
+void spawn_triangles2(
+    WorldCtx *wctx, TriangleSetup2 setup, int num, e_id *ret
+);
 void spawn_triangles(
     WorldCtx *wctx, TriangleSetup setup, int num, de_entity *ret
 );
@@ -166,6 +180,11 @@ typedef bool (*BodiesFilterCallback)(b2BodyId *body_id, void *udata);
 de_entity *bodies_filter(
     de_entity *entts, size_t *entts_num, BodiesFilterCallback cb,
     WorldCtx *wctx, de_ecs *r, void *udata
+);
+
+e_id *bodies_filter2(
+    e_id *entts, size_t *entts_num, BodiesFilterCallback cb,
+    WorldCtx *wctx, ecs_t *r, void *udata
 );
 
 void shape_render_poly(
@@ -618,6 +637,7 @@ inline static void world_shape_render_segment(
 }
 
 void e_reset_all_velocities(de_ecs *r);
+void e_reset_all_velocities2(ecs_t *r);
 
 static inline int cmp_b2ShapeId(const void *a, const void *b) {
     return memcmp(a, b, sizeof(b2ShapeId));
@@ -641,6 +661,14 @@ void e_apply_random_impulse_to_bodies2(ecs_t *r, WorldCtx *wctx);
 void e_cp_body_draw(de_ecs *r, WorldCtx *wctx);
 // XXX: Что делает функция?
 void e_cp_body_draw2(ecs_t *r, WorldCtx *wctx);
+
+struct CheckUnderMouseOpts2 {
+    ecs_t    *r;
+    WorldCtx *wctx;
+    Camera2D cam;        // XXX: Почему не указатель на камеру?
+    TimerMan *tm;
+    float    duration;
+};
 
 struct CheckUnderMouseOpts {
     de_ecs *r;
@@ -725,8 +753,10 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==25729==ABORTING
 */ // }}}
 void beh_check_under_mouse(struct CheckUnderMouseOpts *opts);
+void beh_check_under_mouse2(struct CheckUnderMouseOpts2 *opts);
 /*void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx);*/
 void e_destroy_border_sensors(de_ecs *r, WorldCtx *wctx);
+void e_destroy_border_sensors2(ecs_t *r, WorldCtx *wctx);
 
 // NOTE: Временные переменные, удалить
 extern float _poly_rot_angle;
