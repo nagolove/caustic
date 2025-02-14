@@ -32,9 +32,12 @@ void render_v4_with_tex(
 
 typedef struct RenderTexOpts {
     Texture2D texture;
-    Rectangle source;
+    // По часовой стрелке
+    Vector2   uv[4];
     Vector2   verts[4];
     Color     tint;
+    // XXX: Что за vertex_disp ??
+    // Сдвигает вершины по часовой(?) стрелке n раз.
     int       vertex_disp;
 } RenderTexOpts;
 
