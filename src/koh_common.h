@@ -79,18 +79,7 @@ void draw_paragraph(
 // -1..1 -> 0..1
 float axis2zerorange(float value);
 
-/*
-typedef struct StrBuilder {
-    char **lines;
-    int linesnum;
-} StrBuilder;
-
-void str_builder_init(StrBuilder *sb);
-void str_builder_done(StrBuilder *sb);
-char *str_builder_append(StrBuilder *sb);
-char *str_builder_concat(StrBuilder *sb, int *len);
-*/
-
+// TODO: Сделать слоты на кольцевом буфере для статической памяти
 // не выделяет памяти под строку, статический буфер в функции
 const char *to_bitstr_uint8_t(uint8_t value);
 // не выделяет памяти под строку, статический буфер в функции
@@ -149,12 +138,7 @@ void koh_qsort_soa(
 //cpSpaceDebugColor from_Color(Color c);
 
 struct CameraProcessScale {
-    // TODO: Выбрать лучшее именование для камеры?
-    //Camera2D    *cam_ptr;
-    //Camera2D    *ptr_cam;
-    //Camera2D    *pcam;
-    //Camera2D    *camp;
-    
+    // TODO: Добавить разные интерполяции
     Camera2D    *cam;
     float       dscale_value;       // Приращение масштаба
     KeyboardKey modifier_key_down;
