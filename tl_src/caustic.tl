@@ -85,6 +85,7 @@ local Cache      = require "cache"
 local uv         = require "luv"
 local lanes      = require "lanes".configure()
 local rl         = require "readline"
+local readline = rl.readline
 local sleep      = require "socket".sleep
 local format        = string.format
 local match         = string.match
@@ -2656,7 +2657,7 @@ function actions.stage(_args: Args)
         print("Could not find 'src' directory")
     end
 
-    local inp = rl.readline(ansicolors("%{green}enter stage name%{reset}"))
+    local inp = readline(ansicolors("%{green}enter stage name%{reset}"))
 
     printc("stage name: %{blue}" .. inp .. "%{reset}")
     if #inp <= 3 then
@@ -2664,6 +2665,9 @@ function actions.stage(_args: Args)
         ut.pop_dir()
         return
     end
+
+    local msg = "%{green}enter source file prefix%{reset}"
+    local prefix = readline(ansicolors(msg))
 
     chdir('src')
 
@@ -2674,7 +2678,7 @@ function actions.stage(_args: Args)
 [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "stage_$stage$.h"
+#include "$prefix$stage_$stage$.h"
 
 #include "koh_stages.h"
 
@@ -2737,6 +2741,12 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
     stage_c = gsub(stage_c, "%$stage%$", stage)
     stage_c = gsub(stage_c, "%$Stage%$", Stage)
 
+    if #prefix ~= 0 then
+        prefix = prefix .. "_"
+    end
+
+    stage_c = gsub(stage_c, "%$prefix%$", prefix)
+
     local stage_h = 
     [[// vim: set colorcolumn=85
 // vim: fdm=marker
@@ -2750,12 +2760,8 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store);
 
     stage_h = gsub(stage_h, "%$stage%$", stage)
 
-    write_file_bak("stage_" .. stage .. ".c", stage_c)
-    write_file_bak("stage_" .. stage .. ".h", stage_h)
-
-    -- Если такие есть, то переименовать их в bla_bla_bla.h.bak
-    -- Скопировать файлы шаблонной сцены
-    -- Сделать замену по $PREFIX$ на имя
+    write_file_bak(prefix .. "stage_" .. stage .. ".c", stage_c)
+    write_file_bak(prefix .. "stage_" .. stage .. ".h", stage_h)
 
     ut.pop_dir()
 end
