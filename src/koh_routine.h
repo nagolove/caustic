@@ -68,7 +68,10 @@ static inline struct Polar to_polar(float x, float y) {
 }
 
 static inline const char *Rectangle_tostr(Rectangle r) {
-    static char buf[100] = {0};
+    static char slots[10][100] = {0};
+    static int i = 0;
+    i = (i + 1) % 10;
+    char *buf = slots[i];
     sprintf(buf, "{%6.5f, %6.5f, %6.5f, %6.5f}", r.x, r.y, r.width, r.height);
     return buf;
 }
@@ -224,7 +227,10 @@ static KOH_FORCE_INLINE bool koh_color_eq(Color c1, Color c2) {
 }
 
 inline static char *b2AABB_to_str(struct b2AABB aabb) {
-    static char buf[128];
+    static char slot[5][128];
+    static int cnt = 0;
+    char *buf = slot[cnt];
+    cnt = (cnt + 1) % 5;
     sprintf(
         buf, "{ lowerBound = {%f, %f}, upperBound = {%f, %f}}", 
         aabb.lowerBound.x,
