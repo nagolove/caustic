@@ -138,7 +138,6 @@ void koh_qsort_soa(
 //cpSpaceDebugColor from_Color(Color c);
 
 struct CameraProcessScale {
-    // TODO: Добавить разные интерполяции
     Camera2D    *cam;
     float       dscale_value;       // Приращение масштаба
     KeyboardKey modifier_key_down;
@@ -149,6 +148,9 @@ struct CameraProcessDrag {
     Camera2D    *cam;
 };
 
+// TODO: Добавить разные интерполяции
+// TODO: Добавить гуи для изменения параметров
+// TODO: Добавить сохранение в луа строку
 bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd);
 bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps);
 //bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value);
@@ -368,3 +370,6 @@ void cosys_draw(CoSysOpts opts);
 
 bool koh_file_read_alloc(const char *fname, char **data, size_t *data_len);
 bool koh_file_write(const char *fname, const char *data, size_t data_len);
+__attribute_deprecated__
+void rect2uv(Rectangle rect, Vector2 uv[4]);
+void set_uv_from_rect(Rectangle rect, Vector2 uv[4]);

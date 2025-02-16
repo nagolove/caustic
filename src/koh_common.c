@@ -2373,3 +2373,26 @@ bool koh_file_write(const char *fname, const char *data, size_t data_len) {
     fclose(f);
     return num == 1;
 }
+
+
+void rect2uv(Rectangle rect, Vector2 uv[4]) {
+    uv[0].x = rect.x;
+    uv[0].y = rect.y;
+    uv[1].x = rect.x + rect.width;
+    uv[1].y = rect.y;
+    uv[2].x = rect.x + rect.width;
+    uv[2].y = rect.y + rect.height;
+    uv[3].x = rect.x;
+    uv[3].y = rect.y + rect.height;
+}
+
+void set_uv_from_rect(Rectangle rect, Vector2 uv[4]) {
+    uv[0].x = rect.x;
+    uv[0].y = rect.y;
+    uv[1].x = rect.x + rect.width;
+    uv[1].y = rect.y;
+    uv[2].x = rect.x + rect.width;
+    uv[2].y = rect.y + rect.height;
+    uv[3].x = rect.x;
+    uv[3].y = rect.y + rect.height;
+}
