@@ -6,17 +6,6 @@
 #include "box2d/box2d.h"
 #include "TaskScheduler_c.h"
 
-#ifdef BOX2C_SENSOR_SLEEP
-#include "box2d/types.h"
-#include "box2d/id.h"
-/*#include "box2d/math.h"*/
-/*#include "box2d/color.h"*/
-#endif
-
-#include "contact.h"
-#include "world.h"
-#include "shape.h"
-
 #include "koh_common.h"
 #include "raylib.h"
 #include "koh.h"
@@ -37,20 +26,6 @@ inline static Color b2Color_to_Color(b2HexColor c) {
     // }}}
 }
 
-b2DebugDraw b2_world_dbg_draw_create();
-char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
-
-// Хранение информации из AABB запроса
-struct ShapesStore {
-    b2ShapeId           *shapes_on_screen;
-    int                 shapes_on_screen_cap, shapes_on_screen_num;
-};
-
-void shapes_store_init(struct ShapesStore *ss);
-void shapes_store_shutdown(struct ShapesStore *ss);
-inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id);
-inline static void shapes_store_clear(struct ShapesStore *ss);
-
 typedef struct WorldCtx {
     // Настройка шага симуляции
     int32_t             substeps;
@@ -64,6 +39,7 @@ typedef struct WorldCtx {
     bool                is_dbg_draw, is_paused;
     int                 tasks_count;
 
+    int                 line_thick;
     uint32_t            width, height; // размеры карты в пикселях?
                                        
     b2WorldId           world;
@@ -73,6 +49,20 @@ typedef struct WorldCtx {
 } WorldCtx;
 
 typedef WorldCtx WCtx;
+
+b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx);
+char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
+
+// Хранение информации из AABB запроса
+struct ShapesStore {
+    b2ShapeId           *shapes_on_screen;
+    int                 shapes_on_screen_cap, shapes_on_screen_num;
+};
+
+void shapes_store_init(struct ShapesStore *ss);
+void shapes_store_shutdown(struct ShapesStore *ss);
+inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id);
+inline static void shapes_store_clear(struct ShapesStore *ss);
 
 inline static void shapes_store_push(struct ShapesStore *ss, b2ShapeId id) {
     assert(ss);
@@ -275,3 +265,28 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
 */
 char *b2QueryFilter_2str_alloc(b2QueryFilter filter);
 b2QueryFilter b2QueryFilter_from_str(const char *str, bool *is_ok);
+
+typedef struct WorldCtxSetup {
+    xorshift32_state *xrng;
+    // В каких еденицаз размер мира? Где он используется?
+    unsigned         width, height;
+    b2WorldDef       *wd;
+} WorldCtxSetup;
+
+// NOTE: Более удобный вариант функции конструирования:
+// WorldCtx world_init(struct WorldCtxSetup *setup);
+__attribute_deprecated__
+void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx);
+
+// NOTE: Более удобный вариант функции конструирования:
+// WorldCtx world_init(struct WorldCtxSetup *setup);
+WorldCtx world_init2(struct WorldCtxSetup *setup);
+
+void world_step(struct WorldCtx *wctx);
+void world_shutdown(struct WorldCtx *wctx);
+
+static inline void world_draw_debug(struct WorldCtx *wctx) {
+    assert(wctx);
+    if (wctx->is_dbg_draw)
+        b2World_Draw(wctx->world, &wctx->world_dbg_draw);
+}

@@ -42,7 +42,7 @@ _Static_assert(
     "Vector2 and b2Vec2 has different layout"   
 );  
 
-static const float line_thick = 3.;
+static const float default_line_thick = 13.;
 static bool verbose_b2 = false;
 
 /// Draw a closed polygon provided in CCW order.
@@ -55,6 +55,9 @@ static void draw_polygon(
     trace("draw_polygon: %s\n", str);
     free(str);
     */
+
+    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+        default_line_thick;
 
     Vector2 *verts = (Vector2*)vertices;
     for (int i = 0; i < vertexCount - 1; i++) {
@@ -82,6 +85,9 @@ static void draw_solid_polygon(
     /*
     DrawTriangleFan(_vertices, vertexCount, b2Color_to_Color(color));
     */
+
+    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+        default_line_thick;
 
     Vector2 *verts = (Vector2*)vertices;
     DrawTriangleFan(verts, vertexCount, b2Color_to_Color(color));
@@ -158,6 +164,10 @@ static void draw_capsule(
 ) {
     if (verbose_b2)
         trace("draw_capsule:\n");
+
+    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+        default_line_thick;
+
     DrawCircleLinesV(
         (Vector2) { p1.x, p1.y },
         radius, 
@@ -180,6 +190,10 @@ static void draw_solid_capsule(
 ) {
     if (verbose_b2)
         trace("draw_solid_capsule:\n");
+
+    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+        default_line_thick;
+
     DrawCircleV(
         (Vector2) { p1.x, p1.y },
         radius, 
@@ -200,6 +214,10 @@ static void draw_solid_capsule(
 static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* context) {
     if (verbose_b2)
         trace("draw_segment:\n");
+
+    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+        default_line_thick;
+
     DrawLineEx(
         b2Vec2_to_Vector2(p1),
         b2Vec2_to_Vector2(p2),
@@ -229,7 +247,7 @@ static void draw_string(b2Vec2 p, const char* s, void* context) {
     DrawText(s, p.x, p.y, 20, BLACK);
 }
 
-b2DebugDraw b2_world_dbg_draw_create() {
+b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
     return (struct b2DebugDraw) {
         .DrawPolygon = draw_polygon,
         .DrawSolidPolygon = draw_solid_polygon,
@@ -247,6 +265,7 @@ b2DebugDraw b2_world_dbg_draw_create() {
         .drawAABBs = true,
         .drawMass = true,
         .drawGraphColors = true,
+        .context = wctx,
     };
 }
 
@@ -764,3 +783,200 @@ b2QueryFilter b2QueryFilter_from_str(const char *tbl_str, bool *is_ok) {
     lua_close(l);
     return r;
 }
+
+extern bool b2_parallel;
+
+void world_step(struct WorldCtx *wctx) {
+    if (!wctx->is_paused)
+        b2World_Step(wctx->world, wctx->timestep, wctx->substeps);
+}
+
+static void* enqueue_task(
+    b2TaskCallback* task, int32_t itemCount, int32_t minRange,
+    void* taskContext, void* userContext
+) {
+    /*
+    struct Stage_Box2d *st = userContext;
+    if (st->tasks_count < tasks_max)
+    {
+        SampleTask& sampleTask = sample->m_tasks[sample->m_taskCount];
+        sampleTask.m_SetSize = itemCount;
+        sampleTask.m_MinRange = minRange;
+        sampleTask.m_task = task;
+        sampleTask.m_taskContext = taskContext;
+        sample->m_scheduler.AddTaskSetToPipe(&sampleTask);
+        ++sample->m_taskCount;
+        return &sampleTask;
+    }
+    else
+    {
+        assert(false);
+        task(0, itemCount, 0, taskContext);
+        return NULL;
+    }
+    */
+    return NULL;
+}
+
+static void finish_task(void* taskPtr, void* userContext) {
+    /*
+    SampleTask* sampleTask = static_cast<SampleTask*>(taskPtr);
+    Sample* sample = static_cast<Sample*>(userContext);
+    sample->m_scheduler.WaitforTask(sampleTask);
+    */
+}
+
+WorldCtx world_init2(WorldCtxSetup *setup) {
+    assert(setup);
+
+    WorldCtx wctx = {};
+
+    if (setup->wd) 
+        wctx.world_def = *setup->wd;
+    else {
+        wctx.world_def =  b2DefaultWorldDef();
+        wctx.world_def.enableContinous = true;
+        wctx.world_def.enableSleep = true;
+        wctx.world_def.gravity = b2Vec2_zero;
+    }
+
+    // TODO: шаг вынести в параметры. Или получать из GetFPS()?
+    wctx.timestep = 1. / 60.;
+    wctx.task_shed = enkiNewTaskScheduler();
+    enkiInitTaskScheduler(wctx.task_shed);
+    assert(wctx.task_shed);
+    wctx.task_set = enkiCreateTaskSet(wctx.task_shed, NULL);
+    assert(wctx.task_set);
+    wctx.world_def.enqueueTask = enqueue_task;
+    wctx.world_def.finishTask = finish_task;
+
+    wctx.world = b2CreateWorld(&wctx.world_def);
+
+    wctx.width = setup->width;
+    wctx.height = setup->height;
+
+    if (!setup->xrng) {
+        printf("world_init: xrng is NULL\n");
+        koh_trap();
+    }
+
+    wctx.xrng = setup->xrng;
+
+    if (!wctx.xrng) {
+        printf("world_init2: passed xrng is NULL, creating new prng\n");
+        static xorshift32_state xrng;
+        if (xrng.a != 0)
+            xrng = xorshift32_init();
+        wctx.xrng = &xrng;
+    }
+
+    wctx.substeps = 4;
+
+#define SLOTS_NUM 10
+    static WorldCtx contexts[SLOTS_NUM];
+    static int context_index = 0;
+    context_index = (context_index + 1) % SLOTS_NUM;
+
+    contexts[context_index] = wctx;
+#undef SLOTS_NUM
+
+    wctx.world_dbg_draw = b2_world_dbg_draw_create(&contexts[context_index]);
+    wctx.is_dbg_draw = false;
+
+    assert(setup->xrng);
+    assert(setup->xrng->a);
+    trace(
+        "world_init2: width %u, height %u, "
+        "xorshift32_state seed %u,"
+        "xorshift64_state seed %lu,"
+        "gravity %s\n",
+        setup->width, setup->height, 
+        wctx.xrng->a,
+        wctx.xrng64.a,
+        b2Vec2_to_str(b2World_GetGravity(wctx.world))
+    );
+
+    return wctx;
+}
+
+void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
+    assert(setup);
+    assert(wctx);
+    /*b2_parallel = false;*/
+
+    if (setup->wd) 
+        wctx->world_def = *setup->wd;
+    else {
+        wctx->world_def =  b2DefaultWorldDef();
+        wctx->world_def.enableContinous = true;
+        wctx->world_def.enableSleep = true;
+        wctx->world_def.gravity = b2Vec2_zero;
+    }
+
+    wctx->timestep = 1. / 60.;
+    //int max_threads = 6;
+    wctx->task_shed = enkiNewTaskScheduler();
+    enkiInitTaskScheduler(wctx->task_shed);
+    assert(wctx->task_shed);
+    wctx->task_set = enkiCreateTaskSet(wctx->task_shed, NULL);
+    assert(wctx->task_set);
+    wctx->world_def.enqueueTask = enqueue_task;
+    wctx->world_def.finishTask = finish_task;
+
+    wctx->world = b2CreateWorld(&wctx->world_def);
+
+    wctx->width = setup->width;
+    wctx->height = setup->height;
+
+    if (!setup->xrng) {
+        printf("world_init: xrng is NULL\n");
+        koh_trap();
+    }
+
+    wctx->xrng = setup->xrng;
+    wctx->substeps = 4;
+
+    wctx->world_dbg_draw = b2_world_dbg_draw_create(wctx);
+    wctx->is_dbg_draw = false;
+
+    assert(setup->xrng);
+    assert(setup->xrng->a);
+    trace(
+        "world_init: width %u, height %u, "
+        "xorshift32_state seed %u,"
+        "gravity %s\n",
+        setup->width, setup->height, 
+        setup->xrng->a,
+        b2Vec2_to_str(b2World_GetGravity(wctx->world))
+    );
+}
+
+void world_shutdown(struct WorldCtx *wctx) {
+    trace("world_shutdown: wctx %p\n", wctx);
+    if (!wctx) {
+        return;
+    }
+
+    if (wctx->task_set) {
+        enkiDeleteTaskSet(wctx->task_shed, wctx->task_set);
+        wctx->task_set = NULL;
+    }
+
+    if (wctx->task_shed) {
+        enkiDeleteTaskScheduler(wctx->task_shed);
+        wctx->task_shed = NULL;
+    }
+
+    b2WorldId zero_world = {};
+    if (!memcmp(&wctx->world, &zero_world, sizeof(zero_world))) {
+        b2DestroyWorld(wctx->world);
+        memset(&wctx->world, 0, sizeof(wctx->world));
+    }
+
+    // FIXME: Нужно-ли специально удалять физические тела?
+    // Возможно добавить проход по компонентам тел в системе.
+
+    memset(wctx, 0, sizeof(*wctx));
+}
+
+
