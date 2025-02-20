@@ -5,6 +5,7 @@
 
 //#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
+#include "box2d/box2d.h"
 #include "koh_strbuf.h"
 #include "koh_sparse.h"
 #include "koh_table.h"
@@ -118,6 +119,62 @@ typedef struct ecs_t {
 } ecs_t;
 
 // {{{ tests implementation
+
+typedef struct RenderTexOpts {
+    Texture2D texture;
+    // По часовой стрелке
+    Vector2   uv[4];
+    Vector2   verts[4];
+    Color     tint;
+    // XXX: Что за vertex_disp ??
+    // Сдвигает вершины по часовой(?) стрелке n раз.
+    int       vertex_disp;
+} RenderTexOpts;
+
+// INFO: Из сцены t80_stage_chassis.c
+// Проблемы с итерацией
+static MunitResult test_view_chassis(
+    const MunitParameter params[], void* data
+) {
+
+    // {{{
+    // Физическое тело
+    e_cp_type cp_type_body2 = {
+        .cp_sizeof = sizeof(b2BodyId),
+        .name = "body",
+        .description = "b2BodyId structure",
+        .initial_cap = 1000,
+    };
+
+    // Шасси
+    e_cp_type cp_type_chassis = {
+        .cp_sizeof = sizeof(char),
+        .name = "chassis",
+        .description = "tag chassis",
+        //.str_repr = str_repr_body2,
+        .initial_cap = 1000,
+    };
+
+    e_cp_type cp_type_RenderTexOpts = {
+        .cp_sizeof = sizeof(struct RenderTexOpts),
+        .name = "render_tex_opts",
+        .description = "arbitrary 4 vertex render",
+        .initial_cap = 1000,
+    };
+    // }}}
+
+    ecs_t *r = e_new(NULL);
+
+    e_register(r, &cp_type_body2);
+    e_register(r, &cp_type_chassis);
+    //e_register(r, &cp_type_chassis);
+
+    //cp_ropts = e_emplace(r, e, cp_type_RenderTexOpts);
+
+    e_free(r);
+
+    return MUNIT_OK;
+}
 
 bool iter_each(ecs_t *r, e_id e, void *ud) {
     HTable *set = ud;
@@ -2164,6 +2221,15 @@ static MunitTest test_e_internal[] = {
     },
     */
 
+    {
+        .name =  "/test_view_chassis",
+        .test = test_view_chassis,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
@@ -3285,14 +3351,20 @@ void e_types_print(ecs_t *r) {
 e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
     ecs_assert(r);
     assert(e_valid(r, e));
-    static e_cp_type *types[128] = {};
+#define SLOTS_NUM 10
+#define TYPES_NUM 128
+    static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
+    static int i = 0;
+    e_cp_type **types = slots[i];
 
-    memset(types, 0, sizeof(types));
+    memset(types, 0, sizeof(slots[i]));
+    i = (i + 1) % SLOTS_NUM;
+#undef SLOTS_NUM
 
     int found_types_num = 0;
 
     // Убедиться что хватит места на все типы компонент.
-    assert(htable_count(r->cp_types) < sizeof(types) / sizeof(types[0]));
+    assert(htable_count(r->cp_types) < TYPES_NUM);
 
     for (HTableIterator i = htable_iter_new(r->cp_types);
         htable_iter_valid(&i); htable_iter_next(&i)) {
