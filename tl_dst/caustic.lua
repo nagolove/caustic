@@ -104,6 +104,7 @@ local verbose = false
 
 
 local errexit = false
+local errexit_uv = true
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end = "{CAUSTIC_PASTE_END}"
 local cache
@@ -342,8 +343,9 @@ local function search_and_load_cfgs_up(fname)
 
       print(format(
       "search_and_load_cfgs_up: could not load config in " ..
-      "'%s' with '%s', aborting",
+      "'%s' with '%s', fname '%s', aborting",
       lfs.currentdir(),
+      fname,
       errmsg))
 
       os.exit(1)
@@ -1901,8 +1903,20 @@ end
 
 
 
+
+
+
+
+
+
+
 local parser_setup = {
 
+
+   make_projects = {
+      options = { "-n --name" },
+      summary = [[compile all projects from projects.lua]],
+   },
 
    project = {
       options = { "-n --name" },
@@ -2009,6 +2023,12 @@ local parser_setup = {
    },
    selftest_status = {
       summary = "print git status for selftest.lua entries",
+   },
+   projects_status2 = {
+      summary = "call lazygit for projects.lua entries",
+   },
+   projects_status = {
+      summary = "print git status for projects.lua entries",
    },
    selftest_push = {
       summary = "call git push for selftest.lua entries",
@@ -2247,6 +2267,32 @@ end
 
 
 
+
+
+
+function actions.make_projects(_args)
+   local list = loadfile(path_caustic .. "/projects.lua")();
+
+   errexit_uv = false
+   for k, v in ipairs(list) do
+      print(k, v)
+
+      ut.push_current_dir()
+      chdir(v)
+
+      printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+      local ok, errmsg = pcall(function()
+         actions.make({})
+      end)
+      if not ok then
+         print('Some problem in make on ' .. v .. ": " .. errmsg)
+      end
+
+      ut.pop_dir()
+   end
+   errexit_uv = true
+end
+
 function actions.project(_args)
    print("actions.project:", inspect(_args))
 
@@ -2319,7 +2365,7 @@ return {
         -- }}}
 
         -- результат компиляции и линковки
-        artifact = "$ARTIFACT$",
+        artifact = "$artifact$",
         -- файл с функцикй main()
         main = "main.c",
         -- каталог с исходными текстами
@@ -2360,7 +2406,8 @@ return {
       artifact = inp
    end
 
-   bld_tl = gsub(bld_tl, "$(.-)$", artifact)
+
+   bld_tl = gsub(bld_tl, "%$artifact%$", artifact)
 
    local f = io.open("tlconfig.lua", "w")
    f:write(tlconfig_lua)
@@ -3008,13 +3055,25 @@ function actions.selftest_push(_args)
    end
 end
 
-
-function actions.selftest_status(_args)
-
-   local selftest_fname = path_caustic .. "/selftest.lua"
+local function git_status2(dirlist_fname)
    local ok, errmsg = pcall(function()
-      local test_dirs = loadfile(selftest_fname)()
+      local test_dirs = loadfile(dirlist_fname)()
+      ut.push_current_dir()
+      for _, dir in ipairs(test_dirs) do
+         chdir(dir)
+         cmd_do("lazygit")
+      end
+      ut.pop_dir()
+   end)
+   if not ok then
+      print(format("Could not load %s with %s", dirlist_fname, errmsg))
+      os.exit(1)
+   end
+end
 
+local function git_status(dirlist_fname)
+   local ok, errmsg = pcall(function()
+      local test_dirs = loadfile(dirlist_fname)()
       ut.push_current_dir()
       for _, dir in ipairs(test_dirs) do
          chdir(dir)
@@ -3024,9 +3083,21 @@ function actions.selftest_status(_args)
       ut.pop_dir()
    end)
    if not ok then
-      print(format("Could not load %s with %s", selftest_fname, errmsg))
+      print(format("Could not load %s with %s", dirlist_fname, errmsg))
       os.exit(1)
    end
+end
+
+function actions.projects_status2(_args)
+   git_status2(path_caustic .. "/projects.lua")
+end
+
+function actions.projects_status(_args)
+   git_status2(path_caustic .. "/projects.lua")
+end
+
+function actions.selftest_status(_args)
+   git_status(path_caustic .. "/selftest.lua")
 end
 
 function actions.selftest(_args)
@@ -4291,7 +4362,7 @@ local function run_parallel_uv(queue)
 
    print('run_parallel_uv: errcode', errcode)
 
-   if errcode ~= 0 then
+   if errexit_uv and errcode ~= 0 then
       os.exit(1)
    end
 end

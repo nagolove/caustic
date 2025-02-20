@@ -104,6 +104,7 @@ local verbose       = false
 -- Если истина, то при ошибках будет выход из программы сборки. 
 -- Иначе происходит замалчивание
 local errexit       = false
+local errexit_uv    = true
 local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
 local pattern_end   = "{CAUSTIC_PASTE_END}"
 local cache: Cache
@@ -342,8 +343,9 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         --print("search_and_load_cfgs_up: loadfile() failed with", errmsg)
         print(format(
             "search_and_load_cfgs_up: could not load config in " ..
-            "'%s' with '%s', aborting",
+            "'%s' with '%s', fname '%s', aborting",
             lfs.currentdir(),
+            fname,
             errmsg 
         ))
         os.exit(1)
@@ -1848,17 +1850,22 @@ local record Actions
     selftest_lg: function(Args)
     selftest_push: function(Args)
     selftest_status: function(Args)
+    projects_status: function(Args)
+    projects_status2: function(Args)
     stage: function(Args)
     test: function(Args)
     verbose: function(Args)
     wasm_build: function(Args)
     update: function(Args)
     init_w: function(Args)
+
+    make_projects: function(Args)
     -- }}}
 end
 
 local enum ActionsEnum
     -- {{{
+    "make_projects"
     "project"
     "init_w"
     "stage"
@@ -1870,6 +1877,8 @@ local enum ActionsEnum
     "dependencies"
     "deps"
     "update"
+    "projects_status"
+    "projects_status2"
 
     -- FIXME: Как добавить поддержку зависимотей для текущего проекта?
     -- Значить нужно добавлять пути и опции компилятора от текущего проекта
@@ -1903,6 +1912,11 @@ end
 -- TODO: Добавить вывод справки на русском?
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    make_projects = {
+        options = { "-n --name", },
+        summary = [[compile all projects from projects.lua]],
+    },
 
     project = {
         options = { "-n --name", },
@@ -2009,6 +2023,12 @@ local parser_setup: {string:ParserSetup} = {
     },
     selftest_status = {
         summary = "print git status for selftest.lua entries",
+    },
+    projects_status2 = {
+        summary = "call lazygit for projects.lua entries",
+    },
+    projects_status = {
+        summary = "print git status for projects.lua entries",
     },
     selftest_push = {
         summary = "call git push for selftest.lua entries",
@@ -2247,6 +2267,32 @@ local record Args
     -- }}}
 end
 
+-- Собирает все проекты из path_caustic/projects.lua
+-- TODO: Не останавливать программу сборки если компиляция прошла неудачно,
+-- пытаться собрать все проекты
+function actions.make_projects(_args: Args)
+    local list = loadfile(path_caustic .. "/projects.lua")() as {string};
+
+    errexit_uv = false
+    for k, v in ipairs(list) do
+        print(k, v)
+
+        ut.push_current_dir()
+        chdir(v)
+
+        printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+        local ok, errmsg = pcall(function()
+            actions.make({})
+        end) as (boolean, string)
+        if not ok then
+            print('Some problem in make on ' .. v .. ": " .. errmsg)
+        end
+
+        ut.pop_dir()
+    end
+    errexit_uv = true
+end
+
 function actions.project(_args: Args)
     print("actions.project:", inspect(_args))
 
@@ -2319,7 +2365,7 @@ return {
         -- }}}
 
         -- результат компиляции и линковки
-        artifact = "$ARTIFACT$",
+        artifact = "$artifact$",
         -- файл с функцикй main()
         main = "main.c",
         -- каталог с исходными текстами
@@ -2360,7 +2406,8 @@ return {
         artifact = inp
     end
 
-    bld_tl = gsub(bld_tl, "$(.-)$", artifact)
+    --bld_tl = gsub(bld_tl, "$(.-)$", artifact)
+    bld_tl = gsub(bld_tl, "%$artifact%$", artifact)
 
     local f = io.open("tlconfig.lua", "w")
     f:write(tlconfig_lua)
@@ -3008,13 +3055,25 @@ function actions.selftest_push(_args: Args)
     end
 end
 
-
-function actions.selftest_status(_args: Args)
-    --print('selftest')
-    local selftest_fname = path_caustic .. "/selftest.lua"
+local function git_status2(dirlist_fname: string)
     local ok, errmsg: boolean, string = pcall(function()
-        local test_dirs = loadfile(selftest_fname)() as {string}
-        --print('test_dirs', inspect(test_dirs))
+        local test_dirs = loadfile(dirlist_fname)() as {string}
+        ut.push_current_dir()
+        for _, dir in ipairs(test_dirs) do
+            chdir(dir)
+            cmd_do("lazygit")
+        end
+        ut.pop_dir()
+    end)
+    if not ok then
+        print(format("Could not load %s with %s", dirlist_fname, errmsg))
+        os.exit(1)
+    end
+end
+
+local function git_status(dirlist_fname: string)
+    local ok, errmsg: boolean, string = pcall(function()
+        local test_dirs = loadfile(dirlist_fname)() as {string}
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             chdir(dir)
@@ -3024,9 +3083,21 @@ function actions.selftest_status(_args: Args)
         ut.pop_dir()
     end)
     if not ok then
-        print(format("Could not load %s with %s", selftest_fname, errmsg))
+        print(format("Could not load %s with %s", dirlist_fname, errmsg))
         os.exit(1)
     end
+end
+
+function actions.projects_status2(_args: Args)
+    git_status2(path_caustic .. "/projects.lua")
+end
+
+function actions.projects_status(_args: Args)
+    git_status2(path_caustic .. "/projects.lua")
+end
+
+function actions.selftest_status(_args: Args)
+    git_status(path_caustic .. "/selftest.lua")
 end
 
 function actions.selftest(_args: Args)
@@ -4291,7 +4362,7 @@ local function run_parallel_uv(queue: {Task})
      --uv.tty_set_mode(tty, mode)
     print('run_parallel_uv: errcode', errcode)
 
-    if errcode ~= 0 then
+    if errexit_uv and errcode ~= 0 then
         os.exit(1)
     end
 end
