@@ -54,29 +54,29 @@ enum TimerManAction {
 
 extern bool timerman_verbose;
 
-struct TimerMan *timerman_new(int cap, const char *name);
-void timerman_free(struct TimerMan *tm);
+TimerMan *timerman_new(int cap, const char *name);
+void timerman_free(TimerMan *tm);
 
 // Как создать таймер только если такой таймер еще не создан?
 // Возвращает истину если таймер получилось создать
-bool timerman_add(struct TimerMan *tm, struct TimerDef td);
+bool timerman_add(TimerMan *tm, TimerDef td);
 
 // Производит обновление. Возвращает количество таймеров.
-int timerman_update(struct TimerMan *tm);
-struct TimerMan *timerman_clone(struct TimerMan *tm);
-void timerman_pause(struct TimerMan *tm, bool is_paused);
+int timerman_update(TimerMan *tm);
+TimerMan *timerman_clone(TimerMan *tm);
+void timerman_pause(TimerMan *tm, bool is_paused);
 bool timerman_is_paused(TimerMan *tm);
-void timerman_window_gui(struct TimerMan *tm);
-void timerman_clear(struct TimerMan *tm);
+void timerman_window_gui(TimerMan *tm);
+void timerman_clear(TimerMan *tm);
 // Удаляет закончившиеся таймеры
-int timerman_remove_expired(struct TimerMan *tm);
+int timerman_remove_expired(TimerMan *tm);
 // Возвращает количество всех(конечных и бесконечных) таймеров. 
 // infinite_num возвращает количество бесконечных таймеров
-int timerman_num(struct TimerMan *tm, int *infinite_num);
+int timerman_num(TimerMan *tm, int *infinite_num);
 // Удалить бесконечные таймеры
-//void timerman_clear_infinite(struct TimerMan *tm);
+//void timerman_clear_infinite(TimerMan *tm);
 void timerman_each(
-    struct TimerMan *tm, 
-    enum TimerManAction (*iter)(struct Timer *tmr, void*),
+    TimerMan *tm, 
+    enum TimerManAction (*iter)(Timer *tmr, void*),
     void *udata
 );
