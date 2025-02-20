@@ -2,20 +2,20 @@
 
 #include "raylib.h"
 
-struct ToolPolyline {
+typedef struct ToolPolyline {
     void    *internal;
     bool    exist;
     Vector2 *points;    // данные только для чтения, не ссылаться на них
     int     points_num;
-};
+} ToolPolyline;
 
-struct ToolRectangleAligned {
+typedef struct ToolRectangleAligned {
     void        *internal;
     bool        exist;
     Rectangle   rect;
-};
+} ToolRectangleAligned;
 
-struct ToolRectangle {
+typedef struct ToolRectangle {
     void        *internal;
     bool        exist;
     float       angle, radius;
@@ -23,16 +23,16 @@ struct ToolRectangle {
                 // Вершины для режима VIS_TOOL_RECTANGLE_ORIENTED, по часовой стрелке
                 // Последняя вершина дублирует первую.
                 points[5];
-};
+} ToolRectangle;
 
-struct ToolSector {
+typedef struct ToolSector {
     void    *internal;
     bool    exist;
     float   radius, angle1, angle2;
     Vector2 position;
-};
+} ToolSector;
 
-struct ToolCommonOpts {
+typedef struct ToolCommonOpts {
     // Номер кнопки мыши из Raylib для работы с рамкой выделения
     // При -1 сохряняется текущее значение в Tool****
     int     mouse_button_bind;
@@ -42,42 +42,42 @@ struct ToolCommonOpts {
     bool    snap;
     int     snap_size;
     float   handle_circle_radius;
-};
+} ToolCommonOpts;
 
-struct ToolPolylineOpts {
+typedef struct ToolPolylineOpts {
     struct ToolCommonOpts   common;
     // TODO: Добавить прилипание к сетке
     //bool                    snap;       // Включить прилипание сетки
-};
+} ToolPolylineOpts;
 
-struct ToolSectorDrawOpts {
-};
+typedef struct ToolSectorDrawOpts {
+} ToolSectorDrawOpts;
 
-struct ToolPolylineDrawOpts {
+typedef struct ToolPolylineDrawOpts {
     //bool draw_axises;
-};
+} ToolPolylineDrawOpts;
 
-struct ToolRectangleDrawOpts {
+typedef struct ToolRectangleDrawOpts {
     bool draw_axises;
-};
+} ToolRectangleDrawOpts;
 
-struct ToolRectangleAlignedDrawOpts {
+typedef struct ToolRectangleAlignedDrawOpts {
     bool draw_axises;
-};
+} ToolRectangleAlignedDrawOpts;
 
-struct ToolRectangleAlignedOpts {
+typedef struct ToolRectangleAlignedOpts {
     struct ToolCommonOpts   common;
     int                     snap_size;  // Размер сетки для прилипания, >= 1
     bool                    snap;       // Включить прилипание сетки
-};
+} ToolRectangleAlignedOpts;
 
-struct ToolRectangleOpts {
+typedef struct ToolRectangleOpts {
     struct ToolCommonOpts   common;
-};
+} ToolRectangleOpts;
 
-struct ToolSectorOpts {
+typedef struct ToolSectorOpts {
     struct ToolCommonOpts   common;
-};
+} ToolSectorOpts;
 
 enum VisualToolMode {
     VIS_TOOL_RECTANGLE,
@@ -86,7 +86,7 @@ enum VisualToolMode {
     VIS_TOOL_SECTOR,
 };
 
-struct VisualTool {
+typedef struct VisualTool {
     enum VisualToolMode             mode;
 
     struct ToolRectangle            t_rect;
@@ -104,7 +104,7 @@ struct VisualTool {
     struct ToolPolyline             t_pl;
     struct ToolPolylineDrawOpts     t_pl_draw_opts;
     struct ToolPolylineOpts         t_pl_opts;
-};
+} VisualTool;
 
 /*
 void visual_tool_init(
@@ -151,8 +151,9 @@ void rectanglea_update_opts(
 void rectanglea_shutdown(struct ToolRectangleAligned *rf);
 void rectanglea_update(struct ToolRectangleAligned *rf, const Camera2D *cam);
 void rectanglea_draw(
-    struct ToolRectangleAligned *rf,
-    const struct ToolRectangleAlignedDrawOpts *opts
+    ToolRectangleAligned *rf,
+    const ToolRectangleAlignedDrawOpts *opts,
+    const Camera2D *cam
 );
 
 void rectangle_init(
@@ -164,7 +165,7 @@ void rectangle_update_opts(
 void rectangle_shutdown(struct ToolRectangle *rf);
 void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam);
 void rectangle_draw(
-    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
+    ToolRectangle *rf, const ToolRectangleDrawOpts *opts, const Camera2D *cam
 );
 
 void sector_init(

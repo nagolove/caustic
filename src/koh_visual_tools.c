@@ -608,7 +608,8 @@ static void rectanglea_draw_axises(
 // TODO: Кружки вращения, как добавить?
 void rectanglea_draw(
     struct ToolRectangleAligned *rf,
-    const struct ToolRectangleAlignedDrawOpts *opts
+    const struct ToolRectangleAlignedDrawOpts *opts,
+    const Camera2D *cam
 ) {
     //trace("rectanglea_draw:\n");
     assert(rf);
@@ -617,14 +618,16 @@ void rectanglea_draw(
     struct ToolCommonOpts *cmn = &internal->cmn;
 
     rectanglea_draw_axises(rf, opts);
-    DrawRectangleLinesEx(rf->rect, cmn->line_thick, cmn->line_color);
+    float line_thick = cmn->line_thick;
+    if (cam)
+        line_thick /= cam->zoom;
+    DrawRectangleLinesEx(rf->rect, line_thick, cmn->line_color);
 
     if (internal->corner_index == 0 || internal->corner_index == 2) {
-        DrawCircleV(
-            internal->corner_point,
-            cmn->handle_circle_radius,
-            cmn->handle_color
-        );
+        float handle_r = cmn->handle_circle_radius;
+        if (cam)
+            handle_r /= cam->zoom;
+        DrawCircleV(internal->corner_point, handle_r, cmn->handle_color);
     }
 }
 
@@ -896,11 +899,15 @@ void polyline_draw(
     // Получить видимые координаты экрана после преобразования камеры
     //const Rectangle screen = screen_with_cam(cam);
 
+    // TODO: Сделать кружок internal->cmn.handle_circle_radius всегда одного 
+    // размера
+    float handle_r = internal->cmn.handle_circle_radius;
+    //handle_r /= cam->zoom;
     for (int j = 0; j < internal->points_num; j++) {
         Color color = internal->selected_point_index == j ?
             internal->cmn.handle_color_selected : internal->cmn.handle_color;
         DrawCircleV(
-            internal->points[j], internal->cmn.handle_circle_radius, color
+            internal->points[j], handle_r, color
         );
     }
 
@@ -1068,13 +1075,13 @@ void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam) {
             break;
         case MLT_RECTANGLE:
             //if (vt->t_rect.exist)
-                rectanglea_draw(&vt->t_recta, &vt->t_recta_draw_opts);
+                rectanglea_draw(&vt->t_recta, &vt->t_recta_draw_opts, cam);
             //else if (trace_nonexist)
                 //trace("visual_tool_draw: rectangle is not exists\n");
             break;
         case MLT_RECTANGLE_ORIENTED:
             //if (vt->t_rect_oriented.exist)
-                rectangle_draw(&vt->t_rect, &vt->t_rect_draw_opts);
+                rectangle_draw(&vt->t_rect, &vt->t_rect_draw_opts, cam);
             //else if (trace_nonexist)
                 //trace("visual_tool_draw: rectangle oriented is not exists\n");
             break;
@@ -1287,7 +1294,8 @@ void rectangle_update(struct ToolRectangle *rf, const Camera2D *cam) {
 }
 
 void rectangle_draw(
-    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts
+    struct ToolRectangle *rf, const struct ToolRectangleDrawOpts *opts,
+    const Camera2D *cam
 ) {
     assert(rf);
     struct ToolRectangleInternal *internal = rf->internal;
