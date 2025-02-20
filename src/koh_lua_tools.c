@@ -2,6 +2,7 @@
 // vim: fdm=marker
 #include "koh_lua_tools.h"
 
+#include "rlwr.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "lauxlib.h"
@@ -715,4 +716,39 @@ char *L_tabular_alloc_s(lua_State *l, const char *lua_str) {
     const char *t = L_tabular_print_internal(l, lua_str);
     assert(t);
     return strdup(t);
+}
+
+
+// TODO: Для каждого указателя на состояние хранить указатель на rlwr_t 
+/*static rlwr_t *rlwr[128] = {};*/
+
+lua_State *L_newstate() {
+    lua_State *l = NULL;
+#ifdef KOH_DEP_RLWR
+    rlwr = rlwr_new();
+    lua = rlwr_state(rlwr);
+#else
+    l = luaL_newstate();
+#endif
+    //trace("sc_init: lua version %f\n", lua_version(l));
+    luaL_openlibs(l);
+    return l;
+}
+
+void L_free(lua_State *l) {
+}
+
+
+bool L_call(lua_State *l, const char *func_name) {
+    if (!l)
+        return false;
+
+    lua_getglobal(l, func_name);  // Получаем функцию update() из глобальной области Lua
+
+    if (lua_pcall(l, 0, 0, 0) != LUA_OK) { // Вызываем без аргументов, без возврата
+        /*trace("Ошибка при вызове update(): %s\n", lua_tostring(L, -1));*/
+        lua_pop(l, 1);
+        return false;
+    }
+    return true;
 }

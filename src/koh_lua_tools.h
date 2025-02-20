@@ -110,4 +110,6 @@ char *L_tabular_alloc(lua_State *l, const char *global_name);
 // таблицей. Память выделяется на куче, необходим вызов free()
 char *L_tabular_alloc_s(lua_State *l, const char *lua_str);
 
+bool L_call(lua_State *l, const char *func_name);
+
 extern bool L_verbose;
