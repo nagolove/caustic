@@ -662,21 +662,21 @@ void e_cp_body_draw(de_ecs *r, WorldCtx *wctx);
 // XXX: Что делает функция?
 void e_cp_body_draw2(ecs_t *r, WorldCtx *wctx);
 
-struct CheckUnderMouseOpts2 {
+typedef struct CheckUnderMouseOpts2 {
     ecs_t    *r;
     WorldCtx *wctx;
     Camera2D cam;        // XXX: Почему не указатель на камеру?
     TimerMan *tm;
     float    duration;
-};
+} CheckUnderMouseOpts2;
 
-struct CheckUnderMouseOpts {
+typedef struct CheckUnderMouseOpts {
     de_ecs *r;
     WorldCtx *wctx;
     Camera2D cam;        // XXX: Почему не указатель на камеру?
     struct TimerMan *tm;
     float duration;
-};
+} CheckUnderMouseOpts;
 
 // behaviour
 // XXX: Не работает, приводит к падению
