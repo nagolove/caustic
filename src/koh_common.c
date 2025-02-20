@@ -66,6 +66,7 @@ struct CommonInternal {
 bool common_verbose = false;
 static bool verbose_search_files_rec = false;
 static struct Common cmn;
+const float dscale_value_boost = 10.f;
 
 /*static inline Color DebugColor2Color(cpSpaceDebugColor dc);*/
 static void add_chars_range(int first, int last);
@@ -932,12 +933,17 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
     bool modpressed =   cps->modifier_key_down ? 
                         IsKeyDown(cps->modifier_key_down) : true;
     bool wheel_in_eps = mouse_wheel > EPSILON || mouse_wheel < -EPSILON;
+    float dscale_value = cps->dscale_value;
+    if (IsKeyDown(cps->boost_modifier_key_down)) {
+        //trace("koh_camera_process_mouse_scale_wheel: boosted\n");
+        dscale_value *= dscale_value_boost;
+    }
     if (cam && modpressed && wheel_in_eps) {
         /*trace(*/
             /*"koh_camera_process_mouse_scale_wheel: mouse_wheel %f\n",*/
             /*mouse_wheel*/
         /*);*/
-        const float d = copysignf(cps->dscale_value, mouse_wheel);
+        const float d = copysignf(dscale_value, mouse_wheel);
         /*trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);*/
         cam->zoom = cam->zoom + d;
         Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
@@ -2395,4 +2401,95 @@ void set_uv_from_rect(Rectangle rect, Vector2 uv[4]) {
     uv[2].y = rect.y + rect.height;
     uv[3].x = rect.x;
     uv[3].y = rect.y + rect.height;
+}
+
+static const float dscale_value = 0.1f;
+static const float cam_zoom_min = 0.001;
+static const float cam_zoom_max = 100.f;
+
+void cam_auto_init(CameraAutomat *ca, Camera2D *cam) {
+    memset(ca, 0, sizeof(*ca));
+    ca->tm = timerman_new(1, "cam_auto");
+    ca->dscale_value = dscale_value;
+    ca->cam = cam;
+    assert(ca->cam);
+}
+
+void cam_auto_shutdown(CameraAutomat *ca) {
+    if (ca->tm) {
+        timerman_free(ca->tm);
+        ca->tm = NULL;
+    }
+}
+
+bool tmr_scroll_update(Timer *t) {
+    CameraAutomat *ca = t->data;
+    /*float dscale_value = ca->dscale_value;*/
+    Camera2D *cam = ca->cam;
+
+    /*float mouse_wheel = GetMouseWheelMove();*/
+    /*const float d = copysignf(dscale_value, mouse_wheel);*/
+    /*trace("tmr_scroll_update: mouse_wheel %f, d %f\n", mouse_wheel, d);*/
+
+    float zoom_new = cam->zoom + ca->dscale_value;
+    if (zoom_new > cam_zoom_min && zoom_new < cam_zoom_max) {
+        cam->zoom = cam->zoom + ca->dscale_value;
+        Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
+        cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
+    } else 
+        return true;
+
+    return false;
+}
+
+void cam_auto_update(CameraAutomat *ca) {
+    timerman_update(ca->tm);
+
+    int num = sizeof(ca->last_scroll) / sizeof(ca->last_scroll[0]);
+
+    float mouse_wheel = GetMouseWheelMove();
+    double now = GetTime();
+
+    if (mouse_wheel) {
+        ca->i = (ca->i + 1) % num;
+        ca->last_scroll[ca->i] = now;
+    }
+
+    /*
+    // TODO: Добавить модификатор для ускорения перемотки
+    if (IsKeyDown(cps->boost_modifier_key_down)) {
+        //trace("koh_camera_process_mouse_scale_wheel: boosted\n");
+        dscale_value *= dscale_value_boost;
+    }
+    */
+
+    printf("-----\n");
+    for (int j = 0; j < num; j++) {
+        printf("%f ", ca->last_scroll[j]);
+    }
+    printf("\n\n");
+
+    // Как найти количество перемотки?
+    int k = ca->i + 1;
+    for (int j = 0; j < num; j++) {
+        k = (k - 1);
+        if (k < 0)
+            k = num - 1;
+
+        printf("%f ", ca->last_scroll[k]);
+    }
+    printf("\n");
+
+    if (mouse_wheel) {
+        ca->dscale_value = copysignf(ca->dscale_value, mouse_wheel);
+
+        if (timerman_num(ca->tm, NULL) == 0) {
+            trace("cam_auto_update: timerman_add\n");
+            timerman_add(ca->tm, (TimerDef) {
+                .data = ca,
+                .duration = 0.1,
+                .on_update = tmr_scroll_update,
+            });
+        }
+    }
 }

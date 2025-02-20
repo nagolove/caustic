@@ -10,6 +10,7 @@
 #include "koh_rand.h"
 #include "koh_metaloader.h"
 #include "koh_visual_tools.h"
+#include "koh_timerman.h"
 
 #include <assert.h>
 #include <math.h>
@@ -137,16 +138,31 @@ void koh_qsort_soa(
 
 //cpSpaceDebugColor from_Color(Color c);
 
-struct CameraProcessScale {
+typedef struct CameraProcessScale {
     Camera2D    *cam;
     float       dscale_value;       // Приращение масштаба
-    KeyboardKey modifier_key_down;
-};
+    KeyboardKey modifier_key_down, 
+                // speed * 2.
+                boost_modifier_key_down;
+} CameraProcessScale;
 
-struct CameraProcessDrag {
+typedef struct CameraProcessDrag {
     int         mouse_btn;
     Camera2D    *cam;
-};
+} CameraProcessDrag;
+
+typedef struct CameraAutomat {
+    Camera2D *cam;
+
+    TimerMan *tm;
+    double   last_scroll[64];
+    int      i;
+    float    dscale_value;
+} CameraAutomat;
+
+void cam_auto_init(CameraAutomat *ca, Camera2D *cam);
+void cam_auto_shutdown(CameraAutomat *ca);
+void cam_auto_update(CameraAutomat *ca);
 
 // TODO: Добавить разные интерполяции
 // TODO: Добавить гуи для изменения параметров
