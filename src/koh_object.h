@@ -33,7 +33,7 @@ typedef void (*Object_method)(Object *obj);
 // Посредник для связи объекта с его представлением в lua-системе.
 typedef struct Object_ud {
     Object *obj;
-    Stage  *st;
+    struct Stage  *st;
 } Object_ud;
 
 typedef struct Component {

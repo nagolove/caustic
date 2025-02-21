@@ -2,7 +2,7 @@
 
 #include "koh_console.h"
 #include "koh_logger.h"
-#include "koh_lua_tools.h"
+#include "koh_lua.h"
 #include "lua.h"
 #include <assert.h>
 #include <stdlib.h>

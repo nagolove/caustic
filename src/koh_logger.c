@@ -5,8 +5,7 @@
 
 #include "koh_common.h"
 #include "koh_console.h"
-#include "koh_script.h"
-#include "koh_strset.h"
+#include "koh_lua.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include <assert.h>

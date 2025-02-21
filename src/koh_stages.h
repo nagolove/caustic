@@ -4,7 +4,7 @@
 #include <assert.h>
 #include "koh_common.h"
 #include "koh_logger.h"
-#include "koh_lua_tools.h"
+#include "koh_lua.h"
 
 /*
 TODO: Пока сцена не становится активной, то ее хоткеи не работают.

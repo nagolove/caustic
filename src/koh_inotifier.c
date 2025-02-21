@@ -2,7 +2,7 @@
 #include "koh_inotifier.h"
 #include "koh_console.h"
 #include "koh_hashers.h"
-#include "koh_script.h"
+#include "koh_lua.h"
 
 #if defined(PLATFORM_WEB)
 void inotifier_init() { }

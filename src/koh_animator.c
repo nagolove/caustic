@@ -3,7 +3,7 @@
 #include "koh_logger.h"
 #include <assert.h>
 #include <stdlib.h>
-#include "koh_lua_tools.h"
+#include "koh_lua.h"
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"

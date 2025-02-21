@@ -6,8 +6,7 @@
 #include "koh_common.h"
 #include "koh_console.h"
 #include "koh_logger.h"
-#include "koh_lua_tools.h"
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "lua.h"
 #include "raylib.h"
 #include <assert.h>

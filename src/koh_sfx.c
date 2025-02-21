@@ -12,8 +12,7 @@
 #include "koh_common.h"
 #include "koh_console.h"
 #include "koh_logger.h"
-#include "koh_lua_tools.h"
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "koh_table.h"
 
 static HTable *sounds_tbl = NULL;

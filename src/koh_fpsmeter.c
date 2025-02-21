@@ -1,7 +1,7 @@
 #include "koh_fpsmeter.h"
 
 #include "koh_logger.h"
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "raylib.h"
 #include "raylib.h"
 #include <assert.h>
