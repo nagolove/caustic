@@ -7,13 +7,11 @@
 #include <lua.h>
 #include <lualib.h>
 #include <stdbool.h>
-#include "koh_object.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include "lualib.h"
 #include "raylib.h"
 #include "koh_stages.h"
-#include "koh_object.h"
 
 #define MAX_MTNAME  64
 
@@ -117,7 +115,9 @@ char *L_tabular_alloc(lua_State *l, const char *global_name);
 // таблицей. Память выделяется на куче, необходим вызов free()
 char *L_tabular_alloc_s(lua_State *l, const char *lua_str);
 
-bool L_call(lua_State *l, const char *func_name);
+// Вызов глобальной функции скрипта. Возвращает указатель на статический
+// буфер с описанием ошибки.
+const char *L_call(lua_State *l, const char *func_name, bool *is_ok);
 
 extern bool L_verbose;
 
@@ -151,8 +151,9 @@ void sc_register_all_functions(void);
 void sc_register_function(lua_CFunction f, const char *fname, const char *desc);
 void sc_register_func_desc(const char *funcname, const char *description);
 const char * sc_stack_dump();
-int new_fullud_ref(struct Stage *st, Object *obj, const char *tname);
-int new_fullud_get_ref(struct Stage *st, Object *obj, const char *tname);
+
+/*int new_fullud_ref(struct Stage *st, Object *obj, const char *tname);*/
+/*int new_fullud_get_ref(struct Stage *st, Object *obj, const char *tname);*/
 
 //const char *skip_lead_zeros(const char *s);
 uint32_t read_id(lua_State *lua);
@@ -165,9 +166,10 @@ void sc_dostring(const char *str);
 double *read_number_table(lua_State *lua, int index, int *len);
 Rectangle read_rect(lua_State *lua, int index, bool *err);
 int make_ret_table(int num, void**arr, size_t offset);
-bool object_return_ref_script(Object *obj, int offset);
+//bool object_return_ref_script(Object *obj, int offset);
 void koh_sc_from_args(int argc, char **argv);
 
+/*
 static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
     Object_ud r = {0};
     Object_ud *ref = (Object_ud*)luaL_checkudata(l, ud, tname);
@@ -177,5 +179,6 @@ static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
     }
     return r;
 }
+*/
 
 lua_State *sc_state_new(bool openlibs);

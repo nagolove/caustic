@@ -30,7 +30,7 @@
 #include "koh_logger.h"
 #include "koh_common.h"
 #include "koh_table.h"
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "koh_destral_ecs_internal.h"
 // }}}
 

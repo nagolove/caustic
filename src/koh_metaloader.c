@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include "koh_lua_tools.h"
+#include "koh_lua.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include "raylib.h"

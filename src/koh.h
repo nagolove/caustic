@@ -32,7 +32,6 @@ do {                                                            \
 #include "koh_metaloader.h"
 #include "koh_music.h"
 #include "koh_net.h"
-#include "koh_object.h"
 #include "koh_outline.h"
 #include "koh_pallete.h"
 #include "koh_paragraph.h"

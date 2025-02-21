@@ -24,7 +24,7 @@
 #include "koh_console.h"
 #include "koh_inotifier.h"
 #include "koh_logger.h"
-#include "koh_lua_tools.h"
+#include "koh_lua.h"
 #include "raylib.h"
 
 
@@ -750,18 +750,32 @@ void L_free(lua_State *l) {
 }
 
 
-bool L_call(lua_State *l, const char *func_name) {
-    if (!l)
-        return false;
+const char *L_call(lua_State *l, const char *func_name, bool *is_ok) {
+    static char slots[5][512] = {};
+    static int i = 0;
+    char *buf = slots[i];
+
+    i = (i + i) % 5;
+
+    strcpy(buf, "");
+
+    if (!l) {
+        return buf;
+    }
 
     lua_getglobal(l, func_name);  // Получаем функцию update() из глобальной области Lua
 
+    if (is_ok)
+        *is_ok = false;
+
     if (lua_pcall(l, 0, 0, 0) != LUA_OK) { // Вызываем без аргументов, без возврата
-        /*trace("Ошибка при вызове update(): %s\n", lua_tostring(L, -1));*/
+        if (is_ok)
+            *is_ok = false;
+        strncpy(buf, lua_tostring(l, -1), sizeof(slots[0]));
         lua_pop(l, 1);
-        return false;
     }
-    return true;
+
+    return buf;
 }
 
 #ifndef KOH_DEP_NO_RLWR
@@ -1411,11 +1425,12 @@ Vector2 read_pos(lua_State *lua, bool *notfound) {
     return pos;
 }
 
+/*
 int new_fullud_ref(Stage *st, Object *obj, const char *tname) {
     assert(obj);
     assert(tname);
 
-    /*printf("new_fullud_ref: [%s]\n", stack_dump(cmn.lua));*/
+    //printf("new_fullud_ref: [%s]\n", stack_dump(cmn.lua));
 
     if (luaL_getmetatable(lua, tname) != LUA_TTABLE) {
         printf("new_fullud_ref: there is no such metatable '%s'\n", tname);
@@ -1444,7 +1459,9 @@ int new_fullud_ref(Stage *st, Object *obj, const char *tname) {
 
     return ref;
 }
+*/
 
+/*
 int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
     assert(obj);
     assert(tname);
@@ -1472,7 +1489,9 @@ int new_fullud_get_ref(Stage *st, Object *obj, const char *tname) {
 
     return ref;
 }
+*/
 
+/*
 bool object_return_ref_script(Object *obj, int offset) {
     assert(obj);
     char *tmp = (char*)obj + offset;
@@ -1483,6 +1502,7 @@ bool object_return_ref_script(Object *obj, int offset) {
     }
     return ref_script != 0;
 }
+*/
 
 bool read_fullud(lua_State *lua) {
     bool fullud = false;

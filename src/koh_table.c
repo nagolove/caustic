@@ -2,7 +2,7 @@
 // vim: fdm=marker
 #include "koh_table.h"
 
-#include "koh_lua_tools.h"
+#include "koh_lua.h"
 #include "koh_hashers.h"
 #include <assert.h>
 #include <stdint.h>

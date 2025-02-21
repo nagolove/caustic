@@ -15,12 +15,10 @@
 #include <lauxlib.h>
 #include <lua.h>
 
-#include "koh_object.h"
 #include "koh_common.h"
 #include "koh_hotkey.h"
 #include "koh_logger.h"
-#include "koh_lua_tools.h"
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "koh_tabe.h"
 #include "koh_timer.h"
 
