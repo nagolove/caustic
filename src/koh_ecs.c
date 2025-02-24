@@ -11,6 +11,9 @@
 #include "koh_table.h"
 #include <stdio.h>
 #include <assert.h>
+#include "koh_common.h"
+#include "koh_routine.h"
+#include "koh_b2.h"
 
 // test types {{{
 typedef char type_one;
@@ -120,17 +123,6 @@ typedef struct ecs_t {
 
 // {{{ tests implementation
 
-typedef struct RenderTexOpts {
-    Texture2D texture;
-    // По часовой стрелке
-    Vector2   uv[4];
-    Vector2   verts[4];
-    Color     tint;
-    // XXX: Что за vertex_disp ??
-    // Сдвигает вершины по часовой(?) стрелке n раз.
-    int       vertex_disp;
-} RenderTexOpts;
-
 // INFO: Из сцены t80_stage_chassis.c
 // Проблемы с итерацией
 static MunitResult test_view_chassis(
@@ -167,12 +159,121 @@ static MunitResult test_view_chassis(
 
     e_register(r, &cp_type_body2);
     e_register(r, &cp_type_chassis);
-    //e_register(r, &cp_type_chassis);
+    e_register(r, &cp_type_RenderTexOpts);
 
-    //cp_ropts = e_emplace(r, e, cp_type_RenderTexOpts);
+    const int e_num = 5;
+    int body[e_num], chassis[e_num], render_tex_opts[e_num];
+
+#define clear_counters() \
+    memset(body, 0, sizeof(body)); \
+    memset(chassis, 0, sizeof(chassis)); \
+    memset(render_tex_opts, 0, sizeof(render_tex_opts)); \
+
+    clear_counters();
+
+    // Создание сущности
+    for (int i = 0; i < e_num; i++) {
+        e_id e = e_create(r);
+
+        // цепляние компонент
+        RenderTexOpts *ropts = e_emplace(r, e, cp_type_RenderTexOpts);
+        char *tag = e_emplace(r, e, cp_type_chassis);
+        b2BodyId *bid = e_emplace(r, e, cp_type_body2);
+
+        // заполнение произвольных полей метками итерации цикла
+        ropts->vertex_disp = i;
+        *tag = i;
+        bid->index1 = i;
+    }
+
+    e_view v = {};
+
+    // Цикл по всем рисуемым объектам
+    {
+        v = e_view_create_single(r, cp_type_RenderTexOpts);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            RenderTexOpts *ropts = e_view_get(&v, cp_type_RenderTexOpts);
+            render_tex_opts[ropts->vertex_disp]++;
+        }
+
+        // Проверка на присутствие всех необходимых значений
+        //////////////////////////////////////////////////////
+       
+        printf("render_tex_opts: ");
+        for (int i = 0; i < e_num; i++) {
+            printf("%d ", render_tex_opts[i] == 1);
+        }
+        printf("\n");
+
+        for (int i = 0; i < e_num; i++) {
+            munit_assert(render_tex_opts[i] == 1);
+        }
+        
+        
+        //////////////////////////////////////////////////////
+    }
+
+    clear_counters();
+
+    // Цикл по всем шасси
+    {
+        v = e_view_create_single(r, cp_type_chassis);
+        for (; e_view_valid(&v); e_view_next(&v)) {
+            e_id e = e_view_entity(&v);
+
+            b2BodyId *bid = e_get(r, e, cp_type_body2);
+            body[bid->index1]++;
+
+            RenderTexOpts *ropts = e_get(r, e, cp_type_body2);
+            /*RenderTexOpts *ropts = e_view_get(&v, cp_type_RenderTexOpts);*/
+            printf("ropts->vertex_disp %d\n", ropts->vertex_disp);
+            render_tex_opts[ropts->vertex_disp]++;
+
+            char *tag = e_get(r, e, cp_type_chassis);
+            chassis[(int)(*tag)]++;
+        }
+        
+        // Проверка на присутствие всех необходимых значений
+        //////////////////////////////////////////////////////
+
+        printf("body: ");
+        for (int i = 0; i < e_num; i++) {
+            printf("%d ", body[i]);
+        }
+        printf("\n");
+
+        printf("chassis: ");
+        for (int i = 0; i < e_num; i++) {
+            printf("%d ", chassis[i]);
+        }
+        printf("\n");
+
+        printf("render_tex_opts: ");
+        for (int i = 0; i < e_num; i++) {
+            printf("%d ", render_tex_opts[i]);
+        }
+        printf("\n");
+
+        //////////////////////////////////////////////////////
+
+        for (int i = 0; i < e_num; i++) {
+            munit_assert(body[i] == 1);
+        }
+
+        for (int i = 0; i < e_num; i++) {
+            munit_assert(chassis[i] == 1);
+        }
+
+        for (int i = 0; i < e_num; i++) {
+            munit_assert(render_tex_opts[i] == 1);
+        }
+
+        //////////////////////////////////////////////////////
+    }
 
     e_free(r);
 
+#undef clear_counters
     return MUNIT_OK;
 }
 
