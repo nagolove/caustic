@@ -4,15 +4,11 @@
 #define PCRE2_CODE_UNIT_WIDTH   8
 
 // {{{ include
-//#include "chipmunk/chipmunk.h"
-//#include "chipmunk/chipmunk_structs.h"
-//#include "chipmunk/chipmunk_types.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "koh_rand.h"
 #include "koh_routine.h"
 #include "koh_table.h"
-/*#include "libsmallregex.h"*/
 #include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
