@@ -749,8 +749,13 @@ lua_State *L_newstate() {
 void L_free(lua_State *l) {
 }
 
+void L_call(lua_State *l, const char *func_name, bool *is_ok) {
+    lua_getglobal(l, func_name);  // Получаем функцию update() из глобальной области Lua
+    lua_call(l, 0, 0);
+}
 
-const char *L_call(lua_State *l, const char *func_name, bool *is_ok) {
+
+const char *L_pcall(lua_State *l, const char *func_name, bool *is_ok) {
     static char slots[5][512] = {};
     static int i = 0;
     char *buf = slots[i];

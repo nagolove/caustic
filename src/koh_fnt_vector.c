@@ -91,6 +91,8 @@ FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts) {
     else
         fv->line_thick = 5.;
 
+    assert(library);
+
     /*
     if (!library) {
         fnt_vector_init();

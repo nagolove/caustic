@@ -117,7 +117,8 @@ char *L_tabular_alloc_s(lua_State *l, const char *lua_str);
 
 // Вызов глобальной функции скрипта. Возвращает указатель на статический
 // буфер с описанием ошибки.
-const char *L_call(lua_State *l, const char *func_name, bool *is_ok);
+const char *L_pcall(lua_State *l, const char *func_name, bool *is_ok);
+void L_call(lua_State *l, const char *func_name, bool *is_ok);
 
 extern bool L_verbose;
 
