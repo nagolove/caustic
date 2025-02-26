@@ -1233,6 +1233,7 @@ dependencies = {
         url = "https://github.com/raysan5/raylib.git",
     },
 
+    --[[
     {
         --build_method = 'other',
         --depends = {'lua'},
@@ -1250,6 +1251,7 @@ dependencies = {
         --url = "https://gitlab.com/relkom/small-regex.git",
         url = "git@github.com:nagolove/small-regex-c.git",
     },
+    --]]
 
     {
         disabled = false,

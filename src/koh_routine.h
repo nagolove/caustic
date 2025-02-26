@@ -1,3 +1,4 @@
+// TODO: Перенести весь код в koh_common.h
 #pragma once
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
