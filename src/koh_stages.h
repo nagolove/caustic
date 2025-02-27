@@ -33,10 +33,10 @@ typedef struct Stage {
     char                name[MAX_STAGE_NAME];
 } Stage;
 
-struct StageStoreSetup {
+typedef struct StageStoreSetup {
     lua_State   *l;
     char        *stage_store_name;
-};
+} StageStoreSetup;
 
 // Инициализация подсистемы
 StagesStore *stage_new(struct StageStoreSetup *setup);

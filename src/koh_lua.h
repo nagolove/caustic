@@ -144,7 +144,11 @@ typedef struct ScriptState {
 
 void sc_init();
 void sc_shutdown();
+
+// TODO: Объявить устаревшим и удалить.
+/*__attribute_deprecated__*/
 lua_State *sc_get_state();
+
 void sc_init_script();
 
 ScriptFunc *sc_get_head();

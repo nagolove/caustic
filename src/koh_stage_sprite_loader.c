@@ -234,7 +234,7 @@ static void active_sprite_draw(Stage_SpriteLoader *st) {
 static void stage_sprite_loader_draw(struct Stage *s) {
     Stage_SpriteLoader *st = (Stage_SpriteLoader*)s;
     /*BeginDrawing();*/
-    /*ClearBackground(GRAY);*/
+    ClearBackground(GRAY);
     BeginMode2D(st->cam);
     active_sprite_draw(st);
     visual_tool_draw(&st->tool_visual, &st->cam);
@@ -284,6 +284,7 @@ static void patterns_load(Stage_SpriteLoader *st) {
             lua_tostring(st->l_cfg, -1)
         );
         lua_pop(st->l_cfg, 1);
+        return;
     }
 
     lua_pushvalue(st->l_cfg, -1);
@@ -639,9 +640,11 @@ static void stage_sprite_loader_init(struct Stage *s) {
     color_combos_init(st);
     toolmode_init(st);
 
+    /*
     if (!luaL_dostring(sc_get_state(), "types.fpsmeter_stat()")) {
         trace("stage_sprite_loader_init: could call script stuff\n");
     }
+    */
 
     cam_auto_init(&st->cam_automat, &st->cam);
 }
@@ -1824,7 +1827,6 @@ void stage_sprite_loader_gui_window(struct Stage *s) {
 }
 
 Stage *stage_sprite_loader_new(HotkeyStorage *hk_store) {
-    assert(hk_store);
     Stage_SpriteLoader *st = calloc(1, sizeof(Stage_SpriteLoader));
     st->parent.data = hk_store;
     st->parent.init = (Stage_callback)stage_sprite_loader_init;
