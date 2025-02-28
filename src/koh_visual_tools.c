@@ -621,6 +621,7 @@ void rectanglea_draw(
     float line_thick = cmn->line_thick;
     if (cam)
         line_thick /= cam->zoom;
+
     DrawRectangleLinesEx(rf->rect, line_thick, cmn->line_color);
 
     if (internal->corner_index == 0 || internal->corner_index == 2) {
