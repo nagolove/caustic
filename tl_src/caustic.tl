@@ -2424,7 +2424,7 @@ return {
 [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "koh_stages.h"
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>

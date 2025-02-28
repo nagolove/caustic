@@ -1233,23 +1233,25 @@ dependencies = {
       url = "https://github.com/raysan5/raylib.git",
    },
 
-   {
 
 
-      disabled = true,
-      copy_for_wasm = true,
-      build = build_small_regex,
-      description = "простая библиотека для регулярных выражений",
-      includes = { "small_regex/libsmallregex" },
-      libdirs = { "small_regex/libsmallregex" },
-      links = { "smallregex:static" },
-      links_internal = { "smallregex:static" },
-      name = 'small_regex',
-      dir = "small_regex",
-      url_action = "git",
 
-      url = "git@github.com:nagolove/small-regex-c.git",
-   },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
    {
       disabled = false,
@@ -2422,7 +2424,7 @@ return {
    [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "koh_script.h"
+#include "koh_lua.h"
 #include "koh_stages.h"
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
