@@ -345,7 +345,7 @@ static void patterns_save(Stage_SpriteLoader *st) {
     lua_pushstring(l, regex_pattern_exclude_ase_exported);
     lua_settable(l, -3);
 
-    char *dump_str = L_table_dump2allocated_str(l);
+    char *dump_str = L_table_serpent_alloc(l, NULL);
     if (dump_str) {
         FILE *file = fopen(cfg_fname, "w");
         if (file) {
@@ -775,7 +775,7 @@ static void search_ase_exported(
     lua_State *l = st->l_cfg;
     lua_settop(l, 0);
     lua_rawgeti(l, LUA_REGISTRYINDEX, st->ref_ase_exported_tbl);
-    char *dump_str = L_table_dump2allocated_str(l);
+    char *dump_str = L_table_serpent_alloc(l, NULL);
     if (dump_str) {
         trace("search_ase_exported: dump_str %s\n", dump_str);
         free(dump_str);

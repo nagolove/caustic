@@ -1,7 +1,7 @@
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
-#include "koh_stage_sprite_loader.h"
+#include "koh_stage_sprite_loader2.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 
@@ -24,11 +24,13 @@
 #include <string.h>
 #include "koh_layered_sprite.h"
 
+/*
 enum LastSelected {
     LAST_SELECTED_NONE       = 0,
     LAST_SELECTED_IMAGE      = 1,
     LAST_SELECTED_ASE_EXPORT = 2,
 };
+*/
 
 struct Grid {
     struct GuiColorCombo        line_color_combo;
@@ -56,36 +58,41 @@ typedef struct Stage_SpriteLoader {
     // TODO: Выкинуть на хуй
     // Писать интейфейс для конкретных типов - сау, пехота, строение и т.д.
     // Сделать рефакторинг так, что-бы ничего не упало.
-    MetaLoader                  *metaloader;
+    //MetaLoader                  *metaloader;
     struct VisualTool           tool_visual;
 
     struct FilesSearchResult    fsr_images;
     struct FilesSearchResult    fsr_meta;
     struct FilesSearchResult    fsr_ase_exported;
 
-    // Массивы, в которых один элемент - выбранный
+    // Массивы, в которых один элемент - выбранный.
+    // Соотносятся с переменными fsr_*
     bool                        *images_selected, 
                                 *meta_selected,
                                 *ase_exported_selected;
 
     Texture                     *textures;
     RenderTexture2D             *rt_textures;
-    int                         textures_num,
+    int                         textures_num;
+
+        /*
                                 // XXX: За что отвечает переменная?
                                 meta_loaded_index; 
+                                */
 
     struct LayeredSprite        *textures_ase_exported;
     int                         textures_ase_exported_num;
     int                         selected_sprite_layer;
 
-    enum LastSelected           last_selected;
+    /*enum LastSelected           last_selected;*/
     RenderTexture2D             active_sprite;
+
     Camera2D                    cam;
 
     struct GuiCombo             toolmode_combo;
     struct GuiColorCombo        tool_color_combo;
 
-    struct Grid                  grid;
+    struct Grid                 grid;
 
     lua_State                   *l_cfg;
     int                         ref_cfg_tbl, ref_ase_exported_tbl;
@@ -356,7 +363,7 @@ static void patterns_save(Stage_SpriteLoader *st) {
     lua_pushstring(l, regex_pattern_exclude_ase_exported);
     lua_settable(l, -3);
 
-    char *dump_str = L_table_dump2allocated_str(l);
+    char *dump_str = L_table_serpent_alloc(l, NULL);
     if (dump_str) {
         FILE *file = fopen(cfg_fname, "w");
         if (file) {
@@ -527,11 +534,15 @@ static void stage_sprite_loader_shutdown(struct Stage *s) {
 
     cam_auto_shutdown(&st->cam_automat);
     visual_tool_shutdown(&st->tool_visual);
+
+    /*
     metaloader_write(st->metaloader);
     if (st->metaloader) {
         metaloader_free(st->metaloader);
         st->metaloader = NULL;
     }
+    */
+
     patterns_save(st);
     search_images_shutdown(st);
     search_meta_shutdown(st);
@@ -636,12 +647,17 @@ static void stage_sprite_loader_init(struct Stage *s) {
 
     st->grid.step = 1;
     st->grid.visible = false;
-    st->meta_loaded_index = -1;
+
+    /*st->meta_loaded_index = -1;*/
 
     st->cam.zoom = 1.;
+
+    /*
     st->metaloader = metaloader_new(&(struct MetaLoaderSetup) {
         .verbose = true,
     });
+    */
+
     st->l_cfg = luaL_newstate();
     luaL_openlibs(st->l_cfg);
 
@@ -786,7 +802,7 @@ static void search_ase_exported(
     lua_State *l = st->l_cfg;
     lua_settop(l, 0);
     lua_rawgeti(l, LUA_REGISTRYINDEX, st->ref_ase_exported_tbl);
-    char *dump_str = L_table_dump2allocated_str(l);
+    char *dump_str = L_table_serpent_alloc(l, NULL);
     if (dump_str) {
         trace("search_ase_exported: dump_str %s\n", dump_str);
         free(dump_str);
@@ -879,6 +895,7 @@ static void sprite_load_image(Stage_SpriteLoader *st, const char *fname) {
     st->active_sprite = tex_rt_active;
 }
 
+/*
 static void check_selected(Stage_SpriteLoader *st) {
     for (int i = 0; i < st->fsr_meta.num; i++) {
         const char *name = st->fsr_meta.names[i];
@@ -891,12 +908,13 @@ static void check_selected(Stage_SpriteLoader *st) {
         }
     }
 }
+*/
 
+/*
 static void gui_meta_listbox(Stage_SpriteLoader *st) {
     assert(st);
     // Список выбираемых файлов
     //trace("gui_meta_listbox: st->meta_selected '%p'\n", st->meta_selected);
-
     if (igBeginListBox("meta files", (ImVec2){})) {
         if (st->meta_selected) {
             check_selected(st);
@@ -904,6 +922,7 @@ static void gui_meta_listbox(Stage_SpriteLoader *st) {
         igEndListBox();
     }
 }
+*/
 
 static void toolmode_combo(Stage_SpriteLoader *st) {
     assert(st);
@@ -950,9 +969,12 @@ static void color_combos(Stage_SpriteLoader *st) {
 static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
     ImGuiTreeNodeFlags node_flags = 0;
 
+    /*
     struct MetaLoaderObjects2 objects = metaloader_objects_get2(
         st->metaloader, fname_noext
     );
+    */
+    struct MetaLoaderObjects2 objects = {};
     assert(objects.objs);
 
     for (int j = 0; j < objects.num; j++) {
@@ -1008,24 +1030,37 @@ static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
                 // TODO: Если строка пустая?
                 //Rectangle rect = { 0., 0., 11., 11., };
                 //metaloader_set(st->metaloader, rect, fname_noext, buf);
+
+                /*
                 metaloader_set_rename_fmt(
                     st->metaloader, fname_noext, objects.names[j], "%s", buf
                 );
+                */
+
             }
 
             igSameLine(0., 5.);
             if (igButton("from selected", (ImVec2){}) && 
                 st->tool_visual.t_recta.exist) {
+
+                /*
                 Rectangle new_rect = st->tool_visual.t_recta.rect;
                 metaloader_set(
                     st->metaloader, new_rect, fname_noext, objects.names[j]
                 );
+                */
+
             }
             igSameLine(0., 5.);
             if (igButton("to selected", (ImVec2){})) {
+
+                /*
                 const Rectangle *new_selection = metaloader_get_fmt(
                     st->metaloader, fname_noext, "%s", objects.names[j]
                 );
+                */
+                const Rectangle *new_selection = NULL;
+
                 if (new_selection) {
                     st->tool_visual.t_recta.exist = true;
                     st->tool_visual.t_recta.rect = *new_selection;
@@ -1040,9 +1075,13 @@ static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
             igPushStyleColor_Vec4(ImGuiCol_Button, color);
             igSameLine(0., 5.);
             if (igButton("REMOVE", (ImVec2){})) {
+                
+                /*
                 metaloader_remove_fmt(
                     st->metaloader, fname_noext, "%s", objects.names[j]
                 );
+                */
+
             }
             igPopStyleColor(1);
             igPopID();
@@ -1071,10 +1110,14 @@ static void paste_stuff2lua(
         case VIS_TOOL_RECTANGLE: {
             if (st->tool_visual.t_recta.exist) {
                 /*trace("paste_stuff2lua: write rectangle\n");*/
+
+                /*
                 Rectangle new_rect = st->tool_visual.t_recta.rect;
                 metaloader_set(
                     st->metaloader, new_rect, fname_noext, object_name
                 );
+                */
+
                 memset(object_name, 0, sizeof(object_name) - 1);
             }
             break;
@@ -1084,10 +1127,11 @@ static void paste_stuff2lua(
             break;
         case VIS_TOOL_POLYLINE:
             if (st->tool_visual.t_pl.exist) {
-                struct ToolPolyline *pl = &st->tool_visual.t_pl;
 
                 /*trace("paste_stuff2lua: write polyline\n");*/
+
                 /*
+                struct ToolPolyline *pl = &st->tool_visual.t_pl;
                 for (int i = 0; i < pl->points_num; i++) {
                     trace(
                         "paste_stuff2lua: {%f, %f}\n",
@@ -1097,11 +1141,14 @@ static void paste_stuff2lua(
                 }
                 // */
 
+                /*
                 metaloader_set_fmt2_polyline(
                     st->metaloader, 
                     pl->points, pl->points_num,
                     fname_noext, object_name
                 );
+                */
+
             }
         break;
         case VIS_TOOL_RECTANGLE_ORIENTED:
@@ -1116,7 +1163,9 @@ static void paste_stuff2lua(
 static void gui_meta_tree(Stage_SpriteLoader *st) {
     assert(st);
     
-    struct MetaLoaderFilesList filelist = metaloader_fileslist(st->metaloader);
+    /*struct MetaLoaderFilesList filelist = metaloader_fileslist(st->metaloader);*/
+    struct MetaLoaderFilesList filelist = {};
+
     for (int i = 0; i < filelist.num; ++i) {
         const char *fname_noext = filelist.fnames[i];
         assert(fname_noext);
@@ -1263,16 +1312,25 @@ static void gui_meta(Stage_SpriteLoader *st) {
     ImGuiWindowFlags flags = 0;
     igBegin("meta loader", &opened, flags);
 
-    gui_meta_listbox(st);
+    //gui_meta_listbox(st);
 
+    // TODO: Сделать только один файл загружаемым
+    // XXX: Как хранить загружаемый файл?
+    // Хранить в виде луа-машины и текста?
+    // Делать serpent.dump() в строку текста
     if (igButton("load meta file(s)", (ImVec2){})) {
         if (st->meta_selected) {
             for (int i = 0; i < st->fsr_meta.num; i++) 
                 if (st->meta_selected[i]) {
+
+                    /*
                     metaloader_load_f(st->metaloader, st->fsr_meta.names[i]);
-                    st->meta_loaded_index = i;
+                    */
+
+                    /*st->meta_loaded_index = i;*/
                 }
-            metaloader_print_all(st->metaloader);
+
+            /*metaloader_print_all(st->metaloader);*/
         }
     }
 
@@ -1303,7 +1361,7 @@ static void gui_meta(Stage_SpriteLoader *st) {
     toolmode_combo(st);
     gui_meta_tree(st);
     if (igButton("save meta file(s)", (ImVec2){})) {
-        metaloader_write(st->metaloader);
+        /*metaloader_write(st->metaloader);*/
     }
 
     if (st->active_sprite.id) {
@@ -1326,10 +1384,14 @@ static void gui_meta(Stage_SpriteLoader *st) {
     // FIXME: Когда происходит сброс редактируемого файла?
     // После сохранения?
     // После выбора и загрузки другого метафайла
+
+    /*
     if (st->meta_loaded_index != -1) {
         igText("file '%s' loaded", st->fsr_meta.names[st->meta_loaded_index]);
     } else
         igText("file not loaded");
+    */
+
     if (st->tool_visual.t_recta.exist) {
         igText("selected region %s", rect2str(st->tool_visual.t_recta.rect));
 
@@ -1382,7 +1444,8 @@ static void gui_ase_exported_table(Stage_SpriteLoader *st) {
                     if (j != i)
                         st->ase_exported_selected[j] = false;
 
-                st->last_selected = LAST_SELECTED_ASE_EXPORT;
+                /*st->last_selected = LAST_SELECTED_ASE_EXPORT;*/
+
                 /*
                 trace("gui_ase_exported_table: trash_menu\n");
                 //if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
@@ -1501,7 +1564,7 @@ static void gui_images_table(Stage_SpriteLoader *st) {
                     if (j != i)
                         st->images_selected[j] = false;
 
-                st->last_selected = LAST_SELECTED_IMAGE;
+                /*st->last_selected = LAST_SELECTED_IMAGE;*/
 
                 /*
                 trace("gui_images_table: trash_menu\n");
@@ -1550,6 +1613,10 @@ static void gui_left_loader_group(Stage_SpriteLoader *st) {
     }
 
     if (igButton("load image", (ImVec2){})) {
+
+        sprite_load_image(st, get_selected_image(st));
+
+        /*
         switch (st->last_selected) {
             case LAST_SELECTED_IMAGE: 
                 sprite_load_image(st, get_selected_image(st));
@@ -1570,6 +1637,8 @@ static void gui_left_loader_group(Stage_SpriteLoader *st) {
             default:
                 break;
         }
+        */
+
     }
     igEndGroup();
 }
@@ -1759,11 +1828,9 @@ static void gui_sprite_layers(Stage_SpriteLoader *st) {
     bool opened = true;
     ImGuiWindowFlags flags = 0;
     igBegin("sprite layers", &opened, flags);
-
     gui_right_layers_group(st);
     //igSameLine(0., 10.);
     //gui_left_layers_group(st);
-
     igEnd();
 }
 
@@ -1779,9 +1846,13 @@ static void gui_sprites_loader(Stage_SpriteLoader *st) {
     gui_right_loader_group(st);
     igEnd();
 
+    /*
     if (st->last_selected == LAST_SELECTED_ASE_EXPORT) {
         gui_sprite_layers(st);
     }
+    */
+
+    gui_sprite_layers(st);
 }
 
 // TODO: Переделать в функцию вызываемую в цикле для каждого несохраненного
