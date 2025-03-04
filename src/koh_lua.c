@@ -2,7 +2,6 @@
 // vim: fdm=marker
 #include "koh_lua.h"
 
-#include "rlwr.h"
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "lauxlib.h"
@@ -513,6 +512,79 @@ TypeEntry *types_getlist() {
 //#include "koh_lua_serpent.inc"
 #include "serpent.lua.h"
 
+char *L_table_serpent_alloc(lua_State *l, enum L_DumpError *err) {
+    assert(l);
+
+    int top = lua_gettop(l);
+
+    // TODO: Проверить, модуль serpent загружен. 
+    // Если модуль отсутствует, то загрузить его из строки
+    // Зачем lua_getglobal() и lua_getfield() ?
+    lua_getglobal(l, "package");
+    lua_getfield(l, -1, "preload");
+
+    // XXX: Что делать с принудительной загрузкой библиотек?
+    // Кажется, что загрузка может занимать время и не всегда желательно
+    // наличие библиотек в виртуальной машине по причинам безопасности.
+    luaL_openlibs(l);
+
+    if (luaL_loadstring(l, (char*)serpent_lua) != LUA_OK) {
+        printf(
+            "L_table_dump2allocated_str: luaL_loadstring error '%s'\n",
+            lua_tostring(l, -1)
+        );
+        if (err) {
+            *err = L_DE_SERPENT;
+            return NULL;
+        }
+    }
+
+    lua_setfield(l, -2, "serpent");
+    lua_settop(l, top);
+
+    const char *code =  "local function DUMP(tbl)\n"
+                        "   local serpent\n"
+                        "   local ok, errmsg = pcall(function()\n"
+                        "       serpent = require 'serpent'\n"
+                        "   end)\n"
+                        "   if ok then\n"
+                        "       return serpent.dump(tbl)\n"
+                        "   else\n"
+                        // XXX: Отдадочная печать!
+                        "       --print(errmsg)\n"
+                        "       return 171\n"
+                        "   end\n"
+                        "end\n"
+                        "return DUMP";
+
+    luaL_loadstring(l, code);
+    lua_call(l, 0, LUA_MULTRET);
+
+    lua_pushvalue(l, -2);
+    lua_call(l, 1, LUA_MULTRET);
+
+    if (lua_type(l, -1) != LUA_TSTRING) {
+        lua_pop(l, 1);
+        if (err)
+            *err = L_DE_BADTYPE;
+        return NULL;
+    }
+
+    const char *dumped_data = lua_tostring(l, -1);
+    if (dumped_data) {
+        char *ret = strdup(dumped_data);
+        lua_pop(l, 1);
+        if (err) 
+            *err = 0;
+        return ret;
+    }
+
+    lua_pop(l, 1);
+        if (err) 
+            *err = L_DE_BADTYPE;
+    return NULL;
+}
+
 // XXX: Протестировать
 char *L_table_dump2allocated_str(lua_State *l) {
     // TODO:
@@ -594,9 +666,11 @@ char *L_table_dump2allocated_str(lua_State *l) {
     return NULL;
 }
 
+/*
 char *table_dump2allocated_str(lua_State *l) {
     return L_table_dump2allocated_str(l);
 }
+*/
 
 void L_table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
     assert(l);

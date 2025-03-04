@@ -231,7 +231,7 @@ void gui_color_combo_save(struct GuiColorCombo *gcc, const char *lua_fname) {
     lua_pushstring(l, gcc->color_name);
     lua_settable(l, -3);
    
-    char *dump = L_table_dump2allocated_str(l);
+    char *dump = L_table_serpent_alloc(l, NULL);
     if (dump) {
         trace("gui_color_combo_save: dump '%s'\n", dump);
         FILE *file = fopen(lua_fname, "w");
@@ -365,7 +365,7 @@ void gui_combo_save(struct GuiCombo *gc, const char *lua_fname) {
     lua_pushstring(l, gc->selected_name);
     lua_settable(l, -3);
    
-    char *dump = L_table_dump2allocated_str(l);
+    char *dump = L_table_serpent_alloc(l, NULL);
     if (dump) {
         trace("gui_combo_save: dump '%s'\n", dump);
         FILE *file = fopen(lua_fname, "w");

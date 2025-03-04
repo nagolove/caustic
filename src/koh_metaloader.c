@@ -42,7 +42,7 @@ static bool _metaloader_load(
         "_metaloader_load: before table_dump2allocated_str [%s]\n",
         L_stack_dump(l)
     );
-    str = L_table_dump2allocated_str(l);
+    str = L_table_serpent_alloc(l, NULL);
     trace(
         "_metaloader_load: before table_dump2allocated_str [%s]\n",
         L_stack_dump(l)
@@ -65,7 +65,7 @@ static bool _metaloader_load(
     //trace("_metaloader_load: [%s]\n",L_stack_dump(l));
 
     //////////// DEBUG
-    str = L_table_dump2allocated_str(l);
+    str = L_table_serpent_alloc(l, NULL);
     if (ml->verbose)
         trace("_metaloader_load: '%s'\n", str);
     if (str)
@@ -409,7 +409,7 @@ void metaloader_print(MetaLoader *ml) {
     if (type == LUA_TTABLE) {
         int top = lua_gettop(ml->lua);
         //trace("metaloader_print: %s\n", table_get_print(ml->lua, top, NULL));
-        char *s = L_table_dump2allocated_str(ml->lua);
+        char *s = L_table_serpent_alloc(ml->lua, NULL);
         if (ml->verbose) {
             trace(
                 "metaloader_print: %s\n",

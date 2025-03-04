@@ -7,11 +7,8 @@
 #include <lua.h>
 #include <lualib.h>
 #include <stdbool.h>
-#include "lauxlib.h"
 #include "lua.h"
-#include "lualib.h"
 #include "raylib.h"
-#include "koh_stages.h"
 
 #define MAX_MTNAME  64
 
@@ -99,7 +96,15 @@ char *L_table_get_print(
 __attribute_deprecated__
 char *table_dump2allocated_str(lua_State *l);
 
+__attribute_deprecated__
 char *L_table_dump2allocated_str(lua_State *l);
+
+enum L_DumpError {
+    L_DE_BADTYPE = 0,   // если на вершине стека лежит не таблица
+    L_DE_SERPENT = 1,   // ошибка загрузки serpent модуля
+};
+
+char *L_table_serpent_alloc(lua_State *l, enum L_DumpError *err);
 
 void table_push_rect_as_arr(lua_State *l, Rectangle rect);
 // { x0, y0, x1, y1, x2, y2, ... }
@@ -157,12 +162,7 @@ void sc_register_function(lua_CFunction f, const char *fname, const char *desc);
 void sc_register_func_desc(const char *funcname, const char *description);
 const char * sc_stack_dump();
 
-/*int new_fullud_ref(struct Stage *st, Object *obj, const char *tname);*/
-/*int new_fullud_get_ref(struct Stage *st, Object *obj, const char *tname);*/
-
-//const char *skip_lead_zeros(const char *s);
 uint32_t read_id(lua_State *lua);
-//Vector2 read_pos(lua_State *lua);
 Vector2 read_pos(lua_State *lua, bool *notfound);
 bool read_fullud(lua_State *lua);
 float read_angle(lua_State *lua, float def_value);
@@ -173,17 +173,5 @@ Rectangle read_rect(lua_State *lua, int index, bool *err);
 int make_ret_table(int num, void**arr, size_t offset);
 //bool object_return_ref_script(Object *obj, int offset);
 void koh_sc_from_args(int argc, char **argv);
-
-/*
-static inline Object_ud checkudata(lua_State *l, int ud, const char *tname) {
-    Object_ud r = {0};
-    Object_ud *ref = (Object_ud*)luaL_checkudata(l, ud, tname);
-    if (ref) {
-        r.obj = ref->obj;
-        r.st = ref->st;
-    }
-    return r;
-}
-*/
 
 lua_State *sc_state_new(bool openlibs);
