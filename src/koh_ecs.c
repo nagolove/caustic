@@ -123,6 +123,98 @@ typedef struct ecs_t {
 
 // {{{ tests implementation
 
+struct EachCtx {
+    e_id *arr;
+    int num;
+};
+
+e_cp_type cp_type_tmp = {
+    .cp_sizeof = sizeof(int),
+    .name = "int",
+};
+
+bool on_each_print(ecs_t* r, e_id e, void* ud) {
+    int *c = e_get(r, e, cp_type_tmp);
+    printf("%s, %d\n", e_id2str(e), *c);
+    return false;
+}
+
+bool on_each(ecs_t* r, e_id e, void* ud) {
+    struct EachCtx *ctx = ud;
+    ctx->arr[ctx->num++] = e;
+    return false;
+}
+
+/*
+Создать сущности. Пройтись по ним итератором. Во время итерации удалить часть
+сущностей. Проверить результат.
+ */
+static MunitResult test_view_with_remove(
+    const MunitParameter params[], void* data
+) {
+    ecs_t *r = e_new(NULL);
+
+    e_register(r, &cp_type_tmp);
+
+    const int COUNT = 10;
+
+    // Создать сущности
+    for (int i = 0; i < COUNT; i++) {
+        e_id e = e_create(r);
+        // записать значение компонента
+        int *c = e_emplace(r, e, cp_type_tmp);
+        *c = i;
+    }
+
+    /*e_each(r, on_each_print, NULL);*/
+
+    e_id remove[100] = {};
+    struct EachCtx ctx = {
+        .arr = remove,
+        .num = 0,
+    };
+
+    e_view v = e_view_create_single(r, cp_type_tmp);
+    for (; e_view_valid(&v); e_view_next(&v)) {
+        int *val = e_view_get(&v, cp_type_tmp);
+        if (*val % 2 == 0) {
+            e_destroy(r, e_view_entity(&v));
+        }
+    }
+
+    e_each(r, on_each, &ctx);
+
+    // какие сущности должны остаться?
+    struct {
+        int val, cnt;
+    } x[] = {
+        {1, 0},
+        {3, 0},
+        {5, 0},
+        {7, 0},
+        {9, 0},
+    };
+
+    for (int j = 0; j < ctx.num; j++) {
+        int *c = e_get(r, remove[j], cp_type_tmp);
+        munit_assert_not_null(c);
+        for (int i = 0; i < sizeof(x) / sizeof(x[0]); i++) {
+            if (x[i].val == *c) {
+                x[i].cnt++;
+                break;
+            }
+        }
+    }
+
+    // Проверка, что все значения встречаются ровно один раз
+    for (int i = 0; i < sizeof(x) / sizeof(x[0]); i++) {
+        munit_assert_int(x[i].cnt, ==, 1);
+    }
+
+    e_free(r);
+    return MUNIT_OK;
+}
+
 // INFO: Из сцены t80_stage_chassis.c
 // Проблемы с итерацией
 static MunitResult test_view_chassis(
@@ -691,6 +783,27 @@ static void on_remove_e(
     printf("on_remove_e: <%s> %s\n", table_name,  e_id2str(*e));
     */
 
+}
+
+MunitResult test_emplace_double(const MunitParameter params[], void* userdata) {
+    ecs_t *r = e_new(NULL);
+
+    e_cp_type cmp = {
+        .cp_sizeof = sizeof(int),
+        .name = "int",
+    };
+
+    e_register(r, &cmp);
+
+    e_id e = e_create(r);
+
+    int *i1 = e_emplace(r, e, cmp);
+    munit_assert_not_null(i1);
+    int *i2 = e_emplace(r, e, cmp);
+    printf("test_emplace_double: i2 %p\n", i2);
+
+    e_free(r);
+    return MUNIT_OK;
 }
 
 MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
@@ -2330,6 +2443,26 @@ static MunitTest test_e_internal[] = {
         .options = MUNIT_TEST_OPTION_NONE,
         .parameters = NULL,
     },
+
+    {
+        .name =  "/test_view_with_remove",
+        .test = test_view_with_remove,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name =  "/test_emplace_double",
+        .test = test_emplace_double,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+
 
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };

@@ -59,6 +59,7 @@ typedef struct e_cp_type {
     void        (*on_shutdown)(struct e_cp_type *type);
 
     // какие-то пользовательские данные
+    // XXX: Для чего они нужны? 
     void        *udata;
 
     // Для компонентного проводника.
@@ -169,7 +170,7 @@ bool e_has(ecs_t* r, e_id e, const e_cp_type cp_type);
 void* e_get(ecs_t* r, e_id e, e_cp_type cp_type);
 
 // Если возвращает истину, то цикл прерывается
-typedef bool (*e_each_function)(ecs_t*, e_id, void*);
+typedef bool (*e_each_function)(ecs_t* r, e_id e, void* ud);
 
 /*
     Iterates all the entities that are still in use and calls
@@ -234,6 +235,7 @@ typedef struct e_view {
     ecs_t               *r;
 } e_view;
 
+// TODO: Проверить, сохраняется ли порядок сущностей при удалении их через вид
 e_view e_view_create(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
 // Тоже, что и e_view_create(), но для одного типа
 e_view e_view_create_single(ecs_t* r, e_cp_type cp_type);
@@ -370,6 +372,10 @@ int main() {
 
 static inline bool e_view_valid(e_view* v) {
     assert(v);
+
+    e_view v_zero = {};
+    assert(memcmp(v, &v_zero, sizeof(v_zero)) != 0);
+
     return v->current_entity.id != e_null.id;
 }
 
