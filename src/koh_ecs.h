@@ -118,6 +118,7 @@ e_id e_create(ecs_t* r);
 void e_destroy(ecs_t* r, e_id e);
 
 // Возвращает истину если сущность создана и существует.
+// Для e_null возвращает ложь.
 // t+
 bool e_valid(ecs_t* r, e_id e);
 
@@ -293,6 +294,8 @@ e_id e_each_entity(e_each_iter *i);
 int e_cp_type_cmp(e_cp_type a, e_cp_type b);
 
 // Недостижымый элемент, который всегда отсутствует в системе.
+// TODO: Сделать так, что-бы пустой элемент равнялся нулю.
+// e_null.id = 0 
 extern const e_id e_null;
 
 static inline uint32_t e_id_ver(e_id e) {

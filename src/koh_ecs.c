@@ -800,6 +800,7 @@ MunitResult test_emplace_double(const MunitParameter params[], void* userdata) {
     int *i1 = e_emplace(r, e, cmp);
     munit_assert_not_null(i1);
     int *i2 = e_emplace(r, e, cmp);
+    munit_assert_null(i2);
     printf("test_emplace_double: i2 %p\n", i2);
 
     e_free(r);
@@ -2463,7 +2464,6 @@ static MunitTest test_e_internal[] = {
     },
 
 
-
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
@@ -2777,9 +2777,11 @@ e_id e_create(ecs_t* r) {
 }
 
 static inline void entity_assert(ecs_t *r, e_id e) {
-    assert(e.ord >= 0);
-    assert(e.ver >= 0);
-    assert(e.ord < r->max_id);
+    if (e.id != e_null.id) {
+        assert(e.ord >= 0);
+        assert(e.ord < r->max_id);
+        assert(e.ver >= 0);
+    }
 }
 
 void e_destroy(ecs_t* r, e_id e) {
@@ -2826,12 +2828,15 @@ void e_destroy(ecs_t* r, e_id e) {
     assert(r->entities_num >= 0);
 }
 
-// Проверить существование идентификатора
+// Проверить существование идентификатора. e_null - невалидное значение
 bool e_valid(ecs_t* r, e_id e) {
     ecs_assert(r);
     entity_assert(r, e);
     // TODO: Думать, как использовать версии
-    return r->entities[e.ord] && r->entities_ver[e.ord] == e.ver;
+    if (e.id != e_null.id)
+        return r->entities[e.ord] && r->entities_ver[e.ord] == e.ver;
+    else
+        return false;
 }
 
 static void e_storage_remove(e_storage *s, e_id e) {
@@ -2943,7 +2948,9 @@ void* e_get(ecs_t* r, e_id e, e_cp_type cp_type) {
 
     e_storage *s = e_assure(r, cp_type);
 
-    assert(e_valid(r, e));
+    //assert(e_valid(r, e));
+    if (!e_valid(r, e))
+        return NULL;
 
     // Индекс занят?
     if (ss_has(&s->sparse, e.ord)) {
@@ -3727,6 +3734,7 @@ const char *e_id2str(e_id e) {
 }
 
 const e_id e_null = { .id = INT64_MAX, };
+//const e_id e_null = { .id = 0, };
 
 // }}}
 
