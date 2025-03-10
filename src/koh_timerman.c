@@ -188,7 +188,7 @@ int timerman_update(struct TimerMan *tm) {
         return tm->timers_size;
 
     for (int i = 0; i < tm->timers_size; i++) {
-        struct Timer *timer = &tm->timers[i];
+        Timer *timer = &tm->timers[i];
         timer->tm = tm;
 
         // XXX: Почему такой таймер не удаляется?
