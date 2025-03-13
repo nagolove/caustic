@@ -161,6 +161,8 @@ end
 
 
 
+
+
 local function printc(text)
    print(ansicolors(text))
 end
@@ -465,7 +467,11 @@ end
 
 
 
+
+
 local dependencies
+
+
 
 local function get_deps_name_map(deps)
    assert(deps)
@@ -873,6 +879,8 @@ local function build_remotery(_)
    cmd_do("ar -rcs  \"libremotery.a\" Remotery.o")
    ut.pop_dir()
 end
+
+
 
 
 
@@ -1312,53 +1320,6 @@ dependencies = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function gather_includedirs(
    deps, path_prefix)
 
@@ -1775,59 +1736,66 @@ local function visit(sorted, node)
    table.insert(sorted, 1, node)
 end
 
-local Toposorter = {}
 
 
 
-local Toposorter_mt = {
-   __index = Toposorter,
-}
 
-function Toposorter.new()
-   local self = {
-      T = {},
-   }
-   return setmetatable(self, Toposorter_mt)
-end
 
-function Toposorter:add(value1, value2)
-   print(':add', value1, value2)
-   local from = value1
-   local to = value2
-   if not self.T[from] then
-      self.T[from] = {
-         value = from,
-         parents = {},
-         childs = {},
-      }
-   end
-   if not self.T[to] then
-      self.T[to] = {
-         value = to,
-         parents = {},
-         childs = {},
-      }
-   end
-   local node_from = self.T[from]
-   local node_to = self.T[to]
 
-   table.insert(node_from.childs, node_to)
-   table.insert(node_to.parents, node_from)
-end
 
-function Toposorter:clear()
-   self.T = {}
-end
 
-function Toposorter:sort()
-   local sorted = {}
-   for _, node in pairs(self.T) do
-      if not node.permament then
-         visit(sorted, node)
-      end
-   end
-   return sorted
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1914,6 +1882,11 @@ end
 
 local parser_setup = {
 
+
+   dist = {
+      options = {},
+      summary = [[build binary distribution]],
+   },
 
    make_projects = {
       options = { "-n --name" },
@@ -2268,6 +2241,18 @@ end
 
 
 
+
+function actions.dist(_args)
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
+   assert(cfgs[1])
+
+   local artifact = cfgs[1].artifact
+
+   local dist = 'dist'
+   mkdir(dist)
+   cmd_do(format("cp %s %s", artifact, dist))
+   cmd_do(format("cp -r assets %s", dist))
+end
 
 
 
