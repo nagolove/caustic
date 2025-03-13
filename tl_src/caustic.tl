@@ -1316,54 +1316,7 @@ dependencies = {
     },
 }
 
---[[
--- {{{
-local dependencies_mt: Dependency = {
-    get_cc_includes = function(self: Dependency)
-        print(inspect(self))
-    end,
-}
-
-for _, v in ipairs(dependencies) do
-    setmetatable(v, dependencies_mt as metatable<Dependency>)
-end
--- }}}
---]]
-
---[[
-local function get_urls(deps: {Dependency}): {string}
-    local urls = {}
-    for _, dep in ipairs(deps) do
-        assert(type(dep.url) == 'string')
-        table.insert(urls, dep.url)
-    end
-    return urls
-end
---]]
-
---[[
-local function get_include_dirs(deps: {Dependency}): {string}
-
-    local _includedirs = {}
-    for _, dep in ipairs(deps) do
-        if not dep.disabled then
-            if dep.includes then
-                for _, include in ipairs(dep.includes) do
-                    table.insert(_includedirs, include)
-                end
-            end
-        end
-    end
-
-    for k, dir in ipairs(_includedirs) do
-        _includedirs[k] = path_caustic .. "/%s/" .. dir
-    end
-
-    table.insert(_includedirs, path_caustic .. "/src")
-
-    return _includedirs
-end
---]]
+-- {{{ functions
 
 -- TODO: Проверка на дубликаты путей:
 --      как проверка будет функционировать? какой-то флаг?
@@ -1783,6 +1736,7 @@ local function visit(sorted: {Node}, node: Node)
     table.insert(sorted, 1, node)
 end
 
+--[[
 local record Toposorter
     T: {any: Node}
 end
@@ -1837,6 +1791,9 @@ function Toposorter:sort(): {Node}
     return sorted
 end
 
+--]]
+
+-- }}} 
 local record Actions
     -- {{{
     --anim_convert: function(Args)
