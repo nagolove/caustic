@@ -2914,6 +2914,8 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
     // Добавить сущность в разреженный массив
     ss_add(&s->sparse, e.ord);
 
+    memset(comp_data, 0, cp_type.cp_sizeof);
+
     if (s->on_emplace)
         s->on_emplace(comp_data, e);
 
