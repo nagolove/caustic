@@ -1794,9 +1794,11 @@ end
 --]]
 
 -- }}} 
+
 local record Actions
     -- {{{
     --anim_convert: function(Args)
+    dist: function(Args)
     build: function(Args)
     build_w: function(Args)
     build_smart: function(Args)
@@ -1832,6 +1834,7 @@ end
 
 local enum ActionsEnum
     -- {{{
+    "dist"
     "make_projects"
     "project"
     "init_w"
@@ -1879,6 +1882,11 @@ end
 -- TODO: Добавить вывод справки на русском?
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    dist = {
+        options = {},
+        summary = [[build binary distribution]],
+    },
 
     make_projects = {
         options = { "-n --name", },
@@ -2232,6 +2240,18 @@ local record Args
     full: string        -- XXX: Что значит?
     flags: {string}
     -- }}}
+end
+
+function actions.dist(_args: Args)
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    assert(cfgs[1])
+
+    local artifact = cfgs[1].artifact
+
+    local dist = 'dist'
+    mkdir(dist)
+    cmd_do(format("cp %s %s", artifact, dist))
+    cmd_do(format("cp -r assets %s", dist))
 end
 
 -- Собирает все проекты из path_caustic/projects.lua
