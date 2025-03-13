@@ -161,6 +161,8 @@ local record Cfg
     -- }}}
 end
 
+-- {{{ functions 
+
 local function printc(text: string)
     print(ansicolors(text))
 end
@@ -391,6 +393,8 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     return cfgs, push_num
 end
 
+-- }}} 
+
 local enum UrlAction
     -- склонировать 
 	"git"
@@ -466,6 +470,8 @@ local record Dependency
 end
 
 local dependencies: {Dependency}
+
+-- {{{ functions 
 
 local function get_deps_name_map(deps?: {Dependency}): {string: Dependency}
     assert(deps)
@@ -873,6 +879,8 @@ local function build_remotery(_: Dependency)
     cmd_do("ar -rcs  \"libremotery.a\" Remotery.o")
     ut.pop_dir()
 end
+
+-- }}}
 
 -- XXX:  Любые сборки которые попадают в сеть должны быть без отладочной 
 -- информации, с максимальной оптимизацией. В целях безопасности
