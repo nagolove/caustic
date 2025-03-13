@@ -142,8 +142,11 @@ void e_remove_all(ecs_t* r, e_id e);
     entity that currently has this component instance id results in
     undefined behavior.
 */
+
 // Нельзя создавать долгоживущие указатели на данные компонента сущности 
 // так как память может быть перераспределена при очередном вызове e_emplace()
+// Заполняет нулями участок памяти. 
+// Перед возвратом вызывается on_emplace()
 // XXX: Что будет если вызвать два раза подряд? 
 // Должен быть падение или возврат уже выделенной памяти?
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type);
