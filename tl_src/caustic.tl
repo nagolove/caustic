@@ -396,12 +396,14 @@ local record Dependency
 
     -- Строки для дефайнов компилятора
     custom_defines: function(dep: Dependency): {string}
+
     -- XXX: Что делает данная функция?
-    lualibrary_install: function(abs_project_root_dir: string, to_dir: string)
-    -- Значения коллбэка - build_make, build_cmake, etc
+    --lualibrary_install: function(abs_project_root_dir: string, to_dir: string)
+
+    -- Значения коллбэка - build_with_make, build_with_cmake, etc
     build: function(dep: Dependency)
 
-    --wasm_build: function(dep: Dependency) 
+    -- вызывается для компиляции в WASM
     build_w: function(dep: Dependency) 
 
     after_build: function(dep: Dependency)
@@ -435,6 +437,13 @@ local function build_with_cmake(dep: Dependency)
     cmd_do("make -j")
 end
 
+local function build_with_cmake_w(dep: Dependency)
+    print('build_with_cmake_w: current dir', lfs.currentdir())
+    print('build_with_cmake_w: dep', inspect(dep))
+    cmd_do("emcmake cmake .")
+    cmd_do("emmake -j")
+end
+
 local function build_with_autotool(_: Dependency)
     print('currentdir', lfs.currentdir())
     cmd_do("./autogen.sh")
@@ -444,6 +453,10 @@ end
 
 local function build_with_make(_: Dependency)
     cmd_do("make -j")
+end
+
+local function build_with_make_w(_: Dependency)
+    cmd_do("emmake -j")
 end
 
 local function copy_headers_to_wfc(_: Dependency)
@@ -485,6 +498,18 @@ local function build_chipmunk(dep: Dependency)
     ut.pop_dir()
 end
 --]]
+
+local function build_pcre2_w(dep: Dependency)
+    ut.push_current_dir()
+    print("build_pcre2_w: dep.dir", dep.dir)
+    chdir(dep.dir)
+    print("build_pcre2_w:", lfs.currentdir())
+
+    cmd_do("rm CMakeCache.txt")
+    cmd_do("emcmake cmake .")
+    cmd_do("emmake -j")
+    ut.pop_dir()
+end
 
 local function build_pcre2(dep: Dependency)
     ut.push_current_dir()
@@ -555,6 +580,16 @@ local function build_cimgui(dep: Dependency)
     print("current dir", lfs.currentdir())
     cmd_do("make clean")
     cmd_do("make -j CFLAGS=\"-g3\"")
+end
+
+local function build_cimgui_w(dep: Dependency)
+    print('build_cimgui:', inspect(dep))
+
+    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
+
+    print("current dir", lfs.currentdir())
+    cmd_do("emmake clean")
+    cmd_do("emmake -j CFLAGS=\"-g3\"")
 end
 
 local function get_additional_includes(): string
@@ -681,15 +716,49 @@ local function build_raylib(_: Dependency)
     cmd_do("make -j")
 end
 
+local function build_raylib_w(_: Dependency)
+
+    --[[
+    ut.push_current_dir()
+    chdir("wasm_3rd_party/raylib")
+    chdir("src")
+    local EMSDK = os.getenv('EMSDK')
+    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+    --]]
+
+    cmd_do("emcmake cmake . -DBUILD_EXAMPLES=OFF")
+    cmd_do("emmake -j")
+end
+
 local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     -- TODO: Проверка наличия fd
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
     cmd_do("cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
     cmd_do("make clean && make -j")
+
+end
+
+local function build_box2c_w(_: Dependency)
+    -- TODO: Добавить сборку без отладочной информации.
+    -- TODO: Проверка наличия fd
+    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+ --cmake -DBOX2D_BENCHMARKS=OFF -DBOX2D_BUILD_DOCS=OFF -DBOX2D_SAMPLES=OFF8;10u8;10u8;10u
+    cmd_do("emcmake cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
+    cmd_do("emmake clean && make -j")
+end
+
+local function build_sol(_: Dependency)
+    --cmd_do("build.sh")
+    -- Сделать один включаемый файл
+    cmd_do("python single/single.py")          
 end
 
 local function build_rlwr(_: Dependency)
+    cmd_do("build.sh")
+end
+
+local function build_rlwr_w(_: Dependency)
     cmd_do("build.sh")
 end
 
@@ -700,6 +769,11 @@ end
 local function build_munit(_: Dependency)
     cmd_do("gcc -c munit.c")
     cmd_do("ar rcs libmunit.a munit.o")
+end
+
+local function build_munit_w(_: Dependency)
+    cmd_do("emcc -c munit.c")
+    cmd_do("emar rcs libmunit.a munit.o")
 end
 
 -- TODO: Сделать общую функцию
@@ -727,6 +801,7 @@ end
 local function defines_luafun(_: Dependency): {string}
 end
 
+--[[
 local function lualibrary_install_luafun(
     abs_project_root_dir: string, to_dir: string
 )
@@ -742,22 +817,23 @@ local function lualibrary_install_luafun(
     chdir("src")
 
     local header = io.open("package_path.h", "w")
-    header:write([[
-#ifndef KOH_PACKAGE_PATH_
-#define KOH_PACKAGE_PATH_
-    extern char **koh_packages_path;
-#endif
-]])
+    --]]
+--    header:write([[
+--#ifndef KOH_PACKAGE_PATH_
+--#define KOH_PACKAGE_PATH_
+--    extern char **koh_packages_path;
+--#endif
+--]])
+--[[
     header:close()
 
     local source = io.open("package_path.h", "w")
-    source:write([[
-    Тут полная лажа
-    ]])
-    source:close()
-
-
-end
+--]]
+--    source:write([[
+--    Тут полная лажа
+--    ]])
+--    source:close()
+--end
 
 local function build_resvg(_: Dependency)
     print('build_resvg')
@@ -841,7 +917,7 @@ dependencies = {
         disabled = false,
         description = "color worms moving on texture",
         custom_defines = nil,
-        lualibrary_install = nil,
+        --lualibrary_install = nil,
         dir = "wormseffect",
         includes = { 
             "wormseffect",
@@ -858,10 +934,10 @@ dependencies = {
 
 
     {
-        disabled = false,
+        disabled = true,
         description = "lua functional style library",
         custom_defines = defines_luafun,
-        lualibrary_install = lualibrary_install_luafun,
+        --lualibrary_install = lualibrary_install_luafun,
         dir = "luafun",
         includes = { },
         libdirs = { },
@@ -911,6 +987,7 @@ dependencies = {
     {
         disabled = false,
         build = build_munit,
+        build_w = build_munit_w,
         description = "munit testing framework",
         dir = "munit",
         includes = { "munit" },
@@ -953,6 +1030,7 @@ dependencies = {
     {
         disabled = false,
         build = build_with_cmake,
+        build_w = build_with_cmake_w,
         description = "task sheduler",
         dir = "enkits",
         includes = { "enkits/src" },
@@ -966,13 +1044,9 @@ dependencies = {
 
     {
         disabled = false,
-        --build = build_,
         description = "сетевая библиотека с гарантией доставки поверх UDP",
         dir = "enet",
         includes = { "enet/include" },
-        --libdirs = { "pcre2" },
-        --links = { },
-        --links_internal = { "libpcre2-8.a" },
         name = "enet",
         url_action = "git",
         url = "https://github.com/zpl-c/enet.git",
@@ -981,6 +1055,7 @@ dependencies = {
     {
         disabled = false,
         build = build_pcre2,
+        build_w = build_pcre2_w,
         description = "регулярные выражения с обработкой ошибок и группами захвата",
         dir = "pcre2",
         includes = { "pcre2/src" },
@@ -1012,10 +1087,10 @@ dependencies = {
 	--]]
 
     {
+        disabled = true,
         build = build_lfs,
         description = "C lua модуль для поиска файлов",
         dir = "luafilesystem",
-        disabled = true,
         includes = { "luafilesystem/src" },
         libdirs = { "luafilesystem" },
         links_internal = { "lfs:static" },
@@ -1044,6 +1119,7 @@ dependencies = {
         after_build = cimgui_after_build,
         -- нужно компилировать
         build = build_cimgui,
+        build_w = build_cimgui_w,
         --depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
@@ -1057,7 +1133,7 @@ dependencies = {
     },
 
     {
-        disabled = false,
+        disabled = true,
         after_init = sunvox_after_init,
         copy_for_wasm = true,
         description = "модульный звуковой синтезатор",
@@ -1073,6 +1149,7 @@ dependencies = {
     },
 
     {
+        disabled = true,
         build = build_with_make,
         after_build = gennann_after_build,
         -- определенный коммит используется здесь как пример
@@ -1091,6 +1168,7 @@ dependencies = {
 
     {
         build = build_box2c,
+        build_w = build_box2c_w,
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
@@ -1110,7 +1188,7 @@ dependencies = {
 
     {
         disabled = false,
-        copy_for_wasm = true,
+        copy_for_wasm = false,
         build = build_chipmunk,
         dir = "Chipmunk2D",
         description = "плоский игровой физический движок",
@@ -1125,6 +1203,7 @@ dependencies = {
 
     {
         build = build_with_make,
+        build_w = build_with_make_w,
         copy_for_wasm = true,
         description = "lua интерпритатор",
         dir = "lua",
@@ -1147,33 +1226,24 @@ dependencies = {
         name = 'raylib',
         dir = "raylib",
         build = build_raylib,
+        build_w = build_raylib_w,
         url_action = "git",
         url = "https://github.com/raysan5/raylib.git",
     },
 
-    --[[
     {
-        --build_method = 'other',
-        --depends = {'lua'},
-        disabled = true,
-        copy_for_wasm = true,
-        build = build_small_regex,
-        description = "простая библиотека для регулярных выражений",
-        includes = { "small_regex/libsmallregex" },
-        libdirs = { "small_regex/libsmallregex" },
-        links = { "smallregex:static" },
-        links_internal = { "smallregex:static" },
-        name = 'small_regex',
-        dir = "small_regex",
-        url_action = "git",
-        --url = "https://gitlab.com/relkom/small-regex.git",
-        url = "git@github.com:nagolove/small-regex-c.git",
+        disabled = false,
+        name = "sol",
+        description = "C++ Lua bindins",
+        build = build_sol,
+        url = "https://github.com/ThePhD/sol2.git",
     },
-    --]]
 
     {
         disabled = false,
         build = build_rlwr,
+        -- TODO: Сперва собрать sol c правильной версией lua
+        build_w = build_rlwr_w,
         after_build = nil,
         copy_for_wasm = true,
         description = "Обертка для raylib-lua-sol",
@@ -1188,8 +1258,8 @@ dependencies = {
     },
 
     {
-        --depends = {'smallregex', "wfc"},
         build = build_with_make,
+        build_w = build_with_make_w,
         after_build = utf8proc_after_build,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
@@ -1749,10 +1819,17 @@ local parser_setup: {string:ParserSetup} = {
     dependencies = {
         summary = "print dependencies table",
     },
+
     build = {
         summary = "build dependencies for native platform",
         options = { "-n --name" },
     },
+    
+    build_w = {
+        summary = "build dependencies for WASM platform",
+        options = { "-n --name" },
+    },
+
     compile_flags = {
         summary = "print compile_flags.txt to stdout",
     },
@@ -1858,6 +1935,14 @@ local parser_setup: {string:ParserSetup} = {
     --]]
 }
 -- }}}
+local record Node
+    value: any
+    childs: {Node}
+    parents: {Node}
+    permament: boolean
+    temporary: boolean
+end
+
 --]]
 
 local actions: Actions = {}
@@ -3816,10 +3901,12 @@ local function build_dep_w(dep: Dependency)
 
     local map: {string: function} = {
         ["function"] = function()
-            dep.build(dep)
+            dep.build_w(dep)
         end,
         ["string"] = function()
-            local capture = match(dep.build as string, "@(%a+)")
+            assert("not supported")
+            --[[
+            local capture = match(dep.build_w as string, "@(%a+)")
             print(format("_build_w capture '%s'", capture))
             if capture then
                 local glo = _G as {string:string}
@@ -3839,6 +3926,7 @@ local function build_dep_w(dep: Dependency)
             else
                 error("_build_w bad build string format")
             end
+            --]]
         end,
     }
 
@@ -3849,7 +3937,7 @@ local function build_dep_w(dep: Dependency)
     end
 
     local ok, errmsg: boolean, string = pcall(function()
-        local tp = type(dep.build)
+        local tp = type(dep.build_w)
         print("_build_w dep.build type is", tp)
 
         local func = map[tp]
@@ -4012,7 +4100,7 @@ function actions.build_w(_args: Args)
     print("actions.build: current directory", lfs.currentdir())
 
     if _args.name then
-        print(format("build '%s'", _args.name))
+        print(format("build_w '%s'", _args.name))
         local dependencies_name_map = get_deps_name_map(dependencies)
         if dependencies_name_map[_args.name] then
             local dir = get_dir(dependencies_name_map[_args.name])
@@ -4039,7 +4127,7 @@ function actions.build_w(_args: Args)
         end
     else
         for _, dep in ipairs(dependencies) do
-            _build(dep)
+            _build_w(dep)
         end
     end
 
@@ -5106,18 +5194,11 @@ local function do_parser_setup(
         x = nil
     end
 
-    --prnt = print
-
     prnt("do_parser_setup:")
     for cmd_name, setup_tbl in pairs(setup) do
 
         prnt("cmd_name", cmd_name)
         prnt("setup_tbl", inspect(setup_tbl))
-
-        --if  not setup_tbl.summary and
-            --not setup_tbl.options and
-            --not setup_tbl.flags and
-            --not setup_tbl.arguments then
 
         local p = parser:command(cmd_name)
         if setup_tbl.summary then
@@ -5196,11 +5277,9 @@ local function main()
     end
 
     if ok then
-        --print(inspect(_args))
         if _args.verbose then
             verbose = true
         end
-        --verbose = _args.verbose == true
 
         if verbose then
             printc("%{blue}" .. "VERBOSE_MODE" .. "%{reset}")
@@ -5210,17 +5289,14 @@ local function main()
             print("CAUSTIC_PATH", path_caustic)
         end
 
-        --print("_args", inspect(_args))
         for k, v in pairs(_args) do
             local can_call = type(v) == 'boolean' and v == true 
-            --print("k, v", k, v)
             if actions[k as ActionsEnum] and can_call then
                 actions[k as ActionsEnum](_args as Args)
-                --has_command = true
             end
         end
     else
-        print("bad args")
+        print("bad args, may be not enough arguments?")
     end
 
     --[[
@@ -5229,6 +5305,7 @@ local function main()
         actions.make(_args as Args)
     end
     --]]
+
 end
 
 if arg then
