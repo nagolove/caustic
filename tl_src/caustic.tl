@@ -29,7 +29,7 @@ local path_rel_third_party = remove_last_backslash(
     getenv("3rd_party") or "3rd_party"
 )
 -- каталог для библиотек wasm, собранных в отладочном режиме
-local path_wasm_third_party = remove_last_backslash(
+local path_rel_wasm_third_party = remove_last_backslash(
     getenv("wasm_3rd_party") or "wasm_3rd_party"
 )
 
@@ -65,7 +65,7 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 assert(path_caustic)
 assert(path_rel_third_party)
 assert(path_abs_third_party)
-assert(path_wasm_third_party)
+assert(path_rel_wasm_third_party)
 assert(path_rel_third_party_release)
 assert(path_wasm_third_party_release)
 -- }}}
@@ -124,7 +124,7 @@ if verbose then
     tabular(path_caustic)
     tabular(path_rel_third_party)
     tabular(path_abs_third_party)
-    tabular(path_wasm_third_party)
+    tabular(path_rel_wasm_third_party)
     tabular(path_rel_third_party_release)
     tabular(path_wasm_third_party_release)
 end
@@ -442,35 +442,59 @@ local function get_deps_name_map(deps?: {Dependency}): {string: Dependency}
     return map
 end
 
-local function build_with_cmake(dep: Dependency)
+local function build_with_cmake_common(dep: Dependency)
     print('build_with_cmake: current dir', lfs.currentdir())
     print('build_with_cmake: dep', inspect(dep))
-    cmd_do("cmake .")
-    cmd_do("make -j")
+
+    local m: {Target: {string}} = {
+        ["linux"] = { "cmake ", "make -j" },
+        ["wasm"] = { "emcmake cmake ", "emmake make " },
+    }
+    local c = m[dep.target]
+
+    cmd_do(c[1] .. " .")
+    cmd_do(c[2])
 end
 
+--[[
 local function build_with_cmake_w(dep: Dependency)
     print('build_with_cmake_w: current dir', lfs.currentdir())
     print('build_with_cmake_w: dep', inspect(dep))
     cmd_do("emcmake cmake .")
     cmd_do("emmake make")
 end
+--]]
 
-local function build_freetype_w(_: Dependency)
+local function build_freetype_common(dep: Dependency)
+    print('build_freetype_common', dep.target)
     print('currentdir', lfs.currentdir())
     ut.push_current_dir()
-    cmd_do("emcmake cmake -E make_directory build")
-    cmd_do("emcmake cmake -E chdir build cmake ..")
-    cmd_do("cd build")
-    cmd_do("emmake make")
-    ut.pop_dir()
-end
 
-local function build_with_autotool(_: Dependency)
-    print('currentdir', lfs.currentdir())
-    cmd_do("./autogen.sh")
-    cmd_do("./configure")
-    cmd_do("make -j")
+    local m: {Target: {string}} = {
+        ["linux"] = { "cmake ", "make " },
+        ["wasm"] = { "emcmake cmake ", "emmake make " },
+    }
+    local c = m[dep.target]
+
+    if not c then
+        print(debug.traceback())
+    end
+    assert(c)
+
+    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+
+    local c1 = format("%s -E make_directory build", c[1])
+    local c2 = format("%s -E chdir build cmake ..", c[1])
+
+    -- cmake
+    cmd_do({c1, c2})
+    chdir("build")
+
+    -- make 
+    cmd_do(c[2] .. " clean")
+    cmd_do(c[2])
+
+    ut.pop_dir()
 end
 
 local function build_with_make(_: Dependency)
@@ -792,6 +816,7 @@ local function build_raylib_w(_: Dependency)
     --cmd_do("emmake -j")
 end
 
+--[[
 local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     -- TODO: Проверка наличия fd
@@ -802,25 +827,38 @@ local function build_box2c(_: Dependency)
         '-DBOX2D_BUILD_DOCS=OFF ' ..
         "-DCMAKE_BUILD_TYPE=Debug .")
     cmd_do("make clean && make -j")
-
 end
+--]]
 
-local function build_box2c_w(_: Dependency)
+local insert = table.insert
+
+local function build_box2c_common(dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     -- TODO: Проверка наличия fd
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
- --cmake -DBOX2D_BENCHMARKS=OFF -DBOX2D_BUILD_DOCS=OFF -DBOX2D_SAMPLES=OFF8;10u8;10u8;10u
-    cmd_do('emcmake cmake ' ..
-        '-DCMAKE_C_FLAGS="-pthread -matomics -mbulk-memory" ' ..
-        '-DCMAKE_CXX_FLAGS="-pthread -matomics -mbulk-memory" ' .. 
-        '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ' .. 
+
+
+    local m: {Target: {string}} = {
+        ["linux"] = { "cmake ", "make -j" },
+        ["wasm"] = { "emcmake cmake ", "emmake make " },
+    }
+    local c = m[dep.target]
+
+    local t = {}
+    if dep.target == 'wasm' then
+        insert(t, '-DCMAKE_C_FLAGS="-pthread -matomics -mbulk-memory" ' )
+        insert(t, '-DCMAKE_CXX_FLAGS="-pthread -matomics -mbulk-memory" ')
+        insert(t, '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ')
+    end
+
+    cmd_do(c[1] .. table.concat(t, " ") ..
         '-DCMAKE_BUILD_TYPE=Debug ' ..
         '-DBOX2D_VALIDATE=ON ' ..
         '-DBOX2D_BENCHMARKS=OFF ' ..
         '-DBOX2D_BUILD_DOCS=OFF ' ..
         '-DBOX2D_SAMPLES=OFF .'
     )
-    cmd_do("emmake make ")
+    cmd_do(c[2])
 end
 
 local function build_sol(_: Dependency)
@@ -991,8 +1029,8 @@ dependencies = {
         links_internal = {},
         name = "freetype",
         url_action = "git",
-        build = build_with_autotool,
-        build_w = build_freetype_w,
+        build = build_freetype_common,
+        build_w = build_freetype_common,
         url = "https://github.com/freetype/freetype.git",
         --update = update_default,
     },
@@ -1038,8 +1076,8 @@ dependencies = {
     {
         disabled = false,
         copy_for_wasm = true,
-        build = build_with_cmake,
-        build_w = build_with_cmake_w,
+        build = build_with_cmake_common,
+        build_w = build_with_cmake_common,
         description = "svg parsing library",
         dir = "nanosvg",
         includes = { 
@@ -1123,8 +1161,8 @@ dependencies = {
     {
         disabled = false,
         copy_for_wasm = true,
-        build = build_with_cmake,
-        build_w = build_with_cmake_w,
+        build = build_with_cmake_common,
+        build_w = build_with_cmake_common,
         description = "task sheduler",
         dir = "enkits",
         includes = { "enkits/src" },
@@ -1273,8 +1311,8 @@ dependencies = {
     --]]
 
     {
-        build = build_box2c,
-        build_w = build_box2c_w,
+        build = build_box2c_common,
+        build_w = build_box2c_common,
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
@@ -2944,7 +2982,7 @@ function actions.init_w(_args: Args)
     for _, dep in ipairs(deps) do
         dep.target = "wasm"
     end
-    _init(path_wasm_third_party, deps)
+    _init(path_rel_wasm_third_party, deps)
 end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
@@ -4250,76 +4288,28 @@ local function _build(dep: Dependency)
     ut.pop_dir()
 end
 
-function actions.build_w(_args: Args)
+local function sub_build(_args: Args, path_rel: string, target: Target)
     ut.push_current_dir()
+    local deps = {}
 
     -- Путь к развернутой системе
     chdir(path_caustic)
     -- Путь к библиотекам
-    chdir(path_wasm_third_party)
-
-    print("actions.build: current directory", lfs.currentdir())
-
-    if _args.name then
-        print(format("build_w '%s'", _args.name))
-        local dependencies_name_map = get_deps_name_map(dependencies)
-        if dependencies_name_map[_args.name] then
-            local dir = get_dir(dependencies_name_map[_args.name])
-            --print('dir', dir)
-            local deps_map = get_deps_map(dependencies)
-            --print('deps_map', inspect(deps_map))
-            local dep: Dependency
-            local ok, errmsg: boolean, string = pcall(function()
-                dep = deps_map[dir]
-            end)
-            if ok then 
-                _build_w(dep)
-            else
-                local msg = format(
-                    "could not get '%s' dependency with %s",
-                    _args.name, errmsg
-                )
-                printc("%{red}" .. msg .. "%{reset}")
-            end
-        else
-            print("bad dependency name", _args.name)
-        ut.pop_dir()
-            return
-        end
-    else
-        for _, dep in ipairs(dependencies) do
-            _build_w(dep)
-        end
-    end
-
-    ut.pop_dir()
-end
-
-
-function actions.build(_args: Args)
-    ut.push_current_dir()
-
-    -- Путь к развернутой системе
-    chdir(path_caustic)
-    -- Путь к библиотекам
-    chdir(path_rel_third_party)
-
-    print("actions.build: current directory", lfs.currentdir())
+    chdir(path_rel)
 
     if _args.name then
         print(format("build '%s'", _args.name))
         local dependencies_name_map = get_deps_name_map(dependencies)
         if dependencies_name_map[_args.name] then
             local dir = get_dir(dependencies_name_map[_args.name])
-            --print('dir', dir)
             local deps_map = get_deps_map(dependencies)
-            --print('deps_map', inspect(deps_map))
             local dep: Dependency
             local ok, errmsg: boolean, string = pcall(function()
                 dep = deps_map[dir]
             end)
+
             if ok then 
-                _build(dep)
+                table.insert(deps, dep)
             else
                 local msg = format(
                     "could not get '%s' dependency with %s",
@@ -4327,18 +4317,40 @@ function actions.build(_args: Args)
                 )
                 printc("%{red}" .. msg .. "%{reset}")
             end
+
         else
             print("bad dependency name", _args.name)
-	    ut.pop_dir()
-			return
+            ut.pop_dir()
+            return
         end
     else
-        for _, dep in ipairs(dependencies) do
+        -- обработка всех модулей
+        deps = dependencies
+    end
+
+    printc("%{yellow}sub_build:" .. inspect(deps) .. "%{reset}")
+
+    local ok, errmsg: boolean, string = pcall(function()
+        for _, dep in ipairs(deps) do
+            dep.target = target
             _build(dep)
         end
+    end)
+
+    if not ok then
+        printc("%{red}sub_build: error with " .. errmsg .. "%{reset}")
+        print(debug.traceback())
     end
 
     ut.pop_dir()
+end
+
+function actions.build_w(_args: Args)
+    sub_build(_args, path_rel_wasm_third_party, "wasm")
+end
+
+function actions.build(_args: Args)
+    sub_build(_args, path_rel_third_party, "linux")
 end
 
 function actions.deps(_args: Args)
