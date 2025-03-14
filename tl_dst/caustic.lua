@@ -1555,7 +1555,7 @@ local function get_ready_deps(cfg)
          name2dep[dep.name] = dep
       end
 
-      print("name2dep", inspect(name2dep))
+
 
       for _, depname in ipairs(cfg.not_dependencies) do
          print("depname", depname)
@@ -4946,7 +4946,9 @@ end
 
 
 
-local function sub_make(_args, cfg, push_num)
+local function sub_make(
+   _args, cfg, target, push_num)
+
    if verbose then
       print(format(
       "sub_make: _args %s, cfg %s, push_num %d",
@@ -4995,11 +4997,13 @@ local function sub_make(_args, cfg, push_num)
    local output_dir = "."
    local objfiles = {}
 
-   local defines = {
-      "-DGRAPHICS_API_OPENGL_43",
-      "-DPLATFORM=PLATFORM_DESKTOP",
-      "-DPLATFORM_DESKTOP",
-   }
+   local defines = {}
+
+   if target == 'linux' then
+      insert(defines, "-DGRAPHICS_API_OPENGL_43")
+      insert(defines, "-DPLATFORM=PLATFORM_DESKTOP")
+      insert(defines, "-DPLATFORM_DESKTOP")
+   end
 
 
    local _defines = table.concat(defines, " ")
@@ -5243,7 +5247,7 @@ local function sub_make(_args, cfg, push_num)
          local_cfg.debug_define = cfg.debug_define
 
 
-         sub_make(args, local_cfg)
+         sub_make(args, local_cfg, target)
       end
 
       ut.pop_dir()
@@ -5283,7 +5287,7 @@ function actions.make(_args)
 
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    for _, cfg in ipairs(cfgs) do
-      sub_make(_args, cfg, push_num)
+      sub_make(_args, cfg, "linux", push_num)
    end
 end
 
@@ -5453,13 +5457,6 @@ local function main()
    else
       print("bad args, may be not enough arguments?")
    end
-
-
-
-
-
-
-
 
 end
 
