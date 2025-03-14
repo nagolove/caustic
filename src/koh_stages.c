@@ -105,7 +105,11 @@ void stage_init(StagesStore *ss) {
 }
 
 Stage *stage_add(StagesStore *ss, Stage *st, const char *name) {
-    assert(ss);
+    if (!st) {
+        trace("stage_add: NULL stage, ignoring\n");
+        return NULL;
+    }
+
     assert(st);
     assert(name);
     assert(strlen(name) < MAX_STAGE_NAME);
