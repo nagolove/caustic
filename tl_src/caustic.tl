@@ -73,6 +73,7 @@ assert(path_wasm_third_party_release)
 -- requires and aliases {{{
 require "common"
 local gsub       = string.gsub
+local insert     = table.insert
 local tabular    = require "tabular".show
 local lfs        = require 'lfs'
 local mkdir      = lfs.mkdir
@@ -452,7 +453,13 @@ local function build_with_cmake_common(dep: Dependency)
     }
     local c = m[dep.target]
 
-    cmd_do(c[1] .. " .")
+    local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=64MB" '
+
+    if dep.target == 'linux' then
+        linker_option = ''
+    end
+
+    cmd_do(c[1] .. linker_option .. " .")
     cmd_do(c[2])
 end
 
@@ -543,8 +550,15 @@ local function build_chipmunk(dep: Dependency)
     for k, opt in ipairs(opts) do
         opts[k] = "-D " .. opt
     end
-    cmd_do("cmake . " .. table.concat(opts, " "))
-    cmd_do("make -j")
+
+    local m: {Target: {string}} = {
+        ["linux"] = { "cmake ", "make -j" },
+        ["wasm"] = { "emcmake cmake ", "emmake make " },
+    }
+    local c = m[dep.target]
+
+    cmd_do(c[1] .. table.concat(opts, " "))
+    cmd_do(c[2])
     ut.pop_dir()
 end
 --]]
@@ -654,6 +668,7 @@ local function build_cimgui_w(dep: Dependency)
 end
 --]]
 
+-- XXX: Что делает эта функция?
 local function get_additional_includes(): string
     local includes_str = ""
     local includes = get_deps_name_map(dependencies)["raylib"].includes
@@ -793,24 +808,52 @@ local function build_lfs(_: Dependency)
 end
 --]]
 
-local function build_raylib(_: Dependency)
-    cmd_do("cmake . -DBUILD_EXAMPLES=OFF")
-    cmd_do("make -j")
-end
+local function build_raylib_common(dep: Dependency)
+    local m: {Target: {string}} = {
+        ["linux"] = { "cmake ", "make -j" },
+        ["wasm"] = { "emcmake cmake ", "emmake make " },
+    }
 
-local function build_raylib_w(_: Dependency)
+    local c: {string} = {
+        m[dep.target][1]
+    }
+    local EMSDK = os.getenv('EMSDK')
+
+    -- -DCMAKE_BUILD_TYPE=Release
+    if dep.target == "wasm" then
+        insert(c, "-DPLATFORM=Web ")
+        insert(c, "-DBUILD_EXAMPLES=OFF ")
+        local t = format("-DCMAKE_TOOLCHAIN_FILE=%s" ..
+            "/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake ",
+            EMSDK)
+        insert(c, t)
+    elseif dep.target == 'linux' then
+        insert(c, "-DPLATFORM=Desktop ")
+        insert(c, "-DBUILD_EXAMPLES=ON ")
+    end
+
+    insert(c, " .")
+
+    local cmd = table.concat(c, " ")
+    print('build_raylib_common', cmd)
 
     --[[
-    ut.push_current_dir()
-    chdir("wasm_3rd_party/raylib")
-    chdir("src")
-    local EMSDK = os.getenv('EMSDK')
-    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+    emcmake cmake .. 
+    -DPLATFORM=PLATFORM_WEB 
+    -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake 
+    -DCMAKE_BUILD_TYPE=Release
     --]]
 
-    local EMSDK = os.getenv('EMSDK')
-    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+    -- cmake
     cmd_do(cmd)
+    -- make
+    cmd_do(m[dep.target][2])
+
+    --[[
+    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+    print('cmd', cmd)
+    cmd_do(cmd)
+    --]]
 
     --cmd_do("emcmake cmake . -DBUILD_EXAMPLES=OFF")
     --cmd_do("emmake -j")
@@ -829,8 +872,6 @@ local function build_box2c(_: Dependency)
     cmd_do("make clean && make -j")
 end
 --]]
-
-local insert = table.insert
 
 local function build_box2c_common(dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
@@ -1332,7 +1373,7 @@ dependencies = {
 
     {
         disabled = false,
-        copy_for_wasm = false,
+        copy_for_wasm = true,
         build = build_chipmunk,
         dir = "Chipmunk2D",
         description = "плоский игровой физический движок",
@@ -1369,8 +1410,8 @@ dependencies = {
         links_internal = { "raylib" },
         name = 'raylib',
         dir = "raylib",
-        build = build_raylib,
-        build_w = build_raylib_w,
+        build_w = build_raylib_common,
+        build = build_raylib_common,
         url_action = "git",
         url = "https://github.com/raysan5/raylib.git",
     },
@@ -4092,6 +4133,7 @@ local function _build_smart(dep: Dependency)
 end
 --]]
 
+--[[
 local function build_dep_w(dep: Dependency)
     print("build_dep_w:")
 
@@ -4101,28 +4143,6 @@ local function build_dep_w(dep: Dependency)
         end,
         ["string"] = function()
             assert("not supported")
-            --[[
-            local capture = match(dep.build_w as string, "@(%a+)")
-            print(format("_build_w capture '%s'", capture))
-            if capture then
-                local glo = _G as {string:string}
-                local ptr = glo[capture as string] as function(dep: Dependency)
-                if not ptr then
-                    error(format(
-                        "_build_w could not find capture '%s' if _G",
-                        capture
-                    ))
-                else
-                    if type(ptr) == 'function' then
-                        ptr(dep)
-                    else
-                        error("_build_w bad type for ptr")
-                    end
-                end
-            else
-                error("_build_w bad build string format")
-            end
-            --]]
         end,
     }
 
@@ -4147,58 +4167,9 @@ local function build_dep_w(dep: Dependency)
     end
 
 end
+--]]
 
-local function build_dep(dep: Dependency)
-
-    local map: {string: function} = {
-        ["function"] = function()
-            dep.build(dep)
-        end,
-        ["string"] = function()
-            local capture = match(dep.build as string, "@(%a+)")
-            print(format("_build: capture '%s'", capture))
-            if capture then
-                local glo = _G as {string:string}
-                local ptr = glo[capture as string] as function(dep: Dependency)
-                if not ptr then
-                    error(format(
-                        "_build: could not find capture '%s' if _G",
-                        capture
-                    ))
-                else
-                    if type(ptr) == 'function' then
-                        ptr(dep)
-                    else
-                        error("_build: bad type for ptr")
-                    end
-                end
-            else
-                error("_build: bad build string format")
-            end
-        end,
-    }
-
-    if not dep.build then
-        print(format('%s has no build method', dep.name))
-        return
-    end
-
-    local ok, errmsg: boolean, string = pcall(function()
-        local tp = type(dep.build)
-        print("_build: dep.build type is", tp)
-
-        local func = map[tp]
-        if not func then
-            error("_build: bad type for 'tp'")
-        end
-        func()
-    end)
-    if not ok then
-        print('build error:', errmsg)
-    end
-
-end
-
+--[[
 local function _build_w(dep: Dependency)
     printc("%{green}_build_w:".. dep.name .. "%{reset}")
 
@@ -4244,6 +4215,7 @@ local function _build_w(dep: Dependency)
 
     ut.pop_dir()
 end
+--]]
 
 local function _build(dep: Dependency)
     print("_build:", dep.name)
@@ -4274,12 +4246,63 @@ local function _build(dep: Dependency)
         print("_build: current directory is", lfs.currentdir())
     end
 
-    build_dep(dep)
+    local map: {string: function} = {
+        ["function"] = function()
+            if dep.target == 'wasm' then
+                dep.build_w(dep)
+            elseif dep.target == 'linux' then
+                dep.build(dep)
+            end
+        end,
+        ["string"] = function()
+            local capture = match(dep.build as string, "@(%a+)")
+            print(format("_build: capture '%s'", capture))
+            if capture then
+                local glo = _G as {string:string}
+                local ptr = glo[capture as string] as function(dep: Dependency)
+                if not ptr then
+                    error(format(
+                        "_build: could not find capture '%s' if _G",
+                        capture
+                    ))
+                else
+                    if type(ptr) == 'function' then
+                        ptr(dep)
+                    else
+                        error("_build: bad type for ptr")
+                    end
+                end
+            else
+                error("_build: bad build string format")
+            end
+        end,
+    }
+
+    --[[
+    if not dep.build then
+        print(format('%s has no build method', dep.name))
+        return
+    end
+    --]]
+
+    local ok, errmsg: boolean, string = pcall(function()
+        local tp = type(dep.build)
+        print("_build: dep.build type is", tp)
+
+        local func = map[tp]
+        if not func then
+            error("_build: bad type for 'tp'")
+        end
+        func()
+    end)
+    if not ok then
+        print('build error:', errmsg)
+    end
 
     if dep and dep.after_build then
-        local ok, errmsg: boolean, string = pcall(function()
+        ok, errmsg = pcall(function()
             dep.after_build(dep)
-        end)
+        end) as (boolean, string)
         if not ok then
             print(inspect(dep), 'failed with', errmsg)
         end
@@ -4328,6 +4351,8 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
         deps = dependencies
     end
 
+    print('sub_build:', target)
+    print('sub_build:', path_rel)
     printc("%{yellow}sub_build:" .. inspect(deps) .. "%{reset}")
 
     local ok, errmsg: boolean, string = pcall(function()
