@@ -336,6 +336,12 @@ end
 
 -- }}} 
 
+local enum Target
+    "linux"
+    "windows"
+    "wasm"
+end
+
 local enum UrlAction
     -- склонировать 
 	"git"
@@ -352,6 +358,10 @@ end
 -- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
 -- каталогов библиотек и т.д.
 local record Dependency
+    -- заполняется сборочным скриптом, используется внутри функций сборки
+    -- инициализации модулей
+    target: Target
+
     -- {{{
     description: string -- описание компонента зависимости
     disabled: boolean   -- временно исключает запись из обработки
@@ -410,6 +420,8 @@ local record Dependency
     -- }}}
     -- XXX: Добавить методы к зависимостям
     --get_cc_includes: function(dep: Dependency)
+
+    wasm: boolean
 end
 
 local dependencies: {Dependency}
@@ -441,7 +453,17 @@ local function build_with_cmake_w(dep: Dependency)
     print('build_with_cmake_w: current dir', lfs.currentdir())
     print('build_with_cmake_w: dep', inspect(dep))
     cmd_do("emcmake cmake .")
-    cmd_do("emmake -j")
+    cmd_do("emmake make")
+end
+
+local function build_freetype_w(_: Dependency)
+    print('currentdir', lfs.currentdir())
+    ut.push_current_dir()
+    cmd_do("emcmake cmake -E make_directory build")
+    cmd_do("emcmake cmake -E chdir build cmake ..")
+    cmd_do("cd build")
+    cmd_do("emmake make")
+    ut.pop_dir()
 end
 
 local function build_with_autotool(_: Dependency)
@@ -456,7 +478,7 @@ local function build_with_make(_: Dependency)
 end
 
 local function build_with_make_w(_: Dependency)
-    cmd_do("emmake -j")
+    cmd_do("emmake make")
 end
 
 local function copy_headers_to_wfc(_: Dependency)
@@ -465,11 +487,14 @@ local function copy_headers_to_wfc(_: Dependency)
     cmd_do("cp ../stb/stb_image_write.h .")
 end
 
+--[[
 local function sunvox_after_init()
     print('sunvox_after_init:', lfs.currentdir())
     cmd_do("cp sunvox/sunvox_lib/js/lib/sunvox.wasm sunvox/sunvox_lib/js/lib/sunvox.o")
 end
+--]]
 
+--[[
 local function gennann_after_build(dep: Dependency)
     print('linking genann to static library', dep.dir)
     ut.push_current_dir()
@@ -478,6 +503,7 @@ local function gennann_after_build(dep: Dependency)
     cmd_do("ar rcs libgenann.a genann.o")
     ut.pop_dir()
 end
+--]]
 
 local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
@@ -507,7 +533,7 @@ local function build_pcre2_w(dep: Dependency)
 
     cmd_do("rm CMakeCache.txt")
     cmd_do("emcmake cmake .")
-    cmd_do("emmake -j")
+    cmd_do("emmake make")
     ut.pop_dir()
 end
 
@@ -523,6 +549,8 @@ local function build_pcre2(dep: Dependency)
     ut.pop_dir()
 end
 
+-- Тело функции для создания корутины которая за два прерывания возвращает
+-- защитников включаемого файла
 local function guard()
     local rnd_num = math.random(10000, 20000)
 
@@ -534,8 +562,11 @@ local function guard()
     coroutine.yield("#endif\n")
 end
 
+-- XXX: Что делает эта функция?
+-- зачем аргумент guard_coro ?
 local function paste_from_one_to_other(
-    src: string, dst: string, guard_coro?: thread
+    src: string, dst: string,
+    guard_coro?: thread 
 )
     print(format("paste_from_one_to_other: src '%s', dst '%s'", src, dst))
     local file_src = io.open(src, "r")
@@ -572,25 +603,32 @@ local function paste_from_one_to_other(
     file_dst:close()
 end
 
-local function build_cimgui(dep: Dependency)
+local function build_cimgui_common(dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
     print("current dir", lfs.currentdir())
-    cmd_do("make clean")
-    cmd_do("make -j CFLAGS=\"-g3\"")
+    local m: {Target: string} = {
+        ["linux"] = "make ",
+        ["wasm"] = "emmake make ",
+    }
+    local c = m[dep.target]
+    cmd_do(format("%s clean", c))
+    cmd_do(format("%s -j CFLAGS=\"-g3\"", c))
 end
 
+--[[
 local function build_cimgui_w(dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
     print("current dir", lfs.currentdir())
-    cmd_do("emmake clean")
-    cmd_do("emmake -j CFLAGS=\"-g3\"")
+    cmd_do("emmake make clean")
+    cmd_do("emmake make CFLAGS=\"-g3\"")
 end
+--]]
 
 local function get_additional_includes(): string
     local includes_str = ""
@@ -603,13 +641,16 @@ local function get_additional_includes(): string
                         include
     end
     assert(includes_str)
-    print("include_str", includes_str)
+    print("get_additional_includes:", includes_str)
     assert(includes_str)
     return includes_str
 end
 
 local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
+
+    --[[
+    -- XXX: Зачем этот код?
     local imgui_files = {
         "../imgui/imconfig.h",
         "../imgui/imgui.cpp",
@@ -625,6 +666,7 @@ local function cimgui_after_init(dep: Dependency)
     }
     local imgui_files_str = table.concat(imgui_files, " ")
     cmd_do("cp " .. imgui_files_str .. " ../cimgui/imgui")
+    --]]
 
     ut.push_current_dir()
     chdir(dep.dir)
@@ -633,10 +675,13 @@ local function cimgui_after_init(dep: Dependency)
 
     local use_freetype = false
 
-    cmd_do('git submodule update --init --recursive --depth 1')
+    cmd_do('git submodule update --init --recursive --depth=1')
     ut.push_current_dir()
     chdir('generator')
+
+    -- XXX: Зачем?
     local lua_path = 'LUA_PATH="./?.lua;"$LUA_PATH'
+
     if use_freetype then
         cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv freetype"')
     else
@@ -647,9 +692,15 @@ local function cimgui_after_init(dep: Dependency)
 
     cmd_do("rm CMakeCache.txt")
 
+    local m: {Target:string} = {
+        ["linux"] = "cmake ",
+        ["wasm"] = "emcmake cmake ",
+    }
+    local cm = m[dep.target]
+
     local cmake_cmd = {
         format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
-        "cmake .",
+        cm,
         format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes()),
         "-DIMGUI_STATIC=1",
         "-DNO_FONT_AWESOME=1",
@@ -659,6 +710,12 @@ local function cimgui_after_init(dep: Dependency)
         table.insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
         table.insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
     end
+
+    table.insert(cmake_cmd, " . ")
+
+    printc(
+        "%{blue} " .. format("cmake_cmd %s", inspect(cmake_cmd)) .. " %{reset}"
+    )
     cmd_do(table.concat(cmake_cmd, " "))
 
     paste_from_one_to_other(
@@ -710,6 +767,7 @@ local function build_lfs(_: Dependency)
     cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
     cmd_do("ar rcs liblfs.a lfs.o")
 end
+--]]
 
 local function build_raylib(_: Dependency)
     cmd_do("cmake . -DBUILD_EXAMPLES=OFF")
@@ -726,15 +784,23 @@ local function build_raylib_w(_: Dependency)
     local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
     --]]
 
-    cmd_do("emcmake cmake . -DBUILD_EXAMPLES=OFF")
-    cmd_do("emmake -j")
+    local EMSDK = os.getenv('EMSDK')
+    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+    cmd_do(cmd)
+
+    --cmd_do("emcmake cmake . -DBUILD_EXAMPLES=OFF")
+    --cmd_do("emmake -j")
 end
 
 local function build_box2c(_: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     -- TODO: Проверка наличия fd
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-    cmd_do("cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
+    cmd_do("cmake " .. 
+        "-DBOX2D_VALIDATE=1 " ..
+        '-DBOX2D_BENCHMARKS=OFF ' ..
+        '-DBOX2D_BUILD_DOCS=OFF ' ..
+        "-DCMAKE_BUILD_TYPE=Debug .")
     cmd_do("make clean && make -j")
 
 end
@@ -744,8 +810,17 @@ local function build_box2c_w(_: Dependency)
     -- TODO: Проверка наличия fd
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
  --cmake -DBOX2D_BENCHMARKS=OFF -DBOX2D_BUILD_DOCS=OFF -DBOX2D_SAMPLES=OFF8;10u8;10u8;10u
-    cmd_do("emcmake cmake . -DBOX2D_VALIDATE=1 -DCMAKE_BUILD_TYPE=Debug")
-    cmd_do("emmake clean && make -j")
+    cmd_do('emcmake cmake ' ..
+        '-DCMAKE_C_FLAGS="-pthread -matomics -mbulk-memory" ' ..
+        '-DCMAKE_CXX_FLAGS="-pthread -matomics -mbulk-memory" ' .. 
+        '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ' .. 
+        '-DCMAKE_BUILD_TYPE=Debug ' ..
+        '-DBOX2D_VALIDATE=ON ' ..
+        '-DBOX2D_BENCHMARKS=OFF ' ..
+        '-DBOX2D_BUILD_DOCS=OFF ' ..
+        '-DBOX2D_SAMPLES=OFF .'
+    )
+    cmd_do("emmake make ")
 end
 
 local function build_sol(_: Dependency)
@@ -798,8 +873,10 @@ local function update_box2c(dep: Dependency)
     ut.pop_dir()
 end
 
+--[[
 local function defines_luafun(_: Dependency): {string}
 end
+--]]
 
 --[[
 local function lualibrary_install_luafun(
@@ -843,20 +920,22 @@ local function build_resvg(_: Dependency)
     cmd_do("cargo build --release")
     ut.pop_dir()
 end
+--]]
 
 local _dependecy_init: function(dep: Dependency)
 
+--[[
 local function update_default(_: Dependency) 
     print("update_default")
     print("current directory", lfs.currentdir())
-
     local cmd = "git pull origin master"
     cmd_do(cmd)
-
     -- XXX: Не работает переинициализация
     --_dependecy_init(dep)
 end
+--]]
 
+--[[
 local function build_remotery(_: Dependency) 
     print('build_remotery', lfs.currentdir())
     ut.push_current_dir()
@@ -865,6 +944,7 @@ local function build_remotery(_: Dependency)
     cmd_do("ar -rcs  \"libremotery.a\" Remotery.o")
     ut.pop_dir()
 end
+--]]
 
 -- }}}
 
@@ -877,8 +957,9 @@ end
 -- компилятора, в частности для разрешения пути.
 dependencies = {
 
+    --[[
     {
-        disabled = false,
+        disabled = true,
         description = "online profiler",
         custom_defines = nil,
         dir = "remotery",
@@ -894,9 +975,11 @@ dependencies = {
         url = "https://github.com/Celtoys/Remotery.git",
         --update = update_default,
     },
+    --]]
 
     {
         disabled = false,
+        copy_for_wasm = true,
         description = "ttf fonts manipulation",
         custom_defines = nil,
         dir = "freetype",
@@ -909,10 +992,12 @@ dependencies = {
         name = "freetype",
         url_action = "git",
         build = build_with_autotool,
+        build_w = build_freetype_w,
         url = "https://github.com/freetype/freetype.git",
         --update = update_default,
     },
 
+    --[[
     {
         disabled = false,
         description = "color worms moving on texture",
@@ -931,8 +1016,9 @@ dependencies = {
         url = "git@github.com:nagolove/raylib_colorwormseffect.git",
         update = update_default,
     },
+    --]]
 
-
+    --[[
     {
         disabled = true,
         description = "lua functional style library",
@@ -947,10 +1033,13 @@ dependencies = {
         url_action = "git",
         url = "https://github.com/luafun/luafun.git",
     },
+    --]]
 
     {
         disabled = false,
+        copy_for_wasm = true,
         build = build_with_cmake,
+        build_w = build_with_cmake_w,
         description = "svg parsing library",
         dir = "nanosvg",
         includes = { 
@@ -983,9 +1072,11 @@ dependencies = {
         url_action = "git",
         url = "https://github.com/RazrFalcon/resvg.git",
     },
+    --]]
 
     {
         disabled = false,
+        copy_for_wasm = true,
         build = build_munit,
         build_w = build_munit_w,
         description = "munit testing framework",
@@ -1011,10 +1102,12 @@ dependencies = {
         libdirs = { },
         links = {},
         links_internal = {},
+        copy_for_wasm = true,
     },
 
     {
         disabled = false,
+        copy_for_wasm = true,
         build = nil,
         description = "mum hash functions",
         dir = "mum-hash",
@@ -1029,6 +1122,7 @@ dependencies = {
 
     {
         disabled = false,
+        copy_for_wasm = true,
         build = build_with_cmake,
         build_w = build_with_cmake_w,
         description = "task sheduler",
@@ -1042,7 +1136,9 @@ dependencies = {
         url = "https://github.com/dougbinks/enkiTS.git",
     },
 
+    --[[
     {
+        -- XXX: Не работает с WASM, нужны веб-сокеты
         disabled = false,
         description = "сетевая библиотека с гарантией доставки поверх UDP",
         dir = "enet",
@@ -1051,6 +1147,7 @@ dependencies = {
         url_action = "git",
         url = "https://github.com/zpl-c/enet.git",
     },
+    --]]
 
     {
         disabled = false,
@@ -1063,6 +1160,7 @@ dependencies = {
         links = { "pcre2-8" },
         links_internal = { "libpcre2-8.a" },
         name = "pcre2",
+        copy_for_wasm = true,
         url_action = "git",
         url = "https://github.com/PhilipHazel/pcre2.git",
     },
@@ -1070,6 +1168,7 @@ dependencies = {
     -- XXX: Используется в cimgui?
     {
         disabled = false,
+        copy_for_wasm = true,
         name = "imgui",
         dir = "imgui",
         url_action = "git",
@@ -1098,6 +1197,7 @@ dependencies = {
         url = "https://github.com/lunarmodules/luafilesystem.git",
         url_action = "git",
     },
+    --]]
 
     -- TODO: обновить зависимость
     {
@@ -1110,6 +1210,7 @@ dependencies = {
         name = "rlimgui",
         url = "git@github.com:nagolove/rlImGui.git",
         url_action = "git",
+        copy_for_wasm = true,
     },
 
     {
@@ -1118,8 +1219,8 @@ dependencies = {
         -- переименовывает библиотеку
         after_build = cimgui_after_build,
         -- нужно компилировать
-        build = build_cimgui,
-        build_w = build_cimgui_w,
+        build = build_cimgui_common,
+        build_w = build_cimgui_common,
         --depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
@@ -1130,8 +1231,10 @@ dependencies = {
         name = 'cimgui',
         url = 'https://github.com/cimgui/cimgui.git',
         url_action = "git",
+        copy_for_wasm = true,
     },
 
+    --[[
     {
         disabled = true,
         after_init = sunvox_after_init,
@@ -1147,7 +1250,9 @@ dependencies = {
         url_action = "zip",
         url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1.1c.zip",
     },
+    --]]
 
+    --[[
     {
         disabled = true,
         build = build_with_make,
@@ -1165,6 +1270,7 @@ dependencies = {
         url_action = "git",
         url = "https://github.com/codeplea/genann.git",
     },
+    --]]
 
     {
         build = build_box2c,
@@ -1232,11 +1338,14 @@ dependencies = {
     },
 
     {
+        copy_for_wasm = true,
         disabled = false,
-        name = "sol",
+        name = "sol2",
         description = "C++ Lua bindins",
         build = build_sol,
+        dir = "sol2",
         url = "https://github.com/ThePhD/sol2.git",
+        url_action = "git",
     },
 
     {
@@ -1286,6 +1395,7 @@ dependencies = {
     {
         dir = "wfc",
         build = build_with_make,
+        build_w = build_with_make_w,
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
         --depends = {'stb'},
@@ -1366,7 +1476,10 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
             name2dep[dep.name] = dep
         end
 
+        print("name2dep", inspect(name2dep))
+
         for _, depname in ipairs(cfg.not_dependencies) do
+            print("depname", depname)
             -- Проверка - существует-ли такая зависимость вообще среди всех?
             assert(name2dep[depname])
             name2dep[depname] = nil
@@ -1488,6 +1601,7 @@ local function get_dir(dep: Dependency): string
     end
 end
 
+--[[
 local function get_dirs(deps: {Dependency}): {string}
     local res = {}
     for _, dep in ipairs(deps) do
@@ -1495,6 +1609,7 @@ local function get_dirs(deps: {Dependency}): {string}
     end
     return res
 end
+--]]
 
 local function get_deps_map(deps: {Dependency}): {string: Dependency}
     assert(deps)
@@ -1563,7 +1678,9 @@ local function git_clone_with_checkout(dep: Dependency, checkout_arg: string)
     else
         print('git_clone: dep.dir == nil', lfs.currentdir())
     end
-    cmd_do("git checkout " .. checkout_arg)
+    -- XXX: Подходит только для ветки, не для коммита
+    cmd_do("git pull origin " .. checkout_arg)
+    --cmd_do("git checkout " .. checkout_arg)
 end
 
 local function git_clone(dep: Dependency)
@@ -1576,7 +1693,7 @@ local function git_clone(dep: Dependency)
         git_clone_with_checkout(dep, dep.git_branch)
     else
         local dst = dep.dir or ""
-        local git_cmd = "git clone --depth 1 " .. dep.url .. " " .. dst
+        local git_cmd = "git clone --depth=1 " .. dep.url .. " " .. dst
         cmd_do(git_cmd)
     end
     ut.pop_dir()
@@ -1839,6 +1956,7 @@ local parser_setup: {string:ParserSetup} = {
             { "-f --full", "full nodes info" },
         },
     },
+
     rmdirs = {
         summary = "remove empty directories in path_third_party",
     },
@@ -2014,7 +2132,7 @@ local function _init_smart(path: string, deps: {Dependency})
 end
 --]]
 
--- XXX: ЧТо делает эта функция?
+-- Инициализирует список зависимостей по указанному пути
 local function _init(path: string, deps: {Dependency})
     print("_init", path)
 	--print(tabular(deps))
@@ -2709,11 +2827,14 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store);
 end
 
 function actions.rmdirs(_args: Args)
+    print('not implemented')
+    --[[
     for _, dep in ipairs(dependencies) do
         if dep.dir then
             cmd_do("rmdir " .. path_rel_third_party .. "/" .. dep.dir)
         end
     end
+    --]]
 end
 
 function actions.run(_args: Args)
@@ -2795,8 +2916,10 @@ function actions.proj_init(_args: Args)
     --_init(win_third_party, deps)
 end
 
-function actions.init_w(_args: Args)
+-- Проверяет аргументы и создает список модулей
+local function pre_init(_args: Args): {Dependency}
     local deps = {}
+    -- указано имя одного модуля
     if _args.name then
         local dependencies_name_map = get_deps_name_map(dependencies)
         print('partial init for dependency', _args.name)
@@ -2807,42 +2930,32 @@ function actions.init_w(_args: Args)
             return
         end
     else
+        -- или команда применяется ко всем модулям
         for _, dep in ipairs(dependencies) do
             table.insert(deps, dep)
         end
     end
+    return deps
+end
 
-    --print('deps', inspect(deps))
-    --check_for_unstaged(deps)
-    --_init(path_rel_third_party, deps)
+function actions.init_w(_args: Args)
+    local deps = pre_init(_args)
+    -- установка целевой платформы
+    for _, dep in ipairs(deps) do
+        dep.target = "wasm"
+    end
     _init(path_wasm_third_party, deps)
-    --_init(win_third_party, deps)
 end
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
 function actions.init(_args: Args)
-    local deps = {}
-    if _args.name then
-        local dependencies_name_map = get_deps_name_map(dependencies)
-        print('partial init for dependency', _args.name)
-        if dependencies_name_map[_args.name] then
-            table.insert(deps, dependencies_name_map[_args.name])
-        else
-            print("bad dependency name", _args.name)
-            return
-        end
-    else
-        for _, dep in ipairs(dependencies) do
-            table.insert(deps, dep)
-        end
+    local deps = pre_init(_args)
+    -- установка целевой платформы
+    for _, dep in ipairs(deps) do
+        dep.target = "linux"
     end
-
-    --print('deps', inspect(deps))
-    --check_for_unstaged(deps)
     _init(path_rel_third_party, deps)
-    --_init(path_wasm_third_party, deps)
-    --_init(win_third_party, deps)
 end
 
 --[[
@@ -3328,8 +3441,44 @@ local function _remove(path: string, dirnames: {string})
     ut.pop_dir()
 end
 
+local function backup(dep: Dependency)
+    ut.push_current_dir()
+    chdir(path_rel_third_party)
+
+    print('backup')
+    print('currentdir', lfs.currentdir())
+    local backup_name = dep.name .. ".bak"
+
+    --[[
+    -- TODO: Задать вопрос по перезаписи существующего каталога с бэкапом
+    -- или сделать версионированную запись
+    local attr = lfs.attributes(backup_name)
+    if attr and attr.mode == 'directory' then
+        printc("%{red}" .. backup_name .. " already exists%{reset}")
+        printc("%{red}rewrite?{reset}")
+
+        local inp = io.read()
+            if yes_or_no(inp) == 'no' then
+
+            end
+
+        printc("%{red}-=aborting=-%{reset}")
+        --os.exit(1)
+    end
+    --]]
+
+    local cmd = "rsync -a --info=progress2 " .. dep.name .. " " .. backup_name
+
+    cmd_do(cmd)
+    print("cmd", cmd)
+
+    ut.pop_dir()
+end
+
 function actions.remove(_args: Args)
     print("actions.remove")
+
+    --[[
     local dirnames: {string} = {}
     local dependencies_name_map = get_deps_name_map(dependencies)
     if _args.name and dependencies_name_map[_args.name] then
@@ -3339,9 +3488,18 @@ function actions.remove(_args: Args)
             table.insert(dirnames, dirname)
         end
     end
-    print("actions.remove", inspect(dirnames))
-    _remove(path_rel_third_party, dirnames)
-    _remove(path_wasm_third_party, dirnames)
+    --]]
+
+    -- TODO: Сделать многоступенчатый бэкап данных перед удалением
+    local deps_name_map = get_deps_name_map(dependencies)
+    local dep = deps_name_map[_args.name]
+    if _args.name and dep then
+        backup(dep)
+    end
+
+    --print("actions.remove", inspect(dirnames))
+    --_remove(path_rel_third_party, dirnames)
+    --_remove(path_wasm_third_party, dirnames)
     --_remove(win_third_party, dirnames)
 end
 
@@ -4004,11 +4162,14 @@ local function build_dep(dep: Dependency)
 end
 
 local function _build_w(dep: Dependency)
-    print("_build_w:", dep.name)
+    printc("%{green}_build_w:".. dep.name .. "%{reset}")
+
     if dep.disabled then
         print(format("%s is disabled", dep.name))
         return
     end
+
+    print(inspect(dep))
 
     ut.push_current_dir()
 
@@ -4211,7 +4372,6 @@ end
 
 -- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel_uv(queue: {Task})
-    --uv.tty_set_vterm_state("unsupported")
 
     local errcode = 0
     for _, t in ipairs(queue) do
@@ -4223,15 +4383,8 @@ local function run_parallel_uv(queue: {Task})
             {
                 args = t.args,
                 stdio = {nil, _stdout, _stderr},
-                --env = { "COLORTERM=truecolor", },
             },
             function(code: integer, _: integer)
-                --[[
-                print(
-                    "Process exited with code " .. tostring(code) .. 
-                    ", signal " .. tostring(signal)
-                )
-                --]]
                 errcode = errcode + code
                 _stdout:read_stop()
                 _stderr:read_stop()
@@ -4257,7 +4410,6 @@ local function run_parallel_uv(queue: {Task})
     end
 
     uv.run('default')
-     --uv.tty_set_mode(tty, mode)
     print('run_parallel_uv: errcode', errcode)
 
     if errexit_uv and errcode ~= 0 then
@@ -4487,40 +4639,6 @@ local function yes_or_no(input: string): Answer
     os.exit(1)
 end
 --]]
-
-local function backup(dep: Dependency)
-    ut.push_current_dir()
-    chdir(path_rel_third_party)
-
-    print('backup')
-    print('currentdir', lfs.currentdir())
-    local backup_name = dep.name .. ".bak"
-
-    --[[
-    -- TODO: Задать вопрос по перезаписи существующего каталога с бэкапом
-    -- или сделать версионированную запись
-    local attr = lfs.attributes(backup_name)
-    if attr and attr.mode == 'directory' then
-        printc("%{red}" .. backup_name .. " already exists%{reset}")
-        printc("%{red}rewrite?{reset}")
-
-        local inp = io.read()
-            if yes_or_no(inp) == 'no' then
-
-            end
-
-        printc("%{red}-=aborting=-%{reset}")
-        --os.exit(1)
-    end
-    --]]
-
-    local cmd = "rsync -a --info=progress2 " .. dep.name .. " " .. backup_name
-
-    cmd_do(cmd)
-    print("cmd", cmd)
-
-    ut.pop_dir()
-end
 
 local function _update(dep: Dependency)
     ut.push_current_dir()
