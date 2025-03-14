@@ -21,7 +21,6 @@ do {                                                            \
 #include "koh_dotool.h"
 #include "koh_ecs.h"
 #include "koh_fpsmeter.h"
-#include "koh_genann_view.h"
 #include "koh_hashers.h"
 #include "koh_hotkey.h"
 #include "koh_iface.h"
