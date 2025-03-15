@@ -75,6 +75,7 @@ require "common"
 local gsub       = string.gsub
 local insert     = table.insert
 local tabular    = require "tabular".show
+local upper      = string.upper
 local lfs        = require 'lfs'
 local mkdir      = lfs.mkdir
 local chdir      = lfs.chdir
@@ -337,10 +338,20 @@ end
 
 -- }}} 
 
+local enum MakeAction
+    "release"
+    --"debug"
+end
+
 local enum Target
     "linux"
     "windows"
     "wasm"
+end
+
+local enum LinksType
+    "links_internal"
+    "links"
 end
 
 local enum UrlAction
@@ -1518,11 +1529,6 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
-local enum LinksType
-    "links_internal"
-    "links"
-end
-
 -- XXX: Зачем нужен второй параметр?
 local function gather_links(deps: {Dependency}, linkstype: LinksType): {string}
     local links_tbl = {}
@@ -2316,10 +2322,6 @@ local function _init(path: string, deps: {Dependency})
     --]]
 
     ut.pop_dir()
-end
-
-local enum MakeAction
-    "release"
 end
 
 local record Args
@@ -3665,7 +3667,7 @@ function actions.compile_flags(_: Args)
             for define, value in pairs(cfgs[1].debug_define) do
                 assert(type(define) == 'string');
                 assert(type(value) == 'string');
-                put(format("-D%s=%s", string.upper(define), string.upper(value)))
+                put(format("-D%s=%s", upper(define), upper(value)))
             end
         end
 
@@ -4380,9 +4382,7 @@ end
 
 function actions.deps(_args: Args)
     if _args.full then
-        -- XXX: Когда это запускается? Было закоменченно для отладки 
-        -- actions.make()
-        --print(tabular(dependencies))
+        print(tabular(dependencies))
     else
         local shorts = {}
         for _, dep in ipairs(dependencies) do
@@ -4391,21 +4391,6 @@ function actions.deps(_args: Args)
         print(tabular(shorts))
     end
 end
-
---[[
-local function get_cores_num(): integer
-    local file = io.open("/proc/cpuinfo", "r")
-    local num = 1.
-    for line in file:lines() do
-        local _num = string.match(line, "cpu cores.*%:.*(%d+)")
-        if _num then
-            num = tonumber(_num)
-            break
-        end
-    end
-    return math.floor(num)
-end
---]]
 
 -- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel_uv(queue: {Task})
@@ -4453,96 +4438,6 @@ local function run_parallel_uv(queue: {Task})
         os.exit(1)
     end
 end
-
--- queue - очередь задач в виде строк для запуска компилятора
---[[
-local function run_parallel(queue: {string})
-    local cores_num = get_cores_num() * 2
-    if verbose then
-        print('parallel_run:', #queue)
-        print('cores_num', cores_num)
-    end
-
-    local function build_fun(cmd: string): any
-        local ok, errmsg: boolean, string = pcall(function()
-            cmd_do(cmd)
-        end)
-        if not ok then
-            print(format('cmd_do: failed with %s', errmsg))
-        end
-    end
-
-    local threads: {lanes.Thread} = {}
-    local stop = false
-    local tasks_num: integer
-    if #queue < cores_num then
-        tasks_num = #queue
-    else
-        tasks_num = cores_num
-    end
-
-    local type THREAD_FUNC = function(string): lanes.Thread
-
-    local wait_iters = 1
-    -- цикл ожидания завершения все рабочих потоков
-    repeat
-
-        -- создать столько потоков, сколько есть ядер процессора
-        local new_threads: {lanes.Thread} = {}
-        for _ = 1, tasks_num do
-            local l = lanes.gen("*", build_fun) as THREAD_FUNC
-            -- удалить задачу
-            local cmd = table.remove(queue, 1)
-            if cmd then
-                table.insert(new_threads, l(cmd))
-            end
-        end
-        tasks_num = 0
-
-        -- добавить в список задач
-        for _, thread in ipairs(new_threads) do
-            table.insert(threads, thread)
-        end
-
-        sleep(0.02 as integer)
-
-        -- проверка статусов запущенных задач
-        local has_jobs = false
-        local live_threads = {}
-        for _, t in ipairs(threads) do
-            --print(t, t.status)
-            if t.status == 'done' then
-                if tasks_num + 1 <= cores_num then
-                    tasks_num = tasks_num + 1
-                end
-            else
-                -- если задача еще не выполнена, то добавить её в список живых
-                table.insert(live_threads, t)
-                has_jobs = true
-            end
-        end
-        threads = live_threads
-
-        stop = not has_jobs
-        wait_iters = wait_iters + 1
-    until stop
-
-    if verbose then
-        printc(
-            "%{red}" .. 
-            format("wait iterations done %d", wait_iters) .. "%{reset}"
-        ))
-    end
-end
---]]
-
---[[
-local function run_serial(queue: {string})
-    for _, cmd in ipairs(queue) do
-        cmd_do(cmd)
-    end
-end
---]]
 
 local function cache_remove()
     ut.push_current_dir()
@@ -5055,11 +4950,7 @@ local function sub_make(
                 assert(type(define) == 'string');
                 assert(type(value) == 'string');
                 table.insert(
-                    flags, 
-                    format(
-                        "-D%s=%s", 
-                        string.upper(define), string.upper(value)
-                    )
+                    flags, format("-D%s=%s", upper(define), upper(value))
                 );
             end
 
@@ -5078,12 +4969,7 @@ local function sub_make(
                 assert(type(define) == 'string');
                 assert(type(value) == 'string');
                 table.insert(
-                    flags, 
-                    format(
-                        "-D%s=%s",
-                        string.upper(define),
-                        string.upper(value)
-                    )
+                    flags, format("-D%s=%s", upper(define), upper(value))
                 );
             end
         end
