@@ -4896,6 +4896,7 @@ local function sub_make(
     cache = Cache.new(cache_name)
     local exclude = {}
 
+    -- Исключить некоторые файлы
     if cfg.exclude then
         for _, v in ipairs(cfg.exclude) do
             table.insert(exclude, v)
@@ -4911,6 +4912,8 @@ local function sub_make(
         insert(defines, "-DGRAPHICS_API_OPENGL_43")
         insert(defines, "-DPLATFORM=PLATFORM_DESKTOP")
         insert(defines, "-DPLATFORM_DESKTOP")
+    elseif target == 'wasm' then
+        insert(defines, "-DPLATFORM=PLATFORM_WEB")
     end
 
     -- TODO: Дефайны через bld.lua
@@ -4944,6 +4947,8 @@ local function sub_make(
     end
 
     if not _args.release then
+        -- DEEEBUUUG
+
         table.insert(flags, "-ggdb3")
 
         local debugs = {
@@ -4994,7 +4999,10 @@ local function sub_make(
 
     local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
-    table.insert(_libdirs, "-L/usr/lib")
+    if target == 'linux' then
+        table.insert(_libdirs, "-L/usr/lib")
+    end
+
     if cfg.artifact then
         table.insert(_libdirs, "-L" .. path_caustic)
     end
@@ -5016,7 +5024,6 @@ local function sub_make(
     end
     local _libs: string = table.concat(make_l(_links), " ")
 
-    --local queue = {}
     -- массив с командами
     local tasks: {Task} = {}
     local cwd = lfs.currentdir() .. "/"
@@ -5108,15 +5115,10 @@ local function sub_make(
         -- Проверка каустики на необходимость пересборки
         local local_cfgs = search_and_load_cfgs_up('bld.lua')
 
-        --printc("%{blue}local_cfg%{reset}")
-        --print(tabular(cfg))
-
         for _, local_cfg in ipairs(local_cfgs) do
             local args = {
                 make = true,
                 c = _args.c,
-                --j = _args.j,
-                --u = _args.u,
                 noasan = _args.noasan,
                 release = _args.release
             }
