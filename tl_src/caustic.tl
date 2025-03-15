@@ -4838,6 +4838,19 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
     return flags
 end
 
+local function defines_apply(flags: {string}, defines: {string: string})
+    if not defines then
+        return
+    end
+    print("defines_apply:")
+    for define, value in pairs(defines) do
+        assert(type(define) == 'string');
+        assert(type(value) == 'string');
+        local s = format("-D%s=%s", upper(define), upper(value));
+        table.insert(flags, s)
+    end
+end
+
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
@@ -4944,17 +4957,7 @@ local function sub_make(
             table.insert(defines, define)
         end
 
-        if cfg.debug_define then
-            print("sub_make: appling debug defines")
-            for define, value in pairs(cfg.debug_define) do
-                assert(type(define) == 'string');
-                assert(type(value) == 'string');
-                table.insert(
-                    flags, format("-D%s=%s", upper(define), upper(value))
-                );
-            end
-
-        end
+        defines_apply(flags, cfg.debug_define)
     else
         -- RELEAASE
 
@@ -4963,16 +4966,7 @@ local function sub_make(
         -- отключить assert()
         table.insert(flags, "-DNDEBUG")
 
-        if cfg.release_define then
-            print("sub_make: appling release defines")
-            for define, value in pairs(cfg.release_define) do
-                assert(type(define) == 'string');
-                assert(type(value) == 'string');
-                table.insert(
-                    flags, format("-D%s=%s", upper(define), upper(value))
-                );
-            end
-        end
+        defines_apply(flags, cfg.release_define)
     end
 
     if not _args.noasan then
