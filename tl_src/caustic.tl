@@ -515,12 +515,22 @@ local function build_freetype_common(dep: Dependency)
     ut.pop_dir()
 end
 
+--[[
 local function build_with_make(_: Dependency)
     cmd_do("make -j")
 end
 
 local function build_with_make_w(_: Dependency)
     cmd_do("emmake make")
+end
+--]]
+
+local function build_with_make_common(dep: Dependency)
+    if dep.target == 'wasm' then
+        cmd_do("emmake make")
+    elseif dep.target == 'linux' then
+        cmd_do("make -j")
+    end
 end
 
 local function copy_headers_to_wfc(_: Dependency)
@@ -820,24 +830,36 @@ end
 --]]
 
 local function build_raylib_common(dep: Dependency)
+    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+
+    --[[
     local m: {Target: {string}} = {
         ["linux"] = { "cmake ", "make -j" },
         ["wasm"] = { "emcmake cmake ", "emmake make " },
     }
-
     local c: {string} = {
         m[dep.target][1]
     }
+    --]]
+
     local EMSDK = os.getenv('EMSDK')
 
+    --[[
     -- -DCMAKE_BUILD_TYPE=Release
     if dep.target == "wasm" then
         insert(c, "-DPLATFORM=Web ")
+        insert(c, "-DSUPPORT_AUDIO=OFF ")
         insert(c, "-DBUILD_EXAMPLES=OFF ")
         local t = format("-DCMAKE_TOOLCHAIN_FILE=%s" ..
             "/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake ",
             EMSDK)
         insert(c, t)
+
+        insert(c,
+            format('-DCMAKE_C_FLAGS="-I%s' .. 
+                   '/upstream/emscripten/cache/sysroot/include" ',
+            EMSDK)
+        )
     elseif dep.target == 'linux' then
         insert(c, "-DPLATFORM=Desktop ")
         insert(c, "-DBUILD_EXAMPLES=ON ")
@@ -847,23 +869,22 @@ local function build_raylib_common(dep: Dependency)
 
     local cmd = table.concat(c, " ")
     print('build_raylib_common', cmd)
-
-    --[[
-    emcmake cmake .. 
-    -DPLATFORM=PLATFORM_WEB 
-    -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake 
-    -DCMAKE_BUILD_TYPE=Release
     --]]
 
-    -- cmake
-    cmd_do(cmd)
-    -- make
-    cmd_do(m[dep.target][2])
-
-    --[[
-    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
-    print('cmd', cmd)
-    cmd_do(cmd)
+    if dep.target == 'linux' then
+        -- cmake
+        --cmd_do(cmd)
+        -- make
+        cmd_do("make -j")
+    elseif dep.target == 'wasm' then
+        printc("%{blue}wasm%{reset}")
+        print(lfs.currentdir())
+        chdir("src")
+        local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+        print('cmd', cmd)
+        cmd_do(cmd)
+        cmd_do("mv libraylib.web.a libraylib.a")
+    end
     --]]
 
     --cmd_do("emcmake cmake . -DBUILD_EXAMPLES=OFF")
@@ -1398,8 +1419,8 @@ dependencies = {
     },
 
     {
-        build = build_with_make,
-        build_w = build_with_make_w,
+        build = build_with_make_common,
+        build_w = build_with_make_common,
         copy_for_wasm = true,
         description = "lua интерпритатор",
         dir = "lua",
@@ -1457,8 +1478,8 @@ dependencies = {
     },
 
     {
-        build = build_with_make,
-        build_w = build_with_make_w,
+        build = build_with_make_common,
+        build_w = build_with_make_common,
         after_build = utf8proc_after_build,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
@@ -1484,8 +1505,8 @@ dependencies = {
 
     {
         dir = "wfc",
-        build = build_with_make,
-        build_w = build_with_make_w,
+        build = build_with_make_common,
+        build_w = build_with_make_common,
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
         --depends = {'stb'},
@@ -4914,6 +4935,8 @@ local function sub_make(
         insert(defines, "-DPLATFORM_DESKTOP")
     elseif target == 'wasm' then
         insert(defines, "-DPLATFORM=PLATFORM_WEB")
+        --insert(defines, "-DGRAPHICS_API_OPENGL_ES2")
+        insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
     end
 
     -- TODO: Дефайны через bld.lua
