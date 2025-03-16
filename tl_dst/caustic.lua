@@ -75,6 +75,7 @@ require("common")
 local gsub = string.gsub
 local insert = table.insert
 local tabular = require("tabular").show
+local upper = string.upper
 local lfs = require('lfs')
 local mkdir = lfs.mkdir
 local chdir = lfs.chdir
@@ -425,6 +426,16 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
 local dependencies
 
 
@@ -504,12 +515,22 @@ local function build_freetype_common(dep)
    ut.pop_dir()
 end
 
-local function build_with_make(_)
-   cmd_do("make -j")
-end
 
-local function build_with_make_w(_)
-   cmd_do("emmake make")
+
+
+
+
+
+
+
+
+
+local function build_with_make_common(dep)
+   if dep.target == 'wasm' then
+      cmd_do("emmake make")
+   elseif dep.target == 'linux' then
+      cmd_do("make -j")
+   end
 end
 
 local function copy_headers_to_wfc(_)
@@ -809,50 +830,61 @@ end
 
 
 local function build_raylib_common(dep)
-   local m = {
-      ["linux"] = { "cmake ", "make -j" },
-      ["wasm"] = { "emcmake cmake ", "emmake make " },
-   }
+   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
 
-   local c = {
-      m[dep.target][1],
-   }
+
+
+
+
+
+
+
+
+
+
    local EMSDK = os.getenv('EMSDK')
 
 
-   if dep.target == "wasm" then
-      insert(c, "-DPLATFORM=Web ")
-      insert(c, "-DBUILD_EXAMPLES=OFF ")
-      local t = format("-DCMAKE_TOOLCHAIN_FILE=%s" ..
-      "/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake ",
-      EMSDK)
-      insert(c, t)
-   elseif dep.target == 'linux' then
-      insert(c, "-DPLATFORM=Desktop ")
-      insert(c, "-DBUILD_EXAMPLES=ON ")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   if dep.target == 'linux' then
+
+
+
+      cmd_do("make -j")
+   elseif dep.target == 'wasm' then
+      printc("%{blue}wasm%{reset}")
+      print(lfs.currentdir())
+      chdir("src")
+      local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+      print('cmd', cmd)
+      cmd_do(cmd)
+      cmd_do("mv libraylib.web.a libraylib.a")
    end
-
-   insert(c, " .")
-
-   local cmd = table.concat(c, " ")
-   print('build_raylib_common', cmd)
-
-
-
-
-
-
-
-
-
-   cmd_do(cmd)
-
-   cmd_do(m[dep.target][2])
-
-
-
-
-
 
 
 
@@ -1387,8 +1419,8 @@ dependencies = {
    },
 
    {
-      build = build_with_make,
-      build_w = build_with_make_w,
+      build = build_with_make_common,
+      build_w = build_with_make_common,
       copy_for_wasm = true,
       description = "lua интерпритатор",
       dir = "lua",
@@ -1446,8 +1478,8 @@ dependencies = {
    },
 
    {
-      build = build_with_make,
-      build_w = build_with_make_w,
+      build = build_with_make_common,
+      build_w = build_with_make_common,
       after_build = utf8proc_after_build,
       copy_for_wasm = true,
       description = "библиотека для работы с utf8 Юникодом",
@@ -1473,8 +1505,8 @@ dependencies = {
 
    {
       dir = "wfc",
-      build = build_with_make,
-      build_w = build_with_make_w,
+      build = build_with_make_common,
+      build_w = build_with_make_common,
       after_init = copy_headers_to_wfc,
       copy_for_wasm = true,
 
@@ -1517,11 +1549,6 @@ local function prefix_add(prefix, t)
    end
    return prefixed_t
 end
-
-
-
-
-
 
 
 local function gather_links(deps, linkstype)
@@ -2317,10 +2344,6 @@ local function _init(path, deps)
 
    ut.pop_dir()
 end
-
-
-
-
 
 
 
@@ -3665,7 +3688,7 @@ function actions.compile_flags(_)
          for define, value in pairs(cfgs[1].debug_define) do
             assert(type(define) == 'string');
             assert(type(value) == 'string');
-            put(format("-D%s=%s", string.upper(define), string.upper(value)))
+            put(format("-D%s=%s", upper(define), upper(value)))
          end
       end
 
@@ -4380,9 +4403,7 @@ end
 
 function actions.deps(_args)
    if _args.full then
-
-
-
+      print(tabular(dependencies))
    else
       local shorts = {}
       for _, dep in ipairs(dependencies) do
@@ -4391,21 +4412,6 @@ function actions.deps(_args)
       print(tabular(shorts))
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 local function run_parallel_uv(queue)
@@ -4453,96 +4459,6 @@ local function run_parallel_uv(queue)
       os.exit(1)
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function cache_remove()
    ut.push_current_dir()
@@ -4943,6 +4859,19 @@ local function get_ready_deps_defines(cfg)
    return flags
 end
 
+local function defines_apply(flags, defines)
+   if not defines then
+      return
+   end
+   print("defines_apply:")
+   for define, value in pairs(defines) do
+      assert(type(define) == 'string');
+      assert(type(value) == 'string');
+      local s = format("-D%s=%s", upper(define), upper(value));
+      table.insert(flags, s)
+   end
+end
+
 
 
 
@@ -4988,6 +4917,7 @@ local function sub_make(
    cache = Cache.new(cache_name)
    local exclude = {}
 
+
    if cfg.exclude then
       for _, v in ipairs(cfg.exclude) do
          table.insert(exclude, v)
@@ -5003,6 +4933,10 @@ local function sub_make(
       insert(defines, "-DGRAPHICS_API_OPENGL_43")
       insert(defines, "-DPLATFORM=PLATFORM_DESKTOP")
       insert(defines, "-DPLATFORM_DESKTOP")
+   elseif target == 'wasm' then
+      insert(defines, "-DPLATFORM=PLATFORM_WEB")
+
+      insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
    end
 
 
@@ -5036,6 +4970,8 @@ local function sub_make(
    end
 
    if not _args.release then
+
+
       table.insert(flags, "-ggdb3")
 
       local debugs = {
@@ -5049,21 +4985,7 @@ local function sub_make(
          table.insert(defines, define)
       end
 
-      if cfg.debug_define then
-         print("sub_make: appling debug defines")
-         for define, value in pairs(cfg.debug_define) do
-            assert(type(define) == 'string');
-            assert(type(value) == 'string');
-            table.insert(
-            flags,
-            format(
-            "-D%s=%s",
-            string.upper(define), string.upper(value)));
-
-
-         end
-
-      end
+      defines_apply(flags, cfg.debug_define)
    else
 
 
@@ -5072,21 +4994,7 @@ local function sub_make(
 
       table.insert(flags, "-DNDEBUG")
 
-      if cfg.release_define then
-         print("sub_make: appling release defines")
-         for define, value in pairs(cfg.release_define) do
-            assert(type(define) == 'string');
-            assert(type(value) == 'string');
-            table.insert(
-            flags,
-            format(
-            "-D%s=%s",
-            string.upper(define),
-            string.upper(value)));
-
-
-         end
-      end
+      defines_apply(flags, cfg.release_define)
    end
 
    if not _args.noasan then
@@ -5114,7 +5022,10 @@ local function sub_make(
 
    local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
 
-   table.insert(_libdirs, "-L/usr/lib")
+   if target == 'linux' then
+      table.insert(_libdirs, "-L/usr/lib")
+   end
+
    if cfg.artifact then
       table.insert(_libdirs, "-L" .. path_caustic)
    end
@@ -5135,7 +5046,6 @@ local function sub_make(
       table.insert(_links, 1, "caustic:static")
    end
    local _libs = table.concat(make_l(_links), " ")
-
 
 
    local tasks = {}
@@ -5228,15 +5138,10 @@ local function sub_make(
 
       local local_cfgs = search_and_load_cfgs_up('bld.lua')
 
-
-
-
       for _, local_cfg in ipairs(local_cfgs) do
          local args = {
             make = true,
             c = _args.c,
-
-
             noasan = _args.noasan,
             release = _args.release,
          }
