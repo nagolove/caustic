@@ -936,16 +936,12 @@ end
 
 local function build_sol(_)
 
-
    cmd_do("python single/single.py")
 end
 
-local function build_rlwr(_)
-   cmd_do("build.sh")
-end
-
-local function build_rlwr_w(_)
-   cmd_do("build.sh")
+local function build_rlwr_common(dep)
+   print("build_rlwr_common:", lfs.currentdir(), dep.target)
+   cmd_do("sh build.sh target=" .. dep.target)
 end
 
 local function utf8proc_after_build(_)
@@ -1461,9 +1457,9 @@ dependencies = {
 
    {
       disabled = false,
-      build = build_rlwr,
+      build = build_rlwr_common,
 
-      build_w = build_rlwr_w,
+      build_w = build_rlwr_common,
       after_build = nil,
       copy_for_wasm = true,
       description = "Обертка для raylib-lua-sol",
