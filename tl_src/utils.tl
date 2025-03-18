@@ -104,10 +104,7 @@ end
 -- TODO: {exclude} may be a map, not a array
 -- В таблице исключаемых имен могут быть шаблоны string.match()
 -- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
-local function filter_sources(
-    pattern: string, path: string, cb: function(string), exclude?: {string}
-)
-    assert(cb)
+local function filter_sources(path: string, exclude?: {string}): {string}
 
     local files: {string} = {}
     for file in lfs.dir(path) do
@@ -120,12 +117,6 @@ local function filter_sources(
             local found = false
             for _, pat in ipairs(exclude) do
                 if string.match(file, pat) then
-                    --[[
-                    print(string.format(
-                        "filter_sources: excluded file '%s' by pattern '%s'",
-                        file, pat
-                    ))
-                    --]]
                     found = true
                     break
                 end
@@ -145,29 +136,15 @@ local function filter_sources(
 
     files = files_processed
 
+    --[[
     for _, file in ipairs(files_processed) do
         if string.match(file, pattern) then
             cb(file)
         end
     end
-    
-    --[[
-    for file in lfs.dir(path) do
-        if string.match(file, pattern) then
-            if exclude then
-                for _, pat in ipairs(exclude) do
-                    if string.match(file, pat) then
-                        goto continie
-                    end
-                end
-            end
-            cb(file)
-            :: continie ::
-        end
-    end
     --]]
 
-
+    return files
 end
 
 --[[
