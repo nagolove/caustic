@@ -113,6 +113,23 @@ local cache
 
 
 
+local flags_sanitazer = {
+
+
+
+
+
+
+   "-fsanitize=undefined,address",
+   "-fsanitize-address-use-after-scope",
+}
+
+
+
+
+
+
+
 
 
 
@@ -245,7 +262,17 @@ local cmd_do = cmd_do_execute
 local function filter_sources_c(
    path, cb, exclude)
 
-   ut.filter_sources(".*%.c$", path, cb, exclude)
+   local files = ut.filter_sources(path, exclude)
+   local matched = {}
+   for _, file in ipairs(files) do
+      if string.match(file, ".*%.c$") then
+         insert(matched, file)
+      end
+   end
+
+   for _, file in ipairs(matched) do
+      cb(file)
+   end
 end
 
 
@@ -934,6 +961,9 @@ local function build_box2c_common(dep)
    cmd_do(c[2])
 end
 
+
+
+
 local function build_sol(_)
 
    cmd_do("python single/single.py")
@@ -948,14 +978,14 @@ local function utf8proc_after_build(_)
    cmd_do("rm libutf8proc.so")
 end
 
-local function build_munit(_)
-   cmd_do("gcc -c munit.c")
-   cmd_do("ar rcs libmunit.a munit.o")
-end
-
-local function build_munit_w(_)
-   cmd_do("emcc -c munit.c")
-   cmd_do("emar rcs libmunit.a munit.o")
+local function build_munit_common(dep)
+   if dep.target == 'linux' then
+      cmd_do("gcc -c munit.c")
+      cmd_do("ar rcs libmunit.a munit.o")
+   elseif dep.target == 'wasm' then
+      cmd_do("emcc -c munit.c")
+      cmd_do("emar rcs libmunit.a munit.o")
+   end
 end
 
 
@@ -1184,8 +1214,8 @@ dependencies = {
    {
       disabled = false,
       copy_for_wasm = true,
-      build = build_munit,
-      build_w = build_munit_w,
+      build = build_munit_common,
+      build_w = build_munit_common,
       description = "munit testing framework",
       dir = "munit",
       includes = { "munit" },
@@ -1426,6 +1456,7 @@ dependencies = {
       links_internal = { "lua:static" },
       name = 'lua',
       url = "https://github.com/lua/lua.git",
+      git_tag = "v5.4.0",
       url_action = "git",
    },
 
@@ -1450,6 +1481,7 @@ dependencies = {
       name = "sol2",
       description = "C++ Lua bindins",
       build = build_sol,
+      build_w = build_sol,
       dir = "sol2",
       url = "https://github.com/ThePhD/sol2.git",
       url_action = "git",
@@ -1796,7 +1828,31 @@ local function git_clone(dep)
    else
       local dst = dep.dir or ""
       local git_cmd = "git clone --depth=1 " .. dep.url .. " " .. dst
+
+
+
       cmd_do(git_cmd)
+      ut.push_current_dir()
+      chdir(dst)
+
+      if dep.git_tag then
+         printc("%{blue}using tag' " .. dep.git_tag .. "'%{reset}")
+
+         local c1 = "git fetch origin tag " .. dep.git_tag
+         local c2 = "git checkout tags/" .. dep.git_tag
+
+         print(format("'%s'", c1))
+         print(format("'%s'", c2))
+
+         cmd_do(c1)
+         cmd_do(c2)
+
+
+
+
+      end
+
+      ut.pop_dir()
    end
    ut.pop_dir()
 end
@@ -2059,9 +2115,11 @@ local parser_setup = {
       },
    },
 
-   rmdirs = {
-      summary = "remove empty directories in path_third_party",
-   },
+
+
+
+
+
 
    init = {
 
@@ -2092,10 +2150,13 @@ local parser_setup = {
    publish = {
       summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
    },
+
    remove = {
-      summary = "remove all 3rd_party files",
-      options = { "-n --name" },
+      summary = "remove module by name and target from source tree",
+      options = { "-n --name", "-t --target" },
    },
+
+
 
 
 
@@ -2364,8 +2425,6 @@ end
 
 
 
-
-
 function actions.dist(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    assert(cfgs[1])
@@ -2393,7 +2452,8 @@ function actions.make_projects(_args)
 
       printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
       local ok, errmsg = pcall(function()
-         actions.make({})
+
+         actions.make(_args)
       end)
       if not ok then
          print('Some problem in make on ' .. v .. ": " .. errmsg)
@@ -3540,8 +3600,18 @@ local function _remove(path, dirnames)
 end
 
 local function backup(dep)
+   if not dep.target then
+      printc("%{red}could not do backup without target%{reset}")
+      return
+   end
+
    ut.push_current_dir()
-   chdir(path_rel_third_party)
+
+   local m = {
+      ['linux'] = path_rel_third_party,
+      ['wasm'] = path_rel_wasm_third_party,
+   }
+   chdir(m[dep.target])
 
    print('backup')
    print('currentdir', lfs.currentdir())
@@ -3576,29 +3646,47 @@ end
 function actions.remove(_args)
    print("actions.remove")
 
+   local dirnames = {}
+   local dependencies_name_map = get_deps_name_map(dependencies)
+   if _args.name and dependencies_name_map[_args.name] then
+      table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
+   else
+      print("%{red}modules removing supported only by one name%{reset}")
+      return
 
 
 
 
 
+   end
 
 
-
-
-
-
+   ut.push_current_dir()
+   chdir(path_caustic)
 
 
    local deps_name_map = get_deps_name_map(dependencies)
    local dep = deps_name_map[_args.name]
+
    if _args.name and dep then
+      dep.target = _args.target
       backup(dep)
    end
 
+   local m = {
+      ['linux'] = path_rel_third_party,
+      ['wasm'] = path_rel_wasm_third_party,
+   }
 
+   if not m[dep.target] then
+      print("%{yellow}unknown target%{reset}")
+      return
+   end
 
+   chdir(m[dep.target])
+   _remove(m[dep.target], dirnames)
 
-
+   ut.pop_dir()
 end
 
 function actions.rocks(_)
@@ -3615,13 +3703,19 @@ function actions.rocks(_)
 end
 
 
-local function get_ready_includes(cfg)
+local function get_ready_includes(cfg, target)
    local ready_deps = get_ready_deps(cfg)
 
 
+   local m = {
+      ["linux"] = path_rel_third_party,
+      ["wasm"] = path_rel_wasm_third_party,
+   }
+   local third_party = m[target]
+
    local _includedirs = prefix_add(
    path_caustic .. "/",
-   gather_includedirs(ready_deps, path_rel_third_party))
+   gather_includedirs(ready_deps, third_party))
 
    if _includedirs then
       table.insert(_includedirs, path_caustic .. "/src")
@@ -3637,6 +3731,7 @@ function actions.dependencies(_)
 end
 
 function actions.verbose(_)
+
 
 
 
@@ -3669,7 +3764,7 @@ function actions.compile_flags(_)
    print('cfgs', inspect(cfgs))
 
    if cfgs and cfgs[1] then
-      for _, v in ipairs(get_ready_includes(cfgs[1])) do
+      for _, v in ipairs(get_ready_includes(cfgs[1], 'linux')) do
          put("-I" .. v)
       end
       put("-Isrc")
@@ -3707,251 +3802,6 @@ function actions.compile_flags(_)
    end
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function make_L(list, third_party_prefix)
    local ret = {}
    local prefix = "-L" .. path_caustic .. "/" .. third_party_prefix .. "/"
@@ -3960,6 +3810,7 @@ local function make_L(list, third_party_prefix)
    end
    return ret
 end
+
 
 local function make_l(list)
    local ret = {}
@@ -3974,163 +3825,6 @@ local function make_l(list)
    end
    return ret
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -4456,14 +4150,16 @@ local function run_parallel_uv(queue)
    end
 end
 
-local function cache_remove()
-   ut.push_current_dir()
-   chdir('src')
-   local err = os.remove(cache_name)
-   if not err then
-      print('cache removed')
+local function cache_remove(_args)
+   if _args.c then
+      ut.push_current_dir()
+      chdir('src')
+      local err = os.remove(cache_name)
+      if not err then
+         print('cache removed')
+      end
+      ut.pop_dir()
    end
-   ut.pop_dir()
 end
 
 local function koh_link(objfiles_str, _args)
@@ -4475,23 +4171,6 @@ local function koh_link(objfiles_str, _args)
 
    cmd_do(cmd)
 end
-
-
-
-
-
-
-
-local flags_sanitazer = {
-
-
-
-
-
-
-   "-fsanitize=undefined,address",
-   "-fsanitize-address-use-after-scope",
-}
 
 local function project_link(ctx, cfg, _args)
    local flags = ""
@@ -4883,9 +4562,18 @@ local function sub_make(
 
    end
 
-   if _args.c then
-      cache_remove()
-   end
+
+
+   print('sub_make: currentdir', lfs.currentdir())
+
+   mkdir("obj_linux")
+   mkdir("obj_wasm")
+
+
+
+
+
+   cache_remove(_args)
 
    local curdir = ut.push_current_dir()
    if verbose then
@@ -4920,9 +4608,7 @@ local function sub_make(
       end
    end
 
-   local output_dir = "."
    local objfiles = {}
-
    local defines = {}
 
    if target == 'linux' then
@@ -4937,11 +4623,11 @@ local function sub_make(
 
 
    local _defines = table.concat(defines, " ")
-
    local _includes = table.concat({}, " ")
+
    local includes = {}
 
-   local dirs = get_ready_includes(cfg)
+   local dirs = get_ready_includes(cfg, target)
    for _, v in ipairs(dirs) do
       _includes = _includes .. " -I" .. v
       table.insert(includes, "-I" .. v)
@@ -4958,6 +4644,8 @@ local function sub_make(
 
 
 
+
+
    if _args.link then
       if verbose then
          print("using flto")
@@ -4965,21 +4653,18 @@ local function sub_make(
       table.insert(flags, "-flto")
    end
 
+   local debugs = {}
+
    if not _args.release then
 
 
       table.insert(flags, "-ggdb3")
 
-      local debugs = {
+      debugs = {
          "-DDEBUG",
          "-g3",
          "-fno-omit-frame-pointer",
       }
-
-      _defines = _defines .. " " .. table.concat(debugs, " ")
-      for _, define in ipairs(debugs) do
-         table.insert(defines, define)
-      end
 
       defines_apply(flags, cfg.debug_define)
    else
@@ -4991,6 +4676,11 @@ local function sub_make(
       table.insert(flags, "-DNDEBUG")
 
       defines_apply(flags, cfg.release_define)
+   end
+
+   _defines = _defines .. " " .. table.concat(debugs, " ")
+   for _, define in ipairs(debugs) do
+      table.insert(defines, define)
    end
 
    if not _args.noasan then
@@ -5016,7 +4706,12 @@ local function sub_make(
 
    local _flags = table.concat(flags, " ")
 
-   local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
+   local m = {
+      ["linux"] = path_rel_third_party,
+      ["wasm"] = path_rel_wasm_third_party,
+   }
+
+   local _libdirs = make_L(ut.shallow_copy(libdirs), m[target])
 
    if target == 'linux' then
       table.insert(_libdirs, "-L/usr/lib")
@@ -5027,7 +4722,6 @@ local function sub_make(
    end
 
    local _libspath = table.concat(_libdirs, " ")
-
    local _links = ut.merge_tables(
    get_ready_links(cfg),
    get_ready_links_linux_only(cfg))
@@ -5050,8 +4744,43 @@ local function sub_make(
 
    local repr_queu = {}
 
-   filter_sources_c(".", function(file)
+
+
+   local output_dir = "."
+   if target == 'linux' then
+      output_dir = "obj_linux"
+   elseif target == 'wasm' then
+      output_dir = "obj_wasm"
+   end
+
+
+
+
+
+
+
+
+
+   local files_processed = ut.filter_sources(".", exclude)
+
+
+   local matched = {}
+   for _, file in ipairs(files_processed) do
+      if string.match(file, ".*%.c$") then
+         insert(matched, file)
+      end
+   end
+
+   local compiler = ""
+   if target == 'linux' then
+      compiler = "cc"
+   elseif target == 'wasm' then
+      compiler = "emcc"
+   end
+
+   for _, file in ipairs(matched) do
       local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
+      print("_output", _output)
       local _input = cwd .. file
 
 
@@ -5060,7 +4789,7 @@ local function sub_make(
 
       local args = {}
 
-      table.insert(args, "-lm ")
+
 
       for _, define in ipairs(defines) do
          table.insert(args, define)
@@ -5087,7 +4816,7 @@ local function sub_make(
          table.insert(args, lib)
       end
 
-      local task = { cmd = "cc", args = args }
+      local task = { cmd = compiler, args = args }
       table.insert(tasks, task)
 
 
@@ -5096,11 +4825,15 @@ local function sub_make(
       end
 
       table.insert(objfiles, _output)
-   end, exclude)
+   end
+
+   print(tabular(tasks))
 
    if verbose then
       print(tabular(repr_queu))
    end
+
+
 
 
    run_parallel_uv(tasks)
@@ -5305,8 +5038,6 @@ end
 
 
 
-
-
 local function main()
    KOH_VERBOSE = nil
 
@@ -5317,15 +5048,6 @@ local function main()
    parser:flag("-v --verbose", "use verbose output")
    parser:flag("-V --KOH_VERBOSE", "use debug verbose")
    parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
-
-
-
-
-
-
-
-
-
 
    parser:add_complete()
    local ok, _args = parser:pparse()

@@ -104,10 +104,7 @@ end
 
 
 
-local function filter_sources(
-   pattern, path, cb, exclude)
-
-   assert(cb)
+local function filter_sources(path, exclude)
 
    local files = {}
    for file in lfs.dir(path) do
@@ -120,12 +117,6 @@ local function filter_sources(
          local found = false
          for _, pat in ipairs(exclude) do
             if string.match(file, pat) then
-
-
-
-
-
-
                found = true
                break
             end
@@ -145,11 +136,6 @@ local function filter_sources(
 
    files = files_processed
 
-   for _, file in ipairs(files_processed) do
-      if string.match(file, pattern) then
-         cb(file)
-      end
-   end
 
 
 
@@ -158,16 +144,7 @@ local function filter_sources(
 
 
 
-
-
-
-
-
-
-
-
-
-
+   return files
 end
 
 
