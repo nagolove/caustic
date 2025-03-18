@@ -112,7 +112,24 @@ local pattern_end   = "{CAUSTIC_PASTE_END}"
 local cache: Cache
 -- TODO: Как-то предохранить каталог caustic с рабочей средой от затирания
 -- при ошибочно выставленной переменной окружения CAUSTIC_PATH
+
+local flags_sanitazer = {
+
+    --[[
+    "-fsanitize=thread,leak",
+    "-fsanitize-address-use-after-scope",
+    --]]
+
+    "-fsanitize=undefined,address",
+    "-fsanitize-address-use-after-scope"
+}
 -- }}}
+
+local record LinkContext
+    objfiles: string
+    libspath: string
+    libs: string
+end
 
 -- Добавить разные уровни многословности?
 --[[
@@ -245,7 +262,17 @@ local cmd_do: function(cmd: string|{string}) = cmd_do_execute
 local function filter_sources_c(
     path: string, cb: function(string), exclude?: {string}
 ) 
-    ut.filter_sources(".*%.c$", path, cb, exclude)
+    local files = ut.filter_sources(path, exclude)
+    local matched = {}
+    for _, file in ipairs(files) do
+        if string.match(file, ".*%.c$") then
+            insert(matched, file)
+        end
+    end
+
+    for _, file in ipairs(matched) do
+        cb(file)
+    end
 end
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
@@ -345,7 +372,7 @@ end
 
 local enum Target
     "linux"
-    "windows"
+    --"windows"
     "wasm"
 end
 
@@ -387,6 +414,7 @@ local record Dependency
 	url_action: UrlAction
     -- Если указано, то копировать определенную ветку
     git_branch: string
+    git_tag: string
     url: string         -- git ссылка или ссылка на zip для wget
 
     -- имя каталога в который производится копирование и сборка
@@ -433,7 +461,6 @@ local record Dependency
     -- XXX: Добавить методы к зависимостям
     --get_cc_includes: function(dep: Dependency)
 
-    wasm: boolean
 end
 
 local dependencies: {Dependency}
@@ -934,6 +961,9 @@ local function build_box2c_common(dep: Dependency)
     cmd_do(c[2])
 end
 
+-- TODO: После каждого шага сборки в массиве dependencies обновлять 
+-- переменные путей libdirs, includes и т.д что-бы другие модули могли 
+-- воспользоваться включаемыми файлами и библиотеками для связывания
 local function build_sol(_: Dependency)
     -- Сделать один включаемый файл
     cmd_do("python single/single.py")          
@@ -948,14 +978,14 @@ local function utf8proc_after_build(_: Dependency)
     cmd_do("rm libutf8proc.so")
 end
 
-local function build_munit(_: Dependency)
-    cmd_do("gcc -c munit.c")
-    cmd_do("ar rcs libmunit.a munit.o")
-end
-
-local function build_munit_w(_: Dependency)
-    cmd_do("emcc -c munit.c")
-    cmd_do("emar rcs libmunit.a munit.o")
+local function build_munit_common(dep: Dependency)
+    if dep.target == 'linux' then
+        cmd_do("gcc -c munit.c")
+        cmd_do("ar rcs libmunit.a munit.o")
+    elseif dep.target == 'wasm' then
+        cmd_do("emcc -c munit.c")
+        cmd_do("emar rcs libmunit.a munit.o")
+    end
 end
 
 -- TODO: Сделать общую функцию
@@ -1184,8 +1214,8 @@ dependencies = {
     {
         disabled = false,
         copy_for_wasm = true,
-        build = build_munit,
-        build_w = build_munit_w,
+        build = build_munit_common,
+        build_w = build_munit_common,
         description = "munit testing framework",
         dir = "munit",
         includes = { "munit" },
@@ -1426,6 +1456,7 @@ dependencies = {
         links_internal = { "lua:static" },
         name = 'lua',
         url = "https://github.com/lua/lua.git",
+        git_tag = "v5.4.0",
         url_action = "git",
     },
 
@@ -1450,6 +1481,7 @@ dependencies = {
         name = "sol2",
         description = "C++ Lua bindins",
         build = build_sol,
+        build_w = build_sol,
         dir = "sol2",
         url = "https://github.com/ThePhD/sol2.git",
         url_action = "git",
@@ -1796,7 +1828,31 @@ local function git_clone(dep: Dependency)
     else
         local dst = dep.dir or ""
         local git_cmd = "git clone --depth=1 " .. dep.url .. " " .. dst
+        
+        --string.match(dep.url,  ".+/([^/]+)%.git$"))
+
         cmd_do(git_cmd)
+        ut.push_current_dir()
+        chdir(dst)
+
+        if dep.git_tag then
+            printc("%{blue}using tag' " .. dep.git_tag .. "'%{reset}")
+
+            local c1 = "git fetch origin tag " .. dep.git_tag
+            local c2 = "git checkout tags/" .. dep.git_tag
+
+            print(format("'%s'", c1))
+            print(format("'%s'", c2))
+
+            cmd_do(c1)
+            cmd_do(c2)
+
+            --cmd_do("git fetch --tags")
+            --cmd_do("git ls-remote --tags origin")
+            --cmd_do("git checkout " .. dep.git_tag)
+        end
+
+        ut.pop_dir()
     end
     ut.pop_dir()
 end
@@ -2059,9 +2115,11 @@ local parser_setup: {string:ParserSetup} = {
         },
     },
 
+    --[[
     rmdirs = {
         summary = "remove empty directories in path_third_party",
     },
+    --]]
 
     init = {
         -- TODO: указать куда будут скопированы файлы
@@ -2092,15 +2150,18 @@ local parser_setup: {string:ParserSetup} = {
     publish = {
         summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
     },
+
     remove = {
-        summary = "remove all 3rd_party files",
-        options = { "-n --name" },
+        summary = "remove module by name and target from source tree",
+        options = { "-n --name", "-t --target" },
     },
+
     --[[
     rocks = {
         summary = "list of lua rocks should be installed for this script",
     },
     --]]
+
     run = {
         summary = "run project native executable under gdb",
         arguments = {
@@ -2344,10 +2405,10 @@ end
 local record Args
     -- {{{
     stage: boolean
-    new: string
-    list: string
-    copy: string
-
+    --new: string
+    --list: string
+    --copy: string
+    target: Target
     cpp: string
     nocodegen: string   -- отключить проход кодогенератора
     release: string     -- сборка без отладки, с оптимизацией
@@ -2356,8 +2417,6 @@ local record Args
     make: boolean       -- собрать
     minshell: string
     c: string           -- clean, полная пересборка
-    --j: string           -- паралленьная сборка
-    --u: string           -- параллельная сборка через libuv
     name: string		-- dependency name
     make_type: MakeAction
     link: string        -- оптимизация времени линковки(работает долго)
@@ -2393,7 +2452,8 @@ function actions.make_projects(_args: Args)
 
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
         local ok, errmsg = pcall(function()
-            actions.make({})
+            --actions.make({})
+            actions.make(_args)
         end) as (boolean, string)
         if not ok then
             print('Some problem in make on ' .. v .. ": " .. errmsg)
@@ -3540,8 +3600,18 @@ local function _remove(path: string, dirnames: {string})
 end
 
 local function backup(dep: Dependency)
+    if not dep.target then
+        printc("%{red}could not do backup without target%{reset}")
+        return
+    end
+
     ut.push_current_dir()
-    chdir(path_rel_third_party)
+
+    local m: {Target: string} = {
+        ['linux'] = path_rel_third_party,
+        ['wasm'] = path_rel_wasm_third_party,
+    }
+    chdir(m[dep.target])
 
     print('backup')
     print('currentdir', lfs.currentdir())
@@ -3576,29 +3646,47 @@ end
 function actions.remove(_args: Args)
     print("actions.remove")
 
-    --[[
     local dirnames: {string} = {}
     local dependencies_name_map = get_deps_name_map(dependencies)
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
+        print("%{red}modules removing supported only by one name%{reset}")
+        return
+        --[[
         for _, dirname in ipairs(get_dirs(dependencies)) do
             table.insert(dirnames, dirname)
         end
+        --]]
     end
     --]]
+
+    ut.push_current_dir()
+    chdir(path_caustic)
 
     -- TODO: Сделать многоступенчатый бэкап данных перед удалением
     local deps_name_map = get_deps_name_map(dependencies)
     local dep = deps_name_map[_args.name]
+
     if _args.name and dep then
+        dep.target = _args.target
         backup(dep)
     end
 
-    --print("actions.remove", inspect(dirnames))
-    --_remove(path_rel_third_party, dirnames)
-    --_remove(path_wasm_third_party, dirnames)
-    --_remove(win_third_party, dirnames)
+    local m: {Target: string} = {
+        ['linux'] = path_rel_third_party,
+        ['wasm'] = path_rel_wasm_third_party,
+    }
+
+    if not m[dep.target] then
+        print("%{yellow}unknown target%{reset}")
+        return
+    end
+
+    chdir(m[dep.target])
+    _remove(m[dep.target], dirnames)
+
+    ut.pop_dir()
 end
 
 function actions.rocks(_: Args)
@@ -3615,13 +3703,19 @@ function actions.rocks(_: Args)
 end
 
 -- Возвращет список включаемых каталог соответствующий конфигурации
-local function get_ready_includes(cfg: Cfg): {string}
+local function get_ready_includes(cfg: Cfg, target: Target): {string}
     local ready_deps = get_ready_deps(cfg)
     --print('get_ready_includes:', inspect(ready_deps))
 
+    local m = {
+        ["linux"] = path_rel_third_party,
+        ["wasm"] = path_rel_wasm_third_party,
+    }
+    local third_party = m[target]
+
     local _includedirs = prefix_add(
         path_caustic .. "/",
-        gather_includedirs(ready_deps, path_rel_third_party)
+        gather_includedirs(ready_deps, third_party)
     )
     if _includedirs then
         table.insert(_includedirs, path_caustic .. "/src")
@@ -3644,6 +3738,7 @@ function actions.verbose(_: Args)
         dependencies = dependencies,
         dirnames = get_dirs(dependencies),
         includedirs = get_ready_includes(), 
+        compiler = "emcc"
         --links = links,
         libdirs = libdirs,
         links_internal = get_ready_links_internal(),
@@ -3669,7 +3764,7 @@ function actions.compile_flags(_: Args)
     print('cfgs', inspect(cfgs))
 
     if cfgs and cfgs[1] then
-        for _, v in ipairs(get_ready_includes(cfgs[1])) do
+        for _, v in ipairs(get_ready_includes(cfgs[1], 'linux')) do
             put("-I" .. v)
         end
         put("-Isrc")
@@ -3707,251 +3802,6 @@ function actions.compile_flags(_: Args)
     end
 end
 
---[[
-local function buildw_chipmunk()
-    ut.push_current_dir()
-    chdir("wasm_3rd_party/Chipmunk2D/")
-    cmd_do("emcmake cmake . -DBUILD_DEMOS:BOOL=OFF")
-    cmd_do("emmake make -j")
-    ut.pop_dir()
-end
---]]
-
---[[
-local function w_link(objfiles: {string}, libname: string, flags: string)
-    print('link: ')
-    print(tabular(objfiles))
-    flags = flags or ""
-    print(inspect(objfiles))
-    local objfiles_str = table.concat(objfiles, " ")
-    local cmd = format("emar rcs %s %s %s", libname, objfiles_str, flags)
-    cmd_do(cmd)
-end
---]]
-
---[[
-local function src2obj(filename: string): string
-    return table.pack(gsub(filename, "(.*%.)c$", "%1o"))[1] as string
-end
---]]
-
---[[
-local function buildw_lua()
-    local prevdir = lfs.currentdir()
-    chdir("wasm_3rd_party/lua")
-
-    local objfiles = {}
-    local exclude = {
-        "lua.c"
-    }
-    filter_sources_c(".", function(file: string)
-        local cmd = format("emcc -c %s -Os -Wall", file)
-        print(cmd)
-        local pipe = io.popen(cmd)
-        local res = pipe:read("*a")
-        if #res > 0 then
-            print(res)
-        end
-        table.insert(objfiles, src2obj(file))
-    end, exclude)
-    link(objfiles, 'liblua.a')
-
-    chdir(prevdir)
-end
---]]
-
---[[
-local function buildw_raylib()
-    ut.push_current_dir()
-    chdir("wasm_3rd_party/raylib")
-
-    --make CC=x86_64-w64-mingw32-gcc \
-        --PLATFORM=PLATFORM_DESKTOP \
-        --PLATFORM_OS=WINDOWS \
-        --RAYLIB_LIBTYPE=SHARED
-
-    chdir("src")
-    local EMSDK = os.getenv('EMSDK')
-    local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
-    print(cmd)
-    cmd_do(cmd)
-
-    cmd_do("cp libraylib.a ../libraylib.a")
-
-    ut.pop_dir()
-end
---]]
-
---[[
-local function buildw_genann()
-    local prevdir = lfs.currentdir()
-    chdir("wasm_3rd_party/genann")
-
-    local objfiles = {}
-    local sources = { 
-        "genann.c"
-    }
-    for _, file in ipairs(sources) do
-        --print('file', file)
-        local flags = "-Wall -g3 -I."
-        local cmd = format("emcc -c %s %s", file, flags)
-        print(cmd)
-
-        local pipe = io.popen(cmd)
-        local res = pipe:read("*a")
-        if #res > 0 then
-            print(res)
-        end
-
-        table.insert(objfiles, src2obj(file))
-    end
-    link(objfiles, 'libgenann.a')
-
-    chdir(prevdir)
-end
---]]
-
---[[
-local function buildw_smallregex()
-    local prevdir = lfs.currentdir()
-    chdir("wasm_3rd_party/small-regex/libsmallregex")
-
-    local objfiles = {}
-    local sources = { 
-        "libsmallregex.c"
-    }
-    for _, file in ipairs(sources) do
-        --print('file', file)
-        local flags = "-Wall -g3 -I."
-        local cmd = format("emcc -c %s %s", file, flags)
-        print(cmd)
-
-        local pipe = io.popen(cmd)
-        local res = pipe:read("*a")
-        if #res > 0 then
-            print(res)
-        end
-
-        table.insert(objfiles, src2obj(file))
-    end
-    link(objfiles, 'libsmallregex.a')
-
-    chdir(prevdir)
-end
---]]
-
---[[
-local function buildw_utf8proc()
-    ut.push_current_dir()
-    chdir("wasm_3rd_party/utf8proc/")
-
-    cmd_do("emmake make")
-
-    ut.pop_dir()
-end
---]]
-
-
---[[
-local type ObjectFiles = {string}
-local function w_build_project(
-    output_dir: string, exclude: {string}
-): ObjectFiles
-    print('build_project:', output_dir)
-    local tmp_includedirs = ut.template_dirs(
-        get_include_dirs(),
-        path_wasm_third_party
-    )
-
-    print('tmp_includedirs', inspect(tmp_includedirs))
-    print( "os.exit(1)" )
-    os.exit(1)
-
-    local _exclude = {}
-    for k, v in ipairs(exclude) do
-        _exclude[k] = v
-    end
-
-    if _exclude then
-        for k, v in ipairs(_exclude) do
-            _exclude[k] = string.match(v, ".*/(.*)$") or v
-        end
-    end
-
-    local _includedirs = {}
-    for _, v in ipairs(tmp_includedirs) do
-        table.insert(_includedirs, "-I" .. v)
-    end
-
-    --print('includedirs after')
-    --print(tabular(_includedirs))
-
-    local include_str = table.concat(_includedirs, " ")
-    print('include_str', include_str)
-
-    local define_str = "-DPLATFORM_WEB=1"
-
-    mkdir(output_dir)
-    local path = "src"
-    local objfiles = {}
-    filter_sources_c(path, function(file: string)
-        print(file)
-        local output_path = output_dir .. 
-                            "/" ..gsub(file, "(.*%.)c$", "%1o")
-
-        local cmd = format(
-            "emcc -o %s -c %s/%s -Wall %s %s",
-            output_path, path, file, include_str, define_str
-        )
-        print(cmd)
-        cmd_do(cmd)
-        table.insert(objfiles, src2obj(file))
-    end, _exclude)
-
-    return objfiles
-end
---]]
-
---[[
-local function link_wasm_libproject(objfiles: {string})
-    print('link_libproject')
-    assert(objfiles)
-    local prevdir = lfs.currentdir()
-    chdir("wasm_objects")
-    print('currentdir', lfs.currentdir())
-    print(tabular(objfiles))
-    link(objfiles, 'libproject.a')
-    chdir(prevdir)
-end
---]]
-
---[[
-local function link_koh_lib(objs_dir: string)
-    print('link_koh_lib:', lfs.currentdir())
-    local files = {}
-    for file in lfs.dir(objs_dir) do
-        if string.match(file, ".*%.o") then
-            table.insert(files, objs_dir .. "/" .. file)
-        end
-    end
-    print('files', inspect(files))
-    local files_str = table.concat(files, " ")
-    local cmd = "emar rcs " .. objs_dir .. "/libcaustic.a " .. files_str
-    print(cmd)
-    cmd_do(cmd)
-end
---]]
-
---[[
-local function buildw_koh()
-    local dir = "wasm_objects"
-    build_project(dir, {
-        "koh_input.c"
-    })
-    link_koh_lib(dir)
-end
---]]
-
 local function make_L(list: {string}, third_party_prefix: string): {string}
     local ret = {}
     local prefix = "-L" .. path_caustic .. "/" .. third_party_prefix .. "/"
@@ -3961,6 +3811,7 @@ local function make_L(list: {string}, third_party_prefix: string): {string}
     return ret
 end
 
+-- XXX: Что делает эта функция?
 local function make_l(list: {string}): {string}
     local ret = {}
     local static_pattern = "%:static$"
@@ -4076,163 +3927,6 @@ local function link_wasm_project(main_fname: string, _args: Args)
     cmd_do(cmd)
 
     chdir(prev_dir)
-end
---]]
-
--- TODO: Переписать заново
---[[
-function actions.wbuild(_args: Args)
-    local exist = lfs.attributes("caustic.lua")
-    if exist then
-        -- TODO: эти функции должны задаваться через таблицу зависимостей.
-        buildw_chipmunk()
-        buildw_lua()
-        buildw_raylib()
-        buildw_genann()
-        buildw_smallregex()
-        buildw_utf8proc()
-        buildw_koh()
-    else
-        local cfg: Cfg
-        local ok, errmsg: boolean, string = pcall(function()
-            cfg = loadfile("bld.lua")() as Cfg
-        end)
-        if not ok then
-            print("Failed to load bld.lua", errmsg)
-            os.exit(1)
-        end
-        -- TODO: parallel build
-        local objfiles = w_build_project("wasm_objects", { cfg.main })
-        link_wasm_libproject(objfiles)
-        link_wasm_project("src/" .. cfg.main, _args)
-    end
-end
---]]
-
---[[
-local function _build_smart(dep: Dependency)
-    assert(dep)
-
-    print("_build_smart:")
-    print(tabular(dep))
-
-    local dirname = dep.dir
-
-    if not dirname then
-        print(format(
-            "_build_smart: dependency %s has not 'dir' field", dep.name
-        ))
-        return
-    end
-
-    local prevdir = lfs.currentdir()
-    chdir(dirname)
-
-    if dep.build then
-        local ok, errmsg: boolean, string = pcall(function()
-            dep.build(dep)
-        end)
-        if not ok then
-            print('build error:', errmsg)
-        end
-    else
-        print(format('%s has no build method', dep.name))
-    end
-
-    if dep and dep.after_build then
-        local ok, errmsg: boolean, string = pcall(function()
-            dep.after_build(dep)
-        end)
-        if not ok then
-            print(inspect(dep), 'failed with', errmsg)
-        end
-    end
-
-    chdir(prevdir)
-end
---]]
-
---[[
-local function build_dep_w(dep: Dependency)
-    print("build_dep_w:")
-
-    local map: {string: function} = {
-        ["function"] = function()
-            dep.build_w(dep)
-        end,
-        ["string"] = function()
-            assert("not supported")
-        end,
-    }
-
-    -- TODO: перенести в аргумент функции
-    if not dep.build_w then
-        print(format('%s has no build method', dep.name))
-        return
-    end
-
-    local ok, errmsg: boolean, string = pcall(function()
-        local tp = type(dep.build_w)
-        print("_build_w dep.build type is", tp)
-
-        local func = map[tp]
-        if not func then
-            error("_build_w bad type for 'tp'")
-        end
-        func()
-    end)
-    if not ok then
-        print('build error:', errmsg)
-    end
-
-end
---]]
-
---[[
-local function _build_w(dep: Dependency)
-    printc("%{green}_build_w:".. dep.name .. "%{reset}")
-
-    if dep.disabled then
-        print(format("%s is disabled", dep.name))
-        return
-    end
-
-    print(inspect(dep))
-
-    ut.push_current_dir()
-
-    if not dep.dir then
-        print("dep.dir == nil")
-        print(inspect(dep))
-        os.exit(1)
-    end
-
-    local ok_chd, errmsg_chd = chdir(dep.dir)
-    if not ok_chd then
-        print("current directory", lfs.currentdir())
-        local msg = format(
-            "_build_w: could not do chdir('%s') dependency with %s",
-            dep.dir, errmsg_chd
-        )
-        printc("%{red}" .. msg .. "%{reset}")
-        ut.pop_dir()
-        return
-    else
-        print("_build_w: current directory is", lfs.currentdir())
-    end
-
-    build_dep_w(dep)
-
-    if dep and dep.after_build then
-        local ok, errmsg: boolean, string = pcall(function()
-            dep.after_build(dep)
-        end)
-        if not ok then
-            print(inspect(dep), 'failed with', errmsg)
-        end
-    end
-
-    ut.pop_dir()
 end
 --]]
 
@@ -4456,14 +4150,16 @@ local function run_parallel_uv(queue: {Task})
     end
 end
 
-local function cache_remove()
-    ut.push_current_dir()
-    chdir('src')
-    local err = os.remove(cache_name)
-    if not err then
-        print('cache removed')
+local function cache_remove(_args: Args)
+    if _args.c then
+        ut.push_current_dir()
+        chdir('src')
+        local err = os.remove(cache_name)
+        if not err then
+            print('cache removed')
+        end
+        ut.pop_dir()
     end
-    ut.pop_dir()
 end
 
 local function koh_link(objfiles_str: string, _args: Args)
@@ -4475,23 +4171,6 @@ local function koh_link(objfiles_str: string, _args: Args)
     --print(cmd)
     cmd_do(cmd)
 end
-
-local record LinkContext
-    objfiles: string
-    libspath: string
-    libs: string
-end
-
-local flags_sanitazer = {
-
-    --[[
-    "-fsanitize=thread,leak",
-    "-fsanitize-address-use-after-scope",
-    --]]
-
-    "-fsanitize=undefined,address",
-    "-fsanitize-address-use-after-scope"
-}
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local flags: string = ""
@@ -4883,9 +4562,18 @@ local function sub_make(
         ))
     end
 
-    if _args.c then
-        cache_remove()
-    end
+    -- XXX: Где я нахожусь в иерархии каталогов?
+    -- Где я должен находиться?
+    print('sub_make: currentdir', lfs.currentdir())
+
+    mkdir("obj_linux")
+    mkdir("obj_wasm")
+
+    -- {{{ подготовка
+
+    -- удалить кеш
+    -- TODO: удалять
+    cache_remove(_args)
 
     local curdir = ut.push_current_dir()
     if verbose then
@@ -4920,9 +4608,7 @@ local function sub_make(
         end
     end
 
-    local output_dir = "."
     local objfiles: {string} = {}
-
     local defines: {string} = {}
 
     if target == 'linux' then
@@ -4937,11 +4623,11 @@ local function sub_make(
 
     -- TODO: Дефайны через bld.lua
     local _defines: string = table.concat(defines, " ")
-
     local _includes: string = table.concat({ --[[ "/usr/include", --]] }, " ")
+
     local includes = {}
 
-    local dirs = get_ready_includes(cfg)
+    local dirs = get_ready_includes(cfg, target)
     for _, v in ipairs(dirs) do
         _includes = _includes .. " -I" .. v
         table.insert(includes, "-I" .. v)
@@ -4949,6 +4635,7 @@ local function sub_make(
 
     -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
+        -- {{{
         -- Ошибки сборки с флагом последней версии языка C
         -- Отсутствуют разные функции стандартной библиотеки
         --"-std=c2x",
@@ -4956,6 +4643,7 @@ local function sub_make(
 
         --"-D_USE_MATH_DEFINES",
         --"-D__USE_MISC",
+        -- }}}
     }
 
     if _args.link then
@@ -4965,21 +4653,18 @@ local function sub_make(
         table.insert(flags, "-flto")
     end
 
+    local debugs = {}
+
     if not _args.release then
         -- DEEEBUUUG
 
         table.insert(flags, "-ggdb3")
 
-        local debugs = {
+        debugs = {
             "-DDEBUG",
             "-g3",
             "-fno-omit-frame-pointer",
         }
-
-        _defines = _defines .. " " .. table.concat(debugs, " ")
-        for _, define in ipairs(debugs) do
-            table.insert(defines, define)
-        end
 
         defines_apply(flags, cfg.debug_define)
     else
@@ -4991,6 +4676,11 @@ local function sub_make(
         table.insert(flags, "-DNDEBUG")
 
         defines_apply(flags, cfg.release_define)
+    end
+
+    _defines = _defines .. " " .. table.concat(debugs, " ")
+    for _, define in ipairs(debugs) do
+        table.insert(defines, define)
     end
 
     if not _args.noasan then
@@ -5016,7 +4706,12 @@ local function sub_make(
 
     local _flags: string = table.concat(flags, " ")
 
-    local _libdirs = make_L(ut.shallow_copy(libdirs), path_rel_third_party)
+    local m = {
+        ["linux"] = path_rel_third_party,
+        ["wasm"] = path_rel_wasm_third_party,
+    }
+
+    local _libdirs = make_L(ut.shallow_copy(libdirs), m[target])
 
     if target == 'linux' then
         table.insert(_libdirs, "-L/usr/lib")
@@ -5027,7 +4722,6 @@ local function sub_make(
     end
 
     local _libspath: string = table.concat(_libdirs, " ")
-
     local _links = ut.merge_tables(
         get_ready_links(cfg),
         get_ready_links_linux_only(cfg)
@@ -5050,8 +4744,43 @@ local function sub_make(
     -- Список файлов для перекомпиляции выводимый пользователю
     local repr_queu = {}
 
-    filter_sources_c(".", function(file: string)
+    -- }}}
+
+    local output_dir = "."
+    if target == 'linux' then
+        output_dir = "obj_linux"
+    elseif target == 'wasm' then
+        output_dir = "obj_wasm"
+    end
+
+    --[[
+local function filter_sources_c(
+    path: string, cb: function(string), exclude?: {string}
+) 
+    ut.filter_sources(".*%.c$", path, cb, exclude)
+end
+    --]]
+
+    local files_processed =  ut.filter_sources(".", exclude)
+
+    -- Добавляю только *.c файлы
+    local matched = {}
+    for _, file in ipairs(files_processed) do
+        if string.match(file, ".*%.c$") then
+            insert(matched, file)
+        end
+    end
+
+    local compiler = ""
+    if target == 'linux' then
+        compiler = "cc"
+    elseif target == 'wasm' then
+        compiler = "emcc"
+    end
+
+    for _, file in ipairs(matched) do
         local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
+        print("_output", _output)
         local _input = cwd .. file
 
         -- TODO: Проверять отсутствие объектного файла. 
@@ -5060,7 +4789,7 @@ local function sub_make(
 
         local args = {}
 
-        table.insert(args, "-lm ")
+        --table.insert(args, "-lm ")
 
         for _, define in ipairs(defines) do
            table.insert(args, define)
@@ -5087,7 +4816,7 @@ local function sub_make(
             table.insert(args, lib)
         end
            
-        local task = { cmd = "cc", args = args, }
+        local task = { cmd = compiler, args = args, }
         table.insert(tasks, task)
 
         -- XXX: Кэширование работает вообще?
@@ -5096,11 +4825,15 @@ local function sub_make(
         end
 
         table.insert(objfiles, _output)
-    end, exclude)
+    end
+
+    print(tabular(tasks))
 
     if verbose then
         print(tabular(repr_queu))
     end
+
+    --ut.pop_dir()
 
     -- использовать libuv
     run_parallel_uv(tasks)
@@ -5298,11 +5031,9 @@ end
 -- TODO: Система обработки сцен
 -- Создаем основной парсер
 local parser = argparse("example", "Пример использования вложенных команд с argparse")
-
 local list_cmd = parser:command("list", "Вывести список")
 list_cmd:argument("new"):args("?")
 list_cmd:option("-n --name")
-
 list_cmd:argument("move"):args("?")
 list_cmd:argument("copy"):args("?")
 --]]
@@ -5317,15 +5048,6 @@ local function main()
     parser:flag("-v --verbose", "use verbose output")
     parser:flag("-V --KOH_VERBOSE", "use debug verbose")
     parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
-
-    --[[
-    -- {{{
-    -- Нужно собрать все исходные файлы для wasm версии.
-    -- Сперва скопировать их в отдельный каталог.
-    -- TODO: документация на все опции, команда help
-    -- FIXME: команды build и init, оставить только одну из них?
-    -- }}}
-    --]]
 
     parser:add_complete()
     local ok, _args: boolean, argparse.Args = parser:pparse() 
