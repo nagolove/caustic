@@ -123,6 +123,34 @@ local flags_sanitazer = {
     "-fsanitize=undefined,address",
     "-fsanitize-address-use-after-scope"
 }
+
+local compiler = {
+    ['linux'] = 'gcc',
+    ['wasm'] = 'emcc',
+    ['windows'] = 'x86_64-w64-mingw32-gcc',
+}
+
+local ar = {
+    ['linux'] = 'ar',
+    ['wasm'] = 'emar',
+    ['windows'] = 'x86_64-w64-mingw32-ar',
+}
+
+local cmake = {
+    ["linux"] = "cmake ",
+    ["wasm"] = "emcmake cmake ",
+}
+
+local make = {
+    ["linux"] = "make ",
+    ["wasm"] = "emmake make ",
+}
+
+local path_rel_third_party_t = {
+    ['linux'] = path_rel_third_party,
+    ['wasm'] = path_rel_wasm_third_party,
+}
+
 -- }}}
 
 local record LinkContext
@@ -485,20 +513,14 @@ local function build_with_cmake_common(dep: Dependency)
     print('build_with_cmake: current dir', lfs.currentdir())
     print('build_with_cmake: dep', inspect(dep))
 
-    local m: {Target: {string}} = {
-        ["linux"] = { "cmake ", "make -j" },
-        ["wasm"] = { "emcmake cmake ", "emmake make " },
-    }
-    local c = m[dep.target]
-
     local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=64MB" '
 
     if dep.target == 'linux' then
         linker_option = ''
     end
 
-    cmd_do(c[1] .. linker_option .. " .")
-    cmd_do(c[2])
+    cmd_do(cmake[dep.target] .. linker_option .. " .")
+    cmd_do(make[dep.target])
 end
 
 --[[
@@ -515,29 +537,18 @@ local function build_freetype_common(dep: Dependency)
     print('currentdir', lfs.currentdir())
     ut.push_current_dir()
 
-    local m: {Target: {string}} = {
-        ["linux"] = { "cmake ", "make " },
-        ["wasm"] = { "emcmake cmake ", "emmake make " },
-    }
-    local c = m[dep.target]
-
-    if not c then
-        print(debug.traceback())
-    end
-    assert(c)
-
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
 
-    local c1 = format("%s -E make_directory build", c[1])
-    local c2 = format("%s -E chdir build cmake ..", c[1])
+    local c1 = format("%s -E make_directory build", cmake[dep.target])
+    local c2 = format("%s -E chdir build cmake ..", cmake[dep.target])
 
     -- cmake
     cmd_do({c1, c2})
     chdir("build")
 
     -- make 
-    cmd_do(c[2] .. " clean")
-    cmd_do(c[2])
+    cmd_do(make[dep.target] .. " clean")
+    cmd_do(make[dep.target])
 
     ut.pop_dir()
 end
@@ -599,14 +610,8 @@ local function build_chipmunk(dep: Dependency)
         opts[k] = "-D " .. opt
     end
 
-    local m: {Target: {string}} = {
-        ["linux"] = { "cmake ", "make -j" },
-        ["wasm"] = { "emcmake cmake ", "emmake make " },
-    }
-    local c = m[dep.target]
-
-    cmd_do(c[1] .. table.concat(opts, " "))
-    cmd_do(c[2])
+    cmd_do(cmake[dep.target] .. " " .. table.concat(opts, " "))
+    cmd_do(make[dep.target])
     ut.pop_dir()
 end
 --]]
@@ -695,11 +700,7 @@ local function build_cimgui_common(dep: Dependency)
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
     print("current dir", lfs.currentdir())
-    local m: {Target: string} = {
-        ["linux"] = "make ",
-        ["wasm"] = "emmake make ",
-    }
-    local c = m[dep.target]
+    local c = make[dep.target]
     cmd_do(format("%s clean", c))
     cmd_do(format("%s -j CFLAGS=\"-g3\"", c))
 end
@@ -779,15 +780,11 @@ local function cimgui_after_init(dep: Dependency)
 
     cmd_do("rm CMakeCache.txt")
 
-    local m: {Target:string} = {
-        ["linux"] = "cmake ",
-        ["wasm"] = "emcmake cmake ",
-    }
-    local cm = m[dep.target]
+    assert(cmake[dep.target])
 
     local cmake_cmd = {
         format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
-        cm,
+        cmake[dep.target],
         format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes()),
         "-DIMGUI_STATIC=1",
         "-DNO_FONT_AWESOME=1",
@@ -859,16 +856,6 @@ end
 local function build_raylib_common(dep: Dependency)
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
 
-    --[[
-    local m: {Target: {string}} = {
-        ["linux"] = { "cmake ", "make -j" },
-        ["wasm"] = { "emcmake cmake ", "emmake make " },
-    }
-    local c: {string} = {
-        m[dep.target][1]
-    }
-    --]]
-
     local EMSDK = os.getenv('EMSDK')
 
     --[[
@@ -938,12 +925,6 @@ local function build_box2c_common(dep: Dependency)
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
 
 
-    local m: {Target: {string}} = {
-        ["linux"] = { "cmake ", "make -j" },
-        ["wasm"] = { "emcmake cmake ", "emmake make " },
-    }
-    local c = m[dep.target]
-
     local t = {}
     if dep.target == 'wasm' then
         insert(t, '-DCMAKE_C_FLAGS="-pthread -matomics -mbulk-memory" ' )
@@ -951,14 +932,14 @@ local function build_box2c_common(dep: Dependency)
         insert(t, '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ')
     end
 
-    cmd_do(c[1] .. table.concat(t, " ") ..
+    cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
         '-DCMAKE_BUILD_TYPE=Debug ' ..
         '-DBOX2D_VALIDATE=ON ' ..
         '-DBOX2D_BENCHMARKS=OFF ' ..
         '-DBOX2D_BUILD_DOCS=OFF ' ..
         '-DBOX2D_SAMPLES=OFF .'
     )
-    cmd_do(c[2])
+    cmd_do(make[dep.target])
 end
 
 -- TODO: После каждого шага сборки в массиве dependencies обновлять 
@@ -979,13 +960,8 @@ local function utf8proc_after_build(_: Dependency)
 end
 
 local function build_munit_common(dep: Dependency)
-    if dep.target == 'linux' then
-        cmd_do("gcc -c munit.c")
-        cmd_do("ar rcs libmunit.a munit.o")
-    elseif dep.target == 'wasm' then
-        cmd_do("emcc -c munit.c")
-        cmd_do("emar rcs libmunit.a munit.o")
-    end
+    cmd_do(compiler[dep.target] .. " -c munit.c")
+    cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
 end
 
 -- TODO: Сделать общую функцию
@@ -2022,9 +1998,6 @@ local enum ActionsEnum
     -- Значить нужно добавлять пути и опции компилятора от текущего проекта
     "init"          
     "proj_init"
-
-    --"init_add"      -- NOTE: что эта штука делает?
-    --"init_smart"    -- NOTE: что эта штука делает?
     "make"
     "publish"
     "remove"
@@ -2122,15 +2095,15 @@ local parser_setup: {string:ParserSetup} = {
     --]]
 
     init = {
-        -- TODO: указать куда будут скопированы файлы
-        summary = "download dependencies from network",
-        options = { "-n --name" },
+        summary = "download modules from network",
+        options = { "-n --name", "-t --target" }
     },
+    --[[
     init_w = {
         summary = "download dependencies from network. for WASM",
         options = { "-n --name" },
     },
-
+    --]]
     make = {
         summary = "build libcaustic or current project",
         arguments = { 
@@ -2201,19 +2174,6 @@ local parser_setup: {string:ParserSetup} = {
             { "-m --minshell", "use minimal web shell" },
         }
     },
-    --[[
-    init_smart = {
-        summary = "install new dependencies",
-        options = { "-n --name" },
-    },
-    build_smart = {
-        summary = "build dependencies for native platform",
-        options = { "n --name" },
-    },
-    updates = {
-        summary = "check git repositories for updates",
-    },
-    --]]
 }
 -- }}}
 local record Node
@@ -2305,10 +2265,13 @@ local function _init(path: string, deps: {Dependency})
 
     if not chdir(path) then
         if not mkdir(path) then
-            print('could not do mkdir()')
+            print('could not do mkdir', path)
             os.exit()
         end
-        chdir(path)
+        if not chdir(path) then
+            print("could not chdir() to", path)
+            os.exit()
+        end
     end
 
     if not ut.git_is_repo_clean(".") then
@@ -3011,41 +2974,6 @@ function actions.run(_args: Args)
     end
 end
 
---[[
-function actions.init_add(_args: Args)
-    print("init_add")
-end
---]]
-
---[[
-function actions.init_smart(_args: Args)
-    print('init_smart', inspect(_args))
-
-    local deps = {}
-    if _args.name then
-        print('partial init for dependency', _args.name)
-        if dependencies_name_map[_args.name] then
-            table.insert(deps, dependencies_name_map[_args.name])
-        else
-            print("bad dependency name", _args.name)
-            return
-        end
-    else
-        print("only one named dependency supported")
-        os.exit()
-        --for _, dep in ipairs(dependencies) do
-            --table.insert(deps, dep)
-        --end
-    end
-
-    --print('deps', inspect(deps))
-    --check_for_unstaged(deps)
-    _init_smart(path_third_party, deps)
-    _init_smart(path_wasm_third_party, deps)
-    --_init(win_third_party, deps)
-end
---]]
-
 -- Скачать зависимости указанные в bld.lua для текущего проекта
 function actions.proj_init(_args: Args)
     local deps = {}
@@ -3096,6 +3024,7 @@ local function pre_init(_args: Args): {Dependency}
     return deps
 end
 
+--[[
 function actions.init_w(_args: Args)
     local deps = pre_init(_args)
     -- установка целевой платформы
@@ -3104,16 +3033,28 @@ function actions.init_w(_args: Args)
     end
     _init(path_rel_wasm_third_party, deps)
 end
+--]]
 
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
 function actions.init(_args: Args)
+    if not _args.target then
+        printc("%{red}target is not selected(linux, wasm)%{reset}")
+        return
+    end
+
+    if not path_rel_third_party_t[_args.target] then
+        printc("%{red}could not find target%{yellow}" .. _args.target .. 
+               "%{reset}")
+       return
+    end
+
     local deps = pre_init(_args)
     -- установка целевой платформы
     for _, dep in ipairs(deps) do
-        dep.target = "linux"
+        dep.target = _args.target
     end
-    _init(path_rel_third_party, deps)
+    _init(path_rel_third_party_t[_args.target], deps)
 end
 
 --[[
@@ -3607,11 +3548,8 @@ local function backup(dep: Dependency)
 
     ut.push_current_dir()
 
-    local m: {Target: string} = {
-        ['linux'] = path_rel_third_party,
-        ['wasm'] = path_rel_wasm_third_party,
-    }
-    chdir(m[dep.target])
+    local path = path_rel_third_party_t[dep.target]
+    chdir(path)
 
     print('backup')
     print('currentdir', lfs.currentdir())
@@ -3673,18 +3611,14 @@ function actions.remove(_args: Args)
         backup(dep)
     end
 
-    local m: {Target: string} = {
-        ['linux'] = path_rel_third_party,
-        ['wasm'] = path_rel_wasm_third_party,
-    }
-
-    if not m[dep.target] then
+    local path = path_rel_third_party_t[dep.target]
+    if not path then
         print("%{yellow}unknown target%{reset}")
         return
     end
 
-    chdir(m[dep.target])
-    _remove(m[dep.target], dirnames)
+    chdir(path)
+    _remove(path, dirnames)
 
     ut.pop_dir()
 end
@@ -3707,15 +3641,11 @@ local function get_ready_includes(cfg: Cfg, target: Target): {string}
     local ready_deps = get_ready_deps(cfg)
     --print('get_ready_includes:', inspect(ready_deps))
 
-    local m = {
-        ["linux"] = path_rel_third_party,
-        ["wasm"] = path_rel_wasm_third_party,
-    }
-    local third_party = m[target]
+    local path = path_rel_third_party_t[target]
 
     local _includedirs = prefix_add(
         path_caustic .. "/",
-        gather_includedirs(ready_deps, third_party)
+        gather_includedirs(ready_deps, path)
     )
     if _includedirs then
         table.insert(_includedirs, path_caustic .. "/src")
@@ -4173,6 +4103,8 @@ local function koh_link(objfiles_str: string, _args: Args)
 end
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
+    print('project_link', inspect(ctx))
+
     local flags: string = ""
     if not _args.noasan then
         flags = flags .. table.concat(flags_sanitazer, " ")
@@ -4193,8 +4125,11 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     --print(tabular(ctx.libspath))
 
     local artifact = "../" .. cfg.artifact
+    local cc = compiler[_args.target]
+    assert(cc)
     local cmd = format(
-        "gcc -o \"%s\" %s %s %s %s", 
+        "%s -o \"%s\" %s %s %s %s", 
+        cc,
         artifact,
         ctx.objfiles,
         ctx.libspath,
@@ -4706,12 +4641,9 @@ local function sub_make(
 
     local _flags: string = table.concat(flags, " ")
 
-    local m = {
-        ["linux"] = path_rel_third_party,
-        ["wasm"] = path_rel_wasm_third_party,
-    }
-
-    local _libdirs = make_L(ut.shallow_copy(libdirs), m[target])
+    local path = path_rel_third_party_t[target]
+    assert(path)
+    local _libdirs = make_L(ut.shallow_copy(libdirs), path)
 
     if target == 'linux' then
         table.insert(_libdirs, "-L/usr/lib")
@@ -4771,12 +4703,8 @@ end
         end
     end
 
-    local compiler = ""
-    if target == 'linux' then
-        compiler = "cc"
-    elseif target == 'wasm' then
-        compiler = "emcc"
-    end
+    local cc = compiler[_args.target]
+    assert(cc)
 
     for _, file in ipairs(matched) do
         local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
@@ -4816,7 +4744,7 @@ end
             table.insert(args, lib)
         end
            
-        local task = { cmd = compiler, args = args, }
+        local task = { cmd = cc, args = args, }
         table.insert(tasks, task)
 
         -- XXX: Кэширование работает вообще?
