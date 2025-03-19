@@ -5,26 +5,23 @@
 
 #include "cimgui.h"
 #include "cimgui_impl.h"
-
-#include "koh_paragraph.h"
-#include "koh_rand.h"
 #include "koh_metaloader.h"
-#include "koh_visual_tools.h"
+#include "koh_rand.h"
 #include "koh_timerman.h"
-
+#include "koh_visual_tools.h"
+#include "raylib.h"
 #include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
-//#include "chipmunk/chipmunk.h"
-//#include "chipmunk/chipmunk_types.h"
-/*#include "enet.h"*/
-#include "raylib.h"
-
 #ifndef M_PI
 # define M_PI		3.14159265358979323846	/* pi */
+#endif
+
+#ifndef __attribute_deprecated__
+#define __attribute_deprecated__  __attribute__((deprecated))
 #endif
 
 #define KOH_FORCE_INLINE inline __attribute__((always_inline))

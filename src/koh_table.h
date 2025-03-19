@@ -188,7 +188,7 @@ static inline const char *htable_i64_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%ld", *(int64_t*)data);
+    sprintf(buf, "%lld", (long long)*(int64_t*)data);
     return buf;
 }
 
