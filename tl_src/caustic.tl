@@ -32,7 +32,12 @@ local path_rel_third_party = remove_last_backslash(
 local path_rel_wasm_third_party = remove_last_backslash(
     getenv("wasm_3rd_party") or "wasm_3rd_party"
 )
+-- каталог для библиотек win, собранных в отладочном режиме
+local path_rel_win_third_party = remove_last_backslash(
+    getenv("win_3rd_party") or "win_3rd_party"
+)
 
+--[[
 -- каталог для библиотек x86_64 собранных в релизном режиме
 local path_rel_third_party_release = remove_last_backslash(
     getenv("3rd_party_release") or "3rd_party_release"
@@ -41,8 +46,7 @@ local path_rel_third_party_release = remove_last_backslash(
 local path_wasm_third_party_release = remove_last_backslash(
     getenv("wasm_3rd_party_release") or "wasm_3rd_party_release"
 )
-
-local path_abs_third_party = path_caustic .. "/" .. path_rel_third_party
+--]]
 -- }}}
 
 --local lua_ver = "5.1"
@@ -64,10 +68,11 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 -- {{{  pre requirements assertions
 assert(path_caustic)
 assert(path_rel_third_party)
-assert(path_abs_third_party)
+--assert(path_abs_third_party)
 assert(path_rel_wasm_third_party)
-assert(path_rel_third_party_release)
-assert(path_wasm_third_party_release)
+assert(path_rel_win_third_party)
+--assert(path_rel_third_party_release)
+--assert(path_wasm_third_party_release)
 -- }}}
 
 -- requires and aliases {{{
@@ -136,19 +141,33 @@ local ar = {
     ['windows'] = 'x86_64-w64-mingw32-ar',
 }
 
+local cmake_toolchain_win = path_caustic .. "/toolchain-mingw64.cmake"
+ut.assert_file(cmake_toolchain_win)
 local cmake = {
     ["linux"] = "cmake ",
     ["wasm"] = "emcmake cmake ",
+    ['win'] = format("cmake -DCMAKE_TOOLCHAIN_FILE=%s ", cmake_toolchain_win),
 }
 
 local make = {
     ["linux"] = "make ",
     ["wasm"] = "emmake make ",
+    ['win'] = 'make CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ ' ..
+              'CFLAGS="-I/usr/x86_64-w64-mingw32/include" ' ..
+              'LDFLAGS="-L/usr/x86_64-w64-mingw32/lib" ' ..
+              '-D_WIN32 -DWIN32 '
 }
 
 local path_rel_third_party_t = {
     ['linux'] = path_rel_third_party,
     ['wasm'] = path_rel_wasm_third_party,
+    ['win'] = path_rel_win_third_party,
+}
+
+local path_abs_third_party = {
+    ["linux"] = path_caustic .. "/" .. path_rel_third_party,
+    ['wasm'] = path_caustic .. "/" .. path_rel_wasm_third_party,
+    ['win'] = path_caustic .. "/" .. path_rel_win_third_party,
 }
 
 -- }}}
@@ -172,8 +191,9 @@ if verbose then
     tabular(path_rel_third_party)
     tabular(path_abs_third_party)
     tabular(path_rel_wasm_third_party)
-    tabular(path_rel_third_party_release)
-    tabular(path_wasm_third_party_release)
+    tabular(path_rel_win_third_party)
+    --tabular(path_rel_third_party_release)
+    --tabular(path_wasm_third_party_release)
 end
 
 local record Cfg
@@ -513,14 +533,20 @@ local function build_with_cmake_common(dep: Dependency)
     print('build_with_cmake: current dir', lfs.currentdir())
     print('build_with_cmake: dep', inspect(dep))
 
-    local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=64MB" '
+    -- 67108864 == 64MB
+    local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=67108864" '
+    --local linker_option = ''
 
     if dep.target == 'linux' then
         linker_option = ''
     end
 
-    cmd_do(cmake[dep.target] .. linker_option .. " .")
-    cmd_do(make[dep.target])
+    local c1 = cmake[dep.target] .. linker_option .. " ."
+    local c2 = make[dep.target]
+    print("build_with_cmake_common: c1", c1)
+    print("build_with_cmake_common: c2", c2)
+    cmd_do(c1)
+    cmd_do(c2)
 end
 
 --[[
@@ -552,16 +578,6 @@ local function build_freetype_common(dep: Dependency)
 
     ut.pop_dir()
 end
-
---[[
-local function build_with_make(_: Dependency)
-    cmd_do("make -j")
-end
-
-local function build_with_make_w(_: Dependency)
-    cmd_do("emmake make")
-end
---]]
 
 local function build_with_make_common(dep: Dependency)
     if dep.target == 'wasm' then
@@ -718,13 +734,14 @@ end
 --]]
 
 -- XXX: Что делает эта функция?
-local function get_additional_includes(): string
+local function get_additional_includes(t: Target): string
+    assert(path_abs_third_party[t])
     local includes_str = ""
     local includes = get_deps_name_map(dependencies)["raylib"].includes
     for _, include in ipairs(includes) do
         includes_str =  includes_str .. 
                         "-I" .. 
-                        path_abs_third_party .. 
+                        path_abs_third_party[t] .. 
                         "/" .. 
                         include
     end
@@ -785,7 +802,7 @@ local function cimgui_after_init(dep: Dependency)
     local cmake_cmd = {
         format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
         cmake[dep.target],
-        format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes()),
+        format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes(dep.target)),
         "-DIMGUI_STATIC=1",
         "-DNO_FONT_AWESOME=1",
     }
@@ -803,14 +820,14 @@ local function cimgui_after_init(dep: Dependency)
     cmd_do(table.concat(cmake_cmd, " "))
 
     paste_from_one_to_other(
-        path_abs_third_party .. "/rlImGui/rlImGui.h",
-        path_abs_third_party .. "/cimgui/cimgui.h",
+        path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
+        path_abs_third_party[dep.target] .. "/cimgui/cimgui.h",
         coroutine.create(guard)
     )
 
     paste_from_one_to_other(
-        path_abs_third_party .. "/rlImGui/rlImGui.cpp",
-        path_abs_third_party .. "/cimgui/cimgui.cpp"
+        path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
+        path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp"
     )
 
     ut.pop_dir()
@@ -968,8 +985,20 @@ end
 local function update_box2c(dep: Dependency)
     ut.push_current_dir()
     --print("dep", inspect(dep))
-    chdir(path_abs_third_party)
-    chdir(dep.dir)
+    local ok: boolean
+    local path = path_abs_third_party[dep.target]
+    ok = chdir(path_abs_third_party[dep.target])
+    if not ok then
+        printc("%{red}update_box2c: could not chdir to " .. path .. "%{reset}")
+        return
+    end
+    ok = chdir(dep.dir)
+    if not ok then
+        printc(
+            "%{red}update_box2c: could not chdir to " .. dep.dir .. "%{reset}"
+        )
+        return
+    end
 
     print("update_box2c", lfs.currentdir())
 
@@ -1944,7 +1973,6 @@ local record Actions
     --anim_convert: function(Args)
     dist: function(Args)
     build: function(Args)
-    build_w: function(Args)
     build_smart: function(Args)
     compile_flags: function(Args)
     dependencies: function(Args)
@@ -1985,10 +2013,8 @@ local enum ActionsEnum
     "stage"
     "project"
     "build"
-    "build_w"
-    "build_smart"
     "compile_flags"
-    "dependencies"
+    --"dependencies"
     "deps"
     "update"
     "projects_status"
@@ -2070,14 +2096,9 @@ local parser_setup: {string:ParserSetup} = {
 
     build = {
         summary = "build dependencies for native platform",
-        options = { "-n --name" },
+        options = { "-n --name", "-t --target" }, 
     },
     
-    build_w = {
-        summary = "build dependencies for WASM platform",
-        options = { "-n --name" },
-    },
-
     compile_flags = {
         summary = "print compile_flags.txt to stdout",
     },
@@ -4008,12 +4029,13 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
     ut.pop_dir()
 end
 
-function actions.build_w(_args: Args)
-    sub_build(_args, path_rel_wasm_third_party, "wasm")
-end
-
 function actions.build(_args: Args)
-    sub_build(_args, path_rel_third_party, "linux")
+    local target = _args.t or _args.target
+    if not target then
+        target = 'linux'
+    end
+    --print('actions.build: target', target)
+    sub_build(_args, path_rel_third_party_t[target], target)
 end
 
 function actions.deps(_args: Args)
@@ -4030,11 +4052,18 @@ end
 
 -- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel_uv(queue: {Task})
+    --printc("%{cyan}currentdir " .. lfs.currentdir() .. "%{reset}")
 
     local errcode = 0
     for _, t in ipairs(queue) do
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
+
+        --[[
+        print()
+        print('run_parallel_uv', t.cmd .. ' ' .. table.concat(t.args, " "))
+        print()
+        --]]
 
         local _, _ = uv.spawn(
             t.cmd,
@@ -4088,12 +4117,18 @@ local function cache_remove(_args: Args)
 end
 
 local function koh_link(objfiles_str: string, _args: Args)
-    printc('%{green}koh_link%{green}')
     local libname = "libcaustic.a"
-    if lfs.attributes(libname) then
-        cmd_do("rm libcaustic.a")
+    local target = _args.t or _args.target
+
+    if target == 'wasm' then
+        libname = "libcaustic.web.a"
     end
-    local cmd = format("ar -rcs  \"libcaustic.a\" %s", objfiles_str)
+
+    if lfs.attributes(libname) then
+        cmd_do("rm " .. libname)
+    end
+    printc('%{green}koh_link: target' .. target .. '%{green}')
+    local cmd = format("%s -rcs  \"%s\" %s", ar[target], libname, objfiles_str)
     --print(cmd)
     cmd_do(cmd)
 end
@@ -4675,14 +4710,13 @@ local function sub_make(
     -- }}}
 
     local output_dir = "."
-
-    --[[
+    -- В данный момент скрипт находится в каталоге src
     if target == 'linux' then
-        output_dir = "obj_linux"
+        output_dir = "../obj_linux"
     elseif target == 'wasm' then
-        output_dir = "obj_wasm"
+        output_dir = "../obj_wasm"
     end
-    --]]
+    print("output_dir", output_dir)
 
     --[[
 local function filter_sources_c(
@@ -4709,7 +4743,7 @@ end
 
     for _, file in ipairs(matched) do
         local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
-        print("_output", _output)
+        print(format("_output '%s'", _output))
         local _input = cwd .. file
 
         -- TODO: Проверять отсутствие объектного файла. 
@@ -4849,8 +4883,10 @@ function actions.make(_args: Args)
     end
 
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    local target = _args.t or "linux"
+    print('actions.make: target', target)
     for _, cfg in ipairs(cfgs) do
-        sub_make(_args, cfg, "linux", push_num)
+        sub_make(_args, cfg, target, push_num)
     end
 end
 

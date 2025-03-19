@@ -300,6 +300,14 @@ local function filter<G>(collection: {G}, cb: function(G): boolean): {G}
     return tmp
 end
 
+local function assert_file(fname: string)
+    local f = io.open(fname, "r")
+    if not f then
+        print(debug.traceback())
+        os.exit(1)
+    end
+end
+
 return {
     ripairs                 = ripairs,
     filter                  = filter,
@@ -314,4 +322,5 @@ return {
     shallow_copy            = shallow_copy,
     template_dirs           = template_dirs,
     deepcopy                = deepcopy,
+    assert_file             = assert_file,
 }
