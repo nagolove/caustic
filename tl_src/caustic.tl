@@ -2098,27 +2098,24 @@ local parser_setup: {string:ParserSetup} = {
         summary = "download modules from network",
         options = { "-n --name", "-t --target" }
     },
-    --[[
-    init_w = {
-        summary = "download dependencies from network. for WASM",
-        options = { "-n --name" },
-    },
-    --]]
     make = {
         summary = "build libcaustic or current project",
+        --[[
         arguments = { 
             { "make_type", "?" }
         },
+        --]]
+        options = { "-t" },
+        --[[
         flags = {
             { "-g --nocodegen", "disable codegeneration step" },
-            --{ "-j", "run compilation parallel" },
-            --{ "-u", "run compilation parallel with libuv" },
             { "-c", "full rebuild without cache info" },
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
             { "-p --cpp", "use c++ code" },
             { "-l --link", "use linking time optimization" },
         },
+        --]]
     },
     publish = {
         summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
@@ -2368,9 +2365,7 @@ end
 local record Args
     -- {{{
     stage: boolean
-    --new: string
-    --list: string
-    --copy: string
+    t: Target
     target: Target
     cpp: string
     nocodegen: string   -- отключить проход кодогенератора
@@ -4093,6 +4088,7 @@ local function cache_remove(_args: Args)
 end
 
 local function koh_link(objfiles_str: string, _args: Args)
+    printc('%{green}koh_link%{green}')
     local libname = "libcaustic.a"
     if lfs.attributes(libname) then
         cmd_do("rm libcaustic.a")
@@ -4125,7 +4121,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     --print(tabular(ctx.libspath))
 
     local artifact = "../" .. cfg.artifact
-    local cc = compiler[_args.target]
+    local cc = compiler[_args.target or _args.t]
     assert(cc)
     local cmd = format(
         "%s -o \"%s\" %s %s %s %s", 
@@ -4679,11 +4675,14 @@ local function sub_make(
     -- }}}
 
     local output_dir = "."
+
+    --[[
     if target == 'linux' then
         output_dir = "obj_linux"
     elseif target == 'wasm' then
         output_dir = "obj_wasm"
     end
+    --]]
 
     --[[
 local function filter_sources_c(
@@ -4703,7 +4702,9 @@ end
         end
     end
 
-    local cc = compiler[_args.target]
+    local cc = compiler[target]
+    --print("_args", inspect(_args))
+    --print("compiler", inspect(compiler))
     assert(cc)
 
     for _, file in ipairs(matched) do
