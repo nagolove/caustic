@@ -542,6 +542,7 @@ void console_buf_print(void) {
 
 // {{{ hk_**
 
+__attribute__((unused))
 static void hk_clipboard_copy(Hotkey *hk) {
     printf("hk_clipboard_copy:\n");
     /*
@@ -557,6 +558,7 @@ static void hk_clipboard_copy(Hotkey *hk) {
     SetClipboardText(con.input_line);
 }
 
+__attribute__((unused))
 static void hk_clipboard_paste(Hotkey *hk) {
     const char *clipbrd = GetClipboardText();
     if (!clipbrd)

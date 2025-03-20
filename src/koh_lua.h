@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include "lua.h"
 #include "raylib.h"
+#include "koh_common.h"
 
 #define MAX_MTNAME  64
 

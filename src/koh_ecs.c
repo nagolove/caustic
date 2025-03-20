@@ -979,7 +979,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
                *set2 = htable_new(NULL);
         e_register(r, &cp_type_one);
         // счетчик количества прикреплений каждого типа
-        int cnt1 = 0;
+        //int cnt1 = 0;
 
         // создать и прикрепить
         const int num = 1000;
@@ -998,7 +998,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
                 htable_add(set, one, sizeof(*one), &e, sizeof(e));
                 // e_id => type_one
                 htable_add(set2, &e, sizeof(e), one, sizeof(*one));
-                cnt1++;
+                /*cnt1++;*/
             }
         }
 
@@ -1309,7 +1309,9 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
         e_register(r, &cp_type_two);
         e_register(r, &cp_type_three);
         // счетчик количества прикреплений каждого типа
+        /*
         int cnt1 = 0, cnt2 = 0, cnt3 = 0;
+        */
 
         // создать и прикрепить
         const int num = 1000;
@@ -1322,7 +1324,7 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
                 munit_assert_not_null(one);
                 *one = rand() % 127;
                 htable_add(set1, one, sizeof(*one), &e, sizeof(e));
-                cnt1++;
+                /*cnt1++;*/
             }
 
             if (koh_maybe()) {
@@ -1332,7 +1334,7 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
                 *two = type_two_create();
 
                 htable_add(set2, two, sizeof(*two), &e, sizeof(e));
-                cnt2++;
+                /*cnt2++;*/
             }
 
             if (koh_maybe()) {
@@ -1342,7 +1344,7 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
                 three->b = 0.5 + rand() % 10;
                 three->c = 0.5 + rand() % 10;
                 htable_add(set3, three, sizeof(*three), &e, sizeof(e));
-                cnt3++;
+                /*cnt3++;*/
             }
 
         }
@@ -1368,8 +1370,12 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
             e_view = e_view_entity(&v);
             // должно совпасть
             if (e->id != e_view.id) {
-                printf("test_view_multi: e->id %ld\n", e->id);
-                printf("test_view_multi: e_view.id %ld\n", e_view.id);
+                printf(
+                    "test_view_multi: e->id %lld\n", (long long)e->id
+                );
+                printf(
+                    "test_view_multi: e_view.id %lld\n", (long long)e_view.id
+                );
             }
             //munit_assert((*e).id == e_view.id);
             /////////////////////////////////////////////
@@ -1387,8 +1393,12 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
             e_view = e_view_entity(&v);
             // должно совпасть
             if ((*e).id != e_view.id) {
-                printf("test_view_multi: e->id %ld\n", e->id);
-                printf("test_view_multi: e_view.id %ld\n", e_view.id);
+                printf(
+                    "test_view_multi: e->id %lld\n", (long long)e->id
+                );
+                printf(
+                    "test_view_multi: e_view.id %lld\n", (long long)e_view.id
+                );
             }
             /*munit_assert((*e).id == e_view.id);*/
             /////////////////////////////////////////////
@@ -1472,8 +1482,10 @@ MunitResult test_view_multi(const MunitParameter params[], void* userdata) {
             e_view = e_view_entity(&v);
             // должно совпасть
             if (e->id != e_view.id) {
-                printf("test_view_multi: e->id %ld\n", e->id);
-                printf("test_view_multi: e_view.id %ld\n", e_view.id);
+                printf("test_view_multi: e->id %lld\n", (long long)e->id);
+                printf(
+                    "test_view_multi: e_view.id %lld\n", (long long)e_view.id
+                );
             }
             /*munit_assert((*e).id == e_view.id);*/
             /////////////////////////////////////////////
@@ -1942,7 +1954,7 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         ecs_t *r = e_new(NULL);
         e_id e = e_create(r);
         munit_assert(e.id != e_null.id);
-        printf("test_create: e %ld\n", e.id);
+        printf("test_create: e %lld\n", (long long)e.id);
         e_free(r);
     }
     
@@ -1958,9 +1970,9 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         munit_assert_long(e0.id, ==, 0);
         munit_assert_long(e1.id, ==, 1);
         munit_assert_long(e2.id, ==, 2);
-        printf("test_create: e0 %ld\n", e0.id);
-        printf("test_create: e1 %ld\n", e1.id);
-        printf("test_create: e2 %ld\n", e2.id);
+        printf("test_create: e0 %lld\n", (long long)e0.id);
+        printf("test_create: e1 %lld\n", (long long)e1.id);
+        printf("test_create: e2 %lld\n", (long long)e2.id);
         e_free(r);
     }
 
@@ -1979,9 +1991,9 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         munit_assert(e_valid(r, e0) == true);
         munit_assert(e_valid(r, e1) == true);
         munit_assert(e_valid(r, e2) == true);
-        printf("test_create: e0 %ld\n", e0.id);
-        printf("test_create: e1 %ld\n", e1.id);
-        printf("test_create: e2 %ld\n", e2.id);
+        printf("test_create: e0 %lld\n", (long long)e0.id);
+        printf("test_create: e1 %lld\n", (long long)e1.id);
+        printf("test_create: e2 %lld\n", (long long)e2.id);
         e_free(r);
     }
 
@@ -2000,9 +2012,9 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         munit_assert(e_valid(r, e0) == true);
         munit_assert(e_valid(r, e1) == true);
         munit_assert(e_valid(r, e2) == true);
-        printf("test_create: e0 %ld\n", e0.id);
-        printf("test_create: e1 %ld\n", e1.id);
-        printf("test_create: e2 %ld\n", e2.id);
+        printf("test_create: e0 %lld\n", (long long)e0.id);
+        printf("test_create: e1 %lld\n", (long long)e1.id);
+        printf("test_create: e2 %lld\n", (long long)e2.id);
         e_free(r);
     }
 
@@ -2182,7 +2194,7 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
         e_destroy(r, e);
         e_destroy(r, e);
         munit_assert_int(r->entities_num, ==, 0);
-        printf("test_create_destroy: e %ld\n", e.id);
+        printf("test_create_destroy: e %lld\n", (long long)e.id);
         e_print_entities(r);
         e_free(r);
     }

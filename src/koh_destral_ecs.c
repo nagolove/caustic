@@ -2999,7 +2999,7 @@ static void _test_destroy(de_cp_type comps[3]) {
     Проверка происходит через de_view c одним компонентом
  */
 
-__attribute_maybe_unused__
+__attribute__((unused))
 static MunitResult test_create_emplace_destroy(
     const MunitParameter params[], void* data
 ) {

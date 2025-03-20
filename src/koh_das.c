@@ -285,7 +285,7 @@ void square(DAS_Context *ctx) {
 
 #if !defined(PLATFORM_WEB)
         // XXX: Правильное время стоит?
-        thrd_sleep(&(struct timespec){ .tv_nsec = 10000000000000}, NULL);
+        thrd_sleep(&(struct timespec){ .tv_nsec =  999999999}, NULL);
         //nanosleep(&(struct timespec){ .tv_sec = 0., .tv_nsec = 10000000000000}, NULL);
         //printf("blaaa\n");
         /*

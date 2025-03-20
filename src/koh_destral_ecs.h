@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
+#include "koh_common.h"
 #include "munit.h"
 
 /*  de_ecs

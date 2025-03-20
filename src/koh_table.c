@@ -108,7 +108,7 @@ static inline void *bucket_get_value(const Bucket *bucket) {
 static void bucket_print(HTable *ht, Bucket *b, FILE *f, int64_t *i) {
     if (!b) {
         if (i)
-            fprintf(f, "[%.3zu]", *i);
+            fprintf(f, "[%.3lu]", *i);
     } else {
 
         const char *key = "", *value = "";

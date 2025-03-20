@@ -375,7 +375,8 @@ void net_client_init(Net *n, Client_def def) {
     n->payload = calloc(1, sizeof(Client));
 
     thrd_create(&n->worker, (int(*)(void*))client_worker, n);
-    printf("n->worker = %zu\n", n->worker);
+    /*printf("n->worker = %zu\n", n->worker);*/
+    printf("n->worker = %lu\n", n->worker);
 }
 
 bool net_receive(Net *n, void *data, int len) {

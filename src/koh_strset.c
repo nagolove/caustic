@@ -154,8 +154,8 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
 
     if (strset_verbose) {
         printf(
-            "rec_shift: index %lu, hashi %lu\n",
-            index, hashi
+            "rec_shift: index %llu, hashi %llu\n",
+            (long long)index, (long long)hashi
         );
     }
 
@@ -163,8 +163,8 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
 
         if (strset_verbose) {
             printf(
-                "rec_shift: index %lu, taken %s, key '%s'\n",
-                index, 
+                "rec_shift: index %llu, taken %s, key '%s'\n",
+                (long long)index, 
                 set->arr[index].taken ? "true" : "false",
                 set->arr[index].key
             );
