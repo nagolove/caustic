@@ -10,18 +10,17 @@ local function remove_last_backslash(path)
    return path
 end
 
-local home = os.getenv("HOME")
+local getenv = os.getenv
+local home = getenv("HOME")
 assert(home)
 
-local path_caustic = os.getenv("CAUSTIC_PATH")
+local path_caustic = getenv("CAUSTIC_PATH")
 if not path_caustic then
    print("CAUSTIC_PATH is nil")
    os.exit(1)
 else
    path_caustic = remove_last_backslash(path_caustic)
 end
-
-local getenv = os.getenv
 
 
 
@@ -558,12 +557,17 @@ end
 
 
 
+
+local function find_and_remove_cmake_cache()
+   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+end
+
 local function build_freetype_common(dep)
    print('build_freetype_common', dep.target)
    print('currentdir', lfs.currentdir())
    ut.push_current_dir()
 
-   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+   find_and_remove_cmake_cache()
 
    local c1 = format("%s -E make_directory build", cmake[dep.target])
    local c2 = format("%s -E chdir build cmake ..", cmake[dep.target])
@@ -638,7 +642,7 @@ local function build_pcre2_w(dep)
    chdir(dep.dir)
    print("build_pcre2_w:", lfs.currentdir())
 
-   cmd_do("rm CMakeCache.txt")
+   find_and_remove_cmake_cache()
    cmd_do("emcmake cmake .")
    cmd_do("emmake make")
    ut.pop_dir()
@@ -650,7 +654,7 @@ local function build_pcre2(dep)
    chdir(dep.dir)
    print("pcre2_custom_build:", lfs.currentdir())
 
-   cmd_do("rm CMakeCache.txt")
+   find_and_remove_cmake_cache()
    cmd_do("cmake .")
    cmd_do("make -j")
    ut.pop_dir()
@@ -671,13 +675,17 @@ end
 
 
 
+
 local function paste_from_one_to_other(
-   src, dst,
+   src_fname, dst_fname,
    guard_coro)
 
-   print(format("paste_from_one_to_other: src '%s', dst '%s'", src, dst))
-   local file_src = io.open(src, "r")
-   local file_dst = io.open(dst, "a+")
+   print(format(
+   "paste_from_one_to_other: src_fname '%s', dst_fname '%s'",
+   src_fname, dst_fname))
+
+   local file_src = io.open(src_fname, "r")
+   local file_dst = io.open(dst_fname, "a+")
 
    assert(file_src)
    assert(file_dst)
@@ -751,6 +759,21 @@ local function get_additional_includes(t)
    return includes_str
 end
 
+
+local function match_in_file(fname, pattern)
+   local f = io.open(fname)
+   assert(f)
+   local i = 0
+   for l in f:lines() do
+      i = i + 1
+      if string.match(l, pattern) then
+         return true
+      end
+   end
+
+   return false
+end
+
 local function cimgui_after_init(dep)
    print("cimgui_after_init:", lfs.currentdir())
 
@@ -795,12 +818,14 @@ local function cimgui_after_init(dep)
    ut.pop_dir()
    print("cimgui_after_init: code was generated");
 
-   cmd_do("rm CMakeCache.txt")
+   find_and_remove_cmake_cache()
 
    assert(cmake[dep.target])
 
+   local path = path_abs_third_party[dep.target]
+   assert(path)
    local cmake_cmd = {
-      format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
+      format("CXXFLAGS=-I%s/freetype/include", path),
       cmake[dep.target],
       format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes(dep.target)),
       "-DIMGUI_STATIC=1",
@@ -819,16 +844,35 @@ local function cimgui_after_init(dep)
 
    cmd_do(table.concat(cmake_cmd, " "))
 
-   paste_from_one_to_other(
-   path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
-   path_abs_third_party[dep.target] .. "/cimgui/cimgui.h",
-   coroutine.create(guard))
 
 
-   paste_from_one_to_other(
-   path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
-   path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp")
 
+
+
+
+   local rlimgui_pattern =
+   "void%s*rlImGuiSetup(struct%s*igSetupOptions%s*%*opts);"
+   local dst_fname = path_abs_third_party[dep.target] .. "/cimgui/cimgui.h";
+
+
+   if not match_in_file(dst_fname, rlimgui_pattern) then
+
+      paste_from_one_to_other(
+      path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
+      dst_fname,
+      coroutine.create(guard))
+
+
+      paste_from_one_to_other(
+      path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
+      path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp")
+
+   else
+      printc(
+      "%{yellow}try to duplicate rlImGui stuff" ..
+      " in cimgui module%{reset}")
+
+   end
 
    ut.pop_dir()
 end
@@ -871,9 +915,9 @@ end
 
 
 local function build_raylib_common(dep)
-   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+   find_and_remove_cmake_cache()
 
-   local EMSDK = os.getenv('EMSDK')
+   local EMSDK = getenv('EMSDK')
 
 
 
@@ -922,25 +966,9 @@ local function build_raylib_common(dep)
 
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function build_box2c_common(dep)
 
-
-   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-
+   find_and_remove_cmake_cache()
 
    local t = {}
    if dep.target == 'wasm' then
@@ -1297,7 +1325,7 @@ dependencies = {
       build_w = build_pcre2_w,
       description = "регулярные выражения с обработкой ошибок и группами захвата",
       dir = "pcre2",
-      includes = { "pcre2/src" },
+      includes = { "pcre2/src", "pcre2" },
       libdirs = { "pcre2" },
       links = { "pcre2-8" },
       links_internal = { "libpcre2-8.a" },
@@ -1348,9 +1376,10 @@ dependencies = {
       description = "raylib обвязка над imgui",
       dir = "rlImGui",
       disabled = false,
-      git_branch = "caustic",
+
       name = "rlimgui",
-      url = "git@github.com:nagolove/rlImGui.git",
+
+      url = "https://github.com/raylib-extras/rlImGui.git",
       url_action = "git",
       copy_for_wasm = true,
    },
@@ -2101,6 +2130,7 @@ local parser_setup = {
 
    compile_flags = {
       summary = "print compile_flags.txt to stdout",
+      options = { "-t --target" },
    },
    deps = {
       summary = "list of dependencies",
@@ -3406,7 +3436,7 @@ local function sub_publish(_args, cfg)
       print("Bad directory, no artifact value in bld.lua")
    end
 
-   local site_repo_tmp = gsub(site_repo, "~", os.getenv("HOME"))
+   local site_repo_tmp = gsub(site_repo, "~", getenv("HOME"))
    local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
    mkdir(game_dir)
    local cmd = format(
@@ -3694,55 +3724,66 @@ end
 
 
 
-function actions.compile_flags(_)
-   print("current directory", lfs.currentdir())
+function actions.compile_flags(_args)
+   print(
+   "actions.compile_flags: currentdir", lfs.currentdir(),
+   "_args", inspect(_args))
+
+
    cmd_do("cp compile_flags.txt compile_flags.txt.bak")
-   local target = io.open("compile_flags.txt", "w")
-   assert(target)
+   local f = io.open("compile_flags.txt", "w")
+   assert(f)
 
    local function put(s)
-      target:write(s .. "\n")
+      f:write(s .. "\n")
       print(s)
    end
 
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
 
+   local target = _args.target or _args.t
+   if not target then
+      print("actions.compile_flags: target set to default value 'linux'")
+      target = 'linux'
+   end
    print('cfgs', inspect(cfgs))
 
-   if cfgs and cfgs[1] then
-      for _, v in ipairs(get_ready_includes(cfgs[1], 'linux')) do
-         put("-I" .. v)
-      end
-      put("-Isrc")
-      put("-I.")
-
-      if cfgs[1].debug_define then
-
-
-
-
-
-         for define, value in pairs(cfgs[1].debug_define) do
-            assert(type(define) == 'string');
-            assert(type(value) == 'string');
-            put(format("-D%s=%s", upper(define), upper(value)))
+   if cfgs then
+      for _, cfg in ipairs(cfgs) do
+         for _, include in ipairs(get_ready_includes(cfg, target)) do
+            put("-I" .. include)
          end
+         put("-Isrc")
+         put("-I.")
+
+         if cfgs[1].debug_define then
+
+
+
+
+
+            for define, value in pairs(cfgs[1].debug_define) do
+               assert(type(define) == 'string');
+               assert(type(value) == 'string');
+               put(format("-D%s=%s", upper(define), upper(value)))
+            end
+         end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    else
       printc("%{red}could not generate compile_flags.txt%{reset}")
    end
@@ -4124,6 +4165,8 @@ local function koh_link(objfiles_str, _args)
       libname = "libcaustic.web.a"
    end
 
+   print('koh_link:', inspect(_args))
+
    if lfs.attributes(libname) then
       cmd_do("rm " .. libname)
    end
@@ -4135,6 +4178,7 @@ end
 
 local function project_link(ctx, cfg, _args)
    print('project_link', inspect(ctx))
+   print('project_link', inspect(_args))
 
    local flags = ""
    if not _args.noasan then
@@ -4156,7 +4200,7 @@ local function project_link(ctx, cfg, _args)
 
 
    local artifact = "../" .. cfg.artifact
-   local cc = compiler[_args.target or _args.t]
+   local cc = compiler[_args.target]
    assert(cc)
    local cmd = format(
    "%s -o \"%s\" %s %s %s %s",
@@ -4519,6 +4563,8 @@ end
 local function sub_make(
    _args, cfg, target, push_num)
 
+   _args.target = target
+
    if verbose then
       print(format(
       "sub_make: _args %s, cfg %s, push_num %d",
@@ -4718,14 +4764,6 @@ local function sub_make(
    end
    print("output_dir", output_dir)
 
-
-
-
-
-
-
-
-
    local files_processed = ut.filter_sources(".", exclude)
 
 
@@ -4867,6 +4905,7 @@ local function sub_make(
 
 
 
+      print('sub_make: target', target, '_args', inspect(_args))
       koh_link(objfiles_str, _args)
       cmd_do("mv libcaustic.a ../libcaustic.a")
    end
