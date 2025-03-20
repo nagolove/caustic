@@ -10,18 +10,17 @@ local function remove_last_backslash(path: string): string
     return path
 end
 
-local home = os.getenv("HOME")
+local getenv = os.getenv
+local home = getenv("HOME")
 assert(home)
 
-local path_caustic = os.getenv("CAUSTIC_PATH")
+local path_caustic = getenv("CAUSTIC_PATH")
 if not path_caustic then
     print("CAUSTIC_PATH is nil")
     os.exit(1)
 else
     path_caustic = remove_last_backslash(path_caustic)
 end
-
-local getenv = os.getenv
 
 -- {{{ env vars
 -- каталог для библиотек x86_64 собранных в отладочном режиме
@@ -558,12 +557,17 @@ local function build_with_cmake_w(dep: Dependency)
 end
 --]]
 
+-- TODO: Проверка наличия fd
+local function find_and_remove_cmake_cache()
+    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+end
+
 local function build_freetype_common(dep: Dependency)
     print('build_freetype_common', dep.target)
     print('currentdir', lfs.currentdir())
     ut.push_current_dir()
 
-    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+    find_and_remove_cmake_cache()
 
     local c1 = format("%s -E make_directory build", cmake[dep.target])
     local c2 = format("%s -E chdir build cmake ..", cmake[dep.target])
@@ -638,7 +642,7 @@ local function build_pcre2_w(dep: Dependency)
     chdir(dep.dir)
     print("build_pcre2_w:", lfs.currentdir())
 
-    cmd_do("rm CMakeCache.txt")
+    find_and_remove_cmake_cache()
     cmd_do("emcmake cmake .")
     cmd_do("emmake make")
     ut.pop_dir()
@@ -650,7 +654,7 @@ local function build_pcre2(dep: Dependency)
     chdir(dep.dir)
     print("pcre2_custom_build:", lfs.currentdir())
 
-    cmd_do("rm CMakeCache.txt")
+    find_and_remove_cmake_cache()
     cmd_do("cmake .")
     cmd_do("make -j")
     ut.pop_dir()
@@ -669,15 +673,19 @@ local function guard()
     coroutine.yield("#endif\n")
 end
 
--- XXX: Что делает эта функция?
--- зачем аргумент guard_coro ?
+-- Вставляет содержимое файла src_fname в dst_fname
+-- Если передается корутина, то она используется для текста заградителей 
+-- заголовочных файлов.
 local function paste_from_one_to_other(
-    src: string, dst: string,
+    src_fname: string, dst_fname: string,
     guard_coro?: thread 
 )
-    print(format("paste_from_one_to_other: src '%s', dst '%s'", src, dst))
-    local file_src = io.open(src, "r")
-    local file_dst = io.open(dst, "a+")
+    print(format(
+        "paste_from_one_to_other: src_fname '%s', dst_fname '%s'",
+        src_fname, dst_fname
+    ))
+    local file_src = io.open(src_fname, "r")
+    local file_dst = io.open(dst_fname, "a+")
 
     assert(file_src)
     assert(file_dst)
@@ -751,6 +759,18 @@ local function get_additional_includes(t: Target): string
     return includes_str
 end
 
+-- Сделать функцию для поиска строки в файле?
+local function match_in_file(fname: string, pattern: string): boolean
+    local f = io.open(fname)
+    assert(f)
+    for l in f:lines() do
+        if string.match(l, pattern) then
+            return true;
+        end
+    end
+    return false
+end
+
 local function cimgui_after_init(dep: Dependency)
     print("cimgui_after_init:", lfs.currentdir())
 
@@ -795,7 +815,7 @@ local function cimgui_after_init(dep: Dependency)
     ut.pop_dir()
     print("cimgui_after_init: code was generated");
 
-    cmd_do("rm CMakeCache.txt")
+    find_and_remove_cmake_cache()
 
     assert(cmake[dep.target])
 
@@ -819,16 +839,35 @@ local function cimgui_after_init(dep: Dependency)
     )
     cmd_do(table.concat(cmake_cmd, " "))
 
-    paste_from_one_to_other(
-        path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
-        path_abs_third_party[dep.target] .. "/cimgui/cimgui.h",
-        coroutine.create(guard)
-    )
+    --[[
+    print('dep.target', dep.target)
+    print("os.exit(1)")
+    os.exit(1)
+    --]]
 
-    paste_from_one_to_other(
-        path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
-        path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp"
-    )
+    local rlimgui_pattern = 
+        "void%s*rlImGuiSetup(struct%s*igSetupOptions%s*%*opts);"
+    local dst_fname = path_abs_third_party[dep.target] .. "/cimgui/cimgui.h";
+
+    -- Проверяю, записан ли в файл код rlImGui ?
+    if not match_in_file(dst_fname, rlimgui_pattern) then
+
+        paste_from_one_to_other(
+            path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
+            dst_fname,
+            coroutine.create(guard)
+        )
+
+        paste_from_one_to_other(
+            path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
+            path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp"
+        )
+    else
+        printc(
+            "%{yellow}try to duplicate rlImGui stuff" ..
+           " in cimgui module%{reset}"
+        )
+    end
 
     ut.pop_dir()
 end
@@ -871,9 +910,9 @@ end
 --]]
 
 local function build_raylib_common(dep: Dependency)
-    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+    find_and_remove_cmake_cache()
 
-    local EMSDK = os.getenv('EMSDK')
+    local EMSDK = getenv('EMSDK')
 
     --[[
     -- -DCMAKE_BUILD_TYPE=Release
@@ -922,25 +961,9 @@ local function build_raylib_common(dep: Dependency)
     --cmd_do("emmake -j")
 end
 
---[[
-local function build_box2c(_: Dependency)
-    -- TODO: Добавить сборку без отладочной информации.
-    -- TODO: Проверка наличия fd
-    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-    cmd_do("cmake " .. 
-        "-DBOX2D_VALIDATE=1 " ..
-        '-DBOX2D_BENCHMARKS=OFF ' ..
-        '-DBOX2D_BUILD_DOCS=OFF ' ..
-        "-DCMAKE_BUILD_TYPE=Debug .")
-    cmd_do("make clean && make -j")
-end
---]]
-
 local function build_box2c_common(dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
-    -- TODO: Проверка наличия fd
-    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-
+    find_and_remove_cmake_cache()
 
     local t = {}
     if dep.target == 'wasm' then
@@ -3406,7 +3429,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
         print("Bad directory, no artifact value in bld.lua")
     end
 
-    local site_repo_tmp = gsub(site_repo, "~", os.getenv("HOME"))
+    local site_repo_tmp = gsub(site_repo, "~", getenv("HOME"))
     local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
     mkdir(game_dir)
     local cmd = format(
