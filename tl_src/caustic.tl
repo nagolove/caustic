@@ -763,11 +763,14 @@ end
 local function match_in_file(fname: string, pattern: string): boolean
     local f = io.open(fname)
     assert(f)
+    local i = 0
     for l in f:lines() do
+        i = i + 1
         if string.match(l, pattern) then
             return true;
         end
     end
+    --print("match_in_file:", i)
     return false
 end
 
@@ -819,8 +822,10 @@ local function cimgui_after_init(dep: Dependency)
 
     assert(cmake[dep.target])
 
+    local path = path_abs_third_party[dep.target]
+    assert(path)
     local cmake_cmd = {
-        format("CXXFLAGS=-I%s/freetype/include", path_abs_third_party),
+        format("CXXFLAGS=-I%s/freetype/include", path),
         cmake[dep.target],
         format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes(dep.target)),
         "-DIMGUI_STATIC=1",
@@ -1320,7 +1325,7 @@ dependencies = {
         build_w = build_pcre2_w,
         description = "регулярные выражения с обработкой ошибок и группами захвата",
         dir = "pcre2",
-        includes = { "pcre2/src" },
+        includes = { "pcre2/src", "pcre2" },
         libdirs = { "pcre2" },
         links = { "pcre2-8" },
         links_internal = { "libpcre2-8.a" },
@@ -1371,9 +1376,10 @@ dependencies = {
         description = "raylib обвязка над imgui",
         dir = "rlImGui",
         disabled = false,
-        git_branch = "caustic",
+        --git_branch = "caustic",
         name = "rlimgui",
-        url = "git@github.com:nagolove/rlImGui.git",
+        --url = "git@github.com:nagolove/rlImGui.git",
+        url = "https://github.com/raylib-extras/rlImGui.git",
         url_action = "git",
         copy_for_wasm = true,
     },
@@ -2124,6 +2130,7 @@ local parser_setup: {string:ParserSetup} = {
     
     compile_flags = {
         summary = "print compile_flags.txt to stdout",
+        options = { "-t --target" },
     },
     deps = {
         summary = "list of dependencies",
@@ -3717,55 +3724,66 @@ end
 
 -- XXX: Работает только с одной, первой сборочной целью. 
 -- Что же делать с остальными?
-function actions.compile_flags(_: Args)
-    print("current directory", lfs.currentdir())
+function actions.compile_flags(_args: Args)
+    print(
+        "actions.compile_flags: currentdir", lfs.currentdir(),
+        "_args", inspect(_args)
+    )
+
     cmd_do("cp compile_flags.txt compile_flags.txt.bak")
-    local target = io.open("compile_flags.txt", "w")
-    assert(target)
+    local f = io.open("compile_flags.txt", "w")
+    assert(f)
 
     local function put(s: string)
-        target:write(s .. "\n")
+        f:write(s .. "\n")
         print(s)
     end
 
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
 
+    local target = _args.target or _args.t
+    if not target then
+        print("actions.compile_flags: target set to default value 'linux'")
+        target = 'linux'
+    end
     print('cfgs', inspect(cfgs))
 
-    if cfgs and cfgs[1] then
-        for _, v in ipairs(get_ready_includes(cfgs[1], 'linux')) do
-            put("-I" .. v)
-        end
-        put("-Isrc")
-        put("-I.")
-
-        if cfgs[1].debug_define then
-            --for define, value in pairs(cfgs[0].debug_define) do
-
-            --printc("%{red}INSPECTION%{reset}")
-            --print(inspect(pairs(cfgs[1].debug_define)))
-
-            for define, value in pairs(cfgs[1].debug_define) do
-                assert(type(define) == 'string');
-                assert(type(value) == 'string');
-                put(format("-D%s=%s", upper(define), upper(value)))
+    if cfgs then
+        for _, cfg in ipairs(cfgs) do
+            for _, include in ipairs(get_ready_includes(cfg, target)) do
+                put("-I" .. include)
             end
-        end
+            put("-Isrc")
+            put("-I.")
 
-        --[[ XXX: Когда включать определения макропроцессора для релизной 
-        сборки?
-        --]]
+            if cfgs[1].debug_define then
+                --for define, value in pairs(cfgs[0].debug_define) do
 
-        --[[
-        if cfgs[1].release_define then
-            for define, value in pairs(cfgs[0].release_define) do
-                assert(type(define) == 'string');
-                assert(type(value) == 'string');
-                put(format("-D%s=%s", string.upper(define), string.upper(value)))
+                --printc("%{red}INSPECTION%{reset}")
+                --print(inspect(pairs(cfgs[1].debug_define)))
+
+                for define, value in pairs(cfgs[1].debug_define) do
+                    assert(type(define) == 'string');
+                    assert(type(value) == 'string');
+                    put(format("-D%s=%s", upper(define), upper(value)))
+                end
             end
-        end
-        --]]
 
+            --[[ XXX: Когда включать определения макропроцессора для релизной 
+            сборки?
+            --]]
+
+            --[[
+            if cfgs[1].release_define then
+                for define, value in pairs(cfgs[0].release_define) do
+                    assert(type(define) == 'string');
+                    assert(type(value) == 'string');
+                    put(format("-D%s=%s", string.upper(define), string.upper(value)))
+                end
+            end
+            --]]
+
+        end
     else
         printc("%{red}could not generate compile_flags.txt%{reset}")
     end
@@ -4147,6 +4165,8 @@ local function koh_link(objfiles_str: string, _args: Args)
         libname = "libcaustic.web.a"
     end
 
+    print('koh_link:', inspect(_args))
+
     if lfs.attributes(libname) then
         cmd_do("rm " .. libname)
     end
@@ -4158,6 +4178,7 @@ end
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     print('project_link', inspect(ctx))
+    print('project_link', inspect(_args))
 
     local flags: string = ""
     if not _args.noasan then
@@ -4179,7 +4200,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     --print(tabular(ctx.libspath))
 
     local artifact = "../" .. cfg.artifact
-    local cc = compiler[_args.target or _args.t]
+    local cc = compiler[_args.target]
     assert(cc)
     local cmd = format(
         "%s -o \"%s\" %s %s %s %s", 
@@ -4542,6 +4563,8 @@ end
 local function sub_make(
     _args: Args, cfg: Cfg, target: Target, push_num?: integer
 )
+    _args.target = target
+
     if verbose then
         print(format(
             "sub_make: _args %s, cfg %s, push_num %d",
@@ -4741,14 +4764,6 @@ local function sub_make(
     end
     print("output_dir", output_dir)
 
-    --[[
-local function filter_sources_c(
-    path: string, cb: function(string), exclude?: {string}
-) 
-    ut.filter_sources(".*%.c$", path, cb, exclude)
-end
-    --]]
-
     local files_processed =  ut.filter_sources(".", exclude)
 
     -- Добавляю только *.c файлы
@@ -4890,6 +4905,7 @@ end
         -- Сборка библиотеки "Щелочь"
 
         -- TODO: Связывать в каустику imgui, для сборки koh_imgui.h
+        print('sub_make: target', target, '_args', inspect(_args))
         koh_link(objfiles_str, _args)
         cmd_do("mv libcaustic.a ../libcaustic.a")
     end
