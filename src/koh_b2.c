@@ -159,7 +159,7 @@ static void draw_solid_circle(
 }
 
 /// Draw a capsule.
-static void draw_capsule(
+static void draw_solid_capsule(
     b2Vec2 p1, b2Vec2 p2, float radius, b2HexColor color, void* context
 ) {
     if (verbose_b2)
@@ -185,6 +185,7 @@ static void draw_capsule(
 }
 
 /// Draw a solid capsule.
+/*
 static void draw_solid_capsule(
     b2Vec2 p1, b2Vec2 p2, float radius, b2HexColor color, void* context
 ) {
@@ -209,6 +210,7 @@ static void draw_solid_capsule(
         b2Color_to_Color(color)
     );
 }
+*/
 
 /// Draw a line segment.
 static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* context) {
@@ -241,11 +243,13 @@ static void draw_point(b2Vec2 p, float size, b2HexColor color, void* context) {
 }
 
 /// Draw a string.
+/*
 static void draw_string(b2Vec2 p, const char* s, void* context) {
     if (verbose_b2)
         trace("draw_string:\n");
     DrawText(s, p.x, p.y, 20, BLACK);
 }
+*/
 
 b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
     return (struct b2DebugDraw) {
@@ -254,12 +258,11 @@ b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
         //.DrawRoundedPolygon = draw_rounded_polygon,
         .DrawCircle = draw_circle,
         .DrawSolidCircle = draw_solid_circle,
-        .DrawCapsule = draw_capsule,
         .DrawSolidCapsule = draw_solid_capsule,
         .DrawSegment = draw_segment,
         .DrawTransform = draw_transform,
         .DrawPoint = draw_point,
-        .DrawString = draw_string,
+        /*.DrawString = draw_string,*/
         .drawShapes = true,
         .drawJoints = true,
         .drawAABBs = true,
@@ -330,11 +333,11 @@ static void _b2WorldDef_to_str_lua(char *buf[], int *i, b2WorldDef *def) {
     p(buf[(*i)++], "{ ");
     p(buf[(*i)++], "gravity = %s,", grav);
     p(buf[(*i)++], "restitutionThreshold = %f,", def->restitutionThreshold);
-    p(buf[(*i)++], "contactPushoutVelocity = %f,", def->contactPushoutVelocity);
+    /*p(buf[(*i)++], "contactPushoutVelocity = %f,", def->contactPushoutVelocity);*/
     p(buf[(*i)++], "contactHertz = %f,", def->contactHertz);
     p(buf[(*i)++], "contactDampingRatio = %f,", def->contactDampingRatio);
     p(buf[(*i)++], "enableSleep = %s,", def->enableSleep ? "true" : "false");
-    p(buf[(*i)++], "enableCotinuos = %s,", def->enableContinous ? "true" : "false");
+    /*p(buf[(*i)++], "enableCotinuos = %s,", def->enableContinous ? "true" : "false");*/
     //p(buf[(*i)++], "bodyCapacity = %d,", def->bodyCapacity);
     //p(buf[(*i)++], "shapeCapacity = %d,", def->shapeCapacity);
     //p(buf[(*i)++], "contactCapacity = %d,", def->contactCapacity);
@@ -352,7 +355,7 @@ static void _b2WorldDef_to_str_pure(char *buf[], int *i, b2WorldDef *def) {
     const char *grav = Vector2_tostr(b2Vec2_to_Vector2(def->gravity));
     p(buf[(*i)++], "gravity %s", grav);
     p(buf[(*i)++], "restitutionThreshold %f", def->restitutionThreshold);
-    p(buf[(*i)++], "contactPushoutVelocity %f", def->contactPushoutVelocity);
+    /*p(buf[(*i)++], "contactPushoutVelocity %f", def->contactPushoutVelocity);*/
     p(buf[(*i)++], "contactHertz %f", def->contactHertz);
     p(buf[(*i)++], "contactDampingRatio %f", def->contactDampingRatio);
     p(buf[(*i)++], "enableSleep %s", def->enableSleep ? "true" : "false");
@@ -564,7 +567,7 @@ const char *b2BodyId_id_to_str(b2BodyId id) {
     static char buf[128];
     sprintf(
         buf, "{ index = %d, world = %hd, revision = %hu }",
-        id.index1, id.world0, id.revision
+        id.index1, id.world0, id.generation
     );
     return buf;
 }
@@ -573,7 +576,7 @@ const char *b2ShapeId_id_to_str(b2ShapeId id) {
     static char buf[128];
     sprintf(
         buf, "{ index = %d, world = %hd, revision = %hu }",
-        id.index1, id.world0, id.revision
+        id.index1, id.world0, id.generation
     );
     return buf;
 }
@@ -680,20 +683,27 @@ char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
     return ret;
 }
 
-uint32_t bit_set(uint32_t n, char num, bool val) {
+uint32_t bit_set32(uint32_t n, char num, bool val) {
     return val ? n | (unsigned)1 << num : n & ~(unsigned)1 << num;
 }
+
+uint64_t bit_set64(uint64_t n, char num, bool val) {
+    return val ? n | (unsigned)1 << num : n & ~(unsigned)1 << num;
+}
+
 
 // Читает field_name поле Lua таблицы на вершине стека, разбирает значение поля
 // в виде таблицы { 0, 1, 0, 1, 1, }
 // Записывает данных вектор битор в ret. Предварительно ret обнуляется.
 // Обязательно указывать значения всех 32 бит, не добавлять других полей и т.д.
 // Принимаются только значения 0 и 1
-static bool array2bits(lua_State *l, const char *field_name, uint32_t *ret) {
+static bool array2bits(lua_State *l, const char *field_name, uint64_t *ret) {
     assert(l);
     assert(field_name);
     assert(ret);
     *ret = 0;
+
+    const int bit_num = 64;
 
     // Проверяем наличие поля field_name
     lua_getfield(l, -1, field_name);
@@ -706,7 +716,7 @@ static bool array2bits(lua_State *l, const char *field_name, uint32_t *ret) {
 
     // Извлекаем элементы field_name
     lua_pushnil(l); // Первый ключ для lua_next
-    int num = 0;
+    uint64_t num = 0;
     while (lua_next(l, -2) != 0) {
         if (!lua_isinteger(l, -1)) {
             trace("b2QueryFilter_from_str: not a number in table\n");
@@ -723,7 +733,7 @@ static bool array2bits(lua_State *l, const char *field_name, uint32_t *ret) {
         }
 
         // XXX: Проверить границу, возможно некорректное условие
-        if (num >= 32) {
+        if (num >= bit_num) {
             lua_pop(l, 1);
             // XXX: Что со стеком, будет ли Lua система работать корректно?
             return false;
@@ -731,7 +741,7 @@ static bool array2bits(lua_State *l, const char *field_name, uint32_t *ret) {
 
         /*printf("%lld ", bit);*/
 
-        *ret = bit_set(*ret, 32 - ++num, bit);
+        *ret = bit_set64(*ret, bit_num - ++num, bit);
         lua_pop(l, 1); // Убираем значение, оставляем ключ
     }
 
@@ -835,7 +845,7 @@ WorldCtx world_init2(WorldCtxSetup *setup) {
         wctx.world_def = *setup->wd;
     else {
         wctx.world_def =  b2DefaultWorldDef();
-        wctx.world_def.enableContinous = true;
+        wctx.world_def.enableContinuous = true;
         wctx.world_def.enableSleep = true;
         wctx.world_def.gravity = b2Vec2_zero;
     }
@@ -908,7 +918,7 @@ void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
         wctx->world_def = *setup->wd;
     else {
         wctx->world_def =  b2DefaultWorldDef();
-        wctx->world_def.enableContinous = true;
+        wctx->world_def.enableContinuous = true;
         wctx->world_def.enableSleep = true;
         wctx->world_def.gravity = b2Vec2_zero;
     }
