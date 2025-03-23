@@ -67,11 +67,8 @@ package.cpath
 
 assert(path_caustic)
 assert(path_rel_third_party)
-
 assert(path_rel_wasm_third_party)
 assert(path_rel_win_third_party)
-
-
 
 
 
@@ -1456,7 +1453,10 @@ dependencies = {
       },
       update = update_box2c,
       libdirs = { "box2c/src" },
-      links = { "box2d:static" },
+
+
+
+      links = { "box2dd:static" },
       links_internal = { "box2c:static" },
       name = 'box2c',
       url = "https://github.com/erincatto/box2d.git",
@@ -2157,15 +2157,14 @@ local parser_setup = {
 
 
       options = { "-t" },
+      flags = {
 
+         { "-c", "full rebuild without cache info" },
+         { "-r --release", "release" },
+         { "-a --noasan", "no address sanitazer" },
 
-
-
-
-
-
-
-
+         { "-l --link", "use linking time optimization" },
+      },
 
    },
    publish = {
@@ -3630,6 +3629,17 @@ end
 function actions.remove(_args)
    print("actions.remove")
 
+   if not _args.target then
+      print("You should explicitly specify target option")
+      return
+   end
+
+   local path = path_rel_third_party_t[_args.target]
+   if not path then
+      print("%{yellow}unknown target%{reset}")
+      return
+   end
+
    local dirnames = {}
    local dependencies_name_map = get_deps_name_map(dependencies)
    if _args.name and dependencies_name_map[_args.name] then
@@ -3657,17 +3667,12 @@ function actions.remove(_args)
       backup(dep)
    end
 
-   local path = path_rel_third_party_t[dep.target]
-   if not path then
-      print("%{yellow}unknown target%{reset}")
-      return
-   end
-
    chdir(path)
    _remove(path, dirnames)
 
    ut.pop_dir()
 end
+
 
 function actions.rocks(_)
    local rocks = {
@@ -4202,6 +4207,7 @@ local function project_link(ctx, cfg, _args)
    local artifact = "../" .. cfg.artifact
    local cc = compiler[_args.target]
    assert(cc)
+
    local cmd = format(
    "%s -o \"%s\" %s %s %s %s",
    cc,

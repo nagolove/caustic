@@ -64,14 +64,11 @@ package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         package.cpath
 -- }}}
 
--- {{{  pre requirements assertions
+-- {{{  global variables for module
 assert(path_caustic)
 assert(path_rel_third_party)
---assert(path_abs_third_party)
 assert(path_rel_wasm_third_party)
 assert(path_rel_win_third_party)
---assert(path_rel_third_party_release)
---assert(path_wasm_third_party_release)
 -- }}}
 
 -- requires and aliases {{{
@@ -482,7 +479,7 @@ local record Dependency
     includes: {string}  -- Список каталогов для включаемых файлов.
 
     links_internal: {string}
-    links: {string}
+    links: {string}|function(dep: Dependency): {string}
     libdirs: {string}
 
     -- TODO: Функция инициализация таблички замисимости. Нужна для установки
@@ -1456,7 +1453,10 @@ dependencies = {
         },
         update = update_box2c,
         libdirs = { "box2c/src" },
-        links = { "box2d:static" },
+        -- TODO: Сделать возможной установку функции в качестве значения links
+        -- что-бы функция устанавливала название[я] библиотека 
+        -- по полю dep.target
+        links = { "box2dd:static" },
         links_internal = { "box2c:static" },
         name = 'box2c',
         url = "https://github.com/erincatto/box2d.git",
@@ -2157,13 +2157,12 @@ local parser_setup: {string:ParserSetup} = {
         },
         --]]
         options = { "-t" },
-        --[[
         flags = {
-            { "-g --nocodegen", "disable codegeneration step" },
+            --{ "-g --nocodegen", "disable codegeneration step" },
             { "-c", "full rebuild without cache info" },
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
-            { "-p --cpp", "use c++ code" },
+            --{ "-p --cpp", "use c++ code" },
             { "-l --link", "use linking time optimization" },
         },
         --]]
@@ -3630,6 +3629,17 @@ end
 function actions.remove(_args: Args)
     print("actions.remove")
 
+    if not _args.target then
+        print("You should explicitly specify target option")
+        return
+    end
+
+    local path = path_rel_third_party_t[_args.target]
+    if not path then
+        print("%{yellow}unknown target%{reset}")
+        return
+    end
+
     local dirnames: {string} = {}
     local dependencies_name_map = get_deps_name_map(dependencies)
     if _args.name and dependencies_name_map[_args.name] then
@@ -3657,18 +3667,13 @@ function actions.remove(_args: Args)
         backup(dep)
     end
 
-    local path = path_rel_third_party_t[dep.target]
-    if not path then
-        print("%{yellow}unknown target%{reset}")
-        return
-    end
-
     chdir(path)
     _remove(path, dirnames)
 
     ut.pop_dir()
 end
 
+-- XXX: Переписать это место что-бы действительно работало
 function actions.rocks(_: Args)
     local rocks = {
         'lanes',
@@ -4202,6 +4207,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local artifact = "../" .. cfg.artifact
     local cc = compiler[_args.target]
     assert(cc)
+    -- TODO: Добавить какие-то wasm флаги
     local cmd = format(
         "%s -o \"%s\" %s %s %s %s", 
         cc,
