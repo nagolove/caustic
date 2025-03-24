@@ -32,8 +32,6 @@
 #include <execinfo.h>
 #endif
 
-#include <execinfo.h>
-
 /*#define ENET_IMPLEMENTATION*/
 //#include "enet.h"
 // }}}
@@ -1785,6 +1783,11 @@ void koh_window_state_print() {
     );
 }
 
+#ifdef __wasm__
+void koh_backtrace_print() {
+}
+#else
+#include <execinfo.h>
 void koh_backtrace_print() {
     int num = 100;
     void *trace[num];
@@ -1854,6 +1857,7 @@ const char * koh_backtrace_get() {
 
     return buf;
 }
+#endif
 
 char *Vector2_tostr_alloc(const Vector2 *verts, int num) {
     assert(verts);

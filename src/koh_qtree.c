@@ -268,7 +268,7 @@ void qtree_shrink(struct QTree *qt) {
     }
 }
 
-__attribute_maybe_unused__
+__attribute__((unused))
 static const char *qtree_query2str(struct QTreeQuery q) {
 
     /*

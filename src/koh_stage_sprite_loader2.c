@@ -1735,7 +1735,7 @@ static void gui_right_layers_group(Stage_SpriteLoader *st) {
         igTableSetupColumn("visible", 0, 0, 1);
         igTableHeadersRow();
 
-        int i = 0;
+        //int i = 0;
         lua_pushnil(vm);
         while (lua_next(vm, -2)) {
             ImGuiTableFlags row_flags = 0;
@@ -1799,7 +1799,7 @@ static void gui_right_layers_group(Stage_SpriteLoader *st) {
                 active_sprite_load(st, &ls->tex_combined);
             }
 
-            i++;
+            /*i++;*/
             lua_pop(vm, 1);
         }
 

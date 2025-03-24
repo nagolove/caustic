@@ -435,7 +435,7 @@ char **b2BodyDef_to_str(b2BodyDef bd) {
     p(lines[i++], "angularDamping = %f,",  bd.angularDamping); 
     p(lines[i++], "gravityScale = %f,",  bd.gravityScale);   
     uint64_t user_data = (uint64_t)(bd.userData ? bd.userData : 0);
-    p(lines[i++], "userData = %lX,",  user_data); 
+    p(lines[i++], "userData = %llu,",  (unsigned long long)user_data); 
     p(lines[i++], "enableSleep = %s,",  bd.enableSleep ? "true" : "false");    
     p(lines[i++], "isAwake = %s,",  bd.isAwake ? "true" : "false");    
     p(lines[i++], "fixedRotation = %s,",  bd.fixedRotation ? "true" : "false");  
@@ -456,7 +456,7 @@ char **b2ShapeDef_to_str(b2ShapeDef sd) {
 
     p(lines[i++], "{");
     uint64_t user_data = (uint64_t)(sd.userData ? sd.userData : 0);
-    p(lines[i++], "userData = %lX,", user_data);
+    p(lines[i++], "userData = %llu,", (unsigned long long)user_data);
     p(lines[i++], "friction = %f,", sd.friction);
     p(lines[i++], "restitution = %f,", sd.restitution);
     p(lines[i++], "density = %f,", sd.density);
@@ -898,11 +898,11 @@ WorldCtx world_init2(WorldCtxSetup *setup) {
     trace(
         "world_init2: width %u, height %u, "
         "xorshift32_state seed %u,"
-        "xorshift64_state seed %lu,"
+        "xorshift64_state seed %llu,"
         "gravity %s\n",
         setup->width, setup->height, 
         wctx.xrng->a,
-        wctx.xrng64.a,
+        (unsigned long long)wctx.xrng64.a,
         b2Vec2_to_str(b2World_GetGravity(wctx.world))
     );
 

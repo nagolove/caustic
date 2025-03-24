@@ -4,7 +4,7 @@
 #include "koh_hashers.h"
 #include "koh_lua.h"
 
-#if defined(PLATFORM_WEB)
+#ifdef __wasm__
 void inotifier_init() { }
 void inotifier_update() { }
 void inotifier_shutdown() { }
@@ -344,4 +344,3 @@ void inotifier_watch_remove(const char *fname) {
 }
 
 #endif
-

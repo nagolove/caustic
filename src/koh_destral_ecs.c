@@ -2974,7 +2974,10 @@ static void _test_destroy(de_cp_type comps[3]) {
         // удалить одну случайную сущность целиком
         ctx = facade_entt_destroy(ctx, false);
 
-        printf("ctx.map_entt2Desc %ld\n", htable_count(ctx.map_entt2Desc));
+        printf(
+            "ctx.map_entt2Desc %lld\n",
+            (long long)htable_count(ctx.map_entt2Desc)
+        );
 
         // проверить, что состояние ecs соответствует ожидаемому, которое 
         // хранится в хэштаблицах.
@@ -3262,7 +3265,7 @@ static MunitResult test_view_get(
 
     printf("--------------------------\n");
     //htable_each(table_cell, iter_table_cell, NULL);
-    printf("table_cell count %zu\n", htable_count(table_cell));
+    printf("table_cell count %lld\n", (long long)htable_count(table_cell));
     printf("--------------------------\n");
 
     struct Couple {
@@ -3433,7 +3436,7 @@ static MunitResult test_view_single_get(
 
     printf("--------------------------\n");
     //htable_each(table_cell, iter_table_cell, NULL);
-    printf("table_cell count %zu\n", htable_count(table_cell));
+    printf("table_cell count %llu\n", (long long)htable_count(table_cell));
     printf("--------------------------\n");
 
     struct Couple {

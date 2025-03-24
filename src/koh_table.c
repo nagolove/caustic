@@ -66,16 +66,17 @@ static void _htable_add_uniq(HTable *ht, Bucket *bucket);
 static Bucket *bucket_alloc(int key_len, int value_len);
 
 // {{{ 64bits static assertions
-_Static_assert(
-    sizeof(Hash_t) == sizeof(int64_t),
-    "Please use 64 bit Hash_t value"
-);
-
-_Static_assert(
-    sizeof(size_t) == 8,
-    "Only 64 bit size_t supported"
-);
-
+#ifndef __wasm__
+    // Здесь код, специфичный для WebAssembly
+    _Static_assert(
+        sizeof(Hash_t) == sizeof(int64_t),
+        "Please use 64 bit Hash_t value"
+    );
+    _Static_assert(
+        sizeof(size_t) == 8,
+        "Only 64 bit size_t supported"
+    );
+#endif
 // }}}
 
 static inline void htable_assert(HTable *t) {
@@ -108,7 +109,7 @@ static inline void *bucket_get_value(const Bucket *bucket) {
 static void bucket_print(HTable *ht, Bucket *b, FILE *f, int64_t *i) {
     if (!b) {
         if (i)
-            fprintf(f, "[%.3lu]", *i);
+            fprintf(f, "[%.3lld]", (long long)*i);
     } else {
 
         const char *key = "", *value = "";
@@ -120,13 +121,15 @@ static void bucket_print(HTable *ht, Bucket *b, FILE *f, int64_t *i) {
 
         if (i)
             fprintf(
-                f, "[%.3zu] %10.10s = %10s, hash %lu, hash_index = %.3zu",
-                *i, key, value, b->key_hash, b->key_hash % ht->cap
+                f, "[%.3lld] %10.10s = %10s, hash %llu, hash_index = %.3lld",
+                (long long)*i, key, value, (long long)b->key_hash,
+                (long long)(b->key_hash % ht->cap)
            );
         else
             fprintf(
-                f, "%10.10s = %10s, hash %lu, hash_index = %.3zu",
-                key, value, b->key_hash, b->key_hash % ht->cap
+                f, "%10.10s = %10s, hash %llu, hash_index = %.3lld",
+                key, value, (unsigned long long)b->key_hash,
+                (long long)(b->key_hash % ht->cap)
            );
     }
 }
@@ -645,8 +648,8 @@ HTable *htable_new(struct HTableSetup *setup) {
 
     if (htable_verbose)
         printf(
-            "htable_new: capacity %zu, hash functions %s\n",
-            ht->cap, koh_hashers_name_by_funcptr(ht->f_hash)
+            "htable_new: capacity %lld, hash functions %s\n",
+            (long long)ht->cap, koh_hashers_name_by_funcptr(ht->f_hash)
         );
 
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
@@ -1380,7 +1383,7 @@ static bool strings_find(const char *s, int *index) {
 
 // XXX: Проблемы с экранированием полей key, вывод не работает, ошибка парсера
 // Lua
-__attribute_maybe_unused__
+__attribute__((unused))
 static void strings_print(TableNodeStr *strings) {
     lua_State *l = luaL_newstate();
     luaL_openlibs(l);

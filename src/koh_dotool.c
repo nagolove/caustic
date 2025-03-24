@@ -2,6 +2,9 @@
 // vim: fdm=marker
 
 #include "koh_dotool.h"
+
+#ifndef __wasm__
+
 #include "koh_common.h"
 #include "raymath.h"
 #include <stdio.h>
@@ -926,3 +929,19 @@ bool dotool_is_saving(dotool_ctx_t *ctx) {
     assert(ctx);
     return atomic_load(&ctx->is_saving);
 }
+
+#else 
+
+dotool_ctx_t *dotool_new() { return NULL; }
+void dotool_free(dotool_ctx_t *ctx_t) { }
+void dotool_send_signal(dotool_ctx_t *ctx_t) { }
+void dotool_exec_script(dotool_ctx_t *ctx_t, const char *script_fname) { }
+void dotool_gui(dotool_ctx_t *ctx_t) { }
+void dotool_setup_display(dotool_ctx_t *ctx) { }
+void dotool_update(dotool_ctx_t *ctx) { }
+void dotool_record_start(dotool_ctx_t *ctx) { }
+void dotool_record_stop(dotool_ctx_t *ctx) { }
+void dotool_record_save(dotool_ctx_t *ctx, const char *fname) { }
+bool dotool_is_saving(dotool_ctx_t *ctx) { return false; }
+
+#endif

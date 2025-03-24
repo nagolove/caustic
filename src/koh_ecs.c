@@ -1075,7 +1075,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
                *set_removed = htable_new(NULL);
         e_register(r, &cp_type_one);
         // счетчик количества прикреплений каждого типа
-        int cnt1 = 0;
+        //int cnt1 = 0;
 
         // создать и прикрепить
         const int num = 100,
@@ -1104,7 +1104,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
                 htable_add(set, one, sizeof(*one), &e, sizeof(e));
                 // e_id => type_one
                 htable_add(set2, &e, sizeof(e), one, sizeof(*one));
-                cnt1++;
+                /*cnt1++;*/
             }
         }
 
@@ -1213,7 +1213,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
         // массив айди для создания
         e_id create_arr[create_num];
         memset(create_arr, 0, sizeof(create_arr));
-        int cnt_c = 0;
+        /*int cnt_c = 0;*/
 
                // type_one => e_id
         HTable *set_c = htable_new(NULL),
@@ -1234,7 +1234,7 @@ MunitResult test_view_comlex(const MunitParameter params[], void* userdata) {
                 htable_add(set_c, one, sizeof(*one), &e, sizeof(e));
                 // e_id => type_one
                 htable_add(set_c2, &e, sizeof(e), one, sizeof(*one));
-                cnt_c++;
+                /*cnt_c++;*/
             }
 
             printf("e.id %u\n", e.ver);
@@ -2178,7 +2178,7 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
         munit_assert_int(r->entities_num, ==, 1);
         e_destroy(r, e);
         munit_assert_int(r->entities_num, ==, 0);
-        printf("test_create_destroy: e %ld\n", e.id);
+        printf("test_create_destroy: e %lld\n", (long long)e.id);
         e_print_entities(r);
         e_free(r);
     }
@@ -2278,9 +2278,9 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
             munit_assert(e_valid(r, e0) == false);
             munit_assert(e_valid(r, e1) == false);
             munit_assert(e_valid(r, e2) == false);
-            printf("test_create: e0 %ld\n", e0.id);
-            printf("test_create: e1 %ld\n", e1.id);
-            printf("test_create: e2 %ld\n", e2.id);
+            printf("test_create: e0 %lld\n", (long long)e0.id);
+            printf("test_create: e1 %lld\n", (long long)e1.id);
+            printf("test_create: e2 %lld\n", (long long)e2.id);
         }
         e_free(r);
     }
@@ -2947,7 +2947,7 @@ bool e_has(ecs_t* r, e_id e, const e_cp_type cp_type) {
     cp_is_registered_assert(r, cp_type);
     
     if (!e_valid(r, e)) {
-        printf("e_has: e %ld is not valid\n", e.id);
+        printf("e_has: e %lld is not valid\n", (long long)e.id);
         abort();
     }
 
@@ -3211,8 +3211,8 @@ char *e_entities2table_alloc2(ecs_t *r) {
             if (r->entities[i]) {
                 ps += sprintf(
                             ps,
-                            " { ord = %ld, ver = %u } , ",
-                            i, r->entities_ver[i]
+                            " { ord = %lld, ver = %u } , ",
+                            (long long)i, r->entities_ver[i]
                         );
                 cnt++;
             }
@@ -3238,7 +3238,7 @@ char *e_entities2table_alloc(ecs_t *r) {
         int cnt = 0;
         for (int64_t i = 0; i < r->max_id; i++) {
             if (r->entities[i]) {
-                ps += sprintf(ps, "%ld, ", i);
+                ps += sprintf(ps, "%lld, ", (long long)i);
                 cnt++;
             }
             // сократить количество итераций при малом заполнении массива
