@@ -167,11 +167,19 @@ local path_abs_third_party = {
     ['win'] = path_caustic .. "/" .. path_rel_win_third_party,
 }
 
+local libcaustic_name = {
+    ["linux"] = "libcaustic-linux",
+    ["wasm"] = "libcaustic-wasm",
+    ["win"] = "libcaustic-win",
+}
+
 -- }}}
 
+-- XXX: Почему-бы не передавать в виде таблиц, а не строк с агрументами, 
+-- разделенными пробелами?
 local record LinkContext
-    objfiles: string
-    libspath: string
+    objfiles: {string}
+    libsdirs: {string}
     libs: string
 end
 
@@ -421,17 +429,14 @@ local enum Target
     "wasm"
 end
 
-local enum LinksType
-    "links_internal"
-    "links"
-end
-
 local enum UrlAction
     -- склонировать 
 	"git"
     -- скачать и распаковать
 	"zip"
 end
+
+local type DepLinks = {string}|function(dep: Dependency): {string}
 
 -- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
 -- значением хэша коммита
@@ -480,7 +485,7 @@ local record Dependency
     includes: {string}  -- Список каталогов для включаемых файлов.
 
     links_internal: {string}
-    links: {string}|function(dep: Dependency): {string}
+    links: DepLinks
     libdirs: {string}
 
     -- TODO: Функция инициализация таблички замисимости. Нужна для установки
@@ -1613,13 +1618,29 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
--- XXX: Зачем нужен второй параметр?
-local function gather_links(deps: {Dependency}, linkstype: LinksType): {string}
+local function gather_links(deps: {Dependency}): {string}
     local links_tbl = {}
+    local linkstype = "links"
     for _, dep in ipairs(deps) do
-        if (dep as {any:any})[linkstype as string] then
-            for _, link_internal in ipairs((dep as {any:any})[linkstype] as {string}) do
-                table.insert(links_tbl, link_internal)
+        local dep_links = (dep as {any:any})[linkstype] as DepLinks
+        if dep_links then
+            local list: {string}
+
+            if type(dep_links) == 'table' then
+                list = dep_links as {string}
+            elseif type(dep_links) == 'function' then
+                list = (dep_links as function(Dependency): {string})(dep)
+            else
+                printc(
+                    "%{red}gather_links: bad type in links type " ..
+                    inspect(dep) .. "%{reset}"
+                )
+            end
+
+            if list then
+                for _, link in ipairs(list) do
+                    table.insert(links_tbl, link)
+                end
             end
         end
     end
@@ -1674,19 +1695,21 @@ local function get_ready_links_internal(): {string}
 end
 --]]
 
-local function get_ready_links(cfg: Cfg): {string}
+local function get_ready_links(cfg: Cfg, target: Target): {string}
     local ready_deps = get_ready_deps(cfg)
+    local caustic_platform = libcaustic_name[target]
+    assert(caustic_platform)
     local links = ut.merge_tables(
-        gather_links(ready_deps, "links"),
-        {
+        gather_links(ready_deps), {
             "stdc++",
             "m",
-            "caustic", 
+            caustic_platform
         }
     )
     return links
 end
 
+-- TODO: Убрать эту функцию или сделать зависимой от цели сборки
 local function get_ready_links_linux_only(cfg: Cfg): {string}
     --print('get_ready_links_linux_only:', inspect(cfg))
 
@@ -4165,23 +4188,26 @@ local function cache_remove(_args: Args)
     end
 end
 
-local function koh_link(objfiles_str: string, _args: Args)
-    local libname = "libcaustic.a"
+local function koh_link(objfiles: {string}, _args: Args)
     local target = _args.t or _args.target
-
-    if target == 'wasm' then
-        libname = "libcaustic.web.a"
-    end
+    assert(target)
+    local lib_fname = libcaustic_name[target] .. ".a"
 
     print('koh_link:', inspect(_args))
 
-    if lfs.attributes(libname) then
-        cmd_do("rm " .. libname)
+    if lfs.attributes(lib_fname) then
+        cmd_do("rm " .. lib_fname)
     end
     printc('%{green}koh_link: target' .. target .. '%{green}')
-    local cmd = format("%s -rcs  \"%s\" %s", ar[target], libname, objfiles_str)
-    --print(cmd)
+    --local cmd = format("%s -rcs  \"%s\" %s", ar[target], lib_fname, objfiles_str)
+    local cmd = ar[target] .. " -rcs  \"" .. lib_fname .. "\" " .. 
+                table.concat(objfiles, " ")
+
+    print("koh_link: currentdir", lfs.currentdir())
+    print("koh_link:", cmd)
     cmd_do(cmd)
+
+    cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
 end
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
@@ -4211,15 +4237,24 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local cc = compiler[_args.target]
     assert(cc)
     -- TODO: Добавить какие-то wasm флаги
+
+    --[[
     local cmd = format(
         "%s -o \"%s\" %s %s %s %s", 
         cc,
         artifact,
-        ctx.objfiles,
-        ctx.libspath,
-        flags,
+        table.concat(ctx.objfiles, " "),
+        table.concat(ctx.libsdirs, " "),
+        flags
         ctx.libs
     )
+    --]]
+
+    local cmd = cc .. " -o \"" .. artifact .. "\" " .. 
+                table.concat(ctx.objfiles, " ") .. " " ..
+                table.concat(ctx.libsdirs, " ") .. " " ..
+                flags .. " " .. ctx.libs
+
     if verbose then
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
         printc("project_link: %{blue}" .. cmd .. "%{reset}")
@@ -4566,6 +4601,17 @@ local function defines_apply(flags: {string}, defines: {string: string})
     end
 end
 
+local function print_sorted_string(objfiles: {string})
+    local objfiles_sorted = {}
+    for k, v in ipairs(objfiles) do
+        objfiles_sorted[k] = v
+    end
+    table.sort(objfiles_sorted, function(a: string, b: string): boolean
+        return a < b
+    end)
+    print(tabular(objfiles_sorted))
+end
+
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
@@ -4732,9 +4778,9 @@ local function sub_make(
         table.insert(_libdirs, "-L" .. path_caustic)
     end
 
-    local _libspath: string = table.concat(_libdirs, " ")
+    --local _libspath: string = table.concat(_libdirs, " ")
     local _links = ut.merge_tables(
-        get_ready_links(cfg),
+        get_ready_links(cfg, target),
         get_ready_links_linux_only(cfg)
     )
 
@@ -4846,16 +4892,14 @@ local function sub_make(
 
     if verbose then
         print('objfiles')
-        local objfiles_sorted = {}
-        for k, v in ipairs(objfiles) do
-            objfiles_sorted[k] = v
-        end
-        table.sort(objfiles_sorted, function(a: string, b: string): boolean
-            return a < b
-        end)
-        print(tabular(objfiles_sorted))
+        print_sorted_string(objfiles)
     end
+
+    --[[
     local objfiles_str = table.concat(objfiles, " ")
+    print("objfiles")
+    print(tabular(objfiles))
+    --]]
 
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
     -- скрипте.
@@ -4894,26 +4938,14 @@ local function sub_make(
         end
 
         project_link({
-            objfiles = objfiles_str,
-            libspath = _libspath,
+            objfiles = objfiles,
+            libsdirs = libdirs,
             libs = _libs,
         }, cfg, _args)
-
-        -- TODO: переместить файл из каталога src на уровень выше
-        --local dst = "../" .. cfg.artifact
-        --cp(cfg.artifact, dst)
-        --set_executable_bit(dst)
     else
-        -- Сборка библиотеки "Щелочь"
-
-        -- TODO: Связывать в каустику imgui, для сборки koh_imgui.h
-        print('sub_make: target', target, '_args', inspect(_args))
-        koh_link(objfiles_str, _args)
-        -- XXX: Для разных целей создавать разные объектные файл 
-        -- libcaustic-linux.a
-        -- libcaustic-wasm.a
-        -- libcaustic-win.a
-        cmd_do("mv libcaustic.a ../libcaustic.a")
+        -- Сборка библиотеки "Щелочь", в зависимоти от того, откуда 
+        -- вызывается скрипт
+        koh_link(objfiles, _args)
     end
 
     ut.pop_dir(push_num)
