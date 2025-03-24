@@ -4101,15 +4101,16 @@ local function run_parallel_uv(queue)
 
 
    local errcode = 0
+
+
+
+
+
+
+
    for _, t in ipairs(queue) do
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
-
-
-
-
-
-
 
       local _, _ = uv.spawn(
       t.cmd,
@@ -4143,6 +4144,7 @@ local function run_parallel_uv(queue)
    end
 
    uv.run('default')
+
    print('run_parallel_uv: errcode', errcode)
 
    if errexit_uv and errcode ~= 0 then
@@ -4663,7 +4665,6 @@ local function sub_make(
 
 
 
-
    if _args.link then
       if verbose then
          print("using flto")
@@ -4677,13 +4678,7 @@ local function sub_make(
 
 
       table.insert(flags, "-ggdb3")
-
-      debugs = {
-         "-DDEBUG",
-         "-g3",
-         "-fno-omit-frame-pointer",
-      }
-
+      debugs = { "-DDEBUG", "-g3", "-fno-omit-frame-pointer" }
       defines_apply(flags, cfg.debug_define)
    else
 

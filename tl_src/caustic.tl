@@ -129,6 +129,7 @@ local compiler = {
     ['linux'] = 'gcc',
     ['wasm'] = 'emcc',
     ['windows'] = 'x86_64-w64-mingw32-gcc',
+    --['android'] = 'какая-то супер команда',
 }
 
 local ar = {
@@ -4101,15 +4102,16 @@ local function run_parallel_uv(queue: {Task})
     --printc("%{cyan}currentdir " .. lfs.currentdir() .. "%{reset}")
 
     local errcode = 0
+
+    --[[
+    for _, t in ipairs(queue) do
+        cmd_do(t.cmd .. ' ' .. table.concat(t.args, " "))
+    end
+    --]]
+
     for _, t in ipairs(queue) do
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
-
-        --[[
-        print()
-        print('run_parallel_uv', t.cmd .. ' ' .. table.concat(t.args, " "))
-        print()
-        --]]
 
         local _, _ = uv.spawn(
             t.cmd,
@@ -4143,6 +4145,7 @@ local function run_parallel_uv(queue: {Task})
     end
 
     uv.run('default')
+    --]]
     print('run_parallel_uv: errcode', errcode)
 
     if errexit_uv and errcode ~= 0 then
@@ -4658,7 +4661,6 @@ local function sub_make(
         -- Отсутствуют разные функции стандартной библиотеки
         --"-std=c2x",
         --"-DUSE_C2X_HACKS",
-
         --"-D_USE_MATH_DEFINES",
         --"-D__USE_MISC",
         -- }}}
@@ -4677,13 +4679,7 @@ local function sub_make(
         -- DEEEBUUUG
 
         table.insert(flags, "-ggdb3")
-
-        debugs = {
-            "-DDEBUG",
-            "-g3",
-            "-fno-omit-frame-pointer",
-        }
-
+        debugs = { "-DDEBUG", "-g3", "-fno-omit-frame-pointer", }
         defines_apply(flags, cfg.debug_define)
     else
         -- RELEAASE
@@ -4913,6 +4909,10 @@ local function sub_make(
         -- TODO: Связывать в каустику imgui, для сборки koh_imgui.h
         print('sub_make: target', target, '_args', inspect(_args))
         koh_link(objfiles_str, _args)
+        -- XXX: Для разных целей создавать разные объектные файл 
+        -- libcaustic-linux.a
+        -- libcaustic-wasm.a
+        -- libcaustic-win.a
         cmd_do("mv libcaustic.a ../libcaustic.a")
     end
 
