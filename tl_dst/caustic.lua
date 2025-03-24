@@ -129,6 +129,7 @@ local compiler = {
    ['linux'] = 'gcc',
    ['wasm'] = 'emcc',
    ['windows'] = 'x86_64-w64-mingw32-gcc',
+
 }
 
 local ar = {
@@ -165,6 +166,14 @@ local path_abs_third_party = {
    ['wasm'] = path_caustic .. "/" .. path_rel_wasm_third_party,
    ['win'] = path_caustic .. "/" .. path_rel_win_third_party,
 }
+
+local libcaustic_name = {
+   ["linux"] = "caustic_linux",
+   ["wasm"] = "caustic_wasm",
+   ["win"] = "caustic_win",
+}
+
+
 
 
 
@@ -497,16 +506,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
 local dependencies
 
 
@@ -567,7 +566,12 @@ local function build_freetype_common(dep)
    find_and_remove_cmake_cache()
 
    local c1 = format("%s -E make_directory build", cmake[dep.target])
-   local c2 = format("%s -E chdir build cmake ..", cmake[dep.target])
+   local c2 = format("%s -E chdir build cmake " ..
+   "-DFT_DISABLE_HARFBUZZ=ON " ..
+   "-DFT_DISABLE_BROTLI=ON " ..
+   "-DFT_DISABLE_BZIP2=ON " ..
+   "-DFT_DISABLE_ZLIB=ON " ..
+   "-DFT_DISABLE_PNG=ON ..", cmake[dep.target])
 
 
    cmd_do({ c1, c2 })
@@ -582,8 +586,10 @@ end
 
 local function build_with_make_common(dep)
    if dep.target == 'wasm' then
+      cmd_do("make clean")
       cmd_do("emmake make")
    elseif dep.target == 'linux' then
+      cmd_do("make clean")
       cmd_do("make -j")
    end
 end
@@ -903,18 +909,17 @@ end
 
 
 
-local function build_lfs(_)
-   print('lfs_custom_build', lfs.currentdir())
 
-   cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
-   cmd_do("ar rcs liblfs.a lfs.o")
-end
+
+
+
+
+
+
 
 
 local function build_raylib_common(dep)
    find_and_remove_cmake_cache()
-
-   local EMSDK = getenv('EMSDK')
 
 
 
@@ -947,10 +952,14 @@ local function build_raylib_common(dep)
 
 
 
+
+      chdir('src')
       cmd_do("make -j")
+
    elseif dep.target == 'wasm' then
-      printc("%{blue}wasm%{reset}")
-      print(lfs.currentdir())
+      local EMSDK = getenv('EMSDK')
+
+
       chdir("src")
       local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
       print('cmd', cmd)
@@ -1009,7 +1018,6 @@ end
 
 local function update_box2c(dep)
    ut.push_current_dir()
-
    local ok
    local path = path_abs_third_party[dep.target]
    ok = chdir(path_abs_third_party[dep.target])
@@ -1079,14 +1087,15 @@ end
 
 
 
-local function build_resvg(_)
-   print('build_resvg')
-   ut.push_current_dir()
-   cmd_do("cargo build --release")
-   chdir("crates/c-api")
-   cmd_do("cargo build --release")
-   ut.pop_dir()
-end
+
+
+
+
+
+
+
+
+
 
 
 local _dependecy_init
@@ -1101,6 +1110,28 @@ local _dependecy_init
 
 
 
+
+local function build_lua_common(dep)
+   if dep.target == 'wasm' then
+      cmd_do('emmake make ' ..
+      'CC=emcc ' ..
+      'AR="emar rcs" ' ..
+      'RANLIB=emranlib ' ..
+      'CFLAGS="-Wall -O2 -fno-stack-protector -fno-common ' ..
+      '-std=c99 ' ..
+      '-DLUA_USE_LINUX" ' ..
+      'MYLIBS="" ' ..
+      'MYLDFLAGS=""')
+
+   elseif dep.target == 'linux' then
+      cmd_do("make clean")
+      cmd_do("make -j")
+   else
+      printc(
+      "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}")
+
+   end
+end
 
 
 
@@ -1153,7 +1184,7 @@ dependencies = {
       includes = {
          "freetype/include",
       },
-      libdirs = { "objs/.libs/" },
+      libdirs = { "freetype/build" },
       links = { "freetype" },
       links_internal = {},
       name = "freetype",
@@ -1220,25 +1251,26 @@ dependencies = {
       url = "https://github.com/memononen/nanosvg.git",
    },
 
-   {
-      disabled = true,
-      build = build_resvg,
-      description = "svg rendering library",
-      dir = "resvg",
-      includes = {
 
-         "resvg/crates/c-api",
-      },
-      libdirs = {
 
-         "resvg/target/release",
-      },
-      links = { "resvg" },
-      links_internal = {},
-      name = "resvg",
-      url_action = "git",
-      url = "https://github.com/RazrFalcon/resvg.git",
-   },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
    {
@@ -1292,7 +1324,7 @@ dependencies = {
       copy_for_wasm = true,
       build = build_with_cmake_common,
       build_w = build_with_cmake_common,
-      description = "task sheduler",
+      description = "task sheduler, used by box2d",
       dir = "enkits",
       includes = { "enkits/src" },
       libdirs = { "enkits" },
@@ -1352,18 +1384,19 @@ dependencies = {
 
 
 
-   {
-      disabled = true,
-      build = build_lfs,
-      description = "C lua модуль для поиска файлов",
-      dir = "luafilesystem",
-      includes = { "luafilesystem/src" },
-      libdirs = { "luafilesystem" },
-      links_internal = { "lfs:static" },
-      name = "lfs",
-      url = "https://github.com/lunarmodules/luafilesystem.git",
-      url_action = "git",
-   },
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1394,8 +1427,8 @@ dependencies = {
       dir = "cimgui",
       includes = { "cimgui", "cimgui/generator/output" },
       libdirs = { "cimgui" },
-      links = { "cimgui:static" },
-      links_internal = { "cimgui:static" },
+      links = { "cimgui" },
+      links_internal = { "cimgui" },
       name = 'cimgui',
       url = 'https://github.com/cimgui/cimgui.git',
       url_action = "git",
@@ -1456,8 +1489,8 @@ dependencies = {
 
 
 
-      links = { "box2dd:static" },
-      links_internal = { "box2c:static" },
+      links = { "box2dd" },
+      links_internal = { "box2dd" },
       name = 'box2c',
       url = "https://github.com/erincatto/box2d.git",
       url_action = 'git',
@@ -1471,23 +1504,23 @@ dependencies = {
       description = "плоский игровой физический движок",
       includes = { "Chipmunk2D/include" },
       libdirs = { "Chipmunk2D/src" },
-      links = { "chipmunk:static" },
-      links_internal = { "chipmunk:static" },
+      links = { "chipmunk" },
+      links_internal = { "chipmunk" },
       name = 'chipmunk',
       url_action = 'git',
       url = "https://github.com/nagolove/Chipmunk2D.git",
    },
 
    {
-      build = build_with_make_common,
-      build_w = build_with_make_common,
+      build = build_lua_common,
+      build_w = build_lua_common,
       copy_for_wasm = true,
       description = "lua интерпритатор",
       dir = "lua",
       includes = { "lua" },
       libdirs = { "lua" },
-      links = { "lua:static" },
-      links_internal = { "lua:static" },
+      links = { "lua" },
+      links_internal = { "lua" },
       name = 'lua',
       url = "https://github.com/lua/lua.git",
       git_tag = "v5.4.0",
@@ -1498,7 +1531,7 @@ dependencies = {
       copy_for_wasm = true,
       description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
       includes = { "raylib/src" },
-      libdirs = { "raylib/raylib" },
+      libdirs = { "raylib/src" },
       links = { "raylib" },
       links_internal = { "raylib" },
       name = 'raylib',
@@ -1532,8 +1565,8 @@ dependencies = {
       dir = "rlwr",
       includes = { "rlwr" },
       libdirs = { "rlwr" },
-      links = { "rlwr:static" },
-      links_internal = { "rlwr:static" },
+      links = { "rlwr" },
+      links_internal = { "rlwr" },
       name = 'rlwr',
       url = "git@github.com:nagolove/rlwr.git",
       url_action = "git",
@@ -1548,8 +1581,8 @@ dependencies = {
       dir = "utf8proc",
       includes = { "utf8proc" },
       libdirs = { "utf8proc" },
-      links = { "utf8proc:static" },
-      links_internal = { "utf8proc:static" },
+      links = { "utf8proc" },
+      links_internal = { "utf8proc" },
       name = 'utf8proc',
       url = "https://github.com/JuliaLang/utf8proc.git",
       url_action = "git",
@@ -1612,13 +1645,29 @@ local function prefix_add(prefix, t)
    return prefixed_t
 end
 
-
-local function gather_links(deps, linkstype)
+local function gather_links(deps)
    local links_tbl = {}
+   local linkstype = "links"
    for _, dep in ipairs(deps) do
-      if (dep)[linkstype] then
-         for _, link_internal in ipairs((dep)[linkstype]) do
-            table.insert(links_tbl, link_internal)
+      local dep_links = (dep)[linkstype]
+      if dep_links then
+         local list
+
+         if type(dep_links) == 'table' then
+            list = dep_links
+         elseif type(dep_links) == 'function' then
+            list = (dep_links)(dep)
+         else
+            printc(
+            "%{red}gather_links: bad type in links type " ..
+            inspect(dep) .. "%{reset}")
+
+         end
+
+         if list then
+            for _, link in ipairs(list) do
+               table.insert(links_tbl, link)
+            end
          end
       end
    end
@@ -1644,13 +1693,12 @@ local function get_ready_deps(cfg)
          name2dep[dep.name] = dep
       end
 
-
-
       for _, depname in ipairs(cfg.not_dependencies) do
-         print("depname", depname)
 
-         assert(name2dep[depname])
-         name2dep[depname] = nil
+
+         if depname then
+            name2dep[depname] = nil
+         end
       end
 
 
@@ -1673,18 +1721,18 @@ end
 
 
 
-local function get_ready_links(cfg)
+local function get_ready_links(cfg, _)
    local ready_deps = get_ready_deps(cfg)
    local links = ut.merge_tables(
-   gather_links(ready_deps, "links"),
-   {
+   gather_links(ready_deps), {
       "stdc++",
       "m",
-      "caustic",
+
    })
 
    return links
 end
+
 
 local function get_ready_links_linux_only(cfg)
 
@@ -1723,19 +1771,22 @@ local function get_ready_links_linux_only(cfg)
    return links_linux_only
 end
 
-local function gather_libdirs(deps)
+local function gather_libdirs_abs(deps)
    local libdirs_tbl = {}
    for _, dep in ipairs(deps) do
       if dep.libdirs then
+
+         assert(dep.target)
+         local path = path_abs_third_party[dep.target] .. "/"
+         assert(path)
+
          for _, libdir in ipairs(dep.libdirs) do
-            table.insert(libdirs_tbl, libdir)
+            table.insert(libdirs_tbl, path .. libdir)
          end
       end
    end
    return libdirs_tbl
 end
-
-local libdirs = gather_libdirs(dependencies)
 
 
 
@@ -3794,14 +3845,16 @@ function actions.compile_flags(_args)
    end
 end
 
-local function make_L(list, third_party_prefix)
-   local ret = {}
-   local prefix = "-L" .. path_caustic .. "/" .. third_party_prefix .. "/"
-   for _, v in ipairs(list) do
-      table.insert(ret, prefix .. v)
-   end
-   return ret
-end
+
+
+
+
+
+
+
+
+
+
 
 
 local function make_l(list)
@@ -4108,6 +4161,8 @@ local function run_parallel_uv(queue)
 
 
 
+   local buf_err, buf_out = {}, {}
+
    for _, t in ipairs(queue) do
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
@@ -4129,7 +4184,8 @@ local function run_parallel_uv(queue)
       function(err, data)
          assert(not err, err)
          if data then
-            io.write(data)
+
+            insert(buf_out, data)
          end
       end)
 
@@ -4137,13 +4193,22 @@ local function run_parallel_uv(queue)
       function(err, data)
          assert(not err, err)
          if data then
-            print(data)
+
+            insert(buf_err, data)
          end
       end)
 
    end
 
    uv.run('default')
+
+
+   for _, line in ipairs(buf_out) do
+      io.write(line)
+   end
+   for _, line in ipairs(buf_err) do
+      io.write(line)
+   end
 
    print('run_parallel_uv: errcode', errcode)
 
@@ -4164,23 +4229,26 @@ local function cache_remove(_args)
    end
 end
 
-local function koh_link(objfiles_str, _args)
-   local libname = "libcaustic.a"
+local function koh_link(objfiles, _args)
    local target = _args.t or _args.target
-
-   if target == 'wasm' then
-      libname = "libcaustic.web.a"
-   end
+   assert(target)
+   local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
    print('koh_link:', inspect(_args))
 
-   if lfs.attributes(libname) then
-      cmd_do("rm " .. libname)
+   if lfs.attributes(lib_fname) then
+      cmd_do("rm " .. lib_fname)
    end
    printc('%{green}koh_link: target' .. target .. '%{green}')
-   local cmd = format("%s -rcs  \"%s\" %s", ar[target], libname, objfiles_str)
 
+   local cmd = ar[target] .. " -rcs  \"" .. lib_fname .. "\" " ..
+   table.concat(objfiles, " ")
+
+   print("koh_link: currentdir", lfs.currentdir())
+   print("koh_link:", cmd)
    cmd_do(cmd)
+
+   cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
 end
 
 local function project_link(ctx, cfg, _args)
@@ -4201,28 +4269,32 @@ local function project_link(ctx, cfg, _args)
       flags = ""
    end
 
-
-
-
-
-
    local artifact = "../" .. cfg.artifact
    local cc = compiler[_args.target]
    assert(cc)
 
-   local cmd = format(
-   "%s -o \"%s\" %s %s %s %s",
-   cc,
-   artifact,
-   ctx.objfiles,
-   ctx.libspath,
-   flags,
-   ctx.libs)
+
+
+   local libs = {}
+   for _, lib in ipairs(ctx.libs) do
+      insert(libs, "-l" .. lib)
+   end
+
+   local libsdirs = {}
+   for _, libdir in ipairs(ctx.libsdirs) do
+      insert(libsdirs, "-L" .. libdir)
+   end
+   local cmd = cc .. " -o \"" .. artifact .. "\" " ..
+   table.concat(ctx.objfiles, " ") .. " " ..
+   table.concat(libsdirs, " ") .. " " ..
+   flags .. " " .. table.concat(libs, " ")
 
    if verbose then
       printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
       printc("project_link: %{blue}" .. cmd .. "%{reset}")
    end
+
+   printc("project_link: %{blue}" .. cmd .. "%{reset}")
    cmd_do(cmd)
 end
 
@@ -4565,6 +4637,23 @@ local function defines_apply(flags, defines)
    end
 end
 
+local function print_sorted_string(objfiles)
+   local objfiles_sorted = {}
+   for k, v in ipairs(objfiles) do
+      objfiles_sorted[k] = v
+   end
+   table.sort(objfiles_sorted, function(a, b)
+      return a < b
+   end)
+   print(tabular(objfiles_sorted))
+end
+
+local function dependencies_set_target(target)
+   for _, dep in ipairs(dependencies) do
+      dep.target = target
+   end
+end
+
 
 
 
@@ -4572,6 +4661,8 @@ local function sub_make(
    _args, cfg, target, push_num)
 
    _args.target = target
+
+   dependencies_set_target(target)
 
    if verbose then
       print(format(
@@ -4721,31 +4812,37 @@ local function sub_make(
 
    local path = path_rel_third_party_t[target]
    assert(path)
-   local _libdirs = make_L(ut.shallow_copy(libdirs), path)
+
+
+   local libdirs = gather_libdirs_abs(dependencies)
+   printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
 
    if target == 'linux' then
-      table.insert(_libdirs, "-L/usr/lib")
+      table.insert(libdirs, "/usr/lib")
    end
 
-   if cfg.artifact then
-      table.insert(_libdirs, "-L" .. path_caustic)
-   end
 
-   local _libspath = table.concat(_libdirs, " ")
-   local _links = ut.merge_tables(
-   get_ready_links(cfg),
+   local libs = ut.merge_tables(
+   get_ready_links(cfg, target),
    get_ready_links_linux_only(cfg))
 
 
    if verbose then
       print("_links")
-      print(tabular(_links))
+      print(tabular(libs))
    end
 
    if cfg.artifact then
-      table.insert(_links, 1, "caustic:static")
+      table.insert(libdirs, path_caustic)
+
+      local libcaustic = libcaustic_name[target]
+      assert(libcaustic)
+      table.insert(libs, 1, libcaustic)
    end
-   local _libs = table.concat(make_l(_links), " ")
+
+
+
+
 
 
    local tasks = {}
@@ -4782,7 +4879,7 @@ local function sub_make(
 
    for _, file in ipairs(matched) do
       local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
-      print(format("_output '%s'", _output))
+
       local _input = cwd .. file
 
 
@@ -4801,8 +4898,8 @@ local function sub_make(
          table.insert(args, include)
       end
 
-      for _, libpath in ipairs(_libdirs) do
-         table.insert(args, libpath)
+      for _, libdir in ipairs(libdirs) do
+         table.insert(args, libdir)
       end
 
       for _, flag in ipairs(flags) do
@@ -4814,7 +4911,7 @@ local function sub_make(
       table.insert(args, "-c")
       table.insert(args, _input)
 
-      for _, lib in ipairs(make_l(_links)) do
+      for _, lib in ipairs(make_l(libs)) do
          table.insert(args, lib)
       end
 
@@ -4829,10 +4926,10 @@ local function sub_make(
       table.insert(objfiles, _output)
    end
 
-   print(tabular(tasks))
+
 
    if verbose then
-      print(tabular(repr_queu))
+
    end
 
 
@@ -4845,16 +4942,14 @@ local function sub_make(
 
    if verbose then
       print('objfiles')
-      local objfiles_sorted = {}
-      for k, v in ipairs(objfiles) do
-         objfiles_sorted[k] = v
-      end
-      table.sort(objfiles_sorted, function(a, b)
-         return a < b
-      end)
-      print(tabular(objfiles_sorted))
+      print_sorted_string(objfiles)
    end
-   local objfiles_str = table.concat(objfiles, " ")
+
+
+
+
+
+
 
 
 
@@ -4893,22 +4988,14 @@ local function sub_make(
       end
 
       project_link({
-         objfiles = objfiles_str,
-         libspath = _libspath,
-         libs = _libs,
+         objfiles = objfiles,
+         libsdirs = libdirs,
+         libs = libs,
       }, cfg, _args)
-
-
-
-
-
    else
 
 
-
-      print('sub_make: target', target, '_args', inspect(_args))
-      koh_link(objfiles_str, _args)
-      cmd_do("mv libcaustic.a ../libcaustic.a")
+      koh_link(objfiles, _args)
    end
 
    ut.pop_dir(push_num)
