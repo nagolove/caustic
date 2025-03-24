@@ -88,10 +88,10 @@ local Cache      = require "cache"
 local uv         = require "luv"
 local lanes      = require "lanes".configure()
 local rl         = require "readline"
-local readline = rl.readline
+local readline   = rl.readline
 local sleep      = require "socket".sleep
-local format        = string.format
-local match         = string.match
+local format     = string.format
+local match      = string.match
 --- }}}
 
 -- XXX: Зачем этот код? Что он делает?
@@ -168,9 +168,9 @@ local path_abs_third_party = {
 }
 
 local libcaustic_name = {
-    ["linux"] = "libcaustic-linux",
-    ["wasm"] = "libcaustic-wasm",
-    ["win"] = "libcaustic-win",
+    ["linux"] = "caustic_linux",
+    ["wasm"] = "caustic_wasm",
+    ["win"] = "caustic_win",
 }
 
 -- }}}
@@ -180,7 +180,7 @@ local libcaustic_name = {
 local record LinkContext
     objfiles: {string}
     libsdirs: {string}
-    libs: string
+    libs: {string}
 end
 
 -- Добавить разные уровни многословности?
@@ -438,14 +438,6 @@ end
 
 local type DepLinks = {string}|function(dep: Dependency): {string}
 
--- TODO: Сделать команду для проверки новых обновлений, сравнивая с текущим
--- значением хэша коммита
--- TODO Добавить возможность конфигурирования каждой зависимости при помощи
--- ключей команды caustic
--- В частности - отключение или включение библиотеки freetype
--- TODO: Тестировать получение и сборку каждой зависимости
--- TODO: Отдельная команда для проверки существования каталогов включаемых файлов,
--- каталогов библиотек и т.д.
 local record Dependency
     -- заполняется сборочным скриптом, используется внутри функций сборки
     -- инициализации модулей
@@ -486,6 +478,7 @@ local record Dependency
 
     links_internal: {string}
     links: DepLinks
+    -- Пути к включаемым файлам, должен начинаться со значения dir
     libdirs: {string}
 
     -- TODO: Функция инициализация таблички замисимости. Нужна для установки
@@ -573,7 +566,12 @@ local function build_freetype_common(dep: Dependency)
     find_and_remove_cmake_cache()
 
     local c1 = format("%s -E make_directory build", cmake[dep.target])
-    local c2 = format("%s -E chdir build cmake ..", cmake[dep.target])
+    local c2 = format("%s -E chdir build cmake " ..
+        "-DFT_DISABLE_HARFBUZZ=ON " ..
+        "-DFT_DISABLE_BROTLI=ON " ..
+        "-DFT_DISABLE_BZIP2=ON " ..
+        "-DFT_DISABLE_ZLIB=ON " ..
+        "-DFT_DISABLE_PNG=ON ..", cmake[dep.target])
 
     -- cmake
     cmd_do({c1, c2})
@@ -588,8 +586,10 @@ end
 
 local function build_with_make_common(dep: Dependency)
     if dep.target == 'wasm' then
+        cmd_do("make clean")
         cmd_do("emmake make")
     elseif dep.target == 'linux' then
+        cmd_do("make clean")
         cmd_do("make -j")
     end
 end
@@ -909,6 +909,7 @@ local function freetype_after_init(_: Dependency)
 end
 --]]
 
+--[[
 local function build_lfs(_: Dependency)
     print('lfs_custom_build', lfs.currentdir())
     -- XXX: Путь для включаемых файлов должен быть из таблицы dependencies?
@@ -919,8 +920,6 @@ end
 
 local function build_raylib_common(dep: Dependency)
     find_and_remove_cmake_cache()
-
-    local EMSDK = getenv('EMSDK')
 
     --[[
     -- -DCMAKE_BUILD_TYPE=Release
@@ -953,10 +952,14 @@ local function build_raylib_common(dep: Dependency)
         -- cmake
         --cmd_do(cmd)
         -- make
+        --print("build_raylib_common: currentdir", lfs.currentdir())
+        chdir('src')
         cmd_do("make -j")
+        --print("hop")
     elseif dep.target == 'wasm' then
-        printc("%{blue}wasm%{reset}")
-        print(lfs.currentdir())
+        local EMSDK = getenv('EMSDK')
+        --printc("%{blue}wasm%{reset}")
+        --print(lfs.currentdir())
         chdir("src")
         local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
         print('cmd', cmd)
@@ -1015,7 +1018,6 @@ end
 -- TODO: Сделать общую функцию
 local function update_box2c(dep: Dependency)
     ut.push_current_dir()
-    --print("dep", inspect(dep))
     local ok: boolean
     local path = path_abs_third_party[dep.target]
     ok = chdir(path_abs_third_party[dep.target])
@@ -1085,6 +1087,7 @@ local function lualibrary_install_luafun(
 --    source:close()
 --end
 
+--[[
 local function build_resvg(_: Dependency)
     print('build_resvg')
     ut.push_current_dir()
@@ -1107,6 +1110,28 @@ local function update_default(_: Dependency)
     --_dependecy_init(dep)
 end
 --]]
+
+local function build_lua_common(dep: Dependency)
+    if dep.target == 'wasm' then
+        cmd_do('emmake make ' ..
+            'CC=emcc ' ..
+            'AR="emar rcs" ' ..
+            'RANLIB=emranlib ' ..
+            'CFLAGS="-Wall -O2 -fno-stack-protector -fno-common ' ..
+            '-std=c99 ' ..
+            '-DLUA_USE_LINUX" ' ..
+            'MYLIBS="" ' ..
+            'MYLDFLAGS=""'
+        )
+    elseif dep.target == 'linux' then
+        cmd_do("make clean")
+        cmd_do("make -j")
+    else
+        printc(
+            "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}"
+        )
+    end
+end
 
 --[[
 local function build_remotery(_: Dependency) 
@@ -1159,7 +1184,7 @@ dependencies = {
         includes = { 
             "freetype/include",
         },
-        libdirs = { "objs/.libs/", },
+        libdirs = { "freetype/build", },
         links = { "freetype" },
         links_internal = {},
         name = "freetype",
@@ -1226,6 +1251,7 @@ dependencies = {
         url = "https://github.com/memononen/nanosvg.git",
     },
 
+    --[[
     {
         disabled = true,
         build = build_resvg,
@@ -1298,7 +1324,7 @@ dependencies = {
         copy_for_wasm = true,
         build = build_with_cmake_common,
         build_w = build_with_cmake_common,
-        description = "task sheduler",
+        description = "task sheduler, used by box2d",
         dir = "enkits",
         includes = { "enkits/src" },
         libdirs = { "enkits" },
@@ -1358,6 +1384,7 @@ dependencies = {
     },
 	--]]
 
+    --[[
     {
         disabled = true,
         build = build_lfs,
@@ -1400,8 +1427,8 @@ dependencies = {
         dir = "cimgui",
         includes = { "cimgui", "cimgui/generator/output", },
         libdirs = { "cimgui" },
-        links = { "cimgui:static" },
-        links_internal = { "cimgui:static" },
+        links = { "cimgui" },
+        links_internal = { "cimgui" },
         name = 'cimgui',
         url = 'https://github.com/cimgui/cimgui.git',
         url_action = "git",
@@ -1462,8 +1489,8 @@ dependencies = {
         -- TODO: Сделать возможной установку функции в качестве значения links
         -- что-бы функция устанавливала название[я] библиотека 
         -- по полю dep.target
-        links = { "box2dd:static" },
-        links_internal = { "box2c:static" },
+        links = { "box2dd" },
+        links_internal = { "box2dd" },
         name = 'box2c',
         url = "https://github.com/erincatto/box2d.git",
         url_action = 'git',
@@ -1477,23 +1504,23 @@ dependencies = {
         description = "плоский игровой физический движок",
         includes = { "Chipmunk2D/include", },
         libdirs = { "Chipmunk2D/src" },
-        links = { "chipmunk:static" },
-        links_internal = { "chipmunk:static" },
+        links = { "chipmunk" },
+        links_internal = { "chipmunk" },
         name = 'chipmunk',
         url_action = 'git',
         url = "https://github.com/nagolove/Chipmunk2D.git",
     },
 
     {
-        build = build_with_make_common,
-        build_w = build_with_make_common,
+        build = build_lua_common,
+        build_w = build_lua_common,
         copy_for_wasm = true,
         description = "lua интерпритатор",
         dir = "lua",
         includes = { "lua" },
         libdirs = { "lua" },
-        links  = { "lua:static" },
-        links_internal = { "lua:static" },
+        links  = { "lua" },
+        links_internal = { "lua" },
         name = 'lua',
         url = "https://github.com/lua/lua.git",
         git_tag = "v5.4.0",
@@ -1504,7 +1531,7 @@ dependencies = {
         copy_for_wasm = true,
         description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
         includes = { "raylib/src" },
-        libdirs = { "raylib/raylib" },
+        libdirs = { "raylib/src" },
         links = { "raylib" },
         links_internal = { "raylib" },
         name = 'raylib',
@@ -1538,8 +1565,8 @@ dependencies = {
         dir = "rlwr",
         includes = { "rlwr" },
         libdirs = { "rlwr" },
-        links = { "rlwr:static" },
-        links_internal = { "rlwr:static" },
+        links = { "rlwr" },
+        links_internal = { "rlwr" },
         name = 'rlwr',
         url = "git@github.com:nagolove/rlwr.git",
         url_action = "git",
@@ -1554,8 +1581,8 @@ dependencies = {
         dir = "utf8proc",
         includes = { "utf8proc" },
         libdirs = { "utf8proc" },
-        links = { "utf8proc:static" },
-        links_internal = { "utf8proc:static" },
+        links = { "utf8proc" },
+        links_internal = { "utf8proc" },
         name = 'utf8proc',
         url = "https://github.com/JuliaLang/utf8proc.git",
         url_action = "git",
@@ -1666,13 +1693,12 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
             name2dep[dep.name] = dep
         end
 
-        --print("name2dep", inspect(name2dep))
-
         for _, depname in ipairs(cfg.not_dependencies) do
-            print("depname", depname)
-            -- Проверка - существует-ли такая зависимость вообще среди всех?
-            assert(name2dep[depname])
-            name2dep[depname] = nil
+            -- Зависимость может быть в списке отключенных и отсутствовать в
+            -- массиве dependencies, потому нужна проверка
+            if depname then
+                name2dep[depname] = nil
+            end
         end
 
         -- XXX: Порядок зависимостей нарушается от оригинального массива, 
@@ -1695,15 +1721,13 @@ local function get_ready_links_internal(): {string}
 end
 --]]
 
-local function get_ready_links(cfg: Cfg, target: Target): {string}
+local function get_ready_links(cfg: Cfg, _: Target): {string}
     local ready_deps = get_ready_deps(cfg)
-    local caustic_platform = libcaustic_name[target]
-    assert(caustic_platform)
     local links = ut.merge_tables(
         gather_links(ready_deps), {
             "stdc++",
             "m",
-            caustic_platform
+            --caustic_platform
         }
     )
     return links
@@ -1747,19 +1771,22 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
     return links_linux_only
 end
 
-local function gather_libdirs(deps: {Dependency}): {string}
+local function gather_libdirs_abs(deps: {Dependency}): {string}
     local libdirs_tbl = {}
     for _, dep in ipairs(deps) do
         if dep.libdirs then
+            --print("dep", inspect(dep))
+            assert(dep.target)
+            local path = path_abs_third_party[dep.target] .. "/"
+            assert(path)
+
             for _, libdir in ipairs(dep.libdirs) do
-                table.insert(libdirs_tbl, libdir)
+                table.insert(libdirs_tbl, path .. libdir)
             end
         end
     end
     return libdirs_tbl
 end
-
-local libdirs = gather_libdirs(dependencies)
 
 --[[
 local wasm_libdirs = { 
@@ -3818,6 +3845,7 @@ function actions.compile_flags(_args: Args)
     end
 end
 
+--[[
 local function make_L(list: {string}, third_party_prefix: string): {string}
     local ret = {}
     local prefix = "-L" .. path_caustic .. "/" .. third_party_prefix .. "/"
@@ -3826,6 +3854,7 @@ local function make_L(list: {string}, third_party_prefix: string): {string}
     end
     return ret
 end
+--]]
 
 -- XXX: Что делает эта функция?
 local function make_l(list: {string}): {string}
@@ -4132,6 +4161,8 @@ local function run_parallel_uv(queue: {Task})
     end
     --]]
 
+    local buf_err, buf_out = {}, {}
+
     for _, t in ipairs(queue) do
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
@@ -4153,7 +4184,8 @@ local function run_parallel_uv(queue: {Task})
             function(err: string, data: string)
                 assert(not err, err)
                 if data then
-                    io.write(data)
+                    --io.write(data)
+                    insert(buf_out, data)
                 end
         end)
 
@@ -4161,7 +4193,8 @@ local function run_parallel_uv(queue: {Task})
             function(err: string, data: string)
                 assert(not err, err)
                 if data then
-                    print(data)
+                    --io.write(data)
+                    insert(buf_err, data)
                 end
         end)
 
@@ -4169,6 +4202,14 @@ local function run_parallel_uv(queue: {Task})
 
     uv.run('default')
     --]]
+
+    for _, line in ipairs(buf_out) do
+        io.write(line)
+    end
+    for _, line in ipairs(buf_err) do
+        io.write(line)
+    end
+
     print('run_parallel_uv: errcode', errcode)
 
     if errexit_uv and errcode ~= 0 then
@@ -4191,7 +4232,7 @@ end
 local function koh_link(objfiles: {string}, _args: Args)
     local target = _args.t or _args.target
     assert(target)
-    local lib_fname = libcaustic_name[target] .. ".a"
+    local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
     print('koh_link:', inspect(_args))
 
@@ -4228,37 +4269,32 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         flags = ""
     end
 
-    -- TODO: Разведать связывание, какие данные приходят, разобраться 
-    -- с применением флагов.
-    --print('project_link')
-    --print(tabular(ctx.libspath))
-
     local artifact = "../" .. cfg.artifact
     local cc = compiler[_args.target]
     assert(cc)
+
     -- TODO: Добавить какие-то wasm флаги
 
-    --[[
-    local cmd = format(
-        "%s -o \"%s\" %s %s %s %s", 
-        cc,
-        artifact,
-        table.concat(ctx.objfiles, " "),
-        table.concat(ctx.libsdirs, " "),
-        flags
-        ctx.libs
-    )
-    --]]
+    local libs = {}
+    for _, lib in ipairs(ctx.libs) do
+        insert(libs, "-l" .. lib)
+    end
 
+    local libsdirs = {}
+    for _, libdir in ipairs(ctx.libsdirs) do
+        insert(libsdirs, "-L" .. libdir)
+    end
     local cmd = cc .. " -o \"" .. artifact .. "\" " .. 
                 table.concat(ctx.objfiles, " ") .. " " ..
-                table.concat(ctx.libsdirs, " ") .. " " ..
-                flags .. " " .. ctx.libs
+                table.concat(libsdirs, " ") .. " " ..
+                flags .. " " .. table.concat(libs, " ")
 
     if verbose then
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
         printc("project_link: %{blue}" .. cmd .. "%{reset}")
     end
+
+    printc("project_link: %{blue}" .. cmd .. "%{reset}")
     cmd_do(cmd)
 end
 
@@ -4612,6 +4648,12 @@ local function print_sorted_string(objfiles: {string})
     print(tabular(objfiles_sorted))
 end
 
+local function dependencies_set_target(target: Target)
+    for _, dep in ipairs(dependencies) do
+        dep.target = target
+    end
+end
+
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
@@ -4619,6 +4661,8 @@ local function sub_make(
     _args: Args, cfg: Cfg, target: Target, push_num?: integer
 )
     _args.target = target
+
+    dependencies_set_target(target)
 
     if verbose then
         print(format(
@@ -4768,31 +4812,37 @@ local function sub_make(
 
     local path = path_rel_third_party_t[target]
     assert(path)
-    local _libdirs = make_L(ut.shallow_copy(libdirs), path)
+
+
+    local libdirs = gather_libdirs_abs(dependencies)
+    printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
 
     if target == 'linux' then
-        table.insert(_libdirs, "-L/usr/lib")
-    end
-
-    if cfg.artifact then
-        table.insert(_libdirs, "-L" .. path_caustic)
+        table.insert(libdirs, "/usr/lib")
     end
 
     --local _libspath: string = table.concat(_libdirs, " ")
-    local _links = ut.merge_tables(
+    local libs = ut.merge_tables(
         get_ready_links(cfg, target),
         get_ready_links_linux_only(cfg)
     )
 
     if verbose then
         print("_links")
-        print(tabular(_links))
+        print(tabular(libs))
     end
 
     if cfg.artifact then
-        table.insert(_links, 1, "caustic:static")
+        table.insert(libdirs, path_caustic)
+
+        local libcaustic = libcaustic_name[target]
+        assert(libcaustic)
+        table.insert(libs, 1, libcaustic)
     end
-    local _libs: string = table.concat(make_l(_links), " ")
+    --local _libs: string = table.concat(make_l(_links), " ")
+    --local _libs: {string} = _links
+
+    --printc("%{blue}" .. tabular(_libs) .. "%{reset}")
 
     -- массив с командами
     local tasks: {Task} = {}
@@ -4829,7 +4879,7 @@ local function sub_make(
 
     for _, file in ipairs(matched) do
         local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
-        print(format("_output '%s'", _output))
+        --print(format("_output '%s'", _output))
         local _input = cwd .. file
 
         -- TODO: Проверять отсутствие объектного файла. 
@@ -4848,8 +4898,8 @@ local function sub_make(
             table.insert(args, include)
         end
 
-        for _, libpath in ipairs(_libdirs) do
-            table.insert(args, libpath)
+        for _, libdir in ipairs(libdirs) do
+            table.insert(args, libdir)
         end
 
         for _, flag in ipairs(flags) do
@@ -4861,7 +4911,7 @@ local function sub_make(
         table.insert(args, "-c")
         table.insert(args, _input)
 
-        for _, lib in ipairs(make_l(_links)) do
+        for _, lib in ipairs(make_l(libs)) do
             table.insert(args, lib)
         end
            
@@ -4876,10 +4926,10 @@ local function sub_make(
         table.insert(objfiles, _output)
     end
 
-    print(tabular(tasks))
+    --print(tabular(tasks))
 
     if verbose then
-        print(tabular(repr_queu))
+        --print(tabular(repr_queu))
     end
 
     --ut.pop_dir()
@@ -4940,7 +4990,7 @@ local function sub_make(
         project_link({
             objfiles = objfiles,
             libsdirs = libdirs,
-            libs = _libs,
+            libs = libs,
         }, cfg, _args)
     else
         -- Сборка библиотеки "Щелочь", в зависимоти от того, откуда 
