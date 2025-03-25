@@ -924,47 +924,67 @@ local function build_raylib_common(dep: Dependency)
     --[[
     -- -DCMAKE_BUILD_TYPE=Release
     if dep.target == "wasm" then
-        insert(c, "-DPLATFORM=Web ")
-        insert(c, "-DSUPPORT_AUDIO=OFF ")
-        insert(c, "-DBUILD_EXAMPLES=OFF ")
-        local t = format("-DCMAKE_TOOLCHAIN_FILE=%s" ..
-            "/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake ",
-            EMSDK)
-        insert(c, t)
-
-        insert(c,
-            format('-DCMAKE_C_FLAGS="-I%s' .. 
-                   '/upstream/emscripten/cache/sysroot/include" ',
-            EMSDK)
-        )
     elseif dep.target == 'linux' then
         insert(c, "-DPLATFORM=Desktop ")
         insert(c, "-DBUILD_EXAMPLES=ON ")
     end
-
     insert(c, " .")
-
     local cmd = table.concat(c, " ")
     print('build_raylib_common', cmd)
     --]]
 
     if dep.target == 'linux' then
-        -- cmake
-        --cmd_do(cmd)
-        -- make
-        --print("build_raylib_common: currentdir", lfs.currentdir())
-        chdir('src')
+        local c = {}
+        insert(c, "-DPLATFORM=Desktop ")
+        insert(c, "-DBUILD_EXAMPLES=ON ")
+        cmd_do("cmake " .. table.concat(c, " ") .. " .")
+        cmd_do("make clean")
         cmd_do("make -j")
         --print("hop")
     elseif dep.target == 'wasm' then
         local EMSDK = getenv('EMSDK')
-        --printc("%{blue}wasm%{reset}")
-        --print(lfs.currentdir())
+
         chdir("src")
+        cmd_do("make clean")
         local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
         print('cmd', cmd)
         cmd_do(cmd)
         cmd_do("mv libraylib.web.a libraylib.a")
+        --]]
+
+        --chdir("src")
+        --[[
+        cmd_do("make clean")
+        local c = {}
+        insert(c, "-DPLATFORM=Web ")
+        insert(c, "-DSUPPORT_AUDIO=OFF ")
+        insert(c, "-DBUILD_EXAMPLES=OFF ")
+        insert(c, "-DCMAKE_TOOLCHAIN_FILE=" .. EMSDK .. 
+                  "/upstream/emscripten/cmake/" .. 
+                  "Modules/Platform/Emscripten.cmake ")
+        insert(c, '-DCMAKE_C_FLAGS="-I' .. EMSDK ..
+                  '/upstream/emscripten/cache/sysroot/include" ')
+        local cmd = "emcmake cmake " .. table.concat(c, " ") .. " ."
+        printc("build_raylib_common:%{yellow}" .. cmd .. "%{reset}")
+        cmd_do(cmd)
+        cmd_do("emmake make")
+        --cmd_do("mv libraylib.web.a libraylib.a")
+        --]]
+
+        --[[
+        chdir("src")
+        local c = {
+            "emcc -c rcore.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES3",
+            "emcc -c rshapes.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES3",
+            "emcc -c rtextures.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES3",
+            "emcc -c rtext.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES3",
+            "emcc -c rmodels.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES3",
+            "emcc -c utils.c -Os -Wall -DPLATFORM_WEB",
+            "emcc -c raudio.c -Os -Wall -DPLATFORM_WEB",
+            "emar rcs libraylib.a rcore.o rshapes.o rtextures.o rtext.o rmodels.o utils.o raudio.o",
+        }
+        cmd_do(c)
+        --]]
     end
     --]]
 
@@ -1352,7 +1372,7 @@ dependencies = {
         disabled = false,
         build = build_pcre2,
         build_w = build_pcre2_w,
-        description = "регулярные выражения с обработкой ошибок и группами захвата",
+        description = "регулярные выражения",
         dir = "pcre2",
         includes = { "pcre2/src", "pcre2" },
         libdirs = { "pcre2" },
@@ -1529,6 +1549,18 @@ dependencies = {
 
     {
         copy_for_wasm = true,
+        disabled = false,
+        name = "sol2",
+        description = "C++ Lua bindins",
+        build = build_sol,
+        build_w = build_sol,
+        dir = "sol2",
+        url = "https://github.com/ThePhD/sol2.git",
+        url_action = "git",
+    },
+
+    {
+        copy_for_wasm = true,
         description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
         includes = { "raylib/src" },
         libdirs = { "raylib/src" },
@@ -1540,18 +1572,6 @@ dependencies = {
         build = build_raylib_common,
         url_action = "git",
         url = "https://github.com/raysan5/raylib.git",
-    },
-
-    {
-        copy_for_wasm = true,
-        disabled = false,
-        name = "sol2",
-        description = "C++ Lua bindins",
-        build = build_sol,
-        build_w = build_sol,
-        dir = "sol2",
-        url = "https://github.com/ThePhD/sol2.git",
-        url_action = "git",
     },
 
     {
@@ -1680,7 +1700,6 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
 
     if cfg and cfg.dependencies then
         for _, depname in ipairs(cfg.dependencies) do
-            -- XXX: куда делся параметр в get_deps_name_map()?
             table.insert(ready_deps, get_deps_name_map()[depname])
         end
     else
@@ -1694,43 +1713,20 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
         end
 
         for _, depname in ipairs(cfg.not_dependencies) do
-            -- Зависимость может быть в списке отключенных и отсутствовать в
-            -- массиве dependencies, потому нужна проверка
-            if depname then
-                name2dep[depname] = nil
+            for k, v in ipairs(ready_deps) do
+                if v.name == depname then
+                    table.remove(ready_deps, k)
+                end
             end
         end
-
-        -- XXX: Порядок зависимостей нарушается от оригинального массива, 
-        -- но порядок не важен для списка включаемых каталогов
-        ready_deps = {}
-        for _, dep in pairs(name2dep) do
-            table.insert(ready_deps, dep)
-        end
     end
+
     return ready_deps
 end
 
---[[
-local function get_ready_links_internal(): {string}
-    local links_internal = ut.merge_tables(
-        gather_links(dependencies, "links_internal"),
-        { "stdc++", "m", }
-    )
-    return links_internal
-end
---]]
-
 local function get_ready_links(cfg: Cfg, _: Target): {string}
-    local ready_deps = get_ready_deps(cfg)
-    local links = ut.merge_tables(
-        gather_links(ready_deps), {
-            "stdc++",
-            "m",
-            --caustic_platform
-        }
-    )
-    return links
+    local merge_tables = ut.merge_tables
+    return merge_tables({ "stdc++", "m", }, gather_links(get_ready_deps(cfg)))
 end
 
 -- TODO: Убрать эту функцию или сделать зависимой от цели сборки
@@ -2210,7 +2206,7 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-t" },
         flags = {
             --{ "-g --nocodegen", "disable codegeneration step" },
-            { "-c", "full rebuild without cache info" },
+            { "-c --clean", "full rebuild without cache info" },
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
             --{ "-p --cpp", "use c++ code" },
@@ -2239,7 +2235,7 @@ local parser_setup: {string:ParserSetup} = {
             { "flags", "*" }
         },
         flags = {
-            { "-c", "clean run without gdb" },
+            { "-c --clean", "clean run without gdb" },
         },
     },
     test = {
@@ -3159,9 +3155,9 @@ TODO:
 Найти в исходных файлах имена тестовых функций
 Составить список имен тестовых функций
 Сгенерировать файл тестовой программы
-
 `gcc -MM source.c`
 --]]
+
 local function sub_test(_args: Args, cfg: Cfg)
     local src_dir = cfg.src or "src"
     ut.push_current_dir()
@@ -3187,31 +3183,9 @@ local function sub_test(_args: Args, cfg: Cfg)
             end
         end
 
-        --[[
-        local _output = output_dir .. "/" .. 
-                        gsub(file, "(.*%.)c$", "%1o")
-        --local _input = output_dir .. "/" .. file
-        local _input = cwd .. file
-
-        --print("_input", _input)
-        --print('_input\'', cwd .. string.sub(_input, 3, -1))
-
-        -- TODO: Проверять отсутствие объектного файла
-        local cmd = format(
-            "cc -lm %s %s %s %s -o %s -c %s %s", 
-            _defines, _includes, _libspath, _flags,
-            _output, _input, _libs
-        )
-        if cache:should_recompile(file, cmd) then
-            table.insert(queue, cmd)
-        end
-
-        table.insert(objfiles, _output)
-        --]]
     end)
     print("end of gathering sources")
 
-    --pop_dir(push_num)
     ut.pop_dir()
 end
 
@@ -3780,6 +3754,7 @@ end
 
 -- XXX: Работает только с одной, первой сборочной целью. 
 -- Что же делать с остальными?
+-- TODO: Сделать генерацию для wasm сборки
 function actions.compile_flags(_args: Args)
     print(
         "actions.compile_flags: currentdir", lfs.currentdir(),
@@ -3803,6 +3778,10 @@ function actions.compile_flags(_args: Args)
         target = 'linux'
     end
     print('cfgs', inspect(cfgs))
+
+    if target == 'wasm' then
+        put("-DPLATFORM_WEB")
+    end
 
     if cfgs then
         for _, cfg in ipairs(cfgs) do
@@ -4155,12 +4134,6 @@ local function run_parallel_uv(queue: {Task})
 
     local errcode = 0
 
-    --[[
-    for _, t in ipairs(queue) do
-        cmd_do(t.cmd .. ' ' .. table.concat(t.args, " "))
-    end
-    --]]
-
     local buf_err, buf_out = {}, {}
 
     for _, t in ipairs(queue) do
@@ -4234,17 +4207,17 @@ local function koh_link(objfiles: {string}, _args: Args)
     assert(target)
     local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
-    print('koh_link:', inspect(_args))
+    --print('koh_link:', inspect(_args))
 
     if lfs.attributes(lib_fname) then
         cmd_do("rm " .. lib_fname)
     end
-    printc('%{green}koh_link: target' .. target .. '%{green}')
+    --printc('%{green}koh_link: target ' .. target .. '%{green}')
     --local cmd = format("%s -rcs  \"%s\" %s", ar[target], lib_fname, objfiles_str)
     local cmd = ar[target] .. " -rcs  \"" .. lib_fname .. "\" " .. 
                 table.concat(objfiles, " ")
 
-    print("koh_link: currentdir", lfs.currentdir())
+    --print("koh_link: currentdir", lfs.currentdir())
     print("koh_link:", cmd)
     cmd_do(cmd)
 
@@ -4252,11 +4225,11 @@ local function koh_link(objfiles: {string}, _args: Args)
 end
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
-    print('project_link', inspect(ctx))
-    print('project_link', inspect(_args))
+    --print('project_link', inspect(ctx))
+    --print('project_link', inspect(_args))
 
     local flags: string = ""
-    if not _args.noasan then
+    if not _args.noasan and _args.target ~= 'wasm' then
         flags = flags .. table.concat(flags_sanitazer, " ")
         flags = flags .. " "
         if cfg.flags and type(cfg.flags) == 'table' then
@@ -4284,17 +4257,31 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     for _, libdir in ipairs(ctx.libsdirs) do
         insert(libsdirs, "-L" .. libdir)
     end
-    local cmd = cc .. " -o \"" .. artifact .. "\" " .. 
-                table.concat(ctx.objfiles, " ") .. " " ..
-                table.concat(libsdirs, " ") .. " " ..
-                flags .. " " .. table.concat(libs, " ")
+
+    if _args.target == 'wasm' then
+        artifact = artifact .. ".html"
+    end
+    local cmd = cc .. " -o \"" .. artifact .. "\" "
+
+    if _args.target == 'wasm' then
+        cmd = cmd .. " -DPLATFORM_WEB " ..
+        "-s USE_GLFW=3 " .. 
+        "--preload-file ../assets " ..
+        "-s ALLOW_MEMORY_GROWTH=1 " ..
+        "-s ASYNCIFY "
+    end
+
+    cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
+                 table.concat(libsdirs, " ") .. " " ..
+                 flags .. " " .. table.concat(libs, " ") 
+                --.. " -error-limit=0"
 
     if verbose then
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
         printc("project_link: %{blue}" .. cmd .. "%{reset}")
     end
 
-    printc("project_link: %{blue}" .. cmd .. "%{reset}")
+    --printc("project_link: %{blue}" .. cmd .. "%{reset}")
     cmd_do(cmd)
 end
 
@@ -4675,7 +4662,7 @@ local function sub_make(
 
     -- XXX: Где я нахожусь в иерархии каталогов?
     -- Где я должен находиться?
-    print('sub_make: currentdir', lfs.currentdir())
+    --print('sub_make: currentdir', lfs.currentdir())
 
     mkdir("obj_linux")
     mkdir("obj_wasm")
@@ -4727,7 +4714,8 @@ local function sub_make(
         insert(defines, "-DPLATFORM=PLATFORM_DESKTOP")
         insert(defines, "-DPLATFORM_DESKTOP")
     elseif target == 'wasm' then
-        insert(defines, "-DPLATFORM=PLATFORM_WEB")
+        --insert(defines, "-DPLATFORM=PLATFORM_WEB")
+        insert(defines, "-DPLATFORM_WEB")
         --insert(defines, "-DGRAPHICS_API_OPENGL_ES2")
         insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
     end
@@ -4787,7 +4775,7 @@ local function sub_make(
         table.insert(defines, define)
     end
 
-    if not _args.noasan then
+    if not _args.noasan and _args.target ~= 'wasm' then
         for _, flag in ipairs(flags_sanitazer) do
             table.insert(flags, flag)
         end
@@ -4813,9 +4801,8 @@ local function sub_make(
     local path = path_rel_third_party_t[target]
     assert(path)
 
-
     local libdirs = gather_libdirs_abs(dependencies)
-    printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
+    --printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
 
     if target == 'linux' then
         table.insert(libdirs, "/usr/lib")
@@ -4828,8 +4815,8 @@ local function sub_make(
     )
 
     if verbose then
-        print("_links")
-        print(tabular(libs))
+        --print("_links")
+        --print(tabular(libs))
     end
 
     if cfg.artifact then
@@ -4860,7 +4847,7 @@ local function sub_make(
     elseif target == 'wasm' then
         output_dir = "../obj_wasm"
     end
-    print("output_dir", output_dir)
+    --print("output_dir", output_dir)
 
     local files_processed =  ut.filter_sources(".", exclude)
 
@@ -5011,7 +4998,7 @@ function actions.make(_args: Args)
 
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
-    print('actions.make: target', target)
+    --print('actions.make: target', target)
     for _, cfg in ipairs(cfgs) do
         sub_make(_args, cfg, target, push_num)
     end
