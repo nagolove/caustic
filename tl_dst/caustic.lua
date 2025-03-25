@@ -933,38 +933,58 @@ local function build_raylib_common(dep)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    if dep.target == 'linux' then
-
-
-
-
-      chdir('src')
+      local c = {}
+      insert(c, "-DPLATFORM=Desktop ")
+      insert(c, "-DBUILD_EXAMPLES=ON ")
+      cmd_do("cmake " .. table.concat(c, " ") .. " .")
+      cmd_do("make clean")
       cmd_do("make -j")
 
    elseif dep.target == 'wasm' then
       local EMSDK = getenv('EMSDK')
 
-
       chdir("src")
+      cmd_do("make clean")
       local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
       print('cmd', cmd)
       cmd_do(cmd)
       cmd_do("mv libraylib.web.a libraylib.a")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
    end
 
 
@@ -1352,7 +1372,7 @@ dependencies = {
       disabled = false,
       build = build_pcre2,
       build_w = build_pcre2_w,
-      description = "регулярные выражения с обработкой ошибок и группами захвата",
+      description = "регулярные выражения",
       dir = "pcre2",
       includes = { "pcre2/src", "pcre2" },
       libdirs = { "pcre2" },
@@ -1529,6 +1549,18 @@ dependencies = {
 
    {
       copy_for_wasm = true,
+      disabled = false,
+      name = "sol2",
+      description = "C++ Lua bindins",
+      build = build_sol,
+      build_w = build_sol,
+      dir = "sol2",
+      url = "https://github.com/ThePhD/sol2.git",
+      url_action = "git",
+   },
+
+   {
+      copy_for_wasm = true,
       description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
       includes = { "raylib/src" },
       libdirs = { "raylib/src" },
@@ -1540,18 +1572,6 @@ dependencies = {
       build = build_raylib_common,
       url_action = "git",
       url = "https://github.com/raysan5/raylib.git",
-   },
-
-   {
-      copy_for_wasm = true,
-      disabled = false,
-      name = "sol2",
-      description = "C++ Lua bindins",
-      build = build_sol,
-      build_w = build_sol,
-      dir = "sol2",
-      url = "https://github.com/ThePhD/sol2.git",
-      url_action = "git",
    },
 
    {
@@ -1680,7 +1700,6 @@ local function get_ready_deps(cfg)
 
    if cfg and cfg.dependencies then
       for _, depname in ipairs(cfg.dependencies) do
-
          table.insert(ready_deps, get_deps_name_map()[depname])
       end
    else
@@ -1694,43 +1713,20 @@ local function get_ready_deps(cfg)
       end
 
       for _, depname in ipairs(cfg.not_dependencies) do
-
-
-         if depname then
-            name2dep[depname] = nil
+         for k, v in ipairs(ready_deps) do
+            if v.name == depname then
+               table.remove(ready_deps, k)
+            end
          end
       end
-
-
-
-      ready_deps = {}
-      for _, dep in pairs(name2dep) do
-         table.insert(ready_deps, dep)
-      end
    end
+
    return ready_deps
 end
 
-
-
-
-
-
-
-
-
-
-
 local function get_ready_links(cfg, _)
-   local ready_deps = get_ready_deps(cfg)
-   local links = ut.merge_tables(
-   gather_links(ready_deps), {
-      "stdc++",
-      "m",
-
-   })
-
-   return links
+   local merge_tables = ut.merge_tables
+   return merge_tables({ "stdc++", "m" }, gather_links(get_ready_deps(cfg)))
 end
 
 
@@ -2210,7 +2206,7 @@ local parser_setup = {
       options = { "-t" },
       flags = {
 
-         { "-c", "full rebuild without cache info" },
+         { "-c --clean", "full rebuild without cache info" },
          { "-r --release", "release" },
          { "-a --noasan", "no address sanitazer" },
 
@@ -2239,7 +2235,7 @@ local parser_setup = {
          { "flags", "*" },
       },
       flags = {
-         { "-c", "clean run without gdb" },
+         { "-c --clean", "clean run without gdb" },
       },
    },
    test = {
@@ -3187,30 +3183,8 @@ local function sub_test(_args, cfg)
          end
       end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    end)
    print("end of gathering sources")
-
 
    ut.pop_dir()
 end
@@ -3780,6 +3754,7 @@ end
 
 
 
+
 function actions.compile_flags(_args)
    print(
    "actions.compile_flags: currentdir", lfs.currentdir(),
@@ -3803,6 +3778,10 @@ function actions.compile_flags(_args)
       target = 'linux'
    end
    print('cfgs', inspect(cfgs))
+
+   if target == 'wasm' then
+      put("-DPLATFORM_WEB")
+   end
 
    if cfgs then
       for _, cfg in ipairs(cfgs) do
@@ -4155,12 +4134,6 @@ local function run_parallel_uv(queue)
 
    local errcode = 0
 
-
-
-
-
-
-
    local buf_err, buf_out = {}, {}
 
    for _, t in ipairs(queue) do
@@ -4234,17 +4207,17 @@ local function koh_link(objfiles, _args)
    assert(target)
    local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
-   print('koh_link:', inspect(_args))
+
 
    if lfs.attributes(lib_fname) then
       cmd_do("rm " .. lib_fname)
    end
-   printc('%{green}koh_link: target' .. target .. '%{green}')
+
 
    local cmd = ar[target] .. " -rcs  \"" .. lib_fname .. "\" " ..
    table.concat(objfiles, " ")
 
-   print("koh_link: currentdir", lfs.currentdir())
+
    print("koh_link:", cmd)
    cmd_do(cmd)
 
@@ -4252,11 +4225,11 @@ local function koh_link(objfiles, _args)
 end
 
 local function project_link(ctx, cfg, _args)
-   print('project_link', inspect(ctx))
-   print('project_link', inspect(_args))
+
+
 
    local flags = ""
-   if not _args.noasan then
+   if not _args.noasan and _args.target ~= 'wasm' then
       flags = flags .. table.concat(flags_sanitazer, " ")
       flags = flags .. " "
       if cfg.flags and type(cfg.flags) == 'table' then
@@ -4284,17 +4257,31 @@ local function project_link(ctx, cfg, _args)
    for _, libdir in ipairs(ctx.libsdirs) do
       insert(libsdirs, "-L" .. libdir)
    end
-   local cmd = cc .. " -o \"" .. artifact .. "\" " ..
-   table.concat(ctx.objfiles, " ") .. " " ..
+
+   if _args.target == 'wasm' then
+      artifact = artifact .. ".html"
+   end
+   local cmd = cc .. " -o \"" .. artifact .. "\" "
+
+   if _args.target == 'wasm' then
+      cmd = cmd .. " -DPLATFORM_WEB " ..
+      "-s USE_GLFW=3 " ..
+      "--preload-file ../assets " ..
+      "-s ALLOW_MEMORY_GROWTH=1 " ..
+      "-s ASYNCIFY "
+   end
+
+   cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
    table.concat(libsdirs, " ") .. " " ..
    flags .. " " .. table.concat(libs, " ")
+
 
    if verbose then
       printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
       printc("project_link: %{blue}" .. cmd .. "%{reset}")
    end
 
-   printc("project_link: %{blue}" .. cmd .. "%{reset}")
+
    cmd_do(cmd)
 end
 
@@ -4675,7 +4662,7 @@ local function sub_make(
 
 
 
-   print('sub_make: currentdir', lfs.currentdir())
+
 
    mkdir("obj_linux")
    mkdir("obj_wasm")
@@ -4727,7 +4714,8 @@ local function sub_make(
       insert(defines, "-DPLATFORM=PLATFORM_DESKTOP")
       insert(defines, "-DPLATFORM_DESKTOP")
    elseif target == 'wasm' then
-      insert(defines, "-DPLATFORM=PLATFORM_WEB")
+
+      insert(defines, "-DPLATFORM_WEB")
 
       insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
    end
@@ -4787,7 +4775,7 @@ local function sub_make(
       table.insert(defines, define)
    end
 
-   if not _args.noasan then
+   if not _args.noasan and _args.target ~= 'wasm' then
       for _, flag in ipairs(flags_sanitazer) do
          table.insert(flags, flag)
       end
@@ -4813,9 +4801,8 @@ local function sub_make(
    local path = path_rel_third_party_t[target]
    assert(path)
 
-
    local libdirs = gather_libdirs_abs(dependencies)
-   printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
+
 
    if target == 'linux' then
       table.insert(libdirs, "/usr/lib")
@@ -4828,8 +4815,8 @@ local function sub_make(
 
 
    if verbose then
-      print("_links")
-      print(tabular(libs))
+
+
    end
 
    if cfg.artifact then
@@ -4860,7 +4847,7 @@ local function sub_make(
    elseif target == 'wasm' then
       output_dir = "../obj_wasm"
    end
-   print("output_dir", output_dir)
+
 
    local files_processed = ut.filter_sources(".", exclude)
 
@@ -5011,7 +4998,7 @@ function actions.make(_args)
 
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
-   print('actions.make: target', target)
+
    for _, cfg in ipairs(cfgs) do
       sub_make(_args, cfg, target, push_num)
    end
