@@ -25,15 +25,15 @@ end
 
 
 local path_rel_third_party = remove_last_backslash(
-getenv("3rd_party") or "3rd_party")
+getenv("CAUSTIC_MODULE_LINUX") or "modules_linux")
 
 
 local path_rel_wasm_third_party = remove_last_backslash(
-getenv("wasm_3rd_party") or "wasm_3rd_party")
+getenv("CAUSTIC_MODULE_WASM") or "modules_wasm")
 
 
 local path_rel_win_third_party = remove_last_backslash(
-getenv("win_3rd_party") or "win_3rd_party")
+getenv("CAUSTIC_MODULE_WIN") or "modules_windows")
 
 
 
@@ -56,7 +56,6 @@ package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
 package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" ..
-
 
 path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" .. package.path
 package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
@@ -506,7 +505,7 @@ end
 
 
 
-local dependencies
+local modules
 
 
 
@@ -622,6 +621,9 @@ local function build_chipmunk(dep)
    print("chipmunk_custom_build:", lfs.currentdir())
    ut.push_current_dir()
    chdir(dep.dir)
+
+
+
    local opts = {
       "BUILD_DEMOS=OFF",
       "INSTALL_DEMOS=OFF",
@@ -705,7 +707,8 @@ local function paste_from_one_to_other(
       end
 
       if in_block then
-         file_dst:write(format("%s\n", line))
+
+         file_dst:write(line .. "\n")
       end
 
       if in_block and string.match(line, pattern_end) then
@@ -729,38 +732,51 @@ local function build_cimgui_common(dep)
    print("current dir", lfs.currentdir())
    local c = make[dep.target]
    cmd_do(format("%s clean", c))
-   cmd_do(format("%s -j CFLAGS=\"-g3\"", c))
-end
+   if dep.target == 'linux' then
+      cmd_do(format("%s -j CFLAGS=\"-g3 -DPLATFORM_DESKTOP\"", c))
+   elseif dep.target == 'wasm' then
+      local cmd = format("%s -j CFLAGS=\"-g3 -DPLATFORM_WEB=1\"", c)
+      printc("%{green}build_cimgui_common: " .. cmd .. "%{reset}")
+      cmd_do(cmd)
+   else
+      printc(
+      "%{red}build_cimgui_common:bad target" .. dep.target ..
+      "%{reset}")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function get_additional_includes(t)
-   assert(path_abs_third_party[t])
-   local includes_str = ""
-   local includes = get_deps_name_map(dependencies)["raylib"].includes
-   for _, include in ipairs(includes) do
-      includes_str = includes_str ..
-      "-I" ..
-      path_abs_third_party[t] ..
-      "/" ..
-      include
    end
-   assert(includes_str)
-   print("get_additional_includes:", includes_str)
-   assert(includes_str)
-   return includes_str
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 local function match_in_file(fname, pattern)
@@ -827,17 +843,39 @@ local function cimgui_after_init(dep)
 
    local path = path_abs_third_party[dep.target]
    assert(path)
+
+
+
+
+
+
+
+
+   local cxx_flags = '-DCMAKE_CXX_FLAGS="'
+   local includes = get_deps_name_map(modules)["raylib"].includes
+   for _, include in ipairs(includes) do
+      local s = "-I" .. path_abs_third_party[dep.target] .. "/" .. include
+      cxx_flags = cxx_flags .. s .. " "
+   end
+   cxx_flags = cxx_flags .. '"'
+
    local cmake_cmd = {
-      format("CXXFLAGS=-I%s/freetype/include", path),
+      format('CXXFLAGS=\'-I%s/freetype/include -I%s/raylib/src\'', path, path),
       cmake[dep.target],
-      format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes(dep.target)),
       "-DIMGUI_STATIC=1",
       "-DNO_FONT_AWESOME=1",
+      cxx_flags,
    }
 
+   print('cxx_flags', cxx_flags)
+
+   if dep.target == 'wasm' then
+      insert(cmake_cmd, "-DPLATFORM_WEB=1")
+   end
+
    if use_freetype then
-      table.insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
-      table.insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
+      insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
+      insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
    end
 
    table.insert(cmake_cmd, " . ")
@@ -876,6 +914,9 @@ local function cimgui_after_init(dep)
       " in cimgui module%{reset}")
 
    end
+
+   cmd_do("ls ..")
+   cmd_do("cp -r ../rlImGui/extras/ extras")
 
    ut.pop_dir()
 end
@@ -1173,7 +1214,7 @@ end
 
 
 
-dependencies = {
+modules = {
 
 
 
@@ -1428,10 +1469,25 @@ dependencies = {
       disabled = false,
 
       name = "rlimgui",
+      url = "git@github.com:nagolove/rlImGui.git",
 
-      url = "https://github.com/raylib-extras/rlImGui.git",
       url_action = "git",
       copy_for_wasm = true,
+   },
+
+   {
+      copy_for_wasm = true,
+      description = "библиотека для всякого",
+      includes = { "raylib/src" },
+      libdirs = { "raylib/src" },
+      links = { "raylib" },
+      links_internal = { "raylib" },
+      name = 'raylib',
+      dir = "raylib",
+      build_w = build_raylib_common,
+      build = build_raylib_common,
+      url_action = "git",
+      url = "https://github.com/raysan5/raylib.git",
    },
 
    {
@@ -1560,21 +1616,6 @@ dependencies = {
    },
 
    {
-      copy_for_wasm = true,
-      description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
-      includes = { "raylib/src" },
-      libdirs = { "raylib/src" },
-      links = { "raylib" },
-      links_internal = { "raylib" },
-      name = 'raylib',
-      dir = "raylib",
-      build_w = build_raylib_common,
-      build = build_raylib_common,
-      url_action = "git",
-      url = "https://github.com/raysan5/raylib.git",
-   },
-
-   {
       disabled = false,
       build = build_rlwr_common,
 
@@ -1645,7 +1686,7 @@ local function gather_includedirs(
    for _, dep in ipairs(deps) do
       if dep.includes and not dep.disabled then
          for _, include_path in ipairs(dep.includes) do
-            table.insert(tmp_includedirs, remove_last_backslash(include_path))
+            insert(tmp_includedirs, remove_last_backslash(include_path))
          end
       end
    end
@@ -1703,7 +1744,7 @@ local function get_ready_deps(cfg)
          table.insert(ready_deps, get_deps_name_map()[depname])
       end
    else
-      ready_deps = ut.deepcopy(dependencies)
+      ready_deps = ut.deepcopy(modules)
    end
 
    if cfg and cfg.not_dependencies then
@@ -1784,22 +1825,6 @@ local function gather_libdirs_abs(deps)
    return libdirs_tbl
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function get_dir(dep)
    assert(type(dep.url) == 'string')
    assert(dep)
@@ -1841,10 +1866,6 @@ local function get_deps_map(deps)
    end
    return res
 end
-
-
-
-
 
 local function after_init(dep)
    assert(dep)
@@ -3070,7 +3091,7 @@ end
 function actions.proj_init(_args)
    local deps = {}
    if _args.name then
-      local dependencies_name_map = get_deps_name_map(dependencies)
+      local dependencies_name_map = get_deps_name_map(modules)
       print('partial init for dependency', _args.name)
       if dependencies_name_map[_args.name] then
          table.insert(deps, dependencies_name_map[_args.name])
@@ -3079,7 +3100,7 @@ function actions.proj_init(_args)
          return
       end
    else
-      for _, dep in ipairs(dependencies) do
+      for _, dep in ipairs(modules) do
          table.insert(deps, dep)
       end
    end
@@ -3099,7 +3120,7 @@ local function pre_init(_args)
    local deps = {}
 
    if _args.name then
-      local dependencies_name_map = get_deps_name_map(dependencies)
+      local dependencies_name_map = get_deps_name_map(modules)
       print('partial init for dependency', _args.name)
       if dependencies_name_map[_args.name] then
          table.insert(deps, dependencies_name_map[_args.name])
@@ -3109,7 +3130,7 @@ local function pre_init(_args)
       end
    else
 
-      for _, dep in ipairs(dependencies) do
+      for _, dep in ipairs(modules) do
          table.insert(deps, dep)
       end
    end
@@ -3666,7 +3687,7 @@ function actions.remove(_args)
    end
 
    local dirnames = {}
-   local dependencies_name_map = get_deps_name_map(dependencies)
+   local dependencies_name_map = get_deps_name_map(modules)
    if _args.name and dependencies_name_map[_args.name] then
       table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
    else
@@ -3684,7 +3705,7 @@ function actions.remove(_args)
    chdir(path_caustic)
 
 
-   local deps_name_map = get_deps_name_map(dependencies)
+   local deps_name_map = get_deps_name_map(modules)
    local dep = deps_name_map[_args.name]
 
    if _args.name and dep then
@@ -3731,7 +3752,7 @@ local function get_ready_includes(cfg, target)
 end
 
 function actions.dependencies(_)
-   for _, dep in ipairs(dependencies) do
+   for _, dep in ipairs(modules) do
       print(tabular(dep));
    end
 end
@@ -3781,6 +3802,8 @@ function actions.compile_flags(_args)
 
    if target == 'wasm' then
       put("-DPLATFORM_WEB")
+      local EMSDK = getenv('EMSDK')
+      put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
    end
 
    if cfgs then
@@ -3849,83 +3872,6 @@ local function make_l(list)
    end
    return ret
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -4059,10 +4005,10 @@ local function sub_build(_args, path_rel, target)
 
    if _args.name then
       print(format("build '%s'", _args.name))
-      local dependencies_name_map = get_deps_name_map(dependencies)
+      local dependencies_name_map = get_deps_name_map(modules)
       if dependencies_name_map[_args.name] then
          local dir = get_dir(dependencies_name_map[_args.name])
-         local deps_map = get_deps_map(dependencies)
+         local deps_map = get_deps_map(modules)
          local dep
          local ok, errmsg = pcall(function()
             dep = deps_map[dir]
@@ -4085,12 +4031,12 @@ local function sub_build(_args, path_rel, target)
       end
    else
 
-      deps = dependencies
+      deps = modules
    end
 
-   print('sub_build:', target)
-   print('sub_build:', path_rel)
-   printc("%{yellow}sub_build:" .. inspect(deps) .. "%{reset}")
+
+
+
 
    local ok, errmsg = pcall(function()
       for _, dep in ipairs(deps) do
@@ -4118,10 +4064,10 @@ end
 
 function actions.deps(_args)
    if _args.full then
-      print(tabular(dependencies))
+      print(tabular(modules))
    else
       local shorts = {}
-      for _, dep in ipairs(dependencies) do
+      for _, dep in ipairs(modules) do
          table.insert(shorts, dep.name)
       end
       print(tabular(shorts))
@@ -4247,7 +4193,6 @@ local function project_link(ctx, cfg, _args)
    assert(cc)
 
 
-
    local libs = {}
    for _, lib in ipairs(ctx.libs) do
       insert(libs, "-l" .. lib)
@@ -4263,12 +4208,19 @@ local function project_link(ctx, cfg, _args)
    end
    local cmd = cc .. " -o \"" .. artifact .. "\" "
 
+
    if _args.target == 'wasm' then
-      cmd = cmd .. " -DPLATFORM_WEB " ..
+      cmd = cmd ..
+      " -DPLATFORM_WEB " ..
       "-s USE_GLFW=3 " ..
       "--preload-file ../assets " ..
       "-s ALLOW_MEMORY_GROWTH=1 " ..
-      "-s ASYNCIFY "
+      "-Os " ..
+
+
+      "--shell-file " ..
+      path_abs_third_party['wasm'] ..
+      "/raylib/src/minshell.html "
    end
 
    cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
@@ -4359,7 +4311,7 @@ end
 
 function actions.update(_args)
    if _args.name then
-      local dependencies_name_map = get_deps_name_map(dependencies)
+      local dependencies_name_map = get_deps_name_map(modules)
       print('update for', _args.name)
       if dependencies_name_map[_args.name] then
          local dep = dependencies_name_map[_args.name]
@@ -4582,7 +4534,7 @@ local function get_ready_deps_defines(cfg)
    local map_all_deps = {}
 
 
-   for _, dep in ipairs(ut.deepcopy(dependencies)) do
+   for _, dep in ipairs(ut.deepcopy(modules)) do
       map_all_deps[dep.name] = dep
    end
 
@@ -4636,7 +4588,7 @@ local function print_sorted_string(objfiles)
 end
 
 local function dependencies_set_target(target)
-   for _, dep in ipairs(dependencies) do
+   for _, dep in ipairs(modules) do
       dep.target = target
    end
 end
@@ -4753,6 +4705,10 @@ local function sub_make(
 
    local debugs = {}
 
+   if target == 'wasm' then
+      insert(flags, "-Os")
+   end
+
    if not _args.release then
 
 
@@ -4801,7 +4757,7 @@ local function sub_make(
    local path = path_rel_third_party_t[target]
    assert(path)
 
-   local libdirs = gather_libdirs_abs(dependencies)
+   local libdirs = gather_libdirs_abs(modules)
 
 
    if target == 'linux' then
@@ -4918,8 +4874,6 @@ local function sub_make(
    if verbose then
 
    end
-
-
 
 
    run_parallel_uv(tasks)

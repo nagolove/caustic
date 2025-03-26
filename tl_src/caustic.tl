@@ -25,15 +25,15 @@ end
 -- {{{ env vars
 -- каталог для библиотек x86_64 собранных в отладочном режиме
 local path_rel_third_party = remove_last_backslash(
-    getenv("3rd_party") or "3rd_party"
+    getenv("CAUSTIC_MODULE_LINUX") or "modules_linux"
 )
 -- каталог для библиотек wasm, собранных в отладочном режиме
 local path_rel_wasm_third_party = remove_last_backslash(
-    getenv("wasm_3rd_party") or "wasm_3rd_party"
+    getenv("CAUSTIC_MODULE_WASM") or "modules_wasm"
 )
 -- каталог для библиотек win, собранных в отладочном режиме
 local path_rel_win_third_party = remove_last_backslash(
-    getenv("win_3rd_party") or "win_3rd_party"
+    getenv("CAUSTIC_MODULE_WIN") or "modules_windows"
 )
 
 --[[
@@ -57,7 +57,6 @@ package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
 package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
                -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
-               --home .. "/caustic/3rd_party/json.lua/?.lua;" .. 
                path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
 package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
@@ -506,7 +505,7 @@ local record Dependency
 
 end
 
-local dependencies: {Dependency}
+local modules: {Dependency}
 
 -- {{{ functions 
 
@@ -622,6 +621,9 @@ local function build_chipmunk(dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
     ut.push_current_dir()
     chdir(dep.dir)
+
+    --local s = "-DBUILD_DEMOS=OFF -DINSTALL_DEMOS=OFF -DBUILD_SHARED=OFF -DBUILD_STATIC=ON -DINSTALL_STATIC=OFF " 
+
     local opts = {
         "BUILD_DEMOS=OFF",
         "INSTALL_DEMOS=OFF",
@@ -705,7 +707,8 @@ local function paste_from_one_to_other(
         end
 
         if in_block then
-            file_dst:write(format("%s\n", line))
+            --printc("%{yellow}" .. line .. "%{reset}")
+            file_dst:write(line .. "\n")
         end
 
         if in_block and string.match(line, pattern_end) then
@@ -729,7 +732,18 @@ local function build_cimgui_common(dep: Dependency)
     print("current dir", lfs.currentdir())
     local c = make[dep.target]
     cmd_do(format("%s clean", c))
-    cmd_do(format("%s -j CFLAGS=\"-g3\"", c))
+    if dep.target == 'linux' then
+        cmd_do(format("%s -j CFLAGS=\"-g3 -DPLATFORM_DESKTOP\"", c))
+    elseif dep.target == 'wasm' then
+        local cmd = format("%s -j CFLAGS=\"-g3 -DPLATFORM_WEB=1\"", c)
+        printc("%{green}build_cimgui_common: " .. cmd .. "%{reset}")
+        cmd_do(cmd)
+    else 
+        printc(
+            "%{red}build_cimgui_common:bad target" .. dep.target .. 
+            "%{reset}"
+        )
+    end
 end
 
 --[[
@@ -744,6 +758,7 @@ local function build_cimgui_w(dep: Dependency)
 end
 --]]
 
+--[[
 -- XXX: Что делает эта функция?
 local function get_additional_includes(t: Target): string
     assert(path_abs_third_party[t])
@@ -761,6 +776,7 @@ local function get_additional_includes(t: Target): string
     assert(includes_str)
     return includes_str
 end
+--]]
 
 -- Сделать функцию для поиска строки в файле?
 local function match_in_file(fname: string, pattern: string): boolean
@@ -827,17 +843,39 @@ local function cimgui_after_init(dep: Dependency)
 
     local path = path_abs_third_party[dep.target]
     assert(path)
+    -- TODO: После обработки каждого модуля обновлять данные для включаемых 
+    -- файлов
+
+    --print("get_additional_includes")
+    --print(tabular(get_additional_includes(dep.target)))
+    --print("AAAAAAAAAAAAAAAAAA")
+
+    -- TODO: перенести CXXFLAGS в CMAKE_CXX_FLAGS
+    local cxx_flags = '-DCMAKE_CXX_FLAGS="'
+    local includes = get_deps_name_map(modules)["raylib"].includes
+    for _, include in ipairs(includes) do
+        local s = "-I" .. path_abs_third_party[dep.target] .. "/" .. include
+        cxx_flags = cxx_flags .. s .. " "
+    end
+    cxx_flags = cxx_flags .. '"'
+
     local cmake_cmd = {
-        format("CXXFLAGS=-I%s/freetype/include", path),
+        format('CXXFLAGS=\'-I%s/freetype/include -I%s/raylib/src\'', path, path),
         cmake[dep.target],
-        format("-DCMAKE_CXX_FLAGS=%s", get_additional_includes(dep.target)),
         "-DIMGUI_STATIC=1",
         "-DNO_FONT_AWESOME=1",
+        cxx_flags,
     }
 
+    print('cxx_flags', cxx_flags)
+
+    if dep.target == 'wasm' then
+        insert(cmake_cmd, "-DPLATFORM_WEB=1")
+    end
+
     if use_freetype then
-        table.insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
-        table.insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
+        insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
+        insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
     end
 
     table.insert(cmake_cmd, " . ")
@@ -876,6 +914,9 @@ local function cimgui_after_init(dep: Dependency)
            " in cimgui module%{reset}"
         )
     end
+
+    cmd_do("ls ..")
+    cmd_do("cp -r ../rlImGui/extras/ extras")
 
     ut.pop_dir()
 end
@@ -1173,7 +1214,7 @@ end
 -- Но повторное копирование не требуется. Добавлять путь для LUA_PATH
 -- TODO: Добавить возможность добавления библиотекой дефайнов для 
 -- компилятора, в частности для разрешения пути.
-dependencies = {
+modules = {
 
     --[[
     {
@@ -1428,10 +1469,25 @@ dependencies = {
         disabled = false,
         --git_branch = "caustic",
         name = "rlimgui",
-        --url = "git@github.com:nagolove/rlImGui.git",
-        url = "https://github.com/raylib-extras/rlImGui.git",
+        url = "git@github.com:nagolove/rlImGui.git",
+        --url = "https://github.com/raylib-extras/rlImGui.git",
         url_action = "git",
         copy_for_wasm = true,
+    },
+
+    {
+        copy_for_wasm = true,
+        description = "библиотека для всякого",
+        includes = { "raylib/src" },
+        libdirs = { "raylib/src" },
+        links = { "raylib" },
+        links_internal = { "raylib" },
+        name = 'raylib',
+        dir = "raylib",
+        build_w = build_raylib_common,
+        build = build_raylib_common,
+        url_action = "git",
+        url = "https://github.com/raysan5/raylib.git",
     },
 
     {
@@ -1560,21 +1616,6 @@ dependencies = {
     },
 
     {
-        copy_for_wasm = true,
-        description = "библиотека создания окна, вывода графики, обработки ввода и т.д.",
-        includes = { "raylib/src" },
-        libdirs = { "raylib/src" },
-        links = { "raylib" },
-        links_internal = { "raylib" },
-        name = 'raylib',
-        dir = "raylib",
-        build_w = build_raylib_common,
-        build = build_raylib_common,
-        url_action = "git",
-        url = "https://github.com/raysan5/raylib.git",
-    },
-
-    {
         disabled = false,
         build = build_rlwr_common,
         -- TODO: Сперва собрать sol c правильной версией lua
@@ -1645,7 +1686,7 @@ local function gather_includedirs(
     for _, dep in ipairs(deps) do
         if  dep.includes and not dep.disabled then
             for _, include_path in ipairs(dep.includes) do
-                table.insert(tmp_includedirs, remove_last_backslash(include_path))
+                insert(tmp_includedirs, remove_last_backslash(include_path))
             end
         end
     end
@@ -1703,7 +1744,7 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
             table.insert(ready_deps, get_deps_name_map()[depname])
         end
     else
-        ready_deps = ut.deepcopy(dependencies)
+        ready_deps = ut.deepcopy(modules)
     end
 
     if cfg and cfg.not_dependencies then
@@ -1784,22 +1825,6 @@ local function gather_libdirs_abs(deps: {Dependency}): {string}
     return libdirs_tbl
 end
 
---[[
-local wasm_libdirs = { 
-    "../caustic/wasm_objects/",
-    "../caustic/wasm_3rd_party/genann",
-    "../caustic/wasm_3rd_party/utf8proc",
-    "../caustic/wasm_3rd_party/Chipmunk2D/src",
-    "../caustic/wasm_3rd_party/cimgui",
-    --"../caustic/wasm_3rd_party/raylib/raylib",
-    "../caustic/wasm_3rd_party/raylib",
-    "../caustic/wasm_3rd_party/lua",
-    --"../caustic/wasm_3rd_party/small-regex/libsmallregex",
-    --"../caustic/wasm_3rd_party/sunvox/sunvox_lib/
-    "../caustic/3rd_party/sunvox/sunvox_lib/js/lib"
-}
---]]
-
 local function get_dir(dep: Dependency): string
     assert(type(dep.url) == 'string')
     assert(dep)
@@ -1841,10 +1866,6 @@ local function get_deps_map(deps: {Dependency}): {string: Dependency}
     end
     return res
 end
-
--- имя зависимости
---local dependencies_name_map: {string: Dependency} = 
-    --get_deps_name_map(dependencies)
 
 local function after_init(dep: Dependency)
     assert(dep)
@@ -3070,7 +3091,7 @@ end
 function actions.proj_init(_args: Args)
     local deps = {}
     if _args.name then
-        local dependencies_name_map = get_deps_name_map(dependencies)
+        local dependencies_name_map = get_deps_name_map(modules)
         print('partial init for dependency', _args.name)
         if dependencies_name_map[_args.name] then
             table.insert(deps, dependencies_name_map[_args.name])
@@ -3079,7 +3100,7 @@ function actions.proj_init(_args: Args)
             return
         end
     else
-        for _, dep in ipairs(dependencies) do
+        for _, dep in ipairs(modules) do
             table.insert(deps, dep)
         end
     end
@@ -3099,7 +3120,7 @@ local function pre_init(_args: Args): {Dependency}
     local deps = {}
     -- указано имя одного модуля
     if _args.name then
-        local dependencies_name_map = get_deps_name_map(dependencies)
+        local dependencies_name_map = get_deps_name_map(modules)
         print('partial init for dependency', _args.name)
         if dependencies_name_map[_args.name] then
             table.insert(deps, dependencies_name_map[_args.name])
@@ -3109,7 +3130,7 @@ local function pre_init(_args: Args): {Dependency}
         end
     else
         -- или команда применяется ко всем модулям
-        for _, dep in ipairs(dependencies) do
+        for _, dep in ipairs(modules) do
             table.insert(deps, dep)
         end
     end
@@ -3666,7 +3687,7 @@ function actions.remove(_args: Args)
     end
 
     local dirnames: {string} = {}
-    local dependencies_name_map = get_deps_name_map(dependencies)
+    local dependencies_name_map = get_deps_name_map(modules)
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
@@ -3684,7 +3705,7 @@ function actions.remove(_args: Args)
     chdir(path_caustic)
 
     -- TODO: Сделать многоступенчатый бэкап данных перед удалением
-    local deps_name_map = get_deps_name_map(dependencies)
+    local deps_name_map = get_deps_name_map(modules)
     local dep = deps_name_map[_args.name]
 
     if _args.name and dep then
@@ -3731,7 +3752,7 @@ local function get_ready_includes(cfg: Cfg, target: Target): {string}
 end
 
 function actions.dependencies(_: Args)
-    for _, dep in ipairs(dependencies) do
+    for _, dep in ipairs(modules) do
         print(tabular(dep));
     end
 end
@@ -3781,6 +3802,8 @@ function actions.compile_flags(_args: Args)
 
     if target == 'wasm' then
         put("-DPLATFORM_WEB")
+        local EMSDK = getenv('EMSDK')
+        put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
     end
 
     if cfgs then
@@ -3862,16 +3885,6 @@ end
 #Then the pure computation could run first, and be evalled away, and the GL
 #context creation call to an import would not prevent that. 
 -- }}}
---]]
---[[
-local function link_wasm_project(main_fname: string, _args: Args)
-    --local currentdir = lfs.currentdir()
-    print('link_project:', lfs.currentdir())
-    --local project_dir = string.match(currentdir, ".*/(.*)$")
-    local project_dir = "wasm_build"
-    mkdir(project_dir)
-
-    local prev_dir = lfs.currentdir()
 
     local flags = {
         "-s USE_GLFW=3",
@@ -3885,73 +3898,6 @@ local function link_wasm_project(main_fname: string, _args: Args)
         main_fname or '',
     }
 
-    local shell = "--shell-file ../caustic/3rd_party/raylib/src/minshell.html"
-    if _args.minshell then
-        table.insert(flags, 1, shell)
-    end
-
-    table.insert(flags, format("-o %s/%s.html", project_dir, 'index'))
-
-    local _includedirs = {}
-    for _, v in ipairs(get_ready_includes()) do
-        table.insert(_includedirs, "-I" .. v)
-    end
-    local includes_str = table.concat(_includedirs, " ")
-
-    --print('_includedirs', inspect(_includedirs))
-    --print()
-
-    local _libs = {}
-    for _, v in ipairs(get_ready_links()) do
-        table.insert(_libs, v)
-    end
-    table.insert(_libs, "caustic")
-    table.insert(_libs, "project")
-
-    -- XXX: Как присоединить sunvox к wasm проекту?
-    --table.insert(_libs, "sunvox")
-
-    print("_libs before", inspect(_libs))
-    _libs = make_l(_libs)
-    print("_libs after", inspect(_libs))
-
-    --print("os.exit(1)")
-    --os.exit(1)
-
-    local libs_str = table.concat(_libs, " ")
-
-    print(inspect(_libs))
-    print()
-
-    local libspath = {}
-
-    table.insert(libspath, "wasm_objects")
-    for _, v in ipairs(wasm_libdirs) do
-        table.insert(libspath, v)
-    end
-
-    for k, v in ipairs(libspath) do
-        libspath[k] = "-L" .. v
-    end
-
-    --print(tabular(libspath))
-    print('currentdir', lfs.currentdir())
-    local libspath_str = table.concat(libspath, " ")
-
-    print('flags')
-    print(tabular(flags))
-    --print("os.exit(1)")
-    --os.exit(1)
-
-    local flags_str = table.concat(flags, " ")
-    local cmd = format(
-        "emcc %s %s %s %s", libspath_str, libs_str, includes_str, flags_str
-    )
-    print(cmd)
-    cmd_do(cmd)
-
-    chdir(prev_dir)
-end
 --]]
 
 local function _build(dep: Dependency)
@@ -4059,10 +4005,10 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
 
     if _args.name then
         print(format("build '%s'", _args.name))
-        local dependencies_name_map = get_deps_name_map(dependencies)
+        local dependencies_name_map = get_deps_name_map(modules)
         if dependencies_name_map[_args.name] then
             local dir = get_dir(dependencies_name_map[_args.name])
-            local deps_map = get_deps_map(dependencies)
+            local deps_map = get_deps_map(modules)
             local dep: Dependency
             local ok, errmsg: boolean, string = pcall(function()
                 dep = deps_map[dir]
@@ -4085,12 +4031,12 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
         end
     else
         -- обработка всех модулей
-        deps = dependencies
+        deps = modules
     end
 
-    print('sub_build:', target)
-    print('sub_build:', path_rel)
-    printc("%{yellow}sub_build:" .. inspect(deps) .. "%{reset}")
+    --print('sub_build:', target)
+    --print('sub_build:', path_rel)
+    --printc("%{yellow}sub_build:" .. inspect(deps) .. "%{reset}")
 
     local ok, errmsg: boolean, string = pcall(function()
         for _, dep in ipairs(deps) do
@@ -4118,10 +4064,10 @@ end
 
 function actions.deps(_args: Args)
     if _args.full then
-        print(tabular(dependencies))
+        print(tabular(modules))
     else
         local shorts = {}
-        for _, dep in ipairs(dependencies) do
+        for _, dep in ipairs(modules) do
             table.insert(shorts, dep.name)
         end
         print(tabular(shorts))
@@ -4246,7 +4192,6 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local cc = compiler[_args.target]
     assert(cc)
 
-    -- TODO: Добавить какие-то wasm флаги
 
     local libs = {}
     for _, lib in ipairs(ctx.libs) do
@@ -4263,12 +4208,19 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     end
     local cmd = cc .. " -o \"" .. artifact .. "\" "
 
+    -- Добавить какие-то wasm флаги
     if _args.target == 'wasm' then
-        cmd = cmd .. " -DPLATFORM_WEB " ..
-        "-s USE_GLFW=3 " .. 
-        "--preload-file ../assets " ..
-        "-s ALLOW_MEMORY_GROWTH=1 " ..
-        "-s ASYNCIFY "
+        cmd = cmd 
+        .. " -DPLATFORM_WEB " 
+        .. "-s USE_GLFW=3 " 
+        .. "--preload-file ../assets " 
+        .. "-s ALLOW_MEMORY_GROWTH=1 " 
+        .. "-Os "
+        --.. "-s ASYNCIFY "
+
+        .. "--shell-file " 
+        .. path_abs_third_party['wasm'] 
+        .. "/raylib/src/minshell.html "
     end
 
     cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
@@ -4359,7 +4311,7 @@ end
 -- XXX: Работает только из каталога ~/caustic
 function actions.update(_args: Args)
     if _args.name then
-        local dependencies_name_map = get_deps_name_map(dependencies)
+        local dependencies_name_map = get_deps_name_map(modules)
         print('update for', _args.name)
         if dependencies_name_map[_args.name] then
             local dep = dependencies_name_map[_args.name]
@@ -4582,7 +4534,7 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
     local map_all_deps = {}
 
     -- Отображение: Имя -> Зависимость
-    for _, dep in ipairs(ut.deepcopy(dependencies)) do
+    for _, dep in ipairs(ut.deepcopy(modules)) do
         map_all_deps[dep.name] = dep
     end
     -- Удаление зависимостей согласно конфигурационной структуре
@@ -4636,7 +4588,7 @@ local function print_sorted_string(objfiles: {string})
 end
 
 local function dependencies_set_target(target: Target)
-    for _, dep in ipairs(dependencies) do
+    for _, dep in ipairs(modules) do
         dep.target = target
     end
 end
@@ -4753,6 +4705,10 @@ local function sub_make(
 
     local debugs = {}
 
+    if target == 'wasm' then
+        insert(flags, "-Os")
+    end
+
     if not _args.release then
         -- DEEEBUUUG
 
@@ -4801,7 +4757,7 @@ local function sub_make(
     local path = path_rel_third_party_t[target]
     assert(path)
 
-    local libdirs = gather_libdirs_abs(dependencies)
+    local libdirs = gather_libdirs_abs(modules)
     --printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
 
     if target == 'linux' then
@@ -4918,8 +4874,6 @@ local function sub_make(
     if verbose then
         --print(tabular(repr_queu))
     end
-
-    --ut.pop_dir()
 
     -- использовать libuv
     run_parallel_uv(tasks)
