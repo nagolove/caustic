@@ -979,9 +979,11 @@ local function build_raylib_common(dep)
       insert(c, "-DPLATFORM=Desktop ")
       insert(c, "-DBUILD_EXAMPLES=ON ")
       cmd_do("cmake " .. table.concat(c, " ") .. " .")
-      cmd_do("make clean")
+
       cmd_do("make -j")
 
+
+      chdir('src')
    elseif dep.target == 'wasm' then
       local EMSDK = getenv('EMSDK')
 
@@ -1031,6 +1033,44 @@ local function build_raylib_common(dep)
 
 
 
+
+
+   local raylib_i =
+   [[
+%module raylib
+%{
+#include "raylib.h"
+%}
+
+%include "raylib.h"
+]]
+
+   local f = io.open("raylib.i", "w")
+   f:write(raylib_i)
+   f = nil
+
+   local raylib_wrap_h =
+   [[
+#include "lua.h"
+#include "lauxlib.h"
+// объявляем эту функцию — она из raylib_wrap.c
+extern int luaopen_raylib(lua_State *L);
+]]
+
+   f = io.open("raylib_wrap.h", "w")
+   f:write(raylib_wrap_h)
+   f = nil
+
+   print('currentdir', lfs.currentdir())
+   local swig_cmd =
+   "swig -lua -I. -D__STDC__=1 -D__STDC_VERSION__=199901L raylib.i"
+
+   print('swig_cmd', swig_cmd)
+   cmd_do(swig_cmd)
+
+   local c = " -fPIC -c raylib_wrap.c -I../lua -L../lua -llua"
+   cmd_do(compiler[dep.target] .. c)
+   cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
 end
 
 local function build_box2c_common(dep)
@@ -1294,6 +1334,7 @@ modules = {
 
 
 
+
    {
       disabled = false,
       copy_for_wasm = true,
@@ -1480,8 +1521,17 @@ modules = {
       description = "библиотека для всякого",
       includes = { "raylib/src" },
       libdirs = { "raylib/src" },
-      links = { "raylib" },
-      links_internal = { "raylib" },
+
+      links = {
+         "raylib",
+
+
+
+      },
+      links_internal = {
+         "raylib",
+
+      },
       name = 'raylib',
       dir = "raylib",
       build_w = build_raylib_common,
@@ -4233,7 +4283,7 @@ local function project_link(ctx, cfg, _args)
       printc("project_link: %{blue}" .. cmd .. "%{reset}")
    end
 
-
+   printc("project_link: %{blue}" .. cmd .. "%{reset}")
    cmd_do(cmd)
 end
 
