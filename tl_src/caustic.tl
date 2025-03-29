@@ -758,26 +758,6 @@ local function build_cimgui_w(dep: Dependency)
 end
 --]]
 
---[[
--- XXX: Что делает эта функция?
-local function get_additional_includes(t: Target): string
-    assert(path_abs_third_party[t])
-    local includes_str = ""
-    local includes = get_deps_name_map(dependencies)["raylib"].includes
-    for _, include in ipairs(includes) do
-        includes_str =  includes_str .. 
-                        "-I" .. 
-                        path_abs_third_party[t] .. 
-                        "/" .. 
-                        include
-    end
-    assert(includes_str)
-    print("get_additional_includes:", includes_str)
-    assert(includes_str)
-    return includes_str
-end
---]]
-
 -- Сделать функцию для поиска строки в файле?
 local function match_in_file(fname: string, pattern: string): boolean
     local f = io.open(fname)
@@ -1525,13 +1505,24 @@ modules = {
         includes = { "raylib/src" },
         libdirs = { "raylib/src" },
 
-        links = { 
-            -- Что-бы найти символы надо добавить группу поиска
-            "-Wl,--start-group",
-            "raylib",
-            "raylib_wrap",
-            "-Wl,--end-group",
-        },
+        links = function(dep: Dependency): {string}
+            if dep.target == 'linux' then
+                return { 
+                    -- Что-бы найти символы надо добавить группу поиска
+                    "-Wl,--start-group",
+                    "raylib",
+                    "raylib_wrap",
+                    "-Wl,--end-group",
+                }
+            elseif dep.target == 'wasm' then
+                return { "raylib", "raylib_wrap", }
+            else
+                printc(
+                    "%{red}bad target in links" .. dep.target ..  "%{reset}"
+                )
+            end
+        end,
+
         links_internal = { 
             "raylib" ,
             --"raylib_wrap",
@@ -3646,6 +3637,7 @@ function actions.compile_flags(_args: Args)
 
     if target == 'wasm' then
         put("-DPLATFORM_WEB")
+        put "-D__wasm__"
         local EMSDK = getenv('EMSDK')
         put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
     end
@@ -3919,6 +3911,19 @@ local function run_parallel_uv(queue: {Task})
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
 
+        local _, _ = uv.spawn(
+            t.cmd,
+            {
+                args = t.args,
+                stdio = {nil, _stdout, _stderr},
+            },
+            function(code: integer, _: integer)
+                errcode = errcode + code
+                _stdout:read_stop()
+                _stderr:read_stop()
+            end
+        )
+
         _stdout:read_start(function(err: string, data: string)
             assert(not err, err)
             if data then
@@ -3933,18 +3938,6 @@ local function run_parallel_uv(queue: {Task})
             end
         end)
 
-        local _, _ = uv.spawn(
-            t.cmd,
-            {
-                args = t.args,
-                stdio = {nil, _stdout, _stderr},
-            },
-            function(code: integer, _: integer)
-                errcode = errcode + code
-                _stdout:read_stop()
-                _stderr:read_stop()
-            end
-        )
     end
 
     uv.run('default')
@@ -4051,8 +4044,10 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         --.. "-s ASYNCIFY "
 
         .. "--shell-file " 
-        .. path_abs_third_party['wasm'] 
-        .. "/raylib/src/minshell.html "
+        .. path_caustic .. "/shell.html"
+        .. " "
+        --.. path_abs_third_party['wasm'] 
+        --.. "/raylib/src/minshell.html "
     end
 
     cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..

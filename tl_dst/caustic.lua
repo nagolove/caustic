@@ -759,26 +759,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function match_in_file(fname, pattern)
    local f = io.open(fname)
    assert(f)
@@ -1525,13 +1505,24 @@ modules = {
       includes = { "raylib/src" },
       libdirs = { "raylib/src" },
 
-      links = {
+      links = function(dep)
+         if dep.target == 'linux' then
+            return {
 
-         "-Wl,--start-group",
-         "raylib",
-         "raylib_wrap",
-         "-Wl,--end-group",
-      },
+               "-Wl,--start-group",
+               "raylib",
+               "raylib_wrap",
+               "-Wl,--end-group",
+            }
+         elseif dep.target == 'wasm' then
+            return { "raylib", "raylib_wrap" }
+         else
+            printc(
+            "%{red}bad target in links" .. dep.target .. "%{reset}")
+
+         end
+      end,
+
       links_internal = {
          "raylib",
 
@@ -3646,6 +3637,7 @@ function actions.compile_flags(_args)
 
    if target == 'wasm' then
       put("-DPLATFORM_WEB")
+      put("-D__wasm__")
       local EMSDK = getenv('EMSDK')
       put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
    end
@@ -3919,6 +3911,19 @@ local function run_parallel_uv(queue)
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
 
+      local _, _ = uv.spawn(
+      t.cmd,
+      {
+         args = t.args,
+         stdio = { nil, _stdout, _stderr },
+      },
+      function(code, _)
+         errcode = errcode + code
+         _stdout:read_stop()
+         _stderr:read_stop()
+      end)
+
+
       _stdout:read_start(function(err, data)
          assert(not err, err)
          if data then
@@ -3931,18 +3936,6 @@ local function run_parallel_uv(queue)
 
             insert(buf_err, data)
          end
-      end)
-
-      local _, _ = uv.spawn(
-      t.cmd,
-      {
-         args = t.args,
-         stdio = { nil, _stdout, _stderr },
-      },
-      function(code, _)
-         errcode = errcode + code
-         _stdout:read_stop()
-         _stderr:read_stop()
       end)
 
    end
@@ -4051,8 +4044,10 @@ local function project_link(ctx, cfg, _args)
 
 
       "--shell-file " ..
-      path_abs_third_party['wasm'] ..
-      "/raylib/src/minshell.html "
+      path_caustic .. "/shell.html" ..
+      " "
+
+
    end
 
    cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
