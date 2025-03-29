@@ -2493,3 +2493,39 @@ void cam_auto_update(CameraAutomat *ca) {
         }
     }
 }
+
+#ifdef __wasm__
+#include <emscripten.h>
+#endif
+
+#ifdef __wasm__
+EM_JS(const char*, _local_storage_load, (const char* key), {
+    var k = UTF8ToString(key);
+    var value = localStorage.getItem(k);
+    if (value === null) return 0;
+    var lengthBytes = lengthBytesUTF8(value) + 1;
+    var stringOnWasmHeap = _malloc(lengthBytes);
+    stringToUTF8(value, stringOnWasmHeap, lengthBytes);
+    return stringOnWasmHeap;
+});
+
+EM_JS(void, _local_storage_save, (const char* key, const char* value), {
+    localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
+});
+#endif
+
+
+const char *local_storage_load(const char *key) {
+#ifdef __wasm__
+    return _local_storage_load(key);
+#else
+    return NULL;
+#endif
+}
+
+void local_storage_save(const char *key, const char *value) {
+#ifdef __wasm__
+    _local_storage_save(key, value);
+#endif
+}
+

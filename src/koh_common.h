@@ -386,3 +386,8 @@ bool koh_file_write(const char *fname, const char *data, size_t data_len);
 __attribute_deprecated__
 void rect2uv(Rectangle rect, Vector2 uv[4]);
 void set_uv_from_rect(Rectangle rect, Vector2 uv[4]);
+
+
+const char *local_storage_load(const char *key);
+void local_storage_save(const char *key, const char *value);
+
