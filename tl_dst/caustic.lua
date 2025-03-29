@@ -1068,8 +1068,11 @@ extern int luaopen_raylib(lua_State *L);
    print('swig_cmd', swig_cmd)
    cmd_do(swig_cmd)
 
-   local c = " -fPIC -c raylib_wrap.c -I../lua -L../lua -llua"
-   cmd_do(compiler[dep.target] .. c)
+   local c = compiler[dep.target] ..
+   " -fPIC -g3 -c raylib_wrap.c " ..
+   " -I../../lua -L../../lua -llua"
+   print(c)
+   cmd_do(c)
    cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
 end
 
@@ -1523,10 +1526,11 @@ modules = {
       libdirs = { "raylib/src" },
 
       links = {
+
+         "-Wl,--start-group",
          "raylib",
-
-
-
+         "raylib_wrap",
+         "-Wl,--end-group",
       },
       links_internal = {
          "raylib",
@@ -1834,9 +1838,6 @@ local function get_ready_links_linux_only(cfg)
          map_links_linux_only[libname] = true
       end
 
-
-
-
       for _, depname in ipairs(cfg.not_dependencies) do
 
          map_links_linux_only[depname] = nil
@@ -1847,9 +1848,6 @@ local function get_ready_links_linux_only(cfg)
          links_linux_only[#links_linux_only + 1] = libname
       end
    end
-
-
-
 
    for k, libname in ipairs(links_linux_only) do
       links_linux_only[k] = libname .. ":static"
@@ -1890,16 +1888,6 @@ local function get_dir(dep)
       return dep.dir
    end
 end
-
-
-
-
-
-
-
-
-
-
 
 local function get_deps_map(deps)
    assert(deps)
@@ -2069,11 +2057,16 @@ local function download_and_unpack_zip(dep)
    os.remove(fname)
 end
 
-local function _dependecy_init(dep)
+local function _dependency_init(dep)
    assert(dep)
    if dep.disabled then
       return
    end
+
+   if dep.target == 'wasm' and dep.copy_for_wasm == false then
+      return
+   end
+
    if dep.url_action == "git" then
       git_clone(dep)
    elseif dep.url_action == "zip" then
@@ -2084,19 +2077,6 @@ local function _dependecy_init(dep)
       os.exit(1)
    end
    after_init(dep)
-end
-
-local function dependency_init(dep, destdir)
-   assert(destdir)
-
-
-   if string.match(destdir, "wasm_") then
-      if dep.copy_for_wasm then
-         _dependecy_init(dep)
-      end
-   else
-      _dependecy_init(dep)
-   end
 end
 
 local function wait_threads(threads)
@@ -2112,26 +2092,6 @@ local function wait_threads(threads)
       sleep(0.01)
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2225,12 +2185,6 @@ local parser_setup = {
 
 
 
-
-
-
-
-
-
    update = {
 
       summary = "make backup and reinit dependency by name",
@@ -2294,12 +2248,6 @@ local parser_setup = {
       options = { "-n --name", "-t --target" },
    },
 
-
-
-
-
-
-
    run = {
       summary = "run project native executable under gdb",
       arguments = {
@@ -2349,76 +2297,7 @@ local parser_setup = {
 
 
 
-
-
 local actions = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 local function _init(path, deps)
@@ -2449,11 +2328,9 @@ local function _init(path, deps)
 
    local threads = {}
    local opt_tbl = { required = { "lfs", "compat53" } }
-   local func = lanes.gen("*", opt_tbl, dependency_init)
-
+   local func = lanes.gen("*", opt_tbl, _dependency_init)
 
    local single_thread = true
-
 
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
@@ -2461,19 +2338,11 @@ local function _init(path, deps)
 
       print('processing', dep.name)
 
-
-
-
-
-
-
-
-
       do
          print('without dependency', dep.name)
 
          if single_thread then
-            dependency_init(dep, path)
+            _dependency_init(dep)
          else
 
             local lane_thread = (func)(dep, path)
@@ -2483,21 +2352,6 @@ local function _init(path, deps)
       end
    end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    if #threads ~= 0 then
       print(tabular(threads))
       wait_threads(threads)
@@ -2506,26 +2360,6 @@ local function _init(path, deps)
          print(result, errcode)
       end
    end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
    ut.pop_dir()
 end
@@ -3121,49 +2955,23 @@ function actions.rmdirs(_args)
 
 end
 
-function actions.run(_args)
-   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
-   if verbose then
-      print('actions.run', inspect(_args))
-   end
-   local flags = table.concat(_args.flags, " ")
-
-
-
-   if _args.c then
-      cmd_do(format("./%s", cfgs[1].artifact) .. flags)
-   else
-      cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
-   end
-end
-
-
-function actions.proj_init(_args)
-   local deps = {}
-   if _args.name then
-      local dependencies_name_map = get_deps_name_map(modules)
-      print('partial init for dependency', _args.name)
-      if dependencies_name_map[_args.name] then
-         table.insert(deps, dependencies_name_map[_args.name])
-      else
-         print("bad dependency name", _args.name)
-         return
-      end
-   else
-      for _, dep in ipairs(modules) do
-         table.insert(deps, dep)
-      end
-   end
 
 
 
 
-   local project_path = lfs.currentdir()
-   _init(project_path, deps)
 
 
 
-end
+
+
+
+
+
+
+
+
+
+
 
 
 local function pre_init(_args)
@@ -3770,20 +3578,6 @@ function actions.remove(_args)
 end
 
 
-function actions.rocks(_)
-   local rocks = {
-      'lanes',
-      'luasocket',
-      'luafilesystem',
-      'tabular',
-      'argparse',
-   }
-   for _, rock in ipairs(rocks) do
-      cmd_do(format("luarocks install %s --local", rock))
-   end
-end
-
-
 local function get_ready_includes(cfg, target)
    local ready_deps = get_ready_deps(cfg)
 
@@ -3865,11 +3659,6 @@ function actions.compile_flags(_args)
          put("-I.")
 
          if cfgs[1].debug_define then
-
-
-
-
-
             for define, value in pairs(cfgs[1].debug_define) do
                assert(type(define) == 'string');
                assert(type(value) == 'string');
@@ -3898,26 +3687,20 @@ function actions.compile_flags(_args)
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
 local function make_l(list)
    local ret = {}
    local static_pattern = "%:static$"
    for _, v in ipairs(list) do
-      if string.match(v, static_pattern) then
 
-         table.insert(ret, "-l" .. gsub(v, static_pattern, ""))
+      if string.match(v, "-Wl") then
+         insert(ret, v)
       else
-         table.insert(ret, "-l" .. v)
+         if string.match(v, static_pattern) then
+
+            table.insert(ret, "-l" .. gsub(v, static_pattern, ""))
+         else
+            table.insert(ret, "-l" .. v)
+         end
       end
    end
    return ret
@@ -4136,6 +3919,20 @@ local function run_parallel_uv(queue)
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
 
+      _stdout:read_start(function(err, data)
+         assert(not err, err)
+         if data then
+            insert(buf_out, data)
+         end
+      end)
+      _stderr:read_start(function(err, data)
+         assert(not err, err)
+         if data then
+
+            insert(buf_err, data)
+         end
+      end)
+
       local _, _ = uv.spawn(
       t.cmd,
       {
@@ -4146,25 +3943,6 @@ local function run_parallel_uv(queue)
          errcode = errcode + code
          _stdout:read_stop()
          _stderr:read_stop()
-      end)
-
-
-      _stdout:read_start(
-      function(err, data)
-         assert(not err, err)
-         if data then
-
-            insert(buf_out, data)
-         end
-      end)
-
-      _stderr:read_start(
-      function(err, data)
-         assert(not err, err)
-         if data then
-
-            insert(buf_err, data)
-         end
       end)
 
    end
@@ -4243,10 +4021,13 @@ local function project_link(ctx, cfg, _args)
    assert(cc)
 
 
-   local libs = {}
-   for _, lib in ipairs(ctx.libs) do
-      insert(libs, "-l" .. lib)
-   end
+   local libs = make_l(ctx.libs)
+
+
+
+
+
+
 
    local libsdirs = {}
    for _, libdir in ipairs(ctx.libsdirs) do
@@ -4264,6 +4045,7 @@ local function project_link(ctx, cfg, _args)
       " -DPLATFORM_WEB " ..
       "-s USE_GLFW=3 " ..
       "--preload-file ../assets " ..
+      "-flto " ..
       "-s ALLOW_MEMORY_GROWTH=1 " ..
       "-Os " ..
 
@@ -4891,8 +4673,10 @@ local function sub_make(
          table.insert(args, include)
       end
 
-      for _, libdir in ipairs(libdirs) do
-         table.insert(args, libdir)
+      if target ~= 'wasm' then
+         for _, libdir in ipairs(libdirs) do
+            table.insert(args, "-L" .. libdir)
+         end
       end
 
       for _, flag in ipairs(flags) do
@@ -4904,8 +4688,10 @@ local function sub_make(
       table.insert(args, "-c")
       table.insert(args, _input)
 
-      for _, lib in ipairs(make_l(libs)) do
-         table.insert(args, lib)
+      if target ~= 'wasm' then
+         for _, lib in ipairs(make_l(libs)) do
+            table.insert(args, lib)
+         end
       end
 
       local task = { cmd = cc, args = args }
@@ -5007,60 +4793,6 @@ function actions.make(_args)
       sub_make(_args, cfg, target, push_num)
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function do_parser_setup(
    parser, setup)
