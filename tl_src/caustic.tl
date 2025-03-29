@@ -1068,8 +1068,11 @@ extern int luaopen_raylib(lua_State *L);
     print('swig_cmd', swig_cmd)
     cmd_do(swig_cmd)
 
-    local c = " -fPIC -c raylib_wrap.c -I../lua -L../lua -llua"
-    cmd_do(compiler[dep.target] .. c)
+    local c = compiler[dep.target] 
+        .. " -fPIC -g3 -c raylib_wrap.c " 
+        .. " -I../../lua -L../../lua -llua"
+    print(c)
+    cmd_do(c)
     cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
 end
 
@@ -1523,10 +1526,11 @@ modules = {
         libdirs = { "raylib/src" },
 
         links = { 
+            -- Что-бы найти символы надо добавить группу поиска
+            "-Wl,--start-group",
             "raylib",
-            -- XXX: Что-бы найти символы надо добавить при линковке
-            --  -Wl,--start-group -lraylib -lraylib_wrap -Wl,--end-group
-            --"raylib_wrap" 
+            "raylib_wrap",
+            "-Wl,--end-group",
         },
         links_internal = { 
             "raylib" ,
@@ -1834,9 +1838,6 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
             map_links_linux_only[libname] = true
         end
 
-        --print('map_links_linux_only')
-        --print(tabular(map_links_linux_only))
-
         for _, depname in ipairs(cfg.not_dependencies) do
             --print('depname', depname)
             map_links_linux_only[depname] = nil
@@ -1847,9 +1848,6 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
             links_linux_only[#links_linux_only + 1] = libname
         end
     end
-
-    --print('get_ready_links_linux_only:')
-    --print(tabular(links_linux_only))
 
     for k, libname in ipairs(links_linux_only) do
         links_linux_only[k] = libname .. ":static"
@@ -1890,16 +1888,6 @@ local function get_dir(dep: Dependency): string
         return dep.dir
     end
 end
-
---[[
-local function get_dirs(deps: {Dependency}): {string}
-    local res = {}
-    for _, dep in ipairs(deps) do
-        table.insert(res, get_dir(dep))
-    end
-    return res
-end
---]]
 
 local function get_deps_map(deps: {Dependency}): {string: Dependency}
     assert(deps)
@@ -2069,11 +2057,16 @@ local function download_and_unpack_zip(dep: Dependency)
     os.remove(fname)
 end
 
-local function _dependecy_init(dep: Dependency)
+local function _dependency_init(dep: Dependency): any
 	assert(dep)
     if dep.disabled then
         return
     end
+
+    if dep.target == 'wasm' and dep.copy_for_wasm == false then
+        return
+    end
+
     if dep.url_action == "git" then
         git_clone(dep)
     elseif dep.url_action == "zip" then
@@ -2084,19 +2077,6 @@ local function _dependecy_init(dep: Dependency)
         os.exit(1)
     end
     after_init(dep)
-end
-
-local function dependency_init(dep: Dependency, destdir: string): any
-	assert(destdir)
-    -- XXX: Кажется строчка с копированием в каталог wasm не нужна
-    -- Копирую в wasm каталог только если установлени специальный флажок
-    if string.match(destdir, "wasm_") then 
-        if dep.copy_for_wasm then
-            _dependecy_init(dep)
-        end
-    else
-        _dependecy_init(dep)
-    end
 end
 
 local function wait_threads(threads: {lanes.Thread})
@@ -2120,20 +2100,15 @@ local record Actions
     --anim_convert: function(Args)
     dist: function(Args)
     build: function(Args)
-    build_smart: function(Args)
     compile_flags: function(Args)
     dependencies: function(Args)
     deps: function(Args)
     init: function(Args)
-    --luainit: function(Args)
     make: function(Args)
-    proj_init: function(Args)
     project: function(Args)
     publish: function(Args)
     remove: function(Args)
     rmdirs: function(Args)
-    rocks: function(Args)
-    run: function(Args)
     selftest: function(Args)
     selftest_lg: function(Args)
     selftest_push: function(Args)
@@ -2143,46 +2118,32 @@ local record Actions
     stage: function(Args)
     test: function(Args)
     verbose: function(Args)
-    wasm_build: function(Args)
     update: function(Args)
-    init_w: function(Args)
-
     make_projects: function(Args)
     -- }}}
 end
 
 local enum ActionsEnum
     -- {{{
-    "dist"
     "make_projects"
-    "project"
-    "init_w"
-    "stage"
+    "dist"
     "project"
     "build"
     "compile_flags"
-    --"dependencies"
     "deps"
     "update"
     "projects_status"
     "projects_status2"
-
-    -- FIXME: Как добавить поддержку зависимотей для текущего проекта?
-    -- Значить нужно добавлять пути и опции компилятора от текущего проекта
     "init"          
-    "proj_init"
     "make"
     "publish"
     "remove"
-    "rocks"
-    "run"
     "selftest"
     "selftest_lg"
     "selftest_status"
     "selftest_push"
     "test"
     "verbose"
-    "wasm_build"
     -- }}}
 end
 
@@ -2193,7 +2154,6 @@ local record ParserSetup
     arguments: {{string|integer}}
 end
 
--- TODO: Добавить вывод справки на русском?
 local parser_setup: {string:ParserSetup} = {
     -- {{{
 
@@ -2216,12 +2176,6 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-n --name", },
         summary = [[Create stage in project]]
     },
-    --[[
-    luainit = {
-        summary = "create 'assets' directory and copy there lua libraries",
-        --options = { "-n --name", },
-    },
-    --]]
 
     --[[
     updates_check = {
@@ -2294,12 +2248,6 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-n --name", "-t --target" },
     },
 
-    --[[
-    rocks = {
-        summary = "list of lua rocks should be installed for this script",
-    },
-    --]]
-
     run = {
         summary = "run project native executable under gdb",
         arguments = {
@@ -2349,76 +2297,7 @@ local record Node
     temporary: boolean
 end
 
---]]
-
 local actions: Actions = {}
-
---[[
-local function _init_smart(path: string, deps: {Dependency})
-    print("_init_smart", path, inspect(deps))
-    ut.push_current_dir()
-
-    if not chdir(path) then
-        if not mkdir(path) then
-            print('could not do mkdir()')
-            os.exit()
-        end
-        chdir(path)
-    end
-
-    local threads: {lanes.Thread} = {}
-    local opt_tbl = { required = { "lfs", }, }
-    local func = lanes.gen("*", opt_tbl, dependency_init)
-
-    local sorter = Toposorter.new()
-	local single_thread = true
-
-    for _, dep in ipairs(deps) do
-        assert(type(dep.url) == 'string')
-        assert(dep.name)
-        if dep.depends then
-            for _, dep_name in ipairs(dep.depends) do
-                sorter:add(dep.name, dep_name)
-            end
-        else
-            --sorter:add(dep.name, "null")
-			if single_thread then
-				dependency_init(dep, path)
-			else
-				local type Dependency_init = function(Dependency, string): any
-				local lane_thread = (func as Dependency_init)(dep, path) 
-					as lanes.Thread
-				table.insert(threads, lane_thread)
-			end
-        end
-    end
-
-    local sorted = sorter:sort()
-
-    -- XXX: На всякий случай удаляются имена null
-    -- Но они могут и никогда не присутствовать :))
-    sorted = filter(sorted, function(node: Node): boolean
-        return node.value ~= "null"
-    end)
-
-    print(tabular(threads))
-    wait_threads(threads)
-    for _, thread in ipairs(threads) do
-        local result, errcode = thread:join()
-        print(result, errcode)
-    end
-
-    for _, node in ripairs(sorted) do
-	local value = (node as Node).value
-	print('value', value, inspect(node))
-        local dep = dependencies_name_map[(node as Node).value as string]
-        print('dep', inspect(dep))
-        dependency_init(dep, path)
-    end
-
-    ut.pop_dir()
-end
---]]
 
 -- Инициализирует список зависимостей по указанному пути
 local function _init(path: string, deps: {Dependency})
@@ -2449,11 +2328,9 @@ local function _init(path: string, deps: {Dependency})
 
     local threads: {lanes.Thread} = {}
     local opt_tbl = { required = {"lfs", "compat53" }, }
-    local func = lanes.gen("*", opt_tbl, dependency_init)
+    local func = lanes.gen("*", opt_tbl, _dependency_init)
 
-    --local sorter = Toposorter.new()
 	local single_thread = true
-    --local use_toposort = false
 
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
@@ -2461,19 +2338,11 @@ local function _init(path: string, deps: {Dependency})
 
 		print('processing', dep.name)
 
-        --[[
-        if use_toposort and dep.depends then
-            for _, dep_name in ipairs(dep.depends) do
-				print('sorter:addd', dep.name, dep_name)
-                sorter:add(dep.name, dep_name)
-            end
-        else
-        --]]
         do
 			print('without dependency', dep.name)
             --sorter:add(dep.name, "null")
 			if single_thread then
-				dependency_init(dep, path)
+				_dependency_init(dep)
 			else
 				local type Dependency_init = function(Dependency, string): any
 				local lane_thread = (func as Dependency_init)(dep, path) 
@@ -2483,21 +2352,6 @@ local function _init(path: string, deps: {Dependency})
         end
     end
 
-    --local sorted: {Node}
-    --[[
-    if use_toposort then
-        sorted = sorter:sort()
-        print('sorted')
-
-        -- XXX: На всякий случай удаляются имена null
-        -- Но они могут и никогда не присутствовать :))
-        sorted = ut.filter(sorted, function(node: Node): boolean
-            return node.value ~= "null"
-        end)
-        print('sorted', inspect(sorted))
-    end
-    --]]
-
 	if #threads ~= 0 then
 		print(tabular(threads))
 		wait_threads(threads)
@@ -2506,26 +2360,6 @@ local function _init(path: string, deps: {Dependency})
 			print(result, errcode)
 		end
 	end
-
-    --[[
-    for _, node in ripairs(sorted) do
-        print('node', inspect(node))
-        --print('node.value', (node as Node).value as string)
-        --local dep = dependencies_name_map[(node as Node).value as string]
-    end
-    print('----------------------------')
-    --]]
-
-    --[[
-    if use_toposort then
-        for _, node in ut.ripairs(sorted) do
-            local name_map = get_deps_name_map(dependencies)
-            local dep = name_map[(node as Node).value as string]
-            print('dep', inspect(dep))
-            dependency_init(dep, path)
-        end
-    end
-    --]]
 
     ut.pop_dir()
 end
@@ -3121,6 +2955,7 @@ function actions.rmdirs(_args: Args)
     --]]
 end
 
+--[[
 function actions.run(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     if verbose then
@@ -3136,34 +2971,7 @@ function actions.run(_args: Args)
         cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
     end
 end
-
--- Скачать зависимости указанные в bld.lua для текущего проекта
-function actions.proj_init(_args: Args)
-    local deps = {}
-    if _args.name then
-        local dependencies_name_map = get_deps_name_map(modules)
-        print('partial init for dependency', _args.name)
-        if dependencies_name_map[_args.name] then
-            table.insert(deps, dependencies_name_map[_args.name])
-        else
-            print("bad dependency name", _args.name)
-            return
-        end
-    else
-        for _, dep in ipairs(modules) do
-            table.insert(deps, dep)
-        end
-    end
-
-    --print('deps', inspect(deps))
-    --check_for_unstaged(deps)
-
-    local project_path = lfs.currentdir()
-    _init(project_path, deps)
-
-    --_init(path_wasm_third_party, deps)
-    --_init(win_third_party, deps)
-end
+--]]
 
 -- Проверяет аргументы и создает список модулей
 local function pre_init(_args: Args): {Dependency}
@@ -3769,20 +3577,6 @@ function actions.remove(_args: Args)
     ut.pop_dir()
 end
 
--- XXX: Переписать это место что-бы действительно работало
-function actions.rocks(_: Args)
-    local rocks = {
-        'lanes',
-        'luasocket',
-        'luafilesystem',
-        'tabular',
-        'argparse'
-    }
-    for _, rock in ipairs(rocks) do
-        cmd_do(format("luarocks install %s --local", rock))
-    end
-end
-
 -- Возвращет список включаемых каталог соответствующий конфигурации
 local function get_ready_includes(cfg: Cfg, target: Target): {string}
     local ready_deps = get_ready_deps(cfg)
@@ -3865,11 +3659,6 @@ function actions.compile_flags(_args: Args)
             put("-I.")
 
             if cfgs[1].debug_define then
-                --for define, value in pairs(cfgs[0].debug_define) do
-
-                --printc("%{red}INSPECTION%{reset}")
-                --print(inspect(pairs(cfgs[1].debug_define)))
-
                 for define, value in pairs(cfgs[1].debug_define) do
                     assert(type(define) == 'string');
                     assert(type(value) == 'string');
@@ -3897,27 +3686,21 @@ function actions.compile_flags(_args: Args)
     end
 end
 
---[[
-local function make_L(list: {string}, third_party_prefix: string): {string}
-    local ret = {}
-    local prefix = "-L" .. path_caustic .. "/" .. third_party_prefix .. "/"
-    for _, v in ipairs(list) do
-        table.insert(ret, prefix .. v)
-    end
-    return ret
-end
---]]
-
--- XXX: Что делает эта функция?
+-- Удаляет :static из имени библиотеки, добавляет -l префикс
 local function make_l(list: {string}): {string}
     local ret = {}
     local static_pattern = "%:static$"
     for _, v in ipairs(list) do
-        if string.match(v, static_pattern) then
-            --table.insert(ret, "-Wl,-Bstatic")
-            table.insert(ret, "-l" .. gsub(v, static_pattern, ""))
+        -- Здесь - прямая передача аргументов линковщику, добавить как есть
+        if string.match(v, "-Wl") then
+            insert(ret, v)
         else
-            table.insert(ret, "-l" .. v)
+            if string.match(v, static_pattern) then
+                --table.insert(ret, "-Wl,-Bstatic")
+                table.insert(ret, "-l" .. gsub(v, static_pattern, ""))
+            else
+                table.insert(ret, "-l" .. v)
+            end
         end
     end
     return ret
@@ -4136,6 +3919,20 @@ local function run_parallel_uv(queue: {Task})
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
 
+        _stdout:read_start(function(err: string, data: string)
+            assert(not err, err)
+            if data then
+                insert(buf_out, data)
+            end
+        end)
+        _stderr:read_start( function(err: string, data: string)
+            assert(not err, err)
+            if data then
+                --insert(buf_err, t.cmd .. " " .. table.concat(t.args, " "))
+                insert(buf_err, data)
+            end
+        end)
+
         local _, _ = uv.spawn(
             t.cmd,
             {
@@ -4148,25 +3945,6 @@ local function run_parallel_uv(queue: {Task})
                 _stderr:read_stop()
             end
         )
-
-        _stdout:read_start(
-            function(err: string, data: string)
-                assert(not err, err)
-                if data then
-                    --io.write(data)
-                    insert(buf_out, data)
-                end
-        end)
-
-        _stderr:read_start(
-            function(err: string, data: string)
-                assert(not err, err)
-                if data then
-                    --io.write(data)
-                    insert(buf_err, data)
-                end
-        end)
-
     end
 
     uv.run('default')
@@ -4243,10 +4021,13 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     assert(cc)
 
 
-    local libs = {}
+    local libs = make_l(ctx.libs)
+
+    --[[
     for _, lib in ipairs(ctx.libs) do
         insert(libs, "-l" .. lib)
     end
+    --]]
 
     local libsdirs = {}
     for _, libdir in ipairs(ctx.libsdirs) do
@@ -4264,6 +4045,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         .. " -DPLATFORM_WEB " 
         .. "-s USE_GLFW=3 " 
         .. "--preload-file ../assets " 
+        .. "-flto "
         .. "-s ALLOW_MEMORY_GROWTH=1 " 
         .. "-Os "
         --.. "-s ASYNCIFY "
@@ -4891,8 +4673,10 @@ local function sub_make(
             table.insert(args, include)
         end
 
-        for _, libdir in ipairs(libdirs) do
-            table.insert(args, libdir)
+        if target ~= 'wasm' then
+            for _, libdir in ipairs(libdirs) do
+                table.insert(args, "-L" .. libdir)
+            end
         end
 
         for _, flag in ipairs(flags) do
@@ -4904,8 +4688,10 @@ local function sub_make(
         table.insert(args, "-c")
         table.insert(args, _input)
 
-        for _, lib in ipairs(make_l(libs)) do
-            table.insert(args, lib)
+        if target ~= 'wasm' then
+            for _, lib in ipairs(make_l(libs)) do
+                table.insert(args, lib)
+            end
         end
            
         local task = { cmd = cc, args = args, }
@@ -5007,60 +4793,6 @@ function actions.make(_args: Args)
         sub_make(_args, cfg, target, push_num)
     end
 end
-
---[[
-local function sub_luainit(_args: Args, cfg: Cfg, push_num: integer)
-    ut.push_current_dir()
-    print('sub_luainit', lfs.currentdir())
-
-    mkdir('assets')
-    chdir('assets')
-
-    print('sub_luainit', lfs.currentdir())
-
-    mkdir('lualibs')
-    chdir('lualibs')
-
-    local to = lfs.currentdir()
-
-    for _, dep in ipairs(get_ready_deps(cfg)) do
-        if dep.lualibrary_install then
-            ut.push_current_dir()
-
-            chdir(path_abs_third_party)
-            chdir(dep.dir)
-
-            print("sub_luainit: before lualibrary_install", lfs.currentdir())
-
-            dep.lualibrary_install(to)
-            ut.pop_dir()
-        end
-    end
-
-    print('sub_luainit', lfs.currentdir())
-
-    if not chdir(path_rel_third_party) then
-        print('sub_luainit: problem with chdir(path_rel_third_party)')
-        os.exit(1)
-    end
-    print('sub_luainit', lfs.currentdir())
-    ut.pop_dir(push_num)
-end
---]]
-
---[[
-function actions.luainit(_args: Args)
-    if verbose then
-        print('luainit:')
-        print(tabular(_args))
-    end
-
-    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    for _, cfg in ipairs(cfgs) do
-        sub_luainit(_args, cfg, push_num)
-    end
-end
---]]
 
 local function do_parser_setup(
     parser: argparse.Parser, setup: {string:ParserSetup}
