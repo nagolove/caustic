@@ -2239,15 +2239,6 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-n --name", "-t --target" },
     },
 
-    run = {
-        summary = "run project native executable under gdb",
-        arguments = {
-            { "flags", "*" }
-        },
-        flags = {
-            { "-c --clean", "clean run without gdb" },
-        },
-    },
     test = {
         summary = "build native test executable and run it",
     },
@@ -2271,12 +2262,6 @@ local parser_setup: {string:ParserSetup} = {
     },
     verbose = {
         summary = "print internal data with urls, paths etc.",
-    },
-    wbuild = {
-        summary = "build dependencies and libcaustic for wasm or build project",
-        flags = {
-            { "-m --minshell", "use minimal web shell" },
-        }
     },
 }
 -- }}}
@@ -2366,7 +2351,6 @@ local record Args
     noasan: string      -- отключить санитайзер
     verbose: string     -- много отладочного вывода
     make: boolean       -- собрать
-    minshell: string
     c: string           -- clean, полная пересборка
     name: string		-- dependency name
     make_type: MakeAction
@@ -4041,8 +4025,13 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         .. "-flto "
         .. "-s ALLOW_MEMORY_GROWTH=1 " 
         .. "-Os "
+
+        -- Этот флаг создает слишком много кода, js машина не справляется
         --.. "-s ASYNCIFY "
 
+        -- TODO: Проверять наличие файла shell.html в каталоге проект.
+        -- Если файл есть, то использовать его как шаблон. Если файла нет, то
+        -- использовать оболочку по умолчанию.
         .. "--shell-file " 
         .. path_caustic .. "/shell.html"
         .. " "
