@@ -99,8 +99,7 @@ if string.match(lfs.currentdir(), "tl_dst") then
 end
 
 -- globals {{{
-local site_repo = "~/nagolove.github.io"
---local site_repo_index = site_repo .. "/index.html"
+local site_repo = "nagolove.github.io"
 local cache_name    = "cache.lua"
 local verbose       = false
 -- Если истина, то при ошибках будет выход из программы сборки. 
@@ -127,22 +126,28 @@ local flags_sanitazer = {
 local compiler = {
     ['linux'] = 'gcc',
     ['wasm'] = 'emcc',
-    ['windows'] = 'x86_64-w64-mingw32-gcc',
+    ['win'] = 'x86_64-w64-mingw32-gcc',
     --['android'] = 'какая-то супер команда',
 }
 
 local ar = {
     ['linux'] = 'ar',
     ['wasm'] = 'emar',
-    ['windows'] = 'x86_64-w64-mingw32-ar',
+    ['win'] = 'x86_64-w64-mingw32-ar',
 }
 
 local cmake_toolchain_win = path_caustic .. "/toolchain-mingw64.cmake"
 ut.assert_file(cmake_toolchain_win)
+
+local cmake_toolchain_win_opt = 
+    "-DCMAKE_TOOLCHAIN_FILE=" 
+    .. cmake_toolchain_win
+
 local cmake = {
     ["linux"] = "cmake ",
     ["wasm"] = "emcmake cmake ",
-    ['win'] = format("cmake -DCMAKE_TOOLCHAIN_FILE=%s ", cmake_toolchain_win),
+    --['win'] = "cmake " .. cmake_toolchain_win,
+    ['win'] = "cmake " -- .. cmake_toolchain_win,
 }
 
 local make = {
@@ -424,7 +429,7 @@ end
 
 local enum Target
     "linux"
-    --"windows"
+    "win"
     "wasm"
 end
 
@@ -498,11 +503,20 @@ local record Dependency
     -- вызывается для компиляции в WASM
     build_w: function(dep: Dependency) 
 
+    -- вызывается для компиляции в Windows
+    build_win: function(dep: Dependency) 
+
     after_build: function(dep: Dependency)
     -- }}}
     -- XXX: Добавить методы к зависимостям
     --get_cc_includes: function(dep: Dependency)
 
+end
+
+local enum TargetBuildFunc
+    "build"
+    "build_w"
+    "build_win"
 end
 
 local modules: {Dependency}
@@ -564,13 +578,20 @@ local function build_freetype_common(dep: Dependency)
 
     find_and_remove_cmake_cache()
 
-    local c1 = format("%s -E make_directory build", cmake[dep.target])
-    local c2 = format("%s -E chdir build cmake " ..
-        "-DFT_DISABLE_HARFBUZZ=ON " ..
-        "-DFT_DISABLE_BROTLI=ON " ..
-        "-DFT_DISABLE_BZIP2=ON " ..
-        "-DFT_DISABLE_ZLIB=ON " ..
-        "-DFT_DISABLE_PNG=ON ..", cmake[dep.target])
+    local cm = cmake[dep.target]
+    print("build_freetype_common: cmake", cm)
+    local c1 = cm .. " -E make_directory build " .. cmake_toolchain_win_opt
+    local c2 = cm .. " -E chdir build cmake "
+        .. "-DFT_DISABLE_HARFBUZZ=ON "
+        .. "-DFT_DISABLE_BROTLI=ON "
+        .. "-DFT_DISABLE_BZIP2=ON "
+        .. "-DFT_DISABLE_ZLIB=ON "
+        .. "-DFT_DISABLE_PNG=ON "
+        .. cmake_toolchain_win_opt
+        .. " .."
+
+    print("build_freetype_common: c1", c1)
+    print("build_freetype_common: c2", c2)
 
     -- cmake
     cmd_do({c1, c2})
@@ -1085,10 +1106,12 @@ local function build_sol(_: Dependency)
     cmd_do("python single/single.py")          
 end
 
+--[[
 local function build_rlwr_common(dep: Dependency)
     print("build_rlwr_common:", lfs.currentdir(), dep.target)
     cmd_do("sh build.sh target=" .. dep.target)
 end
+--]]
 
 local function utf8proc_after_build(_: Dependency)
     cmd_do("rm libutf8proc.so")
@@ -1240,6 +1263,7 @@ end
 modules = {
 
     --[[
+    -- {{{
     {
         disabled = true,
         description = "online profiler",
@@ -1257,8 +1281,10 @@ modules = {
         url = "https://github.com/Celtoys/Remotery.git",
         --update = update_default,
     },
+    -- }}}
     --]]
 
+    -- {{{
     {
         disabled = false,
         copy_for_wasm = true,
@@ -1275,9 +1301,11 @@ modules = {
         url_action = "git",
         build = build_freetype_common,
         build_w = build_freetype_common,
+        build_win = build_freetype_common,
         url = "https://github.com/freetype/freetype.git",
         --update = update_default,
     },
+    -- }}}
 
     -- TODO: Включать только те модули, которые объявлены в bld.lua
     --[[
@@ -1660,7 +1688,10 @@ modules = {
         url_action = "git",
     },
 
+    --[[
     {
+        name = 'rlwr',
+        -- {{{
         disabled = false,
         build = build_rlwr_common,
         -- TODO: Сперва собрать sol c правильной версией lua
@@ -1673,10 +1704,11 @@ modules = {
         libdirs = { "rlwr" },
         links = { "rlwr" },
         links_internal = { "rlwr" },
-        name = 'rlwr',
         url = "git@github.com:nagolove/rlwr.git",
         url_action = "git",
+        -- }}}
     },
+    --]]
 
     {
         build = build_with_make_common,
@@ -2274,71 +2306,6 @@ local record Node
 end
 
 local actions: Actions = {}
-
--- Инициализирует список зависимостей по указанному пути
-local function _init(path: string, deps: {Dependency})
-    print("_init", path)
-	--print(tabular(deps))
-    ut.push_current_dir()
-
-    chdir(path_caustic)
-
-    if not chdir(path) then
-        if not mkdir(path) then
-            print('could not do mkdir', path)
-            os.exit()
-        end
-        if not chdir(path) then
-            print("could not chdir() to", path)
-            os.exit()
-        end
-    end
-
-    if not ut.git_is_repo_clean(".") then
-        local curdir = lfs.currentdir()
-        local msg = format("_init: git index is dirty in '%s'", curdir)
-        printc("%{red}" .. msg .. "%{reset}")
-    end
-
-	require 'compat53'
-
-    local threads: {lanes.Thread} = {}
-    local opt_tbl = { required = {"lfs", "compat53" }, }
-    local func = lanes.gen("*", opt_tbl, _dependency_init)
-
-	local single_thread = true
-
-    for _, dep in ipairs(deps) do
-        assert(type(dep.url) == 'string')
-        assert(dep.name)
-
-		print('processing', dep.name)
-
-        do
-			print('without dependency', dep.name)
-            --sorter:add(dep.name, "null")
-			if single_thread then
-				_dependency_init(dep)
-			else
-				local type Dependency_init = function(Dependency, string): any
-				local lane_thread = (func as Dependency_init)(dep, path) 
-					as lanes.Thread
-				table.insert(threads, lane_thread)
-			end
-        end
-    end
-
-	if #threads ~= 0 then
-		print(tabular(threads))
-		wait_threads(threads)
-		for _, thread in ipairs(threads) do
-			local result, errcode = thread:join()
-			print(result, errcode)
-		end
-	end
-
-    ut.pop_dir()
-end
 
 local record Args
     -- {{{
@@ -2970,17 +2937,7 @@ local function pre_init(_args: Args): {Dependency}
     return deps
 end
 
---[[
-function actions.init_w(_args: Args)
-    local deps = pre_init(_args)
-    -- установка целевой платформы
-    for _, dep in ipairs(deps) do
-        dep.target = "wasm"
-    end
-    _init(path_rel_wasm_third_party, deps)
-end
---]]
-
+-- Инициализирует список зависимостей по указанному пути
 -- TODO: сделать проверку на наличие несохраненных изменений в репозитории
 -- зависимости
 function actions.init(_args: Args)
@@ -3000,7 +2957,69 @@ function actions.init(_args: Args)
     for _, dep in ipairs(deps) do
         dep.target = _args.target
     end
-    _init(path_rel_third_party_t[_args.target], deps)
+
+    local path = path_rel_third_party_t[_args.target]
+    print("actions.init: path", path)
+
+    ut.push_current_dir()
+
+    chdir(path_caustic)
+
+    if not chdir(path) then
+        if not mkdir(path) then
+            print('could not do mkdir', path)
+            os.exit()
+        end
+        if not chdir(path) then
+            print("could not chdir() to", path)
+            os.exit()
+        end
+    end
+
+    if not ut.git_is_repo_clean(".") then
+        local curdir = lfs.currentdir()
+        local msg = format("_init: git index is dirty in '%s'", curdir)
+        printc("%{red}" .. msg .. "%{reset}")
+    end
+
+	require 'compat53'
+
+    local threads: {lanes.Thread} = {}
+    local opt_tbl = { required = {"lfs", "compat53" }, }
+    local func = lanes.gen("*", opt_tbl, _dependency_init)
+
+	local single_thread = true
+
+    for _, dep in ipairs(deps) do
+        assert(type(dep.url) == 'string')
+        assert(dep.name)
+
+		print('processing', dep.name)
+
+        do
+			print('without dependency', dep.name)
+            --sorter:add(dep.name, "null")
+			if single_thread then
+				_dependency_init(dep)
+			else
+				local type Dependency_init = function(Dependency, string): any
+				local lane_thread = (func as Dependency_init)(dep, path) 
+					as lanes.Thread
+				table.insert(threads, lane_thread)
+			end
+        end
+    end
+
+	if #threads ~= 0 then
+		print(tabular(threads))
+		wait_threads(threads)
+		for _, thread in ipairs(threads) do
+			local result, errcode = thread:join()
+			print(result, errcode)
+		end
+	end
+
+    ut.pop_dir()
 end
 
 --[[
@@ -3260,22 +3279,161 @@ local function update_links(artifact: string)
 end
 --]]
 
-local function check_files_in_dir(dirname: string, filelist: {string}): boolean
-    print('check_files_in_dir', dirname, inspect(filelist))
-    local dict = {}
-    for _, v in ipairs(filelist) do
-        dict[v] = true
-    end
-    for file in lfs.dir(dirname) do
-        if dict[file] then
-            dict[file] = nil
+-- files - пути к файлам относительно текущего каталога
+local function has_files_in_dir(files: {string}): boolean
+    print("check_files_in_dir: files", inspect(files))
+
+    local cwd = lfs.currentdir() 
+    for _, file in ipairs(files) do
+        if not lfs.attributes(cwd .. "/" .. file) then
+            return false
         end
     end
-    local elements_num = 0
-    for _, _ in pairs(dict) do
-        elements_num = elements_num + 1
+
+    return true
+end
+
+local function sub_publish2(_args: Args, cfg: Cfg)
+    print("sub_publish2: currentdir", lfs.currentdir())
+
+    assert(cfg)
+    local artifact = cfg.artifact
+    assert(artifact)
+
+    local files = {
+        artifact .. ".data",
+        artifact .. ".html"  ,
+        artifact .. ".js" ,
+        artifact .. ".wasm",
+    }
+
+    if not has_files_in_dir(files) then
+        printc("%{red}Not all wasm files in build directory.%{reset}")
+        return
     end
-    return elements_num == 0
+    --]]
+
+    -- TODO: Скопировать файлы из списка files в каталог.
+    -- В каталог с каким именем?
+
+    local dist_dir = string.match(lfs.currentdir(), "%S+/(.*)")
+    print("sub_publish2: dist_dir", dist_dir)
+    local src_dir = lfs.currentdir()
+
+    local site_repo_abs = getenv("HOME") .. "/" .. site_repo
+    local ok, errmsg = chdir(site_repo_abs)
+    if not ok then
+        print(
+            "sub_publish2: could not chdir() to " 
+            .. site_repo_abs 
+            .. "with " 
+            .. errmsg
+        )
+        return
+    end
+
+    print("sub_publish2: currentdir", lfs.currentdir())
+
+    ut.push_current_dir()
+
+    mkdir(dist_dir)
+    chdir(dist_dir)
+
+    print("sub_publish2: currentdir", lfs.currentdir())
+
+    for _, file in ipairs(files) do
+        local cmd = "cp " .. src_dir .. "/" .. file .. " " .. " . "
+        cmd_do(cmd)
+        print("cmd", cmd)
+
+        local git_cmd = "git add " .. lfs.currentdir() .. "/" .. file
+        print("git_cmd", git_cmd)
+        cmd_do(git_cmd)
+    end
+
+    ut.pop_dir()
+
+    print("sub_publish2: currentdir", lfs.currentdir())
+    local f = io.open("index.html", "r")
+    assert(f)
+
+    local in_section = false
+    local lines = {}
+    for line in f:lines() do
+        table.insert(lines, line)
+    end
+    f:close()
+
+    local lines_1, lines_2, lines_3 = {}, {}, {}
+
+    local j = 1
+
+    for i = j, #lines do
+        local line = lines[i]
+        table.insert(lines_1, line)
+        if string.match(line, "begin_links_section") then
+            j = i + 1
+            break
+        end
+    end
+
+    for i = j, #lines do
+        local line = lines[i]
+        if string.match(line, "end_links_section") then
+            table.insert(lines_3, line)
+            j = i + 1
+            break
+        else
+            table.insert(lines_2, line)
+        end
+    end
+
+    for i = j, #lines do
+        local line = lines[i]
+        table.insert(lines_3, line)
+    end
+
+    print(tabular(lines_1))
+    print(tabular(lines_2))
+    print(tabular(lines_3))
+
+    local new_link = '<a href="https://nagolove.github.io/NAME/">' 
+        .. '<strong>NAME</strong></a>'
+
+    new_link = string.gsub(new_link, "NAME", dist_dir)
+    print("new_link", new_link)
+
+    local map = {}
+    for _, line in ipairs(lines_2) do
+        map[line] = true
+    end
+    map[new_link] = true
+
+    lines_2 = {}
+    for line, _ in pairs(map) do
+        --print(line)
+        table.insert(lines_2, line)
+    end
+
+
+    f = io.open("index.html", "w")
+    assert(f)
+
+    for _, line in ipairs(lines_1) do
+        f:write(line .. "\n")
+    end
+    for _, line in ipairs(lines_2) do
+        f:write(line .. "\n")
+    end
+    for _, line in ipairs(lines_3) do
+        f:write(line .. "\n")
+    end
+
+    cmd_do(format("git add %s", cfg.artifact))
+    cmd_do(format('git commit -am "%s updated"', cfg.artifact))
+    cmd_do('git push origin master')
+    --]]
+
 end
 
 local function sub_publish(_args: Args, cfg: Cfg)
@@ -3295,6 +3453,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
     print('attrs')
     print(tabular(attrs))
 
+    --[[
     if not check_files_in_dir(build_dir, {
         "index.data",
         "index.html"  ,
@@ -3304,6 +3463,7 @@ local function sub_publish(_args: Args, cfg: Cfg)
         print("Not all wasm files in build directory.")
         os.exit(1)
     end
+    --]]
 
     --print( "os.exit(1)" )
     --os.exit(1)
@@ -3340,12 +3500,11 @@ local function sub_publish(_args: Args, cfg: Cfg)
 end
 
 function actions.publish(_args: Args)
-    print('publish')
-
     local cfgs: {Cfg} = search_and_load_cfgs_up("bld.lua")
 
     for _, cfg in ipairs(cfgs) do
-        sub_publish(_args, cfg)
+        --sub_publish(_args, cfg)
+        sub_publish2(_args, cfg)
     end
 end
 
@@ -3740,11 +3899,26 @@ local function _build(dep: Dependency)
 
     local map: {string: function} = {
         ["function"] = function()
-            if dep.target == 'wasm' then
-                dep.build_w(dep)
-            elseif dep.target == 'linux' then
-                dep.build(dep)
+
+            local m: {Target: TargetBuildFunc} = {
+                ['wasm'] = 'build_w',
+                ['linux'] = 'build',
+                ['win'] = 'build_win',
+            }
+
+            local target_build_func_name = m[dep.target]
+            print('target_build_func_name', target_build_func_name)
+            assert(target_build_func_name)
+
+            if dep[target_build_func_name] then
+                dep[target_build_func_name](dep)
+            else
+                printc("%{red}_build: dep.name '" 
+                    .. dep.name 
+                    .. "', " .. target_build_func_name
+                    .. " not found")
             end
+
         end,
         ["string"] = function()
             local capture = match(dep.build as string, "@(%a+)")
@@ -3781,11 +3955,11 @@ local function _build(dep: Dependency)
         local tp = type(dep.build)
         print("_build: dep.build type is", tp)
 
-        local func = map[tp]
-        if not func then
+        local build_func = map[tp]
+        if not build_func then
             error("_build: bad type for 'tp'")
         end
-        func()
+        build_func()
     end)
     if not ok then
         print('build error:', errmsg)
@@ -4178,7 +4352,6 @@ function actions.updates(_args: Args)
     end
 end
 --]]
-
 
 -- json->lua конвертация из aseprite
 --[[ TODO: Сделать конвертацию данных на основе bld.lua

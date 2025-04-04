@@ -857,7 +857,7 @@ const char *L_pcall(lua_State *l, const char *func_name, bool *is_ok) {
     return buf;
 }
 
-#ifndef KOH_DEP_NO_RLWR
+#ifdef KOH_DEP_RLWR
 #include "rlwr.h"
 #endif
 
