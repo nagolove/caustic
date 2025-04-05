@@ -3346,10 +3346,30 @@ local function sub_publish2(_args, cfg)
       cmd_do(cmd)
       print("cmd", cmd)
 
-      local git_cmd = "git add " .. lfs.currentdir() .. "/" .. file
-      print("git_cmd", git_cmd)
-      cmd_do(git_cmd)
    end
+
+
+   for file in lfs.dir(".") do
+      local attrs = lfs.attributes(file)
+      if attrs.mode == 'file' then
+         print('file', file)
+
+
+         local new_name = string.gsub(file, "(.*)%.", 'init.')
+         local cmd = "mv ./" .. file .. " " .. new_name
+         print('cmd', cmd)
+
+
+
+         local git_cmd = "git add " .. lfs.currentdir() .. "/" .. new_name
+         print("git_cmd", git_cmd)
+         cmd_do(git_cmd)
+      end
+
+   end
+
+
+
 
    ut.pop_dir()
 
@@ -3357,7 +3377,6 @@ local function sub_publish2(_args, cfg)
    local f = io.open("index.html", "r")
    assert(f)
 
-   local in_section = false
    local lines = {}
    for line in f:lines() do
       table.insert(lines, line)

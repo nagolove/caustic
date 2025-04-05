@@ -3346,10 +3346,30 @@ local function sub_publish2(_args: Args, cfg: Cfg)
         cmd_do(cmd)
         print("cmd", cmd)
 
-        local git_cmd = "git add " .. lfs.currentdir() .. "/" .. file
-        print("git_cmd", git_cmd)
-        cmd_do(git_cmd)
     end
+
+    -- TODO: Добавить переименование скопированных файлов
+    for file in lfs.dir(".") do
+        local attrs = lfs.attributes(file)
+        if attrs.mode == 'file' then
+            print('file', file)
+            -- XXX: Может не работать если в имени файла есть точки кроме той,
+            -- что перед расширением
+            local new_name = string.gsub(file, "(.*)%.", 'init.')
+            local cmd = "mv ./" .. file .. " " .. new_name
+            print('cmd', cmd)
+            --cmd_do(cmd)
+            --print('new_name', new_name)
+
+            local git_cmd = "git add " .. lfs.currentdir() .. "/" .. new_name
+            print("git_cmd", git_cmd)
+            cmd_do(git_cmd)
+        end
+        --print(inspect(attrs))
+    end
+
+    --print( "os.exit()" )
+    --os.exit()
 
     ut.pop_dir()
 
@@ -3357,7 +3377,6 @@ local function sub_publish2(_args: Args, cfg: Cfg)
     local f = io.open("index.html", "r")
     assert(f)
 
-    local in_section = false
     local lines = {}
     for line in f:lines() do
         table.insert(lines, line)
