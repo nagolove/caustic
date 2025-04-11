@@ -1073,7 +1073,9 @@ static void paste_stuff2lua(
             break;
         case VIS_TOOL_POLYLINE:
             if (st->tool_visual.t_pl.exist) {
+                /*
                 struct ToolPolyline *pl = &st->tool_visual.t_pl;
+                */
 
                 /*trace("paste_stuff2lua: write polyline\n");*/
                 /*
@@ -1086,11 +1088,14 @@ static void paste_stuff2lua(
                 }
                 // */
 
+                /*
                 metaloader_set_fmt2_polyline(
                     st->metaloader, 
                     pl->points, pl->points_num,
                     fname_noext, object_name
                 );
+                */
+
             }
         break;
         case VIS_TOOL_RECTANGLE_ORIENTED:
