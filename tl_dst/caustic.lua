@@ -578,6 +578,13 @@ local function build_freetype_common(dep)
 
    find_and_remove_cmake_cache()
 
+   local function toolchain()
+      if dep.target == 'win' then
+         return cmake_toolchain_win_opt
+      end
+      return " "
+   end
+
    local cm = cmake[dep.target]
    print("build_freetype_common: cmake", cm)
    local c1 = cm .. " -E make_directory build " .. cmake_toolchain_win_opt
@@ -587,7 +594,7 @@ local function build_freetype_common(dep)
    "-DFT_DISABLE_BZIP2=ON " ..
    "-DFT_DISABLE_ZLIB=ON " ..
    "-DFT_DISABLE_PNG=ON " ..
-   cmake_toolchain_win_opt ..
+   toolchain() ..
    " .."
 
    print("build_freetype_common: c1", c1)
@@ -3293,8 +3300,8 @@ local function has_files_in_dir(files)
    return true
 end
 
-local function sub_publish2(_args, cfg)
-   print("sub_publish2: currentdir", lfs.currentdir())
+local function sub_publish(_args, cfg)
+   print("sub_publish: currentdir", lfs.currentdir())
 
    assert(cfg)
    local artifact = cfg.artifact
@@ -3317,14 +3324,14 @@ local function sub_publish2(_args, cfg)
 
 
    local dist_dir = string.match(lfs.currentdir(), "%S+/(.*)")
-   print("sub_publish2: dist_dir", dist_dir)
+   print("sub_publish: dist_dir", dist_dir)
    local src_dir = lfs.currentdir()
 
    local site_repo_abs = getenv("HOME") .. "/" .. site_repo
    local ok, errmsg = chdir(site_repo_abs)
    if not ok then
       print(
-      "sub_publish2: could not chdir() to " ..
+      "sub_publish: could not chdir() to " ..
       site_repo_abs ..
       "with " ..
       errmsg)
@@ -3332,14 +3339,14 @@ local function sub_publish2(_args, cfg)
       return
    end
 
-   print("sub_publish2: currentdir", lfs.currentdir())
+   print("sub_publish: currentdir", lfs.currentdir())
 
    ut.push_current_dir()
 
    mkdir(dist_dir)
    chdir(dist_dir)
 
-   print("sub_publish2: currentdir", lfs.currentdir())
+   print("sub_publish: currentdir", lfs.currentdir())
 
    for _, file in ipairs(files) do
       local cmd = "cp " .. src_dir .. "/" .. file .. " " .. " . "
@@ -3351,29 +3358,41 @@ local function sub_publish2(_args, cfg)
 
    for file in lfs.dir(".") do
       local attrs = lfs.attributes(file)
-      if attrs.mode == 'file' then
-         print('file', file)
-
-
-         local new_name = string.gsub(file, "(.*)%.", 'init.')
-         local cmd = "mv ./" .. file .. " " .. new_name
-         print('cmd', cmd)
 
 
 
-         local git_cmd = "git add " .. lfs.currentdir() .. "/" .. new_name
-         print("git_cmd", git_cmd)
-         cmd_do(git_cmd)
-      end
+
+
+
+
+
+
+
+
+
+
 
    end
 
+   for file in lfs.dir(".") do
+      print("file", file)
+      if file == artifact .. ".html" then
+         local new_name = string.gsub(file, "(.*)%.", 'index.')
+         local cmd = "mv ./" .. file .. " " .. new_name
 
+         cmd_do(cmd)
+      end
+   end
 
+   for file in lfs.dir(".") do
+      local git_cmd = "git add " .. lfs.currentdir() .. "/" .. file
+      print("git_cmd", git_cmd)
+      cmd_do(git_cmd)
+   end
 
    ut.pop_dir()
 
-   print("sub_publish2: currentdir", lfs.currentdir())
+   print("sub_publish: currentdir", lfs.currentdir())
    local f = io.open("index.html", "r")
    assert(f)
 
@@ -3416,7 +3435,9 @@ local function sub_publish2(_args, cfg)
    print(tabular(lines_2))
    print(tabular(lines_3))
 
-   local new_link = '<a href="https://nagolove.github.io/NAME/">' ..
+
+
+   local new_link = '<a href="/NAME">' ..
    '<strong>NAME</strong></a>'
 
    new_link = string.gsub(new_link, "NAME", dist_dir)
@@ -3448,82 +3469,23 @@ local function sub_publish2(_args, cfg)
       f:write(line .. "\n")
    end
 
-   cmd_do(format("git add %s", cfg.artifact))
+
    cmd_do(format('git commit -am "%s updated"', cfg.artifact))
    cmd_do('git push origin master')
 
 
-end
-
-local function sub_publish(_args, cfg)
-
-
-
-
-
-
-   local build_dir = "wasm_build"
-   local attrs = lfs.attributes(build_dir)
-   if not attrs then
-      print(format("There is no '%s' directory", build_dir))
-      return
-   end
-
-   print('attrs')
-   print(tabular(attrs))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   if cfg.artifact then
-      print("not implemented. please rewrite code without 'goto' operator")
-
-   else
-      print("Bad directory, no artifact value in bld.lua")
-   end
-
-   local site_repo_tmp = gsub(site_repo, "~", getenv("HOME"))
-   local game_dir = format("%s/%s", site_repo_tmp, cfg.artifact);
-   mkdir(game_dir)
-   local cmd = format(
-
-   "cp %s/* %s/%s",
-   build_dir, site_repo_tmp, cfg.artifact)
-
-   print(cmd)
-   cmd_do(cmd)
-
-   ut.push_current_dir()
-   chdir(site_repo_tmp)
-   print(lfs.currentdir())
-
-
-
-
-   cmd_do(format("git add %s", cfg.artifact))
-   cmd_do(format('git commit -am "%s updated"', cfg.artifact))
-   cmd_do('git push origin master')
-
-   ut.pop_dir()
 end
 
 function actions.publish(_args)
    local cfgs = search_and_load_cfgs_up("bld.lua")
+   if not cfgs then
+      printc(
+      "%{red}actions.publish: " ..
+      "there is no bld.lua in current directory%{reset}")
 
+   end
    for _, cfg in ipairs(cfgs) do
-
-      sub_publish2(_args, cfg)
+      sub_publish(_args, cfg)
    end
 end
 
@@ -4211,6 +4173,10 @@ local function project_link(ctx, cfg, _args)
 
 
    if _args.target == 'wasm' then
+
+      local shell_path = path_caustic .. "/shell.html"
+      print("project_link: shell_path", shell_path)
+
       cmd = cmd ..
       " -DPLATFORM_WEB " ..
       "-s USE_GLFW=3 " ..
@@ -4226,7 +4192,7 @@ local function project_link(ctx, cfg, _args)
 
 
       "--shell-file " ..
-      path_caustic .. "/shell.html" ..
+      shell_path ..
       " "
 
 
