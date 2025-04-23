@@ -176,3 +176,10 @@ int make_ret_table(int num, void**arr, size_t offset);
 void koh_sc_from_args(int argc, char **argv);
 
 lua_State *sc_state_new(bool openlibs);
+
+// Выделитель памяти для Луа по умолчанию.
+void *koh_lua_default_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
+
+void L_inspect(lua_State *l, int idx);
+void L_inline(lua_State *l, const char *code);
+

@@ -38,6 +38,10 @@ static int filters_num = 0, filters_cap = 0;
 static const char *log_fname = "/tmp/causticlog";
 static FILE *log_stream = NULL;
 
+static pcre2_code* re = NULL;
+static pcre2_match_data* match_data = NULL;
+static const char *pattern = "%\{(\\w+)\\}([^%]*)";
+
 void trace_filter_add(const char *pattern) {
     if (pattern && strlen(pattern) == 0)
         return;
@@ -143,6 +147,18 @@ void logger_init(void) {
     /*traces_set = strset_new(NULL);*/
 
     filter_init();
+
+    re = pcre2_compile(
+        //(PCRE2_SPTR)"%\{([a-zA-Z0-9_]+)\\}",
+        (PCRE2_SPTR)pattern,
+        PCRE2_ZERO_TERMINATED,      // pattern length
+        0,                          // options
+        NULL, NULL,                 // errorcode, erroroffset
+        NULL                        // compile context
+    );
+    if (re)
+        match_data = pcre2_match_data_create_from_pattern(re, NULL);
+
 }
 
 /*
@@ -166,9 +182,66 @@ void logger_shutdown() {
     filter_free();
     traces_dump();
     /*strset_free(traces_set);*/
+
+    if (match_data) {
+        pcre2_match_data_free(match_data);
+        match_data = NULL;
+    }
+    if (re) {
+        pcre2_code_free(re);
+        re = NULL;
+    }
 }
 
 FILE *tmp_file = NULL;
+
+/*
+// TODO: Не работает, падает. Предупреждения компилятора на строку 
+// форматирования
+int tracec(const char * format, ...) {
+    if (!is_trace_enabled)
+        return 0;
+
+    char buf[512] = {};
+    va_list args;
+    va_start(args, format);
+    int ret = vsnprintf(buf, sizeof(buf) - 1, format, args);
+    va_end(args);
+
+    PCRE2_SIZE offset = 0;
+    int rc;
+    char *subject = buf;
+    while ((rc = pcre2_match(
+        re, subject, 
+        strlen((char*)subject), 
+        offset, 0, match_data, NULL)) > 0) {
+
+        PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
+
+        // Группа 1: цвет
+        printf("Цвет: %.*s\n",
+                (int)(ovector[3] - ovector[2]),
+                subject + ovector[2]);
+
+        // Группа 2: текст
+        printf("Текст: %.*s\n\n",
+                (int)(ovector[5] - ovector[4]),
+                subject + ovector[4]);
+
+        // Сдвигаем offset дальше
+        offset = ovector[1];
+    }
+
+
+    printf("%s", buf);
+    if (log_stream) {
+        fwrite(buf, strlen(buf), 1, log_stream);
+        fflush(log_stream);
+    }
+
+    return ret;
+}
+*/
 
 int trace(const char * format, ...) {
     if (!is_trace_enabled)

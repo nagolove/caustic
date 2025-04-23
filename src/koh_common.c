@@ -65,10 +65,7 @@ const float dscale_value_boost = 10.f;
 /*static inline Color DebugColor2Color(cpSpaceDebugColor dc);*/
 static void add_chars_range(int first, int last);
 
-bool koh_search_files_small(
-    struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
-);
-bool koh_search_files_pcre2(
+static bool koh_search_files_pcre2(
     struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
 );
 
@@ -1243,7 +1240,8 @@ static void check_for_realloc(struct FilesSearchResult *fsr) {
 static void search_files_rec(
     struct FilesSearchResult *fsr, const char *path, int deep_counter
 ) {
-    trace("search_files_rec:\n");
+    // TODO: Сделать в verbose режиме?
+    /*trace("search_files_rec:\n");*/
 
     if (!fsr->names) {
         fsr->capacity = 100;
@@ -1258,19 +1256,6 @@ static void search_files_rec(
 
     assert(path);
     assert(fsr->internal);
-
-    switch (fsr->internal->regex_engine) {
-        // {{{
-        case RE_PCRE2: {
-            printf("search_files_rec: regex engine pcre2\n");
-            break;
-        }
-        default: {
-            printf("search_files_rec: no regex engine allocated\n");
-            return;
-        }
-        // }}}
-    }
 
     FilePathList fl = LoadDirectoryFilesEx(path, NULL, true);
     /*trace("search_files_rec: fl.count %d\n", fl.count);*/
@@ -1321,34 +1306,23 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
     }
     fsr.regex_pattern = strdup(setup->regex_pattern);
 
-    fsr.internal = malloc(sizeof(*fsr.internal));
+    if (!fsr.internal) 
+        fsr.internal = calloc(1, sizeof(*fsr.internal));
     assert(fsr.internal);
+
+    /*
+    // TODO: Сделать в verbose режиме?
     trace(
         "koh_search_files: path '%s' regex_pattern '%s'\n", 
         fsr.path, fsr.regex_pattern
     );
+    */
 
-    /*if (setup->engine_pcre2) {*/
     fsr.internal->regex_engine = RE_PCRE2;
     if (!koh_search_files_pcre2(setup, &fsr)) {
         trace("koh_search_files: could not create 'pcre2' regex engine\n");
         return fsr;
     }
-    /*
-    } else {
-        trace("koh_search_files: RE_SMALL is unsupported\n");
-        abort();
-
-        fsr.internal->regex_engine = RE_SMALL;
-        if (!koh_search_files_small(setup, &fsr)) {
-            trace(
-                "koh_search_files_small: could not create "
-                "'small' regex engine\n"
-            );
-            return fsr;
-        }
-    }
-    */
 
     int deep_counter = setup->deep;
     if (setup->deep < 0)
@@ -1364,12 +1338,14 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
 
 }
 
-bool koh_search_files_pcre2(
+static bool koh_search_files_pcre2(
     struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
 ) {
     assert(setup);
     assert(fsr);
-    trace("koh_search_files_pcre2:\n");
+
+    // TODO: Сделать в verbose режиме?
+    //trace("koh_search_files_pcre2:\n");
 
     assert(fsr->regex_pattern);
 
@@ -1413,6 +1389,10 @@ bool koh_search_files_pcre2(
     // }}}
     */
 
+    if (fsr->internal->regex.pcre.r) {
+        pcre2_code_free(fsr->internal->regex.pcre.r);
+        fsr->internal->regex.pcre.r = NULL;
+    }
 
     fsr->internal->regex.pcre.r = pcre2_compile(
         (unsigned char*)fsr->regex_pattern, 
@@ -1428,6 +1408,11 @@ bool koh_search_files_pcre2(
         return false;
     }
 
+    if (fsr->internal->regex.pcre.match_data) {
+        pcre2_match_data_free(fsr->internal->regex.pcre.match_data);
+        fsr->internal->regex.pcre.match_data = NULL;
+    }
+
     pcre2_match_data *md = pcre2_match_data_create_from_pattern(
         fsr->internal->regex.pcre.r, NULL
     );
@@ -1436,30 +1421,6 @@ bool koh_search_files_pcre2(
 
     return true;
 }
-
-/*
-bool koh_search_files_small(
-        struct FilesSearchSetup *setup, struct FilesSearchResult *fsr
-) {
-    assert(setup);
-    assert(fsr);
-    trace("koh_search_files_small:\n");
-
-    assert(fsr->regex_pattern);
-    fsr->internal->regex.small = regex_compile(fsr->regex_pattern);
-
-    if (!fsr->internal->regex.small) {
-        trace(
-            "koh_search_files: could not compile regex '%s'\n",
-            fsr->regex_pattern
-        );
-        koh_search_files_shutdown(fsr);
-        return false;
-    }
-
-    return true;
-}
-*/
 
 void koh_search_files_shutdown(struct FilesSearchResult *fsr) {
     if (!fsr)
@@ -2529,3 +2490,48 @@ void local_storage_save(const char *key, const char *value) {
 #endif
 }
 
+const char *koh_uniq_fname_str(const char *prefix, const char *suffix) {
+    time_t rawtime;
+    struct tm *timeinfo;
+    static char buf_datetime[128] = {};
+    memset(buf_datetime, 0, sizeof(buf_datetime));
+
+    if (!suffix) suffix = "";
+    if (!prefix) prefix = "";
+
+    // Получаем текущее время
+    time(&rawtime);
+    // Преобразуем в локальное время
+    timeinfo = localtime(&rawtime);
+
+    // Форматируем в строку 
+    strftime(buf_datetime, sizeof(buf_datetime), "%Y%m%d_%H%M%S", timeinfo);
+
+    static char buf[256] = {};
+    memset(buf, 0, sizeof(buf));
+    snprintf(buf, sizeof(buf), "%s%s%s", prefix, buf_datetime, suffix);
+
+    return buf;
+}
+
+bool koh_search_files_concat(FilesSearchResult *out, FilesSearchResult add) {
+    assert(out);
+
+    if (out->num + add.num >= out->capacity) {
+        size_t sz = sizeof(out->names[0]);
+        out->capacity = out->num + add.num + 1;
+        void *p = realloc(out->names, sz * out->capacity);
+        if (!p) {
+            return false;
+        }
+        out->names = p;
+    }
+
+    for (int j = 0; j < add.num; j++) {
+        if (add.names[j]) {
+            out->names[out->num++] = strdup(add.names[j]);
+        }
+    }
+
+    return true;
+}

@@ -132,3 +132,19 @@ char *strbuf_concat_alloc(StrBuf *s, const char *sep) {
 
     return ret;
 }
+
+char *strbuf_first(StrBuf *s) {
+    assert(s);
+    if (s->num) {
+        return s->s[0];
+    } else 
+        return NULL;
+}
+
+char *strbuf_last(StrBuf *s) {
+    assert(s);
+    if (s->num) {
+        return s->s[s->num - 1];
+    } else 
+        return NULL;
+}

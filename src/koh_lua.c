@@ -1738,3 +1738,43 @@ lua_State *sc_state_new(bool openlibs) {
         luaL_openlibs(lua);
     return lua;
 }
+
+void *koh_lua_default_alloc(
+    void *ud, void *ptr, size_t osize, size_t nsize
+) {
+    (void)ud; (void)osize; // не используем в этом примере
+    if (nsize == 0) {
+        free(ptr);
+        return NULL;
+    } else {
+        return realloc(ptr, nsize);
+    }
+}
+
+void L_inspect(lua_State *l, int idx) {
+    assert(l);
+    // копирую значение
+    lua_pushvalue(l, idx);
+    char buf_uniq_name[128] = {};
+    sprintf(buf_uniq_name, "X_%d_%d", rand() % 100, rand() % 100);
+    lua_setglobal(l, buf_uniq_name);
+    const char *code = 
+        "local inspect = require 'inspect'\n"
+        "print(inspect(%s))";
+    char buf_code[128 * 2] = {};
+    sprintf(buf_code, code, buf_uniq_name);
+    L_inline(l, buf_code);
+
+    lua_pushnil(l);
+    lua_setglobal(l, buf_uniq_name);
+}
+
+
+void L_inline(lua_State *l, const char *code) {
+    assert(l);
+    int err = luaL_dostring(l, code);
+    if (err != LUA_OK) {
+        printf("l_inline: error '%s'\n", lua_tostring(l, -1));
+        abort();
+    } 
+}

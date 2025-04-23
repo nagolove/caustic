@@ -239,12 +239,15 @@ typedef struct FilesSearchSetup {
 char *koh_files_search_setup_2str(FilesSearchSetup *setup);
 // Заполняет структуру.
 // TODO: Возможность поиска в отдельном потоке
-struct FilesSearchResult koh_search_files(FilesSearchSetup *setup);
+FilesSearchResult koh_search_files(FilesSearchSetup *setup);
 // Освобождает память, зануляет содержимое структуры. 
 // Можно вызывать несколько раз.
 void koh_search_files_shutdown(struct FilesSearchResult *fsr);
 
-__attribute_deprecated__
+// Добавляет в список out файлы из add. Результат без дубликатов.
+// Истина в случае успеха.
+bool koh_search_files_concat(FilesSearchResult *out, FilesSearchResult add);
+
 void koh_search_files_print(struct FilesSearchResult *fsr);
 
 void koh_search_files_print2(
@@ -391,3 +394,6 @@ void set_uv_from_rect(Rectangle rect, Vector2 uv[4]);
 const char *local_storage_load(const char *key);
 void local_storage_save(const char *key, const char *value);
 
+// Возвращает статическую строку c именем файла из префикса, даты+времени и
+// суффикса. Используется для уникальных имен файлов.
+const char *koh_uniq_fname_str(const char *prefix, const char *suffix);

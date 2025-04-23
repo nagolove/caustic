@@ -27,6 +27,13 @@ __attribute__((__format__ (__printf__, 1, 2)))
 // Возвращает результат внутреннего printf()
 int trace(const char *format, ...);
 
+/*
+__attribute__((__format__ (__printf__, 1, 2)))
+// Возвращает результат внутреннего printf() 
+// Поддерживает цвета
+int tracec(const char *format, ...);
+*/
+
 int trace_null(const char *format, ...);
 
 __attribute__((__format__ (__printf__, 1, 2)))
