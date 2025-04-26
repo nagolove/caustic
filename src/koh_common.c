@@ -813,7 +813,7 @@ const char *extract_filename(const char *fname, const char *ext) {
 }
 
 const char *rect2str(Rectangle rect) {
-    static char slots[5][64] = {0};
+    static char slots[5][256] = {0};
     static int index = 0;
     index = (index + 1) % 5;
     char *buf = slots[index];
@@ -1130,7 +1130,7 @@ void koh_trap() {
 }
 
 void koh_term_color_set(int color) {
-    assert(color >= 30 && color <= 37);
+    assert(color >= 30 && color <= 97);
     printf("\033[1;%dm", color);
 }
 

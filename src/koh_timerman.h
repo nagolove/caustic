@@ -84,3 +84,5 @@ void timerman_each(
     enum TimerManAction (*iter)(Timer *tmr, void*),
     void *udata
 );
+
+const char *timer2str(TimerDef t);

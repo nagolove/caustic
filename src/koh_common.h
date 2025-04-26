@@ -194,6 +194,15 @@ void koh_trap();
 #define KOH_TERM_MAGENTA      35         
 #define KOH_TERM_CYAN         36         
 #define KOH_TERM_WHITE        37         
+
+#define KOH_TERM_BRIGHT_BLACK        90         
+#define KOH_TERM_BRIGHT_RED          91         
+#define KOH_TERM_BRIGHT_GREEN        92         
+#define KOH_TERM_BRIGHT_YELLOW       93         
+#define KOH_TERM_BRIGHT_BLUE         94         
+#define KOH_TERM_BRIGHT_MAGENTA      95         
+#define KOH_TERM_BRIGHT_CYAN         96         
+#define KOH_TERM_BRIGHT_WHITE        97         
 // }}}
 
 void koh_term_color_set(int color);

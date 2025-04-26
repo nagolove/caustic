@@ -423,3 +423,23 @@ bool timerman_is_paused(TimerMan *tm) {
     assert(tm);
     return tm->paused;
 }
+
+const char *timer2str(TimerDef t) {
+    static char slots[5][256] = {};
+    static int slot_index = 0;
+
+    slot_index = (slot_index + 1) % 5;
+    char *buf = slots[slot_index], *pbuf = buf;
+
+    pbuf += sprintf(pbuf, "{ \n");
+    pbuf += sprintf(pbuf, "data = '%p',\n", t.data);
+    pbuf += sprintf(pbuf, "sz = %zu,\n", t.sz);
+    pbuf += sprintf(pbuf, "duration = %f,\n", t.duration);
+    pbuf += sprintf(pbuf, "on_update = '%p',\n", t.on_update);
+    pbuf += sprintf(pbuf, "on_stop = '%p',\n", t.on_stop);
+    pbuf += sprintf(pbuf, "on_start = '%p',\n", t.on_start);
+    pbuf += sprintf(pbuf, "uniq_name = '%s',\n", t.uniq_name);
+    sprintf(pbuf, " }\n");
+
+    return buf;
+}
