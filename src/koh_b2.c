@@ -243,13 +243,35 @@ static void draw_point(b2Vec2 p, float size, b2HexColor color, void* context) {
 }
 
 /// Draw a string.
-/*
-static void draw_string(b2Vec2 p, const char* s, void* context) {
+static void draw_string(
+    b2Vec2 p, const char* s, b2HexColor color, void* context
+) {
+/*static void draw_string(b2Vec2 p, const char* s, void* context) {*/
     if (verbose_b2)
         trace("draw_string:\n");
     DrawText(s, p.x, p.y, 20, BLACK);
 }
-*/
+
+b2DebugDraw b2_world_dbg_draw_create2() {
+    return (struct b2DebugDraw) {
+        .DrawPolygon = draw_polygon,
+        .DrawSolidPolygon = draw_solid_polygon,
+        //.DrawRoundedPolygon = draw_rounded_polygon,
+        .DrawCircle = draw_circle,
+        .DrawSolidCircle = draw_solid_circle,
+        .DrawSolidCapsule = draw_solid_capsule,
+        .DrawSegment = draw_segment,
+        .DrawTransform = draw_transform,
+        .DrawPoint = draw_point,
+        .DrawString = draw_string,
+        .drawShapes = true,
+        .drawJoints = true,
+        .drawAABBs = true,
+        .drawMass = true,
+        .drawGraphColors = true,
+    };
+}
+
 
 b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
     return (struct b2DebugDraw) {
@@ -262,7 +284,7 @@ b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
         .DrawSegment = draw_segment,
         .DrawTransform = draw_transform,
         .DrawPoint = draw_point,
-        /*.DrawString = draw_string,*/
+        .DrawString = draw_string,
         .drawShapes = true,
         .drawJoints = true,
         .drawAABBs = true,

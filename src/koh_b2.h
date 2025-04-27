@@ -51,6 +51,9 @@ typedef struct WorldCtx {
 typedef WorldCtx WCtx;
 
 b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx);
+// XXX: Работает некорректно, приводит к падению программы, видимо
+// разыменовывание нулевого адреса.
+b2DebugDraw b2_world_dbg_draw_create2();
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
 
 // Хранение информации из AABB запроса
