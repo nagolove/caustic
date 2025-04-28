@@ -399,6 +399,8 @@ __attribute_deprecated__
 void rect2uv(Rectangle rect, Vector2 uv[4]);
 void set_uv_from_rect(Rectangle rect, Vector2 uv[4]);
 
+// Установить текстурные координаты для вырезания прямоугольника
+void set_uv1(Vector2 uv[4]);
 
 const char *local_storage_load(const char *key);
 void local_storage_save(const char *key, const char *value);
@@ -406,3 +408,14 @@ void local_storage_save(const char *key, const char *value);
 // Возвращает статическую строку c именем файла из префикса, даты+времени и
 // суффикса. Используется для уникальных имен файлов.
 const char *koh_uniq_fname_str(const char *prefix, const char *suffix);
+
+// Переводит небольшой массив чисел в плавающей точкой в строку содержащую
+// Луа таблицу. Возвращает указатель на статическую память.
+// Если строка не умещается в буфер предназначенный для возврата, то функция
+// возвращает NULL
+const char *float_arr_tostr(float *arr, size_t num);
+
+// Работает аналогично float_arr_tostr().
+// Возвращает таблицу с таблицами, что может быть не очень хорошо для 
+// некоторых случаев.
+const char *Vector2_arr_tostr(Vector2 *arr, size_t num);

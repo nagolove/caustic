@@ -2364,6 +2364,17 @@ void set_uv_from_rect(Rectangle rect, Vector2 uv[4]) {
     uv[3].y = rect.y + rect.height;
 }
 
+void set_uv1(Vector2 uv[4]) {
+    uv[0].x = 0.;
+    uv[0].y = 0.;
+    uv[1].x = 1.f;
+    uv[1].y = 0.;
+    uv[2].x = 1.f;
+    uv[2].y = 1.f;
+    uv[3].x = 0.;
+    uv[3].y = 1.f;
+}
+
 static const float dscale_value = 0.1f;
 static const float cam_zoom_min = 0.001;
 static const float cam_zoom_max = 100.f;
@@ -2535,3 +2546,67 @@ bool koh_search_files_concat(FilesSearchResult *out, FilesSearchResult add) {
 
     return true;
 }
+
+const char *float_arr_tostr(float *arr, size_t num) {
+    static char slots[5][256] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index], *pbuf = buf;
+    size_t buf_len = sizeof(slots[0]);
+
+    if (!arr) {
+        strncpy(buf, "{ }", buf_len);
+        return buf;
+    }
+
+    pbuf += sprintf(pbuf, "{ ");
+    for (int i = 0; i < num; ++i) {
+        pbuf += sprintf(pbuf, "%f, ", arr[i]);
+
+        if (pbuf - buf >= buf_len) {
+            /*
+            printf(
+                "float_arr_tostr: buf_len %zu, diff %ld\n",
+                buf_len, pbuf - buf
+            );
+            */
+            return NULL;
+        }
+    }
+    sprintf(pbuf, " }");
+
+    return buf;
+}
+
+const char *Vector2_arr_tostr(Vector2 *arr, size_t num) {
+    static char slots[5][256 * 4] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index], *pbuf = buf;
+    size_t buf_len = sizeof(slots[0]);
+
+    if (!arr) {
+        strncpy(buf, "{ }", buf_len);
+        return buf;
+    }
+
+    //printf("buf_len %zu\n", buf_len);
+
+    pbuf += sprintf(pbuf, "{ ");
+    for (int i = 0; i < num; ++i) {
+        if (pbuf - buf >= buf_len) {
+            /*
+            printf(
+                "float_arr_tostr: buf_len %zu, diff %ld\n",
+                buf_len, pbuf - buf
+            );
+            // */
+            return NULL;
+        }
+        pbuf += sprintf(pbuf, "%s, ", Vector2_tostr(arr[i]));
+    }
+    sprintf(pbuf, " }");
+
+    return buf;
+}
+

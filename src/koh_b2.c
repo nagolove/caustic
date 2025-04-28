@@ -668,7 +668,7 @@ void box2d_gui(struct WorldCtx *wctx) {
 }
 
 char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
-    int len = 32 * // количество бит в uint32_t
+    int len = 64 * // количество бит в uint64_t
               4 *  // пробелы и запятые на символ
               2 +  // оба поля(maskBits и categoryBits) структуры b2QueryFilter
               10;  // обрамление массивов скобками
@@ -676,7 +676,7 @@ char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
 
     pret += sprintf(pret, "{ maskBits = { ");
 
-    for (const char *m_bits = to_bitstr_uint32_t(filter.maskBits);
+    for (const char *m_bits = to_bitstr_uint64_t(filter.maskBits);
         *m_bits; m_bits++
     ) {
         if (!pret)
@@ -686,7 +686,7 @@ char *b2QueryFilter_2str_alloc(b2QueryFilter filter) {
 
     pret += sprintf(pret, "}, categoryBits = { ");
 
-    for (const char *c_bits = to_bitstr_uint32_t(filter.categoryBits);
+    for (const char *c_bits = to_bitstr_uint64_t(filter.categoryBits);
         *c_bits; c_bits++
     ) {
         if (!pret)
@@ -710,7 +710,7 @@ uint32_t bit_set32(uint32_t n, char num, bool val) {
 }
 
 uint64_t bit_set64(uint64_t n, char num, bool val) {
-    return val ? n | (unsigned)1 << num : n & ~(unsigned)1 << num;
+    return val ? n | (unsigned long)1 << num : n & ~(unsigned long)1 << num;
 }
 
 
@@ -1012,3 +1012,17 @@ void world_shutdown(struct WorldCtx *wctx) {
 }
 
 
+const char *b2MassData_tostr(b2MassData md) {
+    static char slots[5][128] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+
+    char *buf = slots[index], *pbuf = buf;
+    pbuf += sprintf(pbuf, "{\n");
+    pbuf += sprintf(pbuf, "mass = %f,\n", md.mass);
+    pbuf += sprintf(pbuf, "center = %s,\n", b2Vec2_to_str(md.center));
+    pbuf += sprintf(pbuf, "rotationalInertia = %f,\n", md.rotationalInertia);
+    sprintf(pbuf, " }");
+
+    return buf;
+}

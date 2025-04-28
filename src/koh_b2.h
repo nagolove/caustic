@@ -293,3 +293,5 @@ static inline void world_draw_debug(struct WorldCtx *wctx) {
     if (wctx->is_dbg_draw)
         b2World_Draw(wctx->world, &wctx->world_dbg_draw);
 }
+
+const char *b2MassData_tostr(b2MassData md);
