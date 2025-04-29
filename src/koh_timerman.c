@@ -89,7 +89,7 @@ static bool search(TimerMan *tm, const char *name) {
 
     for (int i = 0; i < tm->timers_size; i++) {
         const char *cur_name = tm->timers[i].uniq_name;
-        if (cur_name && !strcmp(cur_name, name))
+        if (strlen(cur_name) > 0 && !strcmp(cur_name, name))
             return true;
     }
 
@@ -107,7 +107,7 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
         trace("timerman_add: timer without on_update callback\n");
 
     // Если таймер с таким именем существует, то новый не создается
-    if (td.uniq_name && search(tm, td.uniq_name)) {
+    if (strlen(td.uniq_name) > 0 && search(tm, td.uniq_name)) {
         return false;
     }
 
@@ -138,7 +138,7 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     tmr->on_update = td.on_update;
     tmr->on_stop = td.on_stop;
     tmr->on_start = td.on_start;
-    tmr->uniq_name = td.uniq_name;
+    strncpy(tmr->uniq_name, td.uniq_name, sizeof(td.uniq_name));
 
     return true;
 }
@@ -266,7 +266,7 @@ void timerman_window_gui(struct TimerMan *tm) {
         ImGuiTableFlags_Hideable;
 
     ImVec2 outer_size = {0., 0.}; // Размер окошка таблицы
-    if (igBeginTable("timers", 8, table_flags, outer_size, 0.)) {
+    if (igBeginTable("timers", 9, table_flags, outer_size, 0.)) {
         ImGuiTableColumnFlags column_flags = 0;
 
         igTableSetupColumn("#", ImGuiTableColumnFlags_DefaultSort, 0., 0);
@@ -278,6 +278,7 @@ void timerman_window_gui(struct TimerMan *tm) {
         igTableSetupColumn("data", column_flags, 0., 5);
         igTableSetupColumn("on_update cb", column_flags, 0., 6);
         igTableSetupColumn("on_stop cb", column_flags, 0., 7);
+        igTableSetupColumn("uniq_name", column_flags, 0., 8);
         igTableHeadersRow();
 
         for (int row = 0; row < tm->timers_size; ++row) {
@@ -320,6 +321,10 @@ void timerman_window_gui(struct TimerMan *tm) {
 
             igTableSetColumnIndex(7);
             sprintf(line, "%p", tmr->on_stop);
+            igText(line);
+
+            igTableSetColumnIndex(8);
+            sprintf(line, "%s", tmr->uniq_name);
             igText(line);
             // */
         }
@@ -442,4 +447,16 @@ const char *timer2str(TimerDef t) {
     sprintf(pbuf, " }\n");
 
     return buf;
+}
+
+TimerDef timer_def(TimerDef td, const char *fmt, ...) {
+    char buf[TMR_NAME_SZ] = {};
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf) - 1, fmt, args);
+    va_end(args);
+
+    TimerDef tmp = td;
+    strncpy(tmp.uniq_name, buf, TMR_NAME_SZ);
+    return tmp;
 }

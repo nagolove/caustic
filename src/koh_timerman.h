@@ -5,6 +5,8 @@
 
 typedef struct TimerMan TimerMan;
 
+#define TMR_NAME_SZ 64
+
 typedef struct Timer {
     // Заполняется автоматически при вызове timerman_update()
     struct TimerMan *tm; 
@@ -27,7 +29,7 @@ typedef struct Timer {
     bool            (*on_update)(struct Timer *tmr); 
     void            (*on_stop)(struct Timer *tmr);
     void            (*on_start)(struct Timer *tmr);
-    const char      *uniq_name;
+    char            uniq_name[TMR_NAME_SZ];
     // Была ли запущена функция on_start
     bool            started;
 } Timer;
@@ -42,7 +44,7 @@ typedef struct TimerDef {
     // TODO: Как лучше сделать сигнатуры on_update() и on_stop() одинаковыми?
     void            (*on_stop)(struct Timer *tmr);
     void            (*on_start)(struct Timer *tmr);
-    const char      *uniq_name;
+    char            uniq_name[TMR_NAME_SZ];
 } TimerDef;
 
 enum TimerManAction {
@@ -63,6 +65,7 @@ void timerman_free(TimerMan *tm);
 // TODO: Сделать возможность соединения таймеров цепочкой
 // Когда зананчивается один, то начинается следующий. 
 // Данную задачу можно решить в on_stop()
+// Если таймер с таким именем существует, то новый не создается.
 bool timerman_add(TimerMan *tm, TimerDef td);
 
 // Производит обновление. Возвращает количество таймеров.
@@ -86,3 +89,4 @@ void timerman_each(
 );
 
 const char *timer2str(TimerDef t);
+TimerDef timer_def(TimerDef td, const char *fmt, ...);
