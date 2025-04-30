@@ -986,6 +986,7 @@ local function build_raylib_common(dep: Dependency)
         local c = {}
         insert(c, "-DPLATFORM=Desktop ")
         insert(c, "-DBUILD_EXAMPLES=ON ")
+        insert(c, "-DCMAKE_BUILD_TYPE=Debug")
         cmd_do("cmake " .. table.concat(c, " ") .. " .")
         --cmd_do("make clean")
         cmd_do("make -j")
