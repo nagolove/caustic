@@ -4179,6 +4179,13 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         --print("project_link: shell_path", shell_path)
 
         cmd = cmd 
+
+        -- для отладки
+        .. "-g "
+        .. "-gsource-map "
+        .. "-sDEMANGLE_SUPPORT=1 "
+        .. " -sERROR_ON_UNDEFINED_SYMBOLS=0 "
+
         .. " -DPLATFORM_WEB " 
         .. "-s USE_GLFW=3 " 
         .. "-s ASSERTIONS "

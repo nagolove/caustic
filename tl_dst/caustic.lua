@@ -4179,6 +4179,13 @@ local function project_link(ctx, cfg, _args)
 
 
       cmd = cmd ..
+
+
+      "-g " ..
+      "-gsource-map " ..
+      "-sDEMANGLE_SUPPORT=1 " ..
+      " -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
+
       " -DPLATFORM_WEB " ..
       "-s USE_GLFW=3 " ..
       "-s ASSERTIONS " ..
