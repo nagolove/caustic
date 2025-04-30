@@ -68,6 +68,10 @@ void timerman_free(TimerMan *tm);
 // Если таймер с таким именем существует, то новый не создается.
 bool timerman_add(TimerMan *tm, TimerDef td);
 
+// TODO: Сделать поиск таймеров по какому-то условию. 
+// К примеру по продолжительности. То есть найти те счетчики, которые работают 
+// больше 1 секунды.
+
 // Производит обновление. Возвращает количество таймеров.
 int timerman_update(TimerMan *tm);
 TimerMan *timerman_clone(TimerMan *tm);
