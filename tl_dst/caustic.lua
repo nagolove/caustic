@@ -3356,8 +3356,9 @@ local function sub_publish(_args, cfg)
    end
 
 
-   for file in lfs.dir(".") do
-      local attrs = lfs.attributes(file)
+
+   for _ in lfs.dir(".") do
+
 
 
 
@@ -4089,7 +4090,7 @@ local function run_parallel_uv(queue)
       io.write(line)
    end
 
-   print('run_parallel_uv: errcode', errcode)
+
 
    if errexit_uv and errcode ~= 0 then
       os.exit(1)
@@ -4124,7 +4125,7 @@ local function koh_link(objfiles, _args)
    table.concat(objfiles, " ")
 
 
-   print("koh_link:", cmd)
+
    cmd_do(cmd)
 
    cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
@@ -4175,11 +4176,12 @@ local function project_link(ctx, cfg, _args)
    if _args.target == 'wasm' then
 
       local shell_path = path_caustic .. "/shell.html"
-      print("project_link: shell_path", shell_path)
+
 
       cmd = cmd ..
       " -DPLATFORM_WEB " ..
       "-s USE_GLFW=3 " ..
+      "-s ASSERTIONS " ..
       "--preload-file ../assets " ..
       "-flto " ..
       "-s ALLOW_MEMORY_GROWTH=1 " ..
@@ -4208,7 +4210,8 @@ local function project_link(ctx, cfg, _args)
       printc("project_link: %{blue}" .. cmd .. "%{reset}")
    end
 
-   printc("project_link: %{blue}" .. cmd .. "%{reset}")
+
+
    cmd_do(cmd)
 end
 
@@ -4541,7 +4544,7 @@ local function defines_apply(flags, defines)
    if not defines then
       return
    end
-   print("defines_apply:")
+
    for define, value in pairs(defines) do
       assert(type(define) == 'string');
       assert(type(value) == 'string');
