@@ -60,3 +60,4 @@ void hotkey_state_push(HotkeyStorage *storage);
 void hotkey_state_pop(HotkeyStorage *storage);
 
 extern bool hotkey_verbose;
+extern const char *koh_key2str[];
