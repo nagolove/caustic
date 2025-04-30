@@ -1,83 +1,76 @@
 <!doctype html>
-<html lang="EN-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>APPNAME</title>
 
-    <title>APPNAME</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="shortcut icon" href="https://www.raylib.com/favicon.ico">
 
-    <meta name="title" content="APPNAME">
-    <!--<meta name="description" content="New raylib web videogame, developed using raylib videogames library">-->
-    <!--<meta name="keywords" content="raylib, programming, examples, html5, C, C++, library, learn, games, videogames">-->
-    <meta name="viewport" content="width=device-width">
+  <style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        background-color: black;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
 
-    <!-- Favicon -->
-    <link rel="shortcut icon" href="https://www.raylib.com/favicon.ico">
+    canvas.emscripten {
+        border: 0;
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background-color: black;
+    }
+  </style>
 
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: black;
+  <script src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"></script>
+  <script>
+    function saveFileFromMEMFSToDisk(memoryFSname, localFSname) {
+        var isSafari = false;
+        var data = FS.readFile(memoryFSname);
+        var blob = new Blob([data.buffer], {
+            type: isSafari ? "application/octet-stream" : "application/octet-binary"
+        });
+        saveAs(blob, localFSname);
+    }
+  </script>
+</head>
+<body>
+  <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+  <pre id="output"></pre>
 
-            /* Центровка с помощью Flexbox */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-        }
+  <script>
+    // Обязательно выполнять после canvas в DOM
+    var canvas = document.getElementById("canvas");
 
-        canvas.emscripten {
-            border: 0;
-            background-color: black;
-            display: block;
-        }
-    </style>
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
 
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas(); // вызвать при загрузке
 
-    <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"> </script>
-    <script type='text/javascript'>
-        function saveFileFromMEMFSToDisk(memoryFSname, localFSname)     // This can be called by C/C++ code
-        {
-            var isSafari = false; // Not supported, navigator.userAgent access is being restricted
-            //var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-            var data = FS.readFile(memoryFSname);
-            var blob;
-
-            if (isSafari) blob = new Blob([data.buffer], { type: "application/octet-stream" });
-            else blob = new Blob([data.buffer], { type: "application/octet-binary" });
-
-            // NOTE: SaveAsDialog is a browser setting. For example, in Google Chrome,
-            // in Settings/Advanced/Downloads section you have a setting:
-            // 'Ask where to save each file before downloading' - which you can set true/false.
-            // If you enable this setting it would always ask you and bring the SaveAsDialog
-            saveAs(blob, localFSname);
-        }
-    </script>
-    </head>
-    <body>
-        <canvas class=emscripten id=canvas oncontextmenu=event.preventDefault() tabindex=-1></canvas>
-        <p id="output" />
-        <script>
-            var Module = {
-                print: (function() {
-                    var element = document.getElementById('output');
-                    if (element) element.value = ''; // clear browser cache
-                    return function(text) {
-                        if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-                        console.log(text);
-                        if (element) {
-                          element.value += text + "\n";
-                          element.scrollTop = element.scrollHeight; // focus on bottom
-                        }
-                    };
-                })(),
-                canvas: (function() {
-                    var canvas = document.getElementById('canvas');
-                    return canvas;
-                })()
+    var Module = {
+        print: (function () {
+            var element = document.getElementById('output');
+            return function (text) {
+                console.log(text);
+                if (element) {
+                    element.textContent += text + "\n";
+                    element.scrollTop = element.scrollHeight;
+                }
             };
-        </script>
-        {{{ SCRIPT }}}
-    </body>
+        })(),
+        canvas: canvas
+    };
+  </script>
+
+  {{{ SCRIPT }}}
+</body>
 </html>
+
