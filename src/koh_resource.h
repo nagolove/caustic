@@ -12,6 +12,7 @@ enum ResourceType {
 
 typedef struct Resource {
     struct Resource     *next;
+    bool                loaded;
     enum ResourceType   type;
     void                *data, *source_data;
 } Resource;

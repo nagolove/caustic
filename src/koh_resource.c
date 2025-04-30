@@ -32,6 +32,7 @@ Resource *res_add(
     new->next = res_list->next;
     res_list->next = new;
     new->type = type;
+    new->loaded = true;
     return new;
 }
 // */
@@ -117,6 +118,9 @@ void res_unload_all(Resource *res_list, bool no_log) {
         if (!cur->data) 
             continue;
 
+        if (!cur->loaded) 
+            continue;
+
         switch (cur->type) {
             case RT_FONT: {
                 qtrace(
@@ -126,6 +130,12 @@ void res_unload_all(Resource *res_list, bool no_log) {
                 UnloadFont(*(Font*)cur->data);
                 break;
             }
+
+// XXX: Происходит падение при многократном запуске. Возможно в следствии
+// повторного освобождения ресурсов. Совсем отказаться от менеджера?
+// Попробовать отремонтировать удаление? Перейти на массив?
+
+                /*
             case RT_TEXTURE: {
                 qtrace(
                     "res_unload_all: RT_TEXTURE '%s'\n",
@@ -134,6 +144,8 @@ void res_unload_all(Resource *res_list, bool no_log) {
                 UnloadTexture(*(Texture2D*)cur->data);
                 break;
             }
+            */
+
             case RT_SHADER: {
                 qtrace(
                     "res_unload_all: RT_SHADER '%s'\n",
@@ -154,7 +166,9 @@ void res_unload_all(Resource *res_list, bool no_log) {
             default:
                 break;
         }
+        // */
 
+        cur->loaded = false;
         free(cur->data);
         if (cur->source_data) {
             free(cur->source_data);
