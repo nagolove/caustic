@@ -55,25 +55,6 @@ const char *color2str(Color color);
 const char *Color_to_str(Color color);
 Font load_font_unicode(const char *fname, int size);
 
-/*
-struct SpaceShutdownCtx {
-    cpSpace *space;
-    bool free_shapes, free_constraints, free_bodies;
-    bool print_shapes, print_constraints, print_bodies;
-};
-
-void space_shutdown(struct SpaceShutdownCtx ctx);
-void space_debug_draw(cpSpace *space, Color color);
-*/
-
-void draw_paragraph(
-    Font fnt, 
-    char **paragraph, 
-    int num, 
-    Vector2 pos,
-    Color color
-);
-
 // -1..1 -> 0..1
 float axis2zerorange(float value);
 
@@ -130,7 +111,8 @@ typedef void (*QSortSwapFunc)(size_t index1, size_t index2, void *udata);
 
 void koh_qsort_soa(
     void *arr, size_t nmemb, size_t size, 
-    QSortCmpFunc cmp, QSortSwapFunc swap, void *udata
+    QSortCmpFunc cmp, QSortSwapFunc swap, void *udata, 
+    bool reverse
 );
 
 //cpSpaceDebugColor from_Color(Color c);
@@ -215,7 +197,7 @@ void koh_term_color_reset();
    числами и вторыми числами. 
    Память по указателям first и seconf требует освобождения.
 */
-void parse_bracketed_string(
+void parse_bracketed_string_alloc(
     const char *str, int **first, int **second, int *len
 );
 
@@ -226,6 +208,7 @@ typedef struct FilesSearchResult {
     int                                 num, capacity;
     void                                *udata;
     void (*on_search_begin)(struct FilesSearchResult *fsr);
+    bool (*on_search)(struct FilesSearchResult *fsr, const char *fname);
     void (*on_search_end)(struct FilesSearchResult *fsr);
     void (*on_shutdown)(struct FilesSearchResult *fsr);
 } FilesSearchResult;
@@ -238,6 +221,8 @@ typedef struct FilesSearchSetup {
     void    *udata; // Данные пользователя
     // Вызывается в начале поиска
     void (*on_search_begin)(struct FilesSearchResult *fsr);
+    // Возвращает истину если файл соответствует критериям поиска
+    bool (*on_search)(struct FilesSearchResult *fsr, const char *fname);
     // Вызывается после завершения поиска
     void (*on_search_end)(struct FilesSearchResult *fsr);
     // Вызывается при удалении структуры поиск(koh_search_files_shutdown)
@@ -343,12 +328,13 @@ bool koh_str_match(const char *str, size_t *str_len, const char *pattern);
 // ".png", ".jpg", ".tga", ".PNG", ".JPG", ".TGA"
 bool koh_is_fname_image_ext(const char *fname);
 
-char *points2table_allocated(const Vector2 *points, int points_num);
+char *points2table_alloc(const Vector2 *points, int points_num);
 
 // Возвращает указатель на статический буфер максимальной длины 1024 
 // заполненный символами в диапазоне 'a'-'A'
 const char *koh_str_gen_aA(size_t len);
 
+// XXX: Функция протестирована?
 char *koh_str_sub_alloc(
     const char *subject, const char* pattern, const char *replacement
 );
@@ -402,6 +388,7 @@ void set_uv_from_rect(Rectangle rect, Vector2 uv[4]);
 // Установить текстурные координаты для вырезания прямоугольника
 void set_uv1(Vector2 uv[4]);
 
+// TODO: Сделать сохранение в файл, что-бы работало не только в WASM
 const char *local_storage_load(const char *key);
 void local_storage_save(const char *key, const char *value);
 
@@ -416,6 +403,8 @@ const char *koh_uniq_fname_str(const char *prefix, const char *suffix);
 const char *float_arr_tostr(float *arr, size_t num);
 
 // Работает аналогично float_arr_tostr().
-// Возвращает таблицу с таблицами, что может быть не очень хорошо для 
-// некоторых случаев.
+// Возвращает таблицу с таблицами { {0.f, 0.f}, {1.f, 1.f} } и так далле, что 
+// может быть не очень хорошо для некоторых случаев.
+// Аналогично points2table_alloc(), но работает с небольшим внутренним 
+// статическим буфером.
 const char *Vector2_arr_tostr(Vector2 *arr, size_t num);

@@ -59,7 +59,7 @@ struct CommonInternal {
 
 bool common_verbose = false;
 static bool verbose_search_files_rec = false;
-static struct Common cmn;
+static struct Common cmn = {};
 const float dscale_value_boost = 10.f;
 
 /*static inline Color DebugColor2Color(cpSpaceDebugColor dc);*/
@@ -124,10 +124,7 @@ void koh_common_init(void) {
 
     cmn.font_chars_cap = 1024;
     cmn.font_chars = calloc(cmn.font_chars_cap, sizeof(cmn.font_chars[0]));
-    if (!cmn.font_chars) {
-        printf("koh_common_init: could not alloc memory for cmn.font_chars\n");
-        exit(EXIT_FAILURE);
-    }
+    assert(cmn.font_chars);
 
     const int ascii_last = 256, ascii_first = 32;
     // Константы из таблиц Юникода
@@ -146,10 +143,7 @@ void koh_common_init(void) {
 }
 
 void koh_common_shutdown(void) {
-    /*if (cmn.cam) {*/
-        /*free(cmn.cam);*/
-    /*}*/
-    if (cmn.font_chars)
+    if (cmn.font_chars) 
         free(cmn.font_chars);
 
     memset(&cmn, 0, sizeof(cmn));
@@ -185,187 +179,23 @@ static void add_chars_range(int first, int last) {
 }
 
 Font load_font_unicode(const char *fname, int size) {
+    assert(fname);
+    assert(size > 0);
+    assert(cmn.font_chars);
+    assert(cmn.font_chars_num > 0);
     return LoadFontEx(fname, size, cmn.font_chars, cmn.font_chars_num);
 }
-
-/*
-void space_debug_draw_circle(
-        cpVect pos, 
-        cpFloat angle, 
-        cpFloat radius, 
-        cpSpaceDebugColor outlineColor, 
-        cpSpaceDebugColor fillColor, 
-        cpDataPointer data
-) {
-    DrawCircleLines(pos.x, pos.y, radius, DebugColor2Color(outlineColor));
-    //DrawCircle(pos.x, pos.y, radius, *((Color*)data));
-    DrawCircle(pos.x, pos.y, radius, DebugColor2Color(fillColor));
-}
-*/
-
-/*
-void space_debug_draw_segment(
-        cpVect a, 
-        cpVect b, 
-        cpSpaceDebugColor color, 
-        cpDataPointer data
-) {
-    //DrawLine(a.x, a.y, b.x, b.y, *((Color*)data));
-    //DrawLine(a.x, a.y, b.x, b.y, DebugColor2Color(color));
-    float thick = 3.;
-    DrawLineEx(from_Vect(a), from_Vect(b), thick, DebugColor2Color(color));
-}
-*/
-
-/*
-void space_debug_draw_fatsegment(
-        cpVect a, 
-        cpVect b, 
-        cpFloat radius, 
-        cpSpaceDebugColor outlineColor, 
-        cpSpaceDebugColor fillColor, 
-        cpDataPointer data
-) {
-    DrawLine(a.x, a.y, b.x, b.y, DebugColor2Color(outlineColor));
-
-//    DrawLineEx(
-//            (Vector2){ a.x, a.y}, 
-//            (Vector2){ b.x, b.y}, 
-//            radius,
-//            *((Color*)data));
-
-}
-*/
-
-/*
-void space_debug_draw_polygon(
-        int count, 
-        const cpVect *verts, 
-        cpFloat radius,
-        cpSpaceDebugColor outlineColor,
-        cpSpaceDebugColor fillColor,
-        cpDataPointer data
-) {
-    const int points_num = count + 2;
-    Vector2 points[points_num];
-    memset(points, 0, points_num * sizeof(points[0]));
-
-    for(int i = 0; i < count; ++i) {
-        points[i].x = verts[i].x;
-        points[i].y = verts[i].y;
-    }
-    points[count].x  = points[count - 1].x;
-    points[count].y  = points[count - 1].y;
-    points[count + 1].x  = points[0].x;
-    points[count + 1].y  = points[0].y;
-
-    //DrawLineStrip(points, count + 2, DebugColor2Color(outlineColor));
-    float thick = 3;
-    for (int i = 0; i < count + 1; i++) {
-        DrawLineEx(
-            points[i],
-            points[i + 1],
-            thick,
-            DebugColor2Color(outlineColor)
-        );
-    }
-    DrawLineEx(
-        points[count + 1],
-        points[0],
-        thick,
-        DebugColor2Color(outlineColor)
-    );
-}
-*/
-
-/*
-void space_debug_draw_dot(
-        cpFloat size,
-        cpVect pos, 
-        cpSpaceDebugColor color,
-        cpDataPointer data
-) {
-    //DrawCircle(pos.x, pos.y, size, *((Color*)data));
-    DrawCircle(pos.x, pos.y, size, DebugColor2Color(color));
-}
-*/
-
-/*
-cpSpaceDebugColor space_debug_draw_color_for_shape(
-        cpShape *shape, 
-        cpDataPointer data
-) {
-    cpSpaceDebugColor def = {255., 0., 100., 255.};
-
-    if (shape->sensor) {
-        def = (cpSpaceDebugColor) { 55, 155, 0, 255 };
-    }
-
-    if (shape->klass->type == CP_POLY_SHAPE) {
-        def.r = 0;
-    }
-
-    return def;
-}
-*/
-
-/*
-cpSpaceDebugColor from_Color(Color c) {
-    return (cpSpaceDebugColor) { 
-        .r = c.r,
-        .g = c.g,
-        .b = c.b,
-        .a = c.a,
-    };
-}
-*/
-
-/*
-void space_debug_draw(cpSpace *space, Color color) {
-    cpSpaceDebugDrawOptions options = {
-        .drawCircle = space_debug_draw_circle,
-        .drawSegment = space_debug_draw_segment,
-        .drawFatSegment = space_debug_draw_fatsegment,
-        .drawPolygon = space_debug_draw_polygon,
-        .drawDot = space_debug_draw_dot,
-        .flags = CP_SPACE_DEBUG_DRAW_SHAPES | 
-            CP_SPACE_DEBUG_DRAW_CONSTRAINTS |
-            CP_SPACE_DEBUG_DRAW_COLLISION_POINTS,
-        .shapeOutlineColor = from_Color(color),
-        .colorForShape = space_debug_draw_color_for_shape,
-        //.colorForShape = {255., 0., 0., 255.},
-        .constraintColor = {0., 255., 0., 255.},
-        .collisionPointColor = {0., 0., 255., 255.},
-        //.data = &color,
-        .data = NULL,
-    };
-    cpSpaceDebugDraw(space, &options);
-}
-*/
-
-/*
-void draw_paragraph(
-        Font fnt, 
-        char **paragraph, 
-        int num, 
-        Vector2 pos,
-        Color color
-) {
-    Vector2 coord = pos;
-    for(int i = 0; i < num; ++i) {
-        DrawTextEx(fnt, paragraph[i], coord, fnt.baseSize, 0, color);
-        coord.y += fnt.baseSize;
-    }
-}
-*/
 
 float axis2zerorange(float value) {
     return (1. + value) / 2.;
 }
 
 const char *to_bitstr_uint64_t(uint64_t value) {
-    //char *buf = calloc(1, sizeof(uint64_t) * 8 + 1);
-    static char buf[sizeof(uint64_t) * 8 + 1] = {0};
+    static char slots[5][sizeof(uint64_t) * 8 + 1] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+
+    char *buf = slots[index];
     char *last = buf;
 
     union {
@@ -400,8 +230,11 @@ const char *to_bitstr_uint64_t(uint64_t value) {
 }
 
 const char *to_bitstr_uint32_t(uint32_t value) {
-    //char *buf = calloc(1, sizeof(uint64_t) * 8 + 1);
-    static char buf[sizeof(uint32_t) * 8 + 1] = {0};
+    static char slots[5][sizeof(uint32_t) * 8 + 1] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+
+    char *buf = slots[index];
     char *last = buf;
 
     union {
@@ -436,7 +269,11 @@ const char *to_bitstr_uint32_t(uint32_t value) {
 }
 
 const char *to_bitstr_uint8_t(uint8_t value) {
-    static char buf[sizeof(char) * 8 + 1] = {0};
+    static char slots[5][sizeof(char) * 8 + 1] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+
+    char *buf = slots[index];
     char *last = buf;
 
     union {
@@ -847,10 +684,11 @@ const char *get_basename(const char *path) {
 }
 
 struct QSortCtx {
-    char *arr, *arr_initial;
-    void *udata;
-    size_t nmemb, size;
-    QSortCmpFunc cmp;
+    bool          reverse;
+    char          *arr, *arr_initial;
+    void          *udata;
+    size_t        nmemb, size;
+    QSortCmpFunc  cmp;
     QSortSwapFunc swap;
 };
 
@@ -858,14 +696,18 @@ void _koh_qsort_soa(struct QSortCtx *ctx) {
     if (ctx->nmemb < 2)
         return;
 
-    char *swap_tmp[ctx->size];
+    char swap_tmp[ctx->size];
     char *_arr = ctx->arr;
     char *pivot = _arr + ctx->size * (ctx->nmemb / 2);
     size_t i, j;
     for (i = 0, j = ctx->nmemb - 1; ; i++, j--) {
-        // FIXME: Обратный порядок сортировки
-        while (ctx->cmp(_arr + ctx->size * i, pivot) < 0) i++;
-        while (ctx->cmp(_arr + ctx->size * j, pivot) > 0) j--;
+        if (ctx->reverse) {
+            while (ctx->cmp(_arr + ctx->size * i, pivot) > 0) i++;
+            while (ctx->cmp(_arr + ctx->size * j, pivot) < 0) j--;
+        } else {
+            while (ctx->cmp(_arr + ctx->size * i, pivot) < 0) i++;
+            while (ctx->cmp(_arr + ctx->size * j, pivot) > 0) j--;
+        }
         if (i >= j) break;
 
         char *i_ptr = _arr + i * ctx->size;
@@ -878,32 +720,26 @@ void _koh_qsort_soa(struct QSortCtx *ctx) {
         if (ctx->swap) ctx->swap(abs_i, abs_j, ctx->udata);
     }
 
-    struct QSortCtx ctx1;
-    ctx1.arr = ctx->arr;
-    ctx1.arr_initial = ctx->arr_initial;
-    ctx1.cmp = ctx->cmp;
+    struct QSortCtx ctx1 = *ctx;
     ctx1.nmemb = i;
-    ctx1.size = ctx->size;
-    ctx1.swap = ctx->swap;
-    ctx1.udata = ctx->udata;
     _koh_qsort_soa(&ctx1);
-    struct QSortCtx ctx2;
+
+    struct QSortCtx ctx2 = *ctx;
     ctx2.arr = ctx->arr + ctx->size * i;
-    ctx2.arr_initial = ctx->arr_initial;
-    ctx2.cmp = ctx->cmp;
     ctx2.nmemb = ctx->nmemb - i;
-    ctx2.size = ctx->size;
-    ctx2.swap = ctx->swap;
-    ctx2.udata = ctx->udata;
     _koh_qsort_soa(&ctx2);
 }
 
 void koh_qsort_soa(
     void *arr, size_t nmemb, size_t size, 
     QSortCmpFunc cmp, QSortSwapFunc swap,
-    void *udata
+    void *udata, bool reverse
 ) {
+    assert(arr);
+    assert(cmp);
+    assert(swap);
     struct QSortCtx ctx = {
+        .reverse = reverse,
         .nmemb = nmemb,
         .arr = arr,
         .arr_initial = arr,
@@ -1138,7 +974,7 @@ void koh_term_color_reset() {
     printf("\033[0m");
 }
 
-void parse_bracketed_string(
+void parse_bracketed_string_alloc(
     const char *str, int **first, int **second, int *len
 ) {
     assert(str);
@@ -1258,18 +1094,18 @@ static void search_files_rec(
     assert(fsr->internal);
 
     FilePathList fl = LoadDirectoryFilesEx(path, NULL, true);
-    /*trace("search_files_rec: fl.count %d\n", fl.count);*/
 
     for (int j = 0; j < fl.count; j++) {
         const char *name = fl.paths[j];
-        /*trace("search_files_rec: name '%s'\n", name);*/
 
         if (verbose_search_files_rec)
             trace("search_files_rec: regular %s\n", name);
 
         if (match(fsr, name)) {
-            //char fname[1024] = {};
-            //snprintf(fname, sizeof(fname), "%s/%s", path, name);
+
+            if (fsr->on_search && fsr->on_search(fsr, name) == false) {
+                continue;;
+            }
 
             check_for_realloc(fsr);
 
@@ -1293,6 +1129,7 @@ struct FilesSearchResult koh_search_files(struct FilesSearchSetup *setup) {
 
     fsr.udata = setup->udata;
     fsr.on_search_begin = setup->on_search_begin;
+    fsr.on_search = setup->on_search;
     fsr.on_search_end = setup->on_search_end;
     fsr.on_shutdown = setup->on_shutdown;
 
@@ -2054,7 +1891,7 @@ bool koh_is_fname_image_ext(const char *fname) {
     return false;
 }
 
-char *points2table_allocated(const Vector2 *points, int points_num) {
+char *points2table_alloc(const Vector2 *points, int points_num) {
     char *buf = calloc(points_num * 32, sizeof(buf[0])), *pbuf = buf;
     assert(buf);
     pbuf += sprintf(pbuf, "{ ");
