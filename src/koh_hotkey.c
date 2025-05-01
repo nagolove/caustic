@@ -261,6 +261,7 @@ const char *koh_key2str[] = {
     [KEY_MENU] = "MENU",
     [KEY_VOLUME_UP] = "VOLUME_UP",
     [KEY_VOLUME_DOWN] = "VOLUME_DOWN",
+    // }}}
 };
 
 
