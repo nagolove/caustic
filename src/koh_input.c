@@ -156,7 +156,7 @@ static struct BtnRow btn_rows[] = {
 
 
 typedef struct InputKbMouseDrawer {
-    Resource        reslist;
+    ResList         *reslist;
     RenderTexture2D rt;
     Texture2D       tex_mouse, tex_mouse_lb,
                     tex_mouse_rb, tex_mouse_wheel;
@@ -168,7 +168,8 @@ typedef struct InputKbMouseDrawer {
 
 void input_kb_free(InputKbMouseDrawer *kb) {
     assert(kb);
-    res_unload_all(&kb->reslist, false);
+    reslist_free(kb->reslist);
+    //res_unload_all(&kb->reslist, false);
     free(kb);
 }
 
@@ -270,24 +271,24 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     InputKbMouseDrawer *kbm = calloc(1, sizeof(*kbm));
     assert(kbm);
 
-    Resource *rl = &kbm->reslist;
+    ResList *rl = kbm->reslist = reslist_new();
 
     // TODO: Как и где хранить текстуры если вынести t80_input_kb.c в
     // отдельный проект? Как собирать ресурсы и не делать этого повторно
     // каждый раз при запуске проекта?
 
     SetTraceLogLevel(LOG_ERROR);
-    kbm->tex_mouse = res_tex_load(rl, "assets/gfx/mouse/mouse.png");
-    kbm->tex_mouse_rb = res_tex_load(rl, "assets/gfx/mouse/rb.png");
-    kbm->tex_mouse_lb = res_tex_load(rl, "assets/gfx/mouse/lb.png");
-    kbm->tex_mouse_wheel = res_tex_load(rl, "assets/gfx/mouse/wheel.png");
+    kbm->tex_mouse = reslist_load_tex(rl, "assets/gfx/mouse/mouse.png");
+    kbm->tex_mouse_rb = reslist_load_tex(rl, "assets/gfx/mouse/rb.png");
+    kbm->tex_mouse_lb = reslist_load_tex(rl, "assets/gfx/mouse/lb.png");
+    kbm->tex_mouse_wheel = reslist_load_tex(rl, "assets/gfx/mouse/wheel.png");
 
     kbm->btn_width = setup->btn_width;
     Vector2 size = kb_size(setup->btn_width);
     kbm->kb_size = size;
     size.x += kbm->tex_mouse.width * scale_mouse;
 
-    kbm->rt = res_tex_load_rt(rl, size.x, size.y);
+    kbm->rt = reslist_load_rt(rl, size.x, size.y);
     SetTraceLogLevel(LOG_INFO);
 
     kbm->color_text = BLACK;
@@ -379,7 +380,7 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
 }
 
 struct InputGamepadDrawer {
-    Resource                reslist;
+    ResList                 *reslist;
     Texture2D               tex_xbox;
     RenderTexture2D         rt;    
     int                     active_gp;
@@ -396,12 +397,12 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 
     gp->scale = setup->scale;
 
-    Resource *rl = &gp->reslist;
+    ResList *rl = gp->reslist = reslist_new();
     SetTraceLogLevel(LOG_ERROR);
-    gp->tex_xbox = res_tex_load(rl, "assets/gfx/xbox.png");
-    gp->rt = res_tex_load_rt(
-        rl, gp->tex_xbox.width * gp->scale, gp->tex_xbox.height * gp->scale
-    );
+    gp->tex_xbox = reslist_load_tex(rl, "assets/gfx/xbox.png");
+    float ws = gp->tex_xbox.width * gp->scale,
+          hs = gp->tex_xbox.height * gp->scale;
+    gp->rt = reslist_load_rt(rl, ws, hs);
     SetTraceLogLevel(LOG_INFO);
 
     if (koh_verbose_input) {
@@ -426,7 +427,8 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 
 void input_gp_free(InputGamepadDrawer *gp) {
     assert(gp);
-    res_unload_all(&gp->reslist, false);
+    /*res_unload_all(&gp->reslist, false);*/
+    reslist_free(gp->reslist);
     free(gp);
 }
 
