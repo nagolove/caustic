@@ -2,13 +2,37 @@
 
 #include "raylib.h"
 
-enum ResourceType {
+/*
++ Никаких связных списков
++ Минимальный интерфей
+- Динамическое выделение памяти
+ */
+
+///////////////////////////////////////////////////////////////////
+typedef struct ResList ResList;
+
+ResList *reslist_new();
+void reslist_free(ResList *l);
+
+////////////////////////////////////////////////////////////////////
+// XXX: Кеш не работает.
+Font reslist_load_font_unicode(ResList *l, const char *fname, int size);
+Font reslist_load_font(ResList *l, const char *fname, int size);
+Texture reslist_load_texture(ResList *l, const char *fname);
+Texture reslist_load_tex(ResList *l, const char *fname);
+RenderTexture2D reslist_load_rt(ResList *l, int w, int h);
+////////////////////////////////////////////////////////////////////
+
+//void reslist_reload_all(ResList *l);
+///////////////////////////////////////////////////////////////////
+
+typedef enum ResourceType {
     RT_LIST_ROOT,
     RT_TEXTURE,
     RT_TEXTURE_RT,
     RT_FONT,
     RT_SHADER,
-};
+} ResourceType;
 
 typedef struct Resource {
     struct Resource     *next;
@@ -33,6 +57,7 @@ RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h);
 //void res_shader_load2(Resource *res_list, Shader **dest, const char *vertex_fname);
 
 void res_reload_all(Resource *res_list);
+__attribute__((deprecated))
 void res_unload_all(Resource *res_list, bool no_log);
 
 // Добавить ресурс в список

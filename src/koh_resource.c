@@ -248,3 +248,146 @@ Texture2D res_tex_load_async(
 void res_async_loader_pump(ResAsyncLoader *al, Res *res_list) {
 }
 
+typedef struct R {
+    ResourceType type;
+    char         fname[128];
+    int          rt_w, rt_h, fnt_size;
+    void         *raylib_object;
+} R;
+
+struct ResList {
+    R   *arr;
+    int arr_num, arr_cap;
+};
+
+ResList *reslist_new() {
+    ResList *l = calloc(1, sizeof(*l));
+    l->arr_cap = 16;
+    l->arr = calloc(l->arr_cap, sizeof(l->arr[0]));
+    return l;
+}
+
+void reslist_free(ResList *l) {
+    assert(l);
+    for (int i = 0; i < l->arr_num; i++) {
+        R *r = &l->arr[i];
+        if (!r->raylib_object) {
+            continue;
+        }
+        switch (r->type) {
+            case RT_LIST_ROOT: {
+                koh_term_color_set(KOH_TERM_RED);
+                printf("reslist_free: RT_LIST_ROOT\n");
+                koh_term_color_reset();
+                break;
+            }
+            case RT_TEXTURE: {
+                koh_term_color_set(KOH_TERM_BLUE);
+                printf("reslist_free: unload tex [%s]\n", r->fname);
+                koh_term_color_reset();
+                Texture2D *t = r->raylib_object;
+                UnloadTexture(*t);
+                break;
+            }
+            case RT_TEXTURE_RT: {
+                koh_term_color_set(KOH_TERM_BLUE);
+                printf("reslist_free: unload rt [%dx%d]\n", r->rt_w, r->rt_h);
+                koh_term_color_reset();
+                RenderTexture2D *rt = r->raylib_object;
+                UnloadRenderTexture(*rt);
+                break;
+            }
+            case RT_FONT: {
+                koh_term_color_set(KOH_TERM_YELLOW);
+                printf("reslist_free: unload font [%s]\n", r->fname);
+                koh_term_color_reset();
+                Font *f = r->raylib_object;
+                UnloadFont(*f);
+                break;
+            }
+            case RT_SHADER: {
+                koh_term_color_set(KOH_TERM_RED);
+                printf("reslist_free: unload shader [%s]\n", r->fname);
+                koh_term_color_reset();
+                break;
+            }
+        };
+    }
+    if (l)
+        free(l->arr);
+    free(l);
+}
+
+static R *reslist_add(ResList *l) {
+    if (l->arr_num + 1 >= l->arr_cap) {
+        l->arr_cap *= 1.5;
+        assert(l->arr_cap > 0);
+        size_t sz = sizeof(l->arr[0]) * l->arr_cap;
+        void *ptr = realloc(l->arr, sz);
+        assert(ptr);
+        l->arr = ptr;
+    }
+    return &l->arr[l->arr_num++];
+}
+
+Texture reslist_load_tex(ResList *l, const char *fname) {
+    return reslist_load_texture(l, fname);
+}
+
+static void *copy_alloc(void *ptr, size_t sz) {
+    if (!ptr || sz == 0) return NULL;
+    void *cp = malloc(sz);
+    assert(cp);
+    memmove(cp, ptr, sz);
+    return cp;
+}
+
+Texture reslist_load_texture(ResList *l, const char *fname) {
+    assert(l);
+    assert(fname);
+    Texture t = LoadTexture(fname);
+    R *r = reslist_add(l);
+    r->type = RT_TEXTURE;
+    assert(strlen(fname) < sizeof(r->fname));
+    strncpy(r->fname, fname, sizeof(r->fname));
+    r->raylib_object = copy_alloc(&t, sizeof(t));
+    return t;
+}
+
+RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
+    assert(l);
+    assert(w > 0);
+    assert(h > 0);
+    RenderTexture2D rt = LoadRenderTexture(w, h);
+    R *r = reslist_add(l);
+    r->type = RT_TEXTURE_RT;
+    r->rt_w = w, r->rt_h = h;
+    r->raylib_object = copy_alloc(&rt, sizeof(rt));
+    return rt;
+}
+
+Font reslist_load_font_unicode(ResList *l, const char *fname, int size) {
+    assert(l);
+    assert(fname);
+    assert(size > 0);
+    Font f = load_font_unicode(fname, size);
+    R *r = reslist_add(l);
+    r->type = RT_FONT;
+    r->fnt_size = size;
+    strncpy(r->fname, fname, sizeof(r->fname));
+    r->raylib_object = copy_alloc(&f, sizeof(f));
+    return f;
+}
+
+Font reslist_load_font(ResList *l, const char *fname, int size) {
+    assert(l);
+    assert(fname);
+    assert(size > 0);
+    Font f = LoadFontEx(fname, size, NULL, 0);
+    R *r = reslist_add(l);
+    r->type = RT_FONT;
+    r->fnt_size = size;
+    strncpy(r->fname, fname, sizeof(r->fname));
+    r->raylib_object = copy_alloc(&f, sizeof(f));
+    return f;
+}
