@@ -80,6 +80,7 @@ void fnt_vector_free(FntVector *fv) {
         FT_Done_Face(fv->face);
         fv->face = NULL;
     }
+    free(fv);
 }
 
 FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts) {
