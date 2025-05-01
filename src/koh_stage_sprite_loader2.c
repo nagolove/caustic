@@ -996,7 +996,7 @@ static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
             case MLT_POLYLINE: {
                 struct MetaLoaderPolyline *obj_pl;
                 obj_pl = (struct MetaLoaderPolyline*)objects.objs[j];
-                str_repr = points2table_allocated(obj_pl->points, obj_pl->num);
+                str_repr = points2table_alloc(obj_pl->points, obj_pl->num);
                 str_repr_allocated = true;
                 break;
             }

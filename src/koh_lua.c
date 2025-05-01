@@ -681,7 +681,7 @@ void L_table_push_points_as_arr(lua_State *l, Vector2 *points, int points_num) {
 
     int j = 1;
 
-    char *buf = points2table_allocated(points, points_num);
+    char *buf = points2table_alloc(points, points_num);
     trace("table_push_points_as_arr: %s\n", buf);
     free(buf);
 
