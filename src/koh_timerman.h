@@ -7,6 +7,33 @@
 /*
 Retained mode timer - получается коллбэк и void* userdata
 Immediate mode timer - ???
+
+
+Какова верная логика работы?
+
+до первого вызова
+
+-- первый вызов
+
+-- обновление
+
+-- последний вызов
+
+Пример Immediate режима:
+bool timerman_poll(TimerMan *tm, timer_id_t id);
+
+TimerMan *tm = timerman_new();
+...
+timer_id_t id = timerman_add(tm, (TimerDef) {
+    ...
+});
+
+while (main_loop) {
+    if (timerman_poll(tm, id)) {
+        // действие, работа
+    }
+}
+
  */
 
 #define TMR_NAME_SZ 64
@@ -15,8 +42,8 @@ typedef struct TimerMan TimerMan;
 typedef struct Timer Timer;
 
 typedef enum TimerState {
-    TS_ON_UPDATE,
     TS_ON_START,
+    TS_ON_UPDATE,
     TS_ON_STOP,
 } TimerState;
 
@@ -38,33 +65,27 @@ typedef struct TimerDef {
 // постоянных идентификторов?
 typedef int timer_id_t;
 
-bool timerman_valid(TimerMan *mv, timer_id_t id);
-
 typedef struct Timer {
-    // {{{
-    // Заполняется автоматически при вызове timerman_update()
-    struct TimerMan *tm; 
-    // GetTime() 
-    double          add_time; 
-    // in seconds
-    double          duration;   
-    // 0..1
-    // XXX: amount не достигает 1.
-    double          amount;     
-    double          last_now;
-    //bool            expired;
-    // если == 0, то для data не выделяется память
-    size_t          sz; 
-    // динамически выделяемая память если sz != 0
-    void            *data;  
-    TimerFunc       on_start, on_update, on_stop;
-    char            uniq_name[TMR_NAME_SZ];
-    // Была ли запущена функция on_start
-    bool            started;
-    TimerState      state;
-    // уникальный номер, присваивается автоматически
-    timer_id_t      id;
-    // }}}
+    // Тайминг
+    double add_time;
+    double duration;
+    double amount;
+    double last_now;
+
+    // Указатели / данные
+    void *data;
+    size_t sz;
+
+    // Функциональность
+    TimerFunc on_start, on_update, on_stop;
+    struct TimerMan *tm;
+
+    // Управление
+    TimerState state;
+    timer_id_t id;
+
+    // Идентификация
+    char uniq_name[TMR_NAME_SZ];
 } Timer;
 
 enum TimerManAction {
@@ -79,31 +100,10 @@ extern bool koh_timerman_verbose;
 TimerMan *timerman_new(int cap, const char *name);
 void timerman_free(TimerMan *tm);
 
-// Как создать таймер только если такой таймер еще не создан?
-// Возвращает истину если таймер получилось создать
-
-// Возможность соединения таймеров цепочкой - когда зананчивается один, 
-// то начинается следующий. Данную задачу можно решить в on_stop().
-// Если таймер с таким именем существует, то новый не создается.
-//bool timerman_add(TimerMan *tm, TimerDef td);
+// Если таймер с таким именем существует, то новый не создается. Поэтому важно
+// проверять результат вызова функции добавления.
+__attribute__((warn_unused_result)) 
 timer_id_t timerman_add(TimerMan *tm, TimerDef td);
-
-/*
-bool timerman_poll(TimerMan *tm, timer_id_t id);
-
-TimerMan *tm = timerman_new();
-...
-timer_id_t id = timerman_add(tm, (TimerDef) {
-    ...
-});
-
-while (main_loop) {
-    if (timerman_poll(tm, id)) {
-        // действие, работа
-    }
-}
-
- */
 
 // Принудительно остановить, с вызовом on_stop() и удалить.
 void timerman_stop(TimerMan *tm, timer_id_t id);
@@ -127,6 +127,7 @@ void timerman_each(
     enum TimerManAction (*iter)(Timer *tmr, void*),
     void *udata
 );
+bool timerman_valid(TimerMan *mv, timer_id_t id);
 
 const char *timer2str(TimerDef t);
 TimerDef timer_def(TimerDef td, const char *fmt, ...);

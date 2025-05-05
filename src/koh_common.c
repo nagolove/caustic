@@ -2294,11 +2294,12 @@ void cam_auto_update(CameraAutomat *ca) {
 
         if (timerman_num(ca->tm, NULL) == 0) {
             trace("cam_auto_update: timerman_add\n");
-            timerman_add(ca->tm, (TimerDef) {
+            int err = timerman_add(ca->tm, (TimerDef) {
                 .data = ca,
                 .duration = 0.1,
                 .on_update = tmr_scroll_update,
             });
+            assert(err);
         }
     }
 }

@@ -13,7 +13,7 @@
 bool koh_timerman_verbose = false;
 
 struct TimerMan {
-    timer_id_t             id_last_used;
+    timer_id_t          id_last_used;
     struct Timer        *timers;
     int                 timers_cap, timers_num;
     bool                paused;
@@ -106,7 +106,6 @@ timer_id_t timerman_add(struct TimerMan *tm, struct TimerDef td) {
         return -1;
     }
 
-    // XXX: Если нету on_update, то переводить в режим immediate
     if (!td.on_update)
         trace("timerman_add: timer without on_update callback\n");
 
@@ -126,6 +125,7 @@ timer_id_t timerman_add(struct TimerMan *tm, struct TimerDef td) {
         trace("timerman_add: td = %s \n", timerdef2str(td));
 
     tmr->sz = td.sz;
+    tmr->state = TS_ON_START;
 
     if (0 != td.sz) {
         tmr->data = malloc(td.sz);
@@ -148,32 +148,9 @@ timer_id_t timerman_add(struct TimerMan *tm, struct TimerDef td) {
     return tmr->id;
 }
 
-/*
-int timerman_remove_expired(struct TimerMan *tm) {
-    assert(tm);
-    // Хранилище для неистекщих таймеров
-    struct Timer tmp[tm->timers_cap];
-
-    memset(tmp, 0, sizeof(tmp));
-    int tmp_size = 0;
-    for (int i = 0; i < tm->timers_size; i++) {
-        if (tm->timers[i].expired) {
-            if (tm->timers[i].data) {
-                free(tm->timers[i].data);
-                tm->timers[i].data = NULL;
-            }
-        } else {
-            tmp[tmp_size++] = tm->timers[i];
-        }
-    }
-    memmove(tm->timers, tmp, sizeof(tmp[0]) * tmp_size);
-    tm->timers_size = tmp_size;
-    return tm->timers_size;
-}
-*/
-
 static void timer_shutdown(struct Timer *timer) {
-    timer->state = TS_ON_STOP;
+    assert(timer->state == TS_ON_STOP);
+    timer->amount = 1.;
     if (timer->on_stop) 
         timer->on_stop(timer);
     // Если нужно, то освободить память
@@ -181,7 +158,6 @@ static void timer_shutdown(struct Timer *timer) {
         free(timer->data);
         timer->data = NULL;
     }
-    timer->started = false;
 }
 
 int timerman_update(struct TimerMan *tm) {
@@ -197,49 +173,37 @@ int timerman_update(struct TimerMan *tm) {
         Timer *timer = &tm->timers[i];
         timer->tm = tm;
 
-        // XXX: Почему такой таймер не удаляется?
         // Бесконечный таймер. Но он ни как не обрабатывается, не вызывается.
         if (timer->duration < 0) continue;
 
-        /*
-Какова верная логика работы?
-
-до первого вызова
-
--- первый вызов
-
--- обновление
-
--- последний вызов
-         */
-
-        if (!timer->started && timer->on_start) {
+        if (timer->state == TS_ON_START) {
             timer->last_now = GetTime();
-            timer->state = TS_ON_START;
-            timer->on_start(timer);
-            timer->started = true;
-        } else {
+            timer->amount = 0.f;
+            if (timer->on_start)
+                timer->on_start(timer);
+            timer->state = TS_ON_UPDATE;
+        }
 
+        if (timer->state == TS_ON_UPDATE) {
             double now = GetTime();
-            timer->amount = (now - timer->add_time) / timer->duration;
-            printf("timerman_update: amount %f\n", timer->amount);
-
             if (now - timer->add_time > timer->duration) {
-                //timer->expired = true;
-                timer_shutdown(timer);
+                timer->state = TS_ON_STOP;
             } else {
-
                 if (timer->on_update) {
-                    timer->state = TS_ON_UPDATE;
+                    timer->amount = (now - timer->add_time) / timer->duration;
                     if (timer->on_update(timer)) {
-                        timer_shutdown(timer);
-                    } else {
-                        // оставить таймер в менеджере
-                        tmp[tmp_size++] = tm->timers[i];
+                        timer->state = TS_ON_STOP;
                     }
                     timer->last_now = now;
                 }
             }
+        }
+
+        if (timer->state == TS_ON_STOP) {
+            timer_shutdown(timer);
+        } else {
+            // оставить таймер в менеджере
+            tmp[tmp_size++] = tm->timers[i];
         }
     }
 
@@ -365,26 +329,6 @@ void timerman_clear(struct TimerMan *tm) {
     // XXX: Нужно здесь?
     /*tm->paused = false;*/
 }
-
-/*
-void timerman_clear_infinite(struct TimerMan *tm) {
-    assert(tm);
-
-    struct Timer tmp[tm->timers_cap];
-    memset(tmp, 0, sizeof(tmp));
-    int tmp_num = 0;
-
-    for (int i = 0; i < tm->timers_size; ++i) {
-        if (tm->timers[i].duration >= 0)
-            tmp[tmp_num++] = tm->timers[i];
-    }
-
-    if (tmp_num > 0) {
-        memcpy(tm->timers, tmp, sizeof(struct Timer) * tmp_num);
-    }
-    tm->timers_size = tmp_num;
-}
-*/
 
 int timerman_num(struct TimerMan *tm, int *infinite_num) {
     assert(tm);

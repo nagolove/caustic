@@ -1514,13 +1514,14 @@ void beh_check_under_mouse2(struct CheckUnderMouseOpts2 *opts) {
         .e = e,
     };
 
-    timerman_add(opts->tm, (struct TimerDef) {
+    int err = timerman_add(opts->tm, (struct TimerDef) {
         .duration = opts->duration,
         .on_update = update_shape_under_mouse,
         .on_stop = stop_shape_under_mouse,
         .data = &ctx,
         .sz = sizeof(ctx),
     });
+    assert(err);
 }
 
 void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
@@ -1577,13 +1578,14 @@ void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
         .e = e,
     };
 
-    timerman_add(opts->tm, (struct TimerDef) {
+    int err = timerman_add(opts->tm, (struct TimerDef) {
         .duration = opts->duration,
         .on_update = update_shape_under_mouse,
         .on_stop = stop_shape_under_mouse,
         .data = &ctx,
         .sz = sizeof(ctx),
     });
+    assert(err);
 }
 
 // Удалить тела и сущности которые столкнулись с сенсорами
