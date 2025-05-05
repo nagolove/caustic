@@ -2147,6 +2147,7 @@ local record Actions
     projects_status: function(Args)
     projects_status2: function(Args)
     stage: function(Args)
+    unit: function(Args)
     test: function(Args)
     verbose: function(Args)
     update: function(Args)
@@ -2175,6 +2176,7 @@ local enum ActionsEnum
     "selftest_push"
     "test"
     "verbose"
+    "unit"
     -- }}}
 end
 
@@ -2206,6 +2208,11 @@ local parser_setup: {string:ParserSetup} = {
     stage = {
         options = { "-n --name", },
         summary = [[Create stage in project]]
+    },
+
+    unit = {
+        options = { "-n --name", },
+        summary = [[Create unit test directory in home directory]]
     },
 
     --[[
@@ -2333,6 +2340,128 @@ local record Args
     full: string        -- XXX: Что значит?
     flags: {string}
     -- }}}
+end
+
+-- Создает каталог с тестами. На вход дается имя проекта.
+function actions.unit(_args: Args) 
+    print("actions.unit: _args", inspect(_args));
+
+    --local inp = readline(ansicolors("%{green}enter stage name%{reset}"))
+    chdir(home)
+    if not _args.name then
+        printc("%{red}name is not specified%{reset}")
+        return
+    end
+
+    if lfs.attributes(home .. "/" .. _args.name) then
+        printc("%{red}directory exists%{reset}")
+        return
+    end
+
+    local main_c = 
+    -- {{{
+[[// vim: set colorcolumn=85
+// vim: fdm=marker
+
+// {{{ include
+
+#include "munit.h"
+#include <assert.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+// }}}
+
+static bool verbose = false;
+
+static MunitResult test_1(const MunitParameter params[], void* data) {
+    return MUNIT_OK;
+}
+
+static MunitTest t_suite_common[] = {
+
+    {
+        .name =  "/test_1",
+        .test = test_1,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name =  NULL,
+        .test = NULL,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+};
+
+static const MunitSuite suite_root = {
+    .prefix = "$NAME",
+    .tests =  t_suite_common,
+    .suites = NULL,
+    .iterations = 1,
+    .options = MUNIT_SUITE_OPTION_NONE,
+    .verbose = &verbose,
+};
+
+int main(int argc, char **argv) {
+    return munit_suite_main(&suite_root, (void*) "µnit", argc, argv);
+}
+
+]]
+-- }}}
+
+    local bld_lua = [[
+return {
+    {
+        not_dependencies = {
+            "lfs",
+            "rlwr",
+            "resvg",
+        },
+        artifact = "$NAME",
+        main = "$NAME.c",
+        src = "src",
+    },
+}
+]]
+
+    local short_name = _args.name
+    for i = 1, #short_name do
+        local c = string.sub(short_name, i, i)
+        if (c == '-') then
+            printc("%{red}please do not use dashes in project name%{reset}")
+        end
+    end
+
+    mkdir(_args.name)
+    chdir(_args.name)
+
+    mkdir("src")
+
+    local f = io.open("src/main.c", "w")
+    f:write(gsub(main_c, "$NAME", short_name))
+    f:close()
+
+    f = io.open("bld.lua", "w")
+    f:write(gsub(bld_lua, "$NAME", short_name))
+    f:close()
+
+    --cmd_do("mkdir " .. _args.name)
+    --chdir(_args.name)
+
+    --[[
+    local selftest_fname = path_caustic .. "/selftest.lua"
+    local ok, errmsg: boolean, string = pcall(function()
+        local test_dirs = loadfile(selftest_fname)() as {string}
+    end)
+    --]]
 end
 
 function actions.dist(_args: Args)

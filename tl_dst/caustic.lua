@@ -2185,6 +2185,8 @@ end
 
 
 
+
+
 local parser_setup = {
 
 
@@ -2206,6 +2208,11 @@ local parser_setup = {
    stage = {
       options = { "-n --name" },
       summary = [[Create stage in project]],
+   },
+
+   unit = {
+      options = { "-n --name" },
+      summary = [[Create unit test directory in home directory]],
    },
 
 
@@ -2334,6 +2341,112 @@ local actions = {}
 
 
 
+
+
+function actions.unit(_args)
+   print("actions.unit: _args", inspect(_args));
+
+
+   chdir(home)
+   if not _args.name then
+      printc("%{red}name is not specified%{reset}")
+      return
+   end
+
+   if lfs.attributes(home .. "/" .. _args.name) then
+      printc("%{red}directory exists%{reset}")
+      return
+   end
+
+   local main_c = [[// vim: set colorcolumn=85
+// vim: fdm=marker
+
+// {{{ include
+#include "munit.h"
+#include <stdio.h>
+#include <stdlib.h>
+// }}}
+
+static bool verbose = false;
+
+static MunitResult test_1(const MunitParameter params[], void* data) {
+    return MUNIT_OK;
+}
+
+static MunitTest t_suite_common[] = {
+
+    {
+        .name =  "/test_1",
+        .test = test_1,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name =  NULL,
+        .test = NULL,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+};
+
+static const MunitSuite suite_root = {
+    .prefix = (char*) "b2",
+    .tests =  t_suite_common,
+    .suites = NULL,
+    .iterations = 1,
+    .options = MUNIT_SUITE_OPTION_NONE,
+    .verbose = &verbose,
+};
+
+int main(int argc, char **argv) {
+    return munit_suite_main(&suite_root, (void*) "µnit", argc, argv);
+}
+
+]]
+
+   local bld_lua = [[
+return {
+    {
+        not_dependencies = {
+            "lfs",
+            "rlwr",
+            "resvg",
+        },
+        artifact = "b2_test",
+        main = "b2_test.c",
+        src = "src",
+    },
+}
+]]
+
+   mkdir(_args.name)
+   chdir(_args.name)
+   mkdir("src")
+
+   local f = io.open("src/main.c", "w")
+   f:write(main_c)
+   f:close()
+
+   f = io.open("bld.lua", "w")
+   f:write(bld_lua)
+   f:close()
+
+
+
+
+
+
+
+
+
+
+end
 
 function actions.dist(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
