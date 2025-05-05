@@ -1404,7 +1404,7 @@ struct CheckUnderMouse {
     de_entity e;
 };
 
-void stop_shape_under_mouse(struct Timer *tmr) {
+bool stop_shape_under_mouse(struct Timer *tmr) {
     struct CheckUnderMouse *ctx = tmr->data;
     assert(ctx);
 
@@ -1419,13 +1419,13 @@ void stop_shape_under_mouse(struct Timer *tmr) {
     //de_entity e = (uintptr_t)b2Shape_GetUserData(shape);
 
     if (!de_valid(ctx->r, ctx->e)) 
-        return;
+        return false;
 
     struct ShapeRenderOpts *r_opts = NULL;
     r_opts = de_try_get(ctx->r, ctx->e, cp_type_shape_render_opts);
 
     if (!r_opts)
-        return;
+        return false;
 
     //trace("stop_shape_under_mouse: timer %p, color resetted\n", tmr);
     r_opts->color = WHITE;
@@ -1436,6 +1436,8 @@ void stop_shape_under_mouse(struct Timer *tmr) {
     if (tex)
         r_opts->tex = *tex;
     //trace("stop_shape_under_mouse: timer %p, texture resetted\n", tmr);
+
+    return false;
 }
 
 bool update_shape_under_mouse(struct Timer *tmr) {

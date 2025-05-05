@@ -2,7 +2,7 @@
 #include "koh_paragraph.h"
 
 #include "koh_common.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_logger.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -49,7 +49,7 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     assert(prgh);
     assert(fmt);
 
-    char buf[MAX_LINE];
+    char buf[256];
     //printf("%d", (int)sizeof(buf));
     //memset(buf, 0, sizeof(char) * MAX_LINE);
     memset(buf, 0, sizeof(buf));
@@ -88,7 +88,7 @@ void paragraph_build(Paragraph *prgh, Font fnt) {
     }
 
     //XXX * 2
-    char line[MAX_LINE * 2] = {0};
+    char line[256 * 2] = {0};
     for(int i = 0; i < longest; i++) {
         strcat(line, "─");
     }
@@ -104,7 +104,7 @@ void paragraph_build(Paragraph *prgh, Font fnt) {
     snprintf(prgh->transformed_lines[0], memsize, "┌%s┐", line);
     int j = 1;
     for(int i = 0; i < prgh->linesnum; i++,j++) {
-        char spaces[MAX_LINE * 2] = {0};
+        char spaces[256 * 2] = {0};
         //int spacesnum = longest - strlen(prgh->lines[i]);
         int spacesnum = longest - u8_codeptlen(prgh->lines[i]);
         for(int j = 0; j < spacesnum; j++) {

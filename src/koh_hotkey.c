@@ -4,7 +4,7 @@
 #include "koh_hotkey.h"
 
 #include "koh_common.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_logger.h"
 #include "koh_lua.h"
 #include "lua.h"
@@ -277,7 +277,7 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
         }
     }
 
-    console_buf_write(
+    printf(
             "|modkey+modkey+key|groups bits|name|bool enabled|description|"
     );
 
@@ -303,7 +303,7 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
             "[%%8s+%%8s+%%10s] %%%ds %%20s %%1s - %%s", maxgroupnum
         );
         //console_buf_write("[%8s+%8s+%10s] %8s %20s %1s - %s", 
-        console_buf_write(buf, 
+        printf(buf, 
                 get_key2str(hk->combo.mod),
                 get_key2str(hk->combo.mod2),
                 get_key2str(hk->combo.key),

@@ -10,17 +10,19 @@
 #include <string.h>
 #include "koh_common.h"
 
-bool timerman_verbose = false;
+bool koh_timerman_verbose = false;
 
 struct TimerMan {
+    timer_id_t             id_last_used;
     struct Timer        *timers;
-    int                 timers_cap, timers_size;
+    int                 timers_cap, timers_num;
     bool                paused;
     double              pause_time; // время начала паузы
     char                name[128];
 };
 
 struct TimerMan *timerman_new(int cap, const char *name) {
+    assert(IsWindowReady());
     struct TimerMan *tm = calloc(1, sizeof(*tm));
     assert(tm);
     assert(cap > 0);
@@ -35,17 +37,18 @@ struct TimerMan *timerman_new(int cap, const char *name) {
 
     strncpy(tm->name, name, sizeof(tm->name) - 1);
     tm->name[sizeof(tm->name) - 1] = 0;
+    tm->id_last_used = 0;
     return tm;
 }
 
 void timerman_free(struct TimerMan *tm) {
     assert(tm);
 
-    if (timerman_verbose)
+    if (koh_timerman_verbose)
         trace("timerman_free: '%s'\n", tm->name);
 
-    for (int i = 0; i < tm->timers_size; ++i) {
-        if (tm->timers[i].sz == 0 && tm->timers[i].data) {
+    for (int i = 0; i < tm->timers_num; ++i) {
+        if (tm->timers[i].sz != 0 && tm->timers[i].data) {
             free(tm->timers[i].data);
             tm->timers[i].data = NULL;
         }
@@ -87,7 +90,7 @@ static bool search(TimerMan *tm, const char *name) {
     assert(tm);
     assert(name);
 
-    for (int i = 0; i < tm->timers_size; i++) {
+    for (int i = 0; i < tm->timers_num; i++) {
         const char *cur_name = tm->timers[i].uniq_name;
         if (strlen(cur_name) > 0 && !strcmp(cur_name, name))
             return true;
@@ -96,29 +99,30 @@ static bool search(TimerMan *tm, const char *name) {
     return false;
 }
 
-bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
+timer_id_t timerman_add(struct TimerMan *tm, struct TimerDef td) {
     assert(tm);
-    if (tm->timers_size >= tm->timers_cap) {
+    if (tm->timers_num >= tm->timers_cap) {
         trace("timerman_add: could not create, not enough memory\n");
-        return false;
+        return -1;
     }
 
+    // XXX: Если нету on_update, то переводить в режим immediate
     if (!td.on_update)
         trace("timerman_add: timer without on_update callback\n");
 
     // Если таймер с таким именем существует, то новый не создается
     if (strlen(td.uniq_name) > 0 && search(tm, td.uniq_name)) {
-        return false;
+        return -1;
     }
 
-    struct Timer *tmr = &tm->timers[tm->timers_size++];
+    struct Timer *tmr = &tm->timers[tm->timers_num++];
     static size_t id = 0;
     tmr->id = id++;
     tmr->add_time = tmr->last_now = GetTime();
     assert(td.duration > 0);
     tmr->duration = td.duration;
 
-    if (timerman_verbose)
+    if (koh_timerman_verbose)
         trace("timerman_add: td = %s \n", timerdef2str(td));
 
     tmr->sz = td.sz;
@@ -127,10 +131,10 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
         tmr->data = malloc(td.sz);
         assert(tmr->data);
         memmove(tmr->data, td.data, td.sz);
-        if (timerman_verbose)
+        if (koh_timerman_verbose)
             trace("timerman_add: allocated memory for tmr->data\n");
     } else {
-        if (timerman_verbose)
+        if (koh_timerman_verbose)
             trace("timerman_add: just copy void*\n");
         tmr->data = td.data;
     }
@@ -138,9 +142,10 @@ bool timerman_add(struct TimerMan *tm, struct TimerDef td) {
     tmr->on_update = td.on_update;
     tmr->on_stop = td.on_stop;
     tmr->on_start = td.on_start;
+    tmr->id = tm->id_last_used++;
     strncpy(tmr->uniq_name, td.uniq_name, sizeof(td.uniq_name));
 
-    return true;
+    return tmr->id;
 }
 
 /*
@@ -168,6 +173,7 @@ int timerman_remove_expired(struct TimerMan *tm) {
 */
 
 static void timer_shutdown(struct Timer *timer) {
+    timer->state = TS_ON_STOP;
     if (timer->on_stop) 
         timer->on_stop(timer);
     // Если нужно, то освободить память
@@ -185,9 +191,9 @@ int timerman_update(struct TimerMan *tm) {
     int tmp_size = 0;
 
     if (tm->paused)
-        return tm->timers_size;
+        return tm->timers_num;
 
-    for (int i = 0; i < tm->timers_size; i++) {
+    for (int i = 0; i < tm->timers_num; i++) {
         Timer *timer = &tm->timers[i];
         timer->tm = tm;
 
@@ -195,36 +201,52 @@ int timerman_update(struct TimerMan *tm) {
         // Бесконечный таймер. Но он ни как не обрабатывается, не вызывается.
         if (timer->duration < 0) continue;
 
-        double now = GetTime();
-        timer->amount = (now - timer->add_time) / timer->duration;
+        /*
+Какова верная логика работы?
 
-        if (now - timer->add_time > timer->duration) {
-            //timer->expired = true;
-            timer_shutdown(timer);
+до первого вызова
+
+-- первый вызов
+
+-- обновление
+
+-- последний вызов
+         */
+
+        if (!timer->started && timer->on_start) {
+            timer->last_now = GetTime();
+            timer->state = TS_ON_START;
+            timer->on_start(timer);
+            timer->started = true;
         } else {
 
-            if (!timer->started && timer->on_start) {
-                timer->on_start(timer);
-                timer->started = true;
-            }
+            double now = GetTime();
+            timer->amount = (now - timer->add_time) / timer->duration;
+            printf("timerman_update: amount %f\n", timer->amount);
 
-            if (timer->on_update) {
-                if (timer->on_update(timer)) {
-                    timer_shutdown(timer);
-                } else
-                    // оставить таймер в менеджере
-                    // XXX: Как перезапустить таймер 
-                    // после достижения его длительности?
-                    tmp[tmp_size++] = tm->timers[i];
-                timer->last_now = now;
+            if (now - timer->add_time > timer->duration) {
+                //timer->expired = true;
+                timer_shutdown(timer);
+            } else {
+
+                if (timer->on_update) {
+                    timer->state = TS_ON_UPDATE;
+                    if (timer->on_update(timer)) {
+                        timer_shutdown(timer);
+                    } else {
+                        // оставить таймер в менеджере
+                        tmp[tmp_size++] = tm->timers[i];
+                    }
+                    timer->last_now = now;
+                }
             }
-        };
+        }
     }
 
     memmove(tm->timers, tmp, sizeof(tmp[0]) * tmp_size);
-    tm->timers_size = tmp_size;
+    tm->timers_num = tmp_size;
 
-    return tm->timers_size;
+    return tm->timers_num;
 }
 
 void timerman_pause(struct TimerMan *tm, bool is_paused) {
@@ -234,7 +256,7 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
             // enable -> disable
             trace("timerman_pause: enable -> disable\n");
             tm->pause_time = GetTime();
-            for (int i = 0; i < tm->timers_size; ++i) {
+            for (int i = 0; i < tm->timers_num; ++i) {
                 tm->timers[i].last_now = tm->pause_time;
             }
             tm->paused = is_paused;
@@ -244,7 +266,7 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
             // disable -> enable
             double shift = GetTime() - tm->pause_time;
             trace("timerman_pause: disable -> enable, shift %f\n", shift);
-            for (int i = 0; i < tm->timers_size; ++i) {
+            for (int i = 0; i < tm->timers_num; ++i) {
                 tm->timers[i].add_time += shift;
             }
             tm->paused = is_paused;
@@ -281,7 +303,7 @@ void timerman_window_gui(struct TimerMan *tm) {
         igTableSetupColumn("uniq_name", column_flags, 0., 8);
         igTableHeadersRow();
 
-        for (int row = 0; row < tm->timers_size; ++row) {
+        for (int row = 0; row < tm->timers_num; ++row) {
             char line[64] = {0};
             struct Timer * tmr = &tm->timers[row];
 
@@ -292,7 +314,7 @@ void timerman_window_gui(struct TimerMan *tm) {
             igText(line);
 
             igTableSetColumnIndex(1);
-            sprintf(line, "%ld", tmr->id);
+            sprintf(line, "%d", tmr->id);
             igText(line);
 
             igTableSetColumnIndex(2);
@@ -339,7 +361,7 @@ void timerman_window_gui(struct TimerMan *tm) {
 
 void timerman_clear(struct TimerMan *tm) {
     assert(tm);
-    tm->timers_size = 0;
+    tm->timers_num = 0;
     // XXX: Нужно здесь?
     /*tm->paused = false;*/
 }
@@ -368,10 +390,10 @@ int timerman_num(struct TimerMan *tm, int *infinite_num) {
     assert(tm);
     if (infinite_num) {
         *infinite_num = 0;
-        for (int i = 0; i < tm->timers_size; ++i)
+        for (int i = 0; i < tm->timers_num; ++i)
             *infinite_num += tm->timers[i].duration < 0;
     }
-    return tm->timers_size;
+    return tm->timers_num;
 }
 
 void timerman_each(
@@ -387,7 +409,7 @@ void timerman_each(
     memset(tmp, 0, sizeof(tmp));
     int tmp_num = 0;
 
-    for (int i = 0; i < tm->timers_size; ++i) {
+    for (int i = 0; i < tm->timers_num; ++i) {
         switch (iter(&tm->timers[i], udata)) {
             case TMA_NEXT: 
                 tmp[tmp_num++] = tm->timers[i];
@@ -409,7 +431,7 @@ copy:
     if (tmp_num > 0) {
         memcpy(tm->timers, tmp, sizeof(struct Timer) * tmp_num);
     }
-    tm->timers_size = tmp_num;
+    tm->timers_num = tmp_num;
 }
 
 struct TimerMan *timerman_clone(struct TimerMan *tm) {
@@ -419,7 +441,7 @@ struct TimerMan *timerman_clone(struct TimerMan *tm) {
     *ret = *tm;
     ret->timers = calloc(ret->timers_cap, sizeof(ret->timers[0]));
     assert(ret->timers);
-    size_t sz = sizeof(tm->timers[0]) * tm->timers_size;
+    size_t sz = sizeof(tm->timers[0]) * tm->timers_num;
     memcpy(ret->timers, tm->timers, sz);
     return ret;
 }
@@ -459,4 +481,27 @@ TimerDef timer_def(TimerDef td, const char *fmt, ...) {
     TimerDef tmp = td;
     strncpy(tmp.uniq_name, buf, TMR_NAME_SZ);
     return tmp;
+}
+
+bool timerman_valid(TimerMan *mv, timer_id_t id) {
+    return false;
+}
+
+void timerman_stop(TimerMan *tm, timer_id_t id) {
+    assert(tm);
+
+    if (id == -1)
+        return;
+
+    for (int i = 0; i < tm->timers_num; i++) {
+        Timer *t = &tm->timers[i];
+        t->tm = tm;
+        if (t->id == id) {
+            if (t->on_stop) timer_shutdown(t);
+            // XXX: Не будет чего с неопределенными полями структуры?
+            tm->timers[i] = tm->timers[tm->timers_num - 1];
+            tm->timers_num--;
+            return;
+        }
+    }
 }

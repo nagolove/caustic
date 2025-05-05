@@ -1,7 +1,7 @@
 #pragma once
 
 #include "koh_stages.h"
-#include "koh_timer.h"
+//#include "koh_timer.h"
 #include "raylib.h"
 
 #define MAX_MENU_ITEMS  20

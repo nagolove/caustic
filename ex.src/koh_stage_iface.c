@@ -4,7 +4,7 @@
 #include "koh_stage_iface.h"
 
 #include "koh_common.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_iface.h"
 #include "koh_stages.h"
 #include "raylib.h"

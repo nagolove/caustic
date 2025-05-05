@@ -1,6 +1,6 @@
 #include "koh_tabe.h"
 
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_logger.h"
 #include "koh_lua.h"
 #include "lua.h"

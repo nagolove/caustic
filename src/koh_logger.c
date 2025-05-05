@@ -4,7 +4,7 @@
 #define PCRE2_CODE_UNIT_WIDTH   8
 
 #include "koh_common.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_lua.h"
 #include "lauxlib.h"
 #include "lua.h"
@@ -294,13 +294,13 @@ int l_filter(lua_State *lua) {
 
 int l_filters(lua_State *lua) {
     lua_createtable(lua, filters_num, 0);
-    console_buf_write_c(BLUE, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    printf( "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     for (int k = 0; k < filters_num; ++k) {
         lua_pushstring(lua, filters[k].pattern);
         lua_rawseti(lua, -2, k + 1);
-        console_buf_write("[%.3d] '%s'", k + 1, filters[k].pattern);
+        printf("[%.3d] '%s'", k + 1, filters[k].pattern);
     }
-    console_buf_write_c(BLUE, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     return 1;
 }
 

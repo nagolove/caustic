@@ -168,7 +168,7 @@ Vector2 read_pos(lua_State *lua, bool *notfound);
 bool read_fullud(lua_State *lua);
 float read_angle(lua_State *lua, float def_value);
 double *read_number_table(lua_State *lua, int index, int *len);
-void sc_dostring(const char *str);
+//void sc_dostring(const char *str);
 double *read_number_table(lua_State *lua, int index, int *len);
 Rectangle read_rect(lua_State *lua, int index, bool *err);
 int make_ret_table(int num, void**arr, size_t offset);

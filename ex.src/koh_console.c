@@ -20,7 +20,7 @@
 #include "koh_logger.h"
 #include "koh_lua.h"
 #include "koh_tabe.h"
-#include "koh_timer.h"
+//#include "koh_timer.h"
 
 // {{{ Declarations
 // TODO: Поиск по текстовому выводу консоли(как в vim)

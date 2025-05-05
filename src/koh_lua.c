@@ -20,7 +20,7 @@
 #include <string.h>
 #include "lauxlib.h"
 #include "lua.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_inotifier.h"
 #include "koh_logger.h"
 #include "koh_lua.h"
@@ -945,7 +945,7 @@ void print_avaible_functions(lua_State *lua) {
     int cap = 30, len = 0;
     struct Pair *pairs = calloc(cap, sizeof(pairs[0]));
 
-    console_buf_write_c(BLUE, "Следущие функции доступны из консоли:\n");
+    printf("print_avaible_functions: Следущие функции доступны из консоли:\n");
 
     lua_rawgeti(lua, LUA_REGISTRYINDEX, ref_functions_desc);
     int table_index = lua_gettop(lua);
@@ -978,7 +978,7 @@ void print_avaible_functions(lua_State *lua) {
     qsort(pairs, len, sizeof(struct Pair), cmp);
     for (int i = 0; i < len; ++i) {
         struct Pair *p = &pairs[i];
-        console_buf_write_c(BLACK, "%s = %s", p->name, p->desc);
+        printf("%s = %s", p->name, p->desc);
     }
 
     free(pairs);
@@ -1613,6 +1613,7 @@ float read_angle(lua_State *lua, float def_value) {
     return angle;
 }
 
+/*
 void sc_dostring(const char *str) {
     lua_State *lua = sc_get_state();
 
@@ -1646,11 +1647,13 @@ void sc_dostring(const char *str) {
         console_do_strange();
     }
 }
+*/
 
+/*
 int l_con_print(lua_State *s) {
     int argsnum = lua_gettop(s);
     const Color color = DARKPURPLE;
-    /*printf("l_con_print [%s]\n", stack_dump(s));*/
+    //printf("l_con_print [%s]\n", stack_dump(s));
     for(int i = 1; i <= argsnum; ++i) {
         if (lua_isstring(s, i)) {
             const char *str = lua_tostring(s, i);
@@ -1666,6 +1669,7 @@ int l_con_print(lua_State *s) {
     //console_buf_write2(color, format, 
     return 0;
 }
+*/
 
 static void hook(lua_State *lua, lua_Debug *ar) {
     assert(lua);
@@ -1706,6 +1710,7 @@ int make_ret_table(int num, void**arr, size_t offset) {
     return 1;
 }
 
+/*
 void koh_sc_from_args(int argc, char **argv) {
     char joined_args[512] = {0};
     for(int i = 0; i < argc; ++i) {
@@ -1722,6 +1727,7 @@ void koh_sc_from_args(int argc, char **argv) {
         sc_dostring(joined_args);
     }
 }
+*/
 
 lua_State *sc_state_new(bool openlibs) {
     lua = luaL_newstate();

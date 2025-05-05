@@ -1,6 +1,6 @@
 // vim: fdm=marker
 #include "koh_inotifier.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_hashers.h"
 #include "koh_lua.h"
 

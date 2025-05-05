@@ -10,7 +10,7 @@
 #include "raylib.h"
 
 #include "koh_common.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_logger.h"
 #include "koh_lua.h"
 #include "koh_table.h"
@@ -30,7 +30,8 @@ static HTableAction iter_print_sound(
     const void *key, int key_len, void *value, int value_len, void *data
 ) {
     struct SoundArray *sound_arr = value;
-    console_buf_write("[%s] - %d variations\n", (char*)key, sound_arr->num);
+    //console_buf_write("[%s] - %d variations\n", (char*)key, sound_arr->num);
+    printf("iter_print_sound: [%s] - %d variations\n", (char*)key, sound_arr->num);
     return HTABLE_ACTION_NEXT;
 }
 

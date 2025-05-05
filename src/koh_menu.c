@@ -4,7 +4,7 @@
 #include "koh_menu.h"
 
 #include "koh_common.h"
-#include "koh_console.h"
+//#include "koh_console.h"
 #include "koh_logger.h"
 #include "koh_routine.h"
 #include "koh_routine.h"
@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "koh_timerman.h"
 
 #define MENU_MAX_NAME   48
 
@@ -26,8 +27,8 @@ struct Menu {
     MenuAction  render_before;
     MenuItem    *items;
     Rectangle   scroll_rect;
-    koh_Timer   *tmr_arrow_blink;
-    koh_TimerStore  timers;
+    //koh_Timer   *tmr_arrow_blink;
+    TimerMan    *timers;
     Vector2     pos;
     bool        font_owned, input_active, is_builded;
     const char  *left_bracket, *right_bracket;
@@ -40,7 +41,7 @@ struct Menu {
 
 static const char *left_bracket = "[[", *right_bracket = "]]";
 
-bool tmr_timer_blink(koh_Timer *t) {
+bool tmr_timer_blink(Timer *t) {
     //trace("timer_blink\n");
     Menu *mnu = t->data;
 
@@ -53,7 +54,8 @@ bool tmr_timer_blink(koh_Timer *t) {
     mnu->arrow_down_color.a = floor((1. + sin(GetTime())) / 2. * 255.);
     mnu->arrow_up_color.a = floor((1. + sin(GetTime())) / 2. * 255.);
 
-    return true;
+    // XXX: или возвращать истину?
+    return false;
 }
 
 void menu_dump(Menu *mnu) {
@@ -65,8 +67,8 @@ void menu_dump(Menu *mnu) {
     trace("menu_dump: render_before %p\n", mnu->render_before);
     trace("menu_dump: items %p\n", mnu->items);
     trace("menu_dump: scroll_rect %s\n", rect2str(mnu->scroll_rect));
-    trace("menu_dump: tmr_arrow_blink %s\n", koh_timer2str(mnu->tmr_arrow_blink));
-    trace("menu_dump: timers num %d\n", mnu->timers.timersnum);
+    //trace("menu_dump: tmr_arrow_blink %s\n", koh_timer2str(mnu->tmr_arrow_blink));
+    //trace("menu_dump: timers num %d\n", mnu->timers.timersnum);
     trace("menu_dump: pos %s\n", Vector2_tostr(mnu->pos));
     trace("menu_dump: font_owned %s\n", mnu->font_owned ? "true" : "false");
     trace("menu_dump: input_active %s\n", mnu->input_active ? "true" : "false");
@@ -108,7 +110,11 @@ Menu *menu_new(MenuSetup setup) {
     mnu->arrow_up_color = setup.arrow_up_color;
     mnu->arrow_down_color = setup.arrow_down_color;
     /*mnu->arrows_color = YELLOW;*/
-    koh_timerstore_init(&mnu->timers, 1);
+
+    //koh_timerstore_init(&mnu->timers, 1);
+    mnu->timers = timerman_new(10, "mnu");
+
+    /*
     mnu->tmr_arrow_blink = koh_timerstore_new(&mnu->timers, &(Timer_Def) {
         .waitfor  = 0,
         .every    = 0.05,
@@ -116,6 +122,18 @@ Menu *menu_new(MenuSetup setup) {
         .data     = mnu,
         .func     = tmr_timer_blink,
     });
+    */
+
+    /*
+    timerman_add(&mnu->timers, &(TimerDef) {
+        .waitfor  = 0,
+        .every    = 0.05,
+        .duration = -1,
+        .data     = mnu,
+        .func     = tmr_timer_blink,
+    });
+*/
+
     mnu->items_cap = 10;
     mnu->items = calloc(mnu->items_cap, sizeof(mnu->items[0]));
     mnu->left_bracket = left_bracket;
@@ -129,7 +147,10 @@ void menu_free(Menu *mnu) {
     if (mnu->font_owned) {
         UnloadFont(mnu->fnt);
     }
-    koh_timerstore_shutdown(&mnu->timers);
+
+    //koh_timerstore_shutdown(&mnu->timers);
+    timerman_free(mnu->timers);
+
     memset(mnu, 0, sizeof(*mnu));
     free(mnu);
 }
@@ -264,13 +285,15 @@ void menu_update(Menu *mnu, MenuUpdateHandler func, void *udata) {
         abort();
     }
 
-    koh_timerstore_update(&mnu->timers);
+    //koh_timerstore_update(&mnu->timers);
     menu_render(mnu);
 
+    /*
     if (mnu->input_active && !console_is_editor_mode()) {
         if (func)
             func(mnu, udata);
     }
+    */
 
 }
 
