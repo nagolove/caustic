@@ -387,6 +387,7 @@ void set_uv_from_rect(Rectangle rect, Vector2 uv[4]);
 
 // Установить текстурные координаты для вырезания прямоугольника
 void set_uv1(Vector2 uv[4]);
+void set_uv1_inv_y(Vector2 uv[4]);
 
 // TODO: Сделать сохранение в файл, что-бы работало не только в WASM
 const char *local_storage_load(const char *key);

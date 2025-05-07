@@ -2201,6 +2201,17 @@ void set_uv_from_rect(Rectangle rect, Vector2 uv[4]) {
     uv[3].y = rect.y + rect.height;
 }
 
+void set_uv1_inv_y(Vector2 uv[4]) {
+    uv[0].x = 0.;
+    uv[0].y = 1.;
+    uv[1].x = 1.f;
+    uv[1].y = 1.;
+    uv[2].x = 1.f;
+    uv[2].y = 0.f;
+    uv[3].x = 0.;
+    uv[3].y = 0.f;
+}
+
 void set_uv1(Vector2 uv[4]) {
     uv[0].x = 0.;
     uv[0].y = 0.;
