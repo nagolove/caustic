@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/*
+/* {{{
 Retained mode timer - получается коллбэк и void* userdata
 Immediate mode timer - ???
 
@@ -34,7 +34,8 @@ while (main_loop) {
     }
 }
 
- */
+}}}
+*/
 
 #define TMR_NAME_SZ 64
 
@@ -67,10 +68,10 @@ typedef int timer_id_t;
 
 typedef struct Timer {
     // Тайминг
-    double add_time;
-    double duration;
-    double amount;
-    double last_now;
+    double add_time, 
+           duration, 
+           amount, 
+           last_now;
 
     // Указатели / данные
     void *data;

@@ -110,7 +110,11 @@ timer_id_t timerman_add(struct TimerMan *tm, struct TimerDef td) {
         trace("timerman_add: timer without on_update callback\n");
 
     // Если таймер с таким именем существует, то новый не создается
-    if (strlen(td.uniq_name) > 0 && search(tm, td.uniq_name)) {
+    if (search(tm, td.uniq_name)) {
+        printf(
+            "timerman_add: found timer with the same name '%s'\n",
+            td.uniq_name
+        );
         return -1;
     }
 
@@ -170,37 +174,39 @@ int timerman_update(struct TimerMan *tm) {
         return tm->timers_num;
 
     for (int i = 0; i < tm->timers_num; i++) {
-        Timer *timer = &tm->timers[i];
-        timer->tm = tm;
+        Timer *t = &tm->timers[i];
+        t->tm = tm;
 
         // Бесконечный таймер. Но он ни как не обрабатывается, не вызывается.
-        if (timer->duration < 0) continue;
+        if (t->duration < 0) continue;
 
-        if (timer->state == TS_ON_START) {
-            timer->last_now = GetTime();
-            timer->amount = 0.f;
-            if (timer->on_start)
-                timer->on_start(timer);
-            timer->state = TS_ON_UPDATE;
+        if (t->state == TS_ON_START) {
+            t->last_now = GetTime();
+            t->amount = 0.f;
+            if (t->on_start) {
+                if (t->on_start(t))
+                    t->state = TS_ON_STOP;
+            } else
+                t->state = TS_ON_UPDATE;
         }
 
-        if (timer->state == TS_ON_UPDATE) {
+        if (t->state == TS_ON_UPDATE) {
             double now = GetTime();
-            if (now - timer->add_time > timer->duration) {
-                timer->state = TS_ON_STOP;
+            if (now - t->add_time > t->duration) {
+                t->state = TS_ON_STOP;
             } else {
-                if (timer->on_update) {
-                    timer->amount = (now - timer->add_time) / timer->duration;
-                    if (timer->on_update(timer)) {
-                        timer->state = TS_ON_STOP;
+                if (t->on_update) {
+                    t->amount = (now - t->add_time) / t->duration;
+                    if (t->on_update(t)) {
+                        t->state = TS_ON_STOP;
                     }
-                    timer->last_now = now;
+                    t->last_now = now;
                 }
             }
         }
 
-        if (timer->state == TS_ON_STOP) {
-            timer_shutdown(timer);
+        if (t->state == TS_ON_STOP) {
+            timer_shutdown(t);
         } else {
             // оставить таймер в менеджере
             tmp[tmp_size++] = tm->timers[i];
