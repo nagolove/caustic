@@ -2129,6 +2129,7 @@ end
 local record Actions
     -- {{{
     --anim_convert: function(Args)
+    run: function(Args)
     dist: function(Args)
     build: function(Args)
     compile_flags: function(Args)
@@ -2157,6 +2158,7 @@ end
 
 local enum ActionsEnum
     -- {{{
+    "run"
     "make_projects"
     "dist"
     "project"
@@ -2259,6 +2261,11 @@ local parser_setup: {string:ParserSetup} = {
         summary = "download modules from network",
         options = { "-n --name", "-t --target" }
     },
+
+    run = {
+        summary = "make and run current project",
+    },
+
     make = {
         summary = "build libcaustic or current project",
         --[[
@@ -2277,6 +2284,7 @@ local parser_setup: {string:ParserSetup} = {
         },
         --]]
     },
+
     publish = {
         summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
     },
@@ -5058,6 +5066,17 @@ local function sub_make(
     end
 
     ut.pop_dir(push_num)
+end
+
+function actions.run(_args: Args)
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    cmd_do("reset")
+    actions.make(_args)
+    assert(cfgs[1])
+    assert(cfgs[1].artifact)
+    local cmd = "./" .. cfgs[1].artifact
+    print('cmd', cmd)
+    cmd_do(cmd)
 end
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 

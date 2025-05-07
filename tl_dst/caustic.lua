@@ -2187,6 +2187,8 @@ end
 
 
 
+
+
 local parser_setup = {
 
 
@@ -2259,6 +2261,11 @@ local parser_setup = {
       summary = "download modules from network",
       options = { "-n --name", "-t --target" },
    },
+
+   run = {
+      summary = "make and run current project",
+   },
+
    make = {
       summary = "build libcaustic or current project",
 
@@ -2277,6 +2284,7 @@ local parser_setup = {
       },
 
    },
+
    publish = {
       summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
    },
@@ -2358,13 +2366,19 @@ function actions.unit(_args)
       return
    end
 
-   local main_c = [[// vim: set colorcolumn=85
+   local main_c =
+
+   [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
 // {{{ include
+
 #include "munit.h"
+#include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 // }}}
 
 static bool verbose = false;
@@ -2396,7 +2410,7 @@ static MunitTest t_suite_common[] = {
 };
 
 static const MunitSuite suite_root = {
-    .prefix = (char*) "b2",
+    .prefix = "$NAME",
     .tests =  t_suite_common,
     .suites = NULL,
     .iterations = 1,
@@ -2410,6 +2424,7 @@ int main(int argc, char **argv) {
 
 ]]
 
+
    local bld_lua = [[
 return {
     {
@@ -2418,23 +2433,32 @@ return {
             "rlwr",
             "resvg",
         },
-        artifact = "b2_test",
-        main = "b2_test.c",
+        artifact = "$NAME",
+        main = "$NAME.c",
         src = "src",
     },
 }
 ]]
 
+   local short_name = _args.name
+   for i = 1, #short_name do
+      local c = string.sub(short_name, i, i)
+      if (c == '-') then
+         printc("%{red}please do not use dashes in project name%{reset}")
+      end
+   end
+
    mkdir(_args.name)
    chdir(_args.name)
+
    mkdir("src")
 
    local f = io.open("src/main.c", "w")
-   f:write(main_c)
+   f:write(gsub(main_c, "$NAME", short_name))
    f:close()
 
    f = io.open("bld.lua", "w")
-   f:write(bld_lua)
+   f:write(gsub(bld_lua, "$NAME", short_name))
    f:close()
 
 
@@ -5042,6 +5066,17 @@ local function sub_make(
    end
 
    ut.pop_dir(push_num)
+end
+
+function actions.run(_args)
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
+   cmd_do("reset")
+   actions.make(_args)
+   assert(cfgs[1])
+   assert(cfgs[1].artifact)
+   local cmd = "./" .. cfgs[1].artifact
+   print('cmd', cmd)
+   cmd_do(cmd)
 end
 
 
