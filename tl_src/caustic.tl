@@ -2264,6 +2264,9 @@ local parser_setup: {string:ParserSetup} = {
 
     run = {
         summary = "make and run current project",
+        flags = {
+            {"-d --debug", "run artifact in gdb",}
+        }
     },
 
     make = {
@@ -2332,6 +2335,7 @@ local actions: Actions = {}
 
 local record Args
     -- {{{
+    debug: string
     stage: boolean
     t: Target
     target: Target
@@ -2693,16 +2697,6 @@ static Camera2D cam = {
     .zoom = 1.,
 };
 
-static void console_on_enable(HotkeyStorage *hk_store, void *udata) {
-    trace("console_on_enable:\n");
-    //hotkey_group_enable(hk_store, HOTKEY_GROUP_FIGHT, false);
-}
-
-static void console_on_disable(HotkeyStorage *hk_store, void *udata) {
-    trace("console_on_disable:\n");
-    //hotkey_group_enable(hk_store, HOTKEY_GROUP_FIGHT, true);
-}
-
 static void gui_render() {
     rlImGuiBegin();
 
@@ -2734,16 +2728,9 @@ static void update(void) {
     ClearBackground(color_background_clear);
 
     hotkey_process(&hk_store);
-    console_check_editor_mode();
 
     koh_fpsmeter_draw();
 
-    Vector2 mp = Vector2Add(
-        GetMousePosition(), GetMonitorPosition(GetCurrentMonitor())
-    );
-    console_write("%s", Vector2_tostr(mp));
-
-    console_update();
     gui_render();
 
     EndDrawing();
@@ -2830,16 +2817,6 @@ int main(int argc, char **argv) {
 
     // stage_init(ss);
 
-    console_init(&hk_store, &(struct ConsoleSetup) {
-        .on_enable = console_on_enable,
-        .on_disable = console_on_disable,
-        .udata = NULL,
-        .color_text = BLACK,
-        .color_cursor = BLUE,
-        .fnt_size = 32,
-        .fnt_path = "assets/fonts/DejavuSansMono.ttf",
-    });
-
     last_time = GetTime();
 
 #if defined(PLATFORM_WEB)
@@ -2858,7 +2835,6 @@ int main(int argc, char **argv) {
     koh_music_shutdown();       // добавить в систему инициализации
     koh_fpsmeter_shutdown(); // добавить в систему инициализации
     koh_render_shutdown();// добавить в систему инициализации
-    console_shutdown();// добавить в систему инициализации
     hotkey_shutdown(&hk_store);// добавить в систему инициализации, void*
     if (ss) {
         stage_free(ss);
@@ -2931,7 +2907,7 @@ function actions.stage(_args: Args)
         return
     end
 
-    local msg = "%{green}enter source file prefix%{reset}"
+    local msg = "%{green}enter source file prefix(without _)%{reset}"
     local prefix = readline(ansicolors(msg))
 
     chdir('src')
@@ -5074,9 +5050,28 @@ function actions.run(_args: Args)
     actions.make(_args)
     assert(cfgs[1])
     assert(cfgs[1].artifact)
-    local cmd = "./" .. cfgs[1].artifact
-    print('cmd', cmd)
-    cmd_do(cmd)
+
+    if not _args.debug then
+        local cmd = "./" .. cfgs[1].artifact
+        print('cmd', cmd)
+        cmd_do(cmd)
+    else
+        local gdbinit_exists = io.open(".gdbinit", "r")
+
+        if not gdbinit_exists then
+            local dot_gdbinit = [[
+set confirm off
+r
+]]
+            local f = io.open(".gdbinit", "w")
+            f:write(dot_gdbinit)
+            f:close()
+        end
+
+        local cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork"
+        print('cmd', cmd)
+        cmd_do(cmd)
+    end
 end
 
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
