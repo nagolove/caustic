@@ -24,6 +24,7 @@ typedef struct Stage {
     StagesStore         *store;
 
     // TODO: Добавить проверку на NULL утверждением в вызовы Stage_callback
+    // XXX: enter может вызываться раньше init
     Stage_callback      init, enter, leave,
                         shutdown, draw, update, gui;
 
@@ -43,13 +44,15 @@ StagesStore *stage_new(struct StageStoreSetup *setup);
 // Добавить сцену. Внутри - st освобождается через free()
 Stage *stage_add(StagesStore *ss, Stage *st, const char *name);
 // Инициализация добавленных сцен
+// TODO: Переименовать что-бы понятно было
+// типа stage_init_added()
 void stage_init(StagesStore *ss);
 // Деинициализация всех сцен
 void stage_shutdown(StagesStore *ss);
 void stage_free(StagesStore *ss);
 // Установить текущую сцену
 void stage_active_set(StagesStore *ss, const char *name);
-// Обработать сцену
+// Обработать сцену. Вызывает update(), потом draw()
 void stage_active_update(StagesStore *ss);
 // Получить имя текущей сцены
 const char *stage_active_name_get(StagesStore *ss);
