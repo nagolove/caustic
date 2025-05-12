@@ -2916,6 +2916,7 @@ function actions.stage(_args: Args)
     local Stage = inp:sub(1, 1):upper() .. inp:sub(2, #inp)
 
     local stage_c = 
+    -- {{{
 [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
@@ -2979,6 +2980,8 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
     return (Stage*)st;
 }
 ]]
+    -- }}}
+
     stage_c = gsub(stage_c, "%$stage%$", stage)
     stage_c = gsub(stage_c, "%$Stage%$", Stage)
 
