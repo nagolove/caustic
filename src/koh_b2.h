@@ -122,9 +122,11 @@ KOH_FORCE_INLINE b2Body *b2Body_get(b2WorldId world_id, b2BodyId id) {
 */
 
 static inline const char *b2Vec2_to_str(b2Vec2 v) {
-    static char buf[64] = {0};
-    //snprintf(buf, sizeof(buf), "{%6.5f, %6.5f}", v.x, v.y);
-    snprintf(buf, sizeof(buf), "{%f, %f}", v.x, v.y);
+    static char slots[5][64] = {0};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+    snprintf(buf, sizeof(slots[0]), "{%f, %f}", v.x, v.y);
     return buf;
 }
 
