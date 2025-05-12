@@ -152,6 +152,9 @@ void e_remove_all(ecs_t* r, e_id e);
 // Должен быть падение или возврат уже выделенной памяти?
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type);
 
+// Возвращает количество объектов данного типа в системе
+size_t e_num(ecs_t* r, e_cp_type cp_type);
+
 /*
     Removes the given component from the entity.
 

@@ -446,6 +446,29 @@ MunitResult test_valid(const MunitParameter params[], void* userdata) {
     return MUNIT_OK;
 }
 
+MunitResult test_num(const MunitParameter params[], void* userdata) {
+
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_one);
+    munit_assert(e_num(r, cp_type_one) == 0);
+
+    e_id e = e_create(r);
+    void *data = e_emplace(r, e, cp_type_one);
+    (void)data;
+    munit_assert(e_num(r, cp_type_one) == 1);
+
+    data = e_emplace(r, e, cp_type_one);
+    (void)data;
+    munit_assert(e_num(r, cp_type_one) == 1);
+
+    e_destroy(r, e);
+    munit_assert(e_num(r, cp_type_one) == 0);
+
+    e_free(r);
+
+    return MUNIT_OK;
+}
+
 // Проход по всем сущностям
 MunitResult test_each(const MunitParameter params[], void* userdata) {
 
@@ -2294,6 +2317,16 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
 static MunitTest test_e_internal[] = {
 
     {
+      (char*) "/num",
+      test_num,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+
+    {
       (char*) "/each",
       test_each,
       NULL,
@@ -2533,6 +2566,8 @@ static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
 #endif
 }
 
+// TODO: Сравнение по идентификатору попробовать заменить поиском
+// в хеш таблице
 static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
     ecs_assert(r);
     cp_type_assert(cp_type);
@@ -2892,6 +2927,16 @@ void e_remove_all(ecs_t* r, e_id e) {
                 e_storage_remove(&r->storages[i], e);
             }
         }
+}
+
+size_t e_num(ecs_t* r, e_cp_type cp_type) {
+    ecs_assert(r);
+    cp_is_registered_assert(r, cp_type);
+
+    // XXX: Происходит выделение памяти для типа если он еще не создан
+    e_storage *s = e_assure(r, cp_type);
+    assert(s);
+    return s->cp_data_size;
 }
 
 void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
