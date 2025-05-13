@@ -16,6 +16,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
+
+#if defined(PLATFORM_WEB)
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 #ifndef M_PI
 # define M_PI		3.14159265358979323846	/* pi */
 #endif
@@ -409,3 +415,18 @@ const char *float_arr_tostr(float *arr, size_t num);
 // Аналогично points2table_alloc(), но работает с небольшим внутренним 
 // статическим буфером.
 const char *Vector2_arr_tostr(Vector2 *arr, size_t num);
+
+static inline void em_setup_screen_size(int *_w, int *_h) {
+#ifdef __wasm__
+    assert(_w);
+    assert(_h);
+
+    double w = 0, h = 0;
+    // Получаем размер canvas в CSS-пикселях
+    emscripten_get_element_css_size("#canvas", &w, &h);
+
+    *_w = (int)w;
+    *_h = (int)h;
+#endif
+}
+
