@@ -15,6 +15,8 @@
 #include "koh_routine.h"
 #include "koh_b2.h"
 
+#define RIGHT_NULL
+
 // test types {{{
 typedef char type_one;
 
@@ -291,6 +293,7 @@ static MunitResult test_view_chassis(
         // Проверка на присутствие всех необходимых значений
         //////////////////////////////////////////////////////
        
+        printf("\n");
         printf("render_tex_opts: ");
         for (int i = 0; i < e_num; i++) {
             printf("%d ", render_tex_opts[i] == 1);
@@ -373,9 +376,6 @@ bool iter_each(ecs_t *r, e_id e, void *ud) {
     HTable *set = ud;
 
     /*
-    printf("iter_each: e %ld\n", e);
-    printf("htable_count: %ld\n", htable_count(set));
-
     printf(
         "iter_eac: exist %s\n", 
         htable_exist(set, &e, sizeof(e)) ? "true" : "false"
@@ -386,7 +386,18 @@ bool iter_each(ecs_t *r, e_id e, void *ud) {
     );
     // */
 
-    htable_remove_i64(set, e.id);
+    bool removed = htable_remove_i64(set, e.id);
+
+    (void)removed;
+    /*
+    printf(
+        "iter_each: e %s, removed %s\n",
+        e_id2str(e),
+        removed ? "true" : "false"
+    );
+    */
+
+    //printf("iter_eac: htable_count %ld\n", htable_count(set));
     return false;
 }
 
@@ -432,13 +443,17 @@ MunitResult test_valid(const MunitParameter params[], void* userdata) {
         e_id e = e_null;
         for (int i = 0; i < 10; i++) {
             e = e_create(r);
-            printf("e %s\n", e_id2str(e));
+            //printf("e %s\n", e_id2str(e));
             munit_assert(e_valid(r, e) == true);
             e_destroy(r, e);
             munit_assert(e_valid(r, e) == false);
         }
 
+#ifdef RIGHT_NULL
+        munit_assert(e.id == ((e_idu){ .ord = 1, .ver = 9 }).id);
+#else
         munit_assert(e.id == ((e_idu){ .ord = 0, .ver = 9 }).id);
+#endif
 
         e_free(r);
     }
@@ -470,6 +485,98 @@ MunitResult test_num(const MunitParameter params[], void* userdata) {
 }
 
 // Проход по всем сущностям
+MunitResult test_each_determ(const MunitParameter params[], void* userdata) {
+
+    for (int i = 0; i < 2; i++) {
+    {
+        ecs_t *r = e_new(NULL);
+        const int num = 10;
+        HTable *set = htable_new(&(HTableSetup) {
+            .f_key2str = htable_i64_str,
+            //.f_hash = koh_hasher_djb2,
+            .f_hash = koh_hasher_fnv64,
+        });
+
+        // создать сущности
+        for (int j = 0; j < num; ++j) {
+            e_id e = e_create(r);
+            //printf("test_each_determ: e.id %ld\n", e.id);
+            htable_add_i64(set, e.id, NULL, 0);
+        }
+
+        /*
+        printf("htable_count: %ld\n", htable_count(set));
+        printf("test_each: before removing\n");
+        e_print_entities(r);
+        */
+
+        const int num_2remove = 3;
+        // индексы для удаления
+        int ids_2remove[] = { 3, 4, 5 };
+        for (int i = 0; i < num_2remove; i++) {
+            e_id e = { .ord =  ids_2remove[i], .ver = 0 };
+            /*printf("%ld ", e);*/
+            e_destroy(r, e);
+            htable_remove_i64(set, e.id);
+            /*munit_assert(htable_remove_i64(set, ids_2remove[i]) == true);*/
+        }
+        printf("\n");
+
+        ////////////////////////////////////////
+        /*
+        {
+            koh_term_color_set(KOH_TERM_YELLOW);
+            HTableIterator i = htable_iter_new(set);
+            for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                int64_t *val = htable_iter_key(&i, NULL);
+                assert(val);
+                printf("%ld ", *val);
+            }
+            printf("\n");
+            koh_term_color_reset();
+        }
+        */
+        ////////////////////////////////////////
+
+        /*
+        printf("test_each: after removing\n");
+        e_print_entities(r);
+        printf("entts_num %zu\n", r->entities_num);
+        */
+
+        e_each(r, iter_each, set);
+
+        //////////////////////////////////////////
+        /*
+        {
+            koh_term_color_set(KOH_TERM_MAGENTA);
+            HTableIterator i = htable_iter_new(set);
+            for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+                int64_t *val = htable_iter_key(&i, NULL);
+                assert(val);
+                printf("%ld ", *val);
+            }
+            printf("\n");
+            koh_term_color_reset();
+        }
+        */
+        //////////////////////////////////////////
+
+        // printf("htable_count: %ld\n", htable_count(set));
+
+        // e_print_entities(r); // сколько осталось элементов?
+        munit_assert_int(htable_count(set), ==, 0);
+        
+        htable_free(set);
+        e_free(r);
+    }
+
+}
+
+    return MUNIT_OK;
+}
+
+// Проход по всем сущностям
 MunitResult test_each(const MunitParameter params[], void* userdata) {
 
     for (int i = 0; i < 2; i++) {
@@ -478,7 +585,7 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
         const int num = 10;
         HTable *set = htable_new(&(HTableSetup) {
             .f_key2str = htable_i64_str,
-            .f_hash = koh_hasher_djb2,
+            .f_hash = koh_hasher_fnv64,
         });
 
         // создать сущности
@@ -779,13 +886,19 @@ MunitResult test_view_get(const MunitParameter params[], void* userdata) {
 
     size_t num = 0;
     e_id *entts = e_entities_alloc(r, &num);
+    // Проход по всем сущностям в системе
     for (int i = 0; i < num; i++) {
         e_id e = entts[i];
+        // Существует?
         munit_assert(e_valid(r, e));
+        // Всегда должен быть прикреплен компонент
         munit_assert(e_has(r, e, cp_type_two));
+        // Получаю компонент
         type_two *two = e_get(r, e, cp_type_two);
+        // Связь компонента с сущностью через хештаблицу
         e_id *e_fr_set = htable_get(set, two, sizeof(*two), NULL);
         munit_assert(e_fr_set != NULL);
+        // Результат из хештаблицы должен совпадать с связью в ецс
         munit_assert((*e_fr_set).id == e.id);
     }
     free(entts);
@@ -820,11 +933,37 @@ MunitResult test_emplace_double(const MunitParameter params[], void* userdata) {
 
     e_id e = e_create(r);
 
-    int *i1 = e_emplace(r, e, cmp);
-    munit_assert_not_null(i1);
-    int *i2 = e_emplace(r, e, cmp);
-    munit_assert_null(i2);
-    printf("test_emplace_double: i2 %p\n", i2);
+    int *i1, *i2;
+
+    {
+        i1 = e_emplace(r, e, cmp);
+        munit_assert_not_null(i1);
+        i2 = e_emplace(r, e, cmp);
+        munit_assert_null(i2);
+    }
+
+    // Могу получить компонент от сущности?
+    int *g1 = e_get(r, e, cmp);
+    munit_assert(g1 == i1);
+
+    // Удаляю компонет и проверяю успешность удаления
+    e_remove(r, e, cmp);
+    g1 = e_get(r, e, cmp);
+    munit_assert_null(g1);
+
+    // повтор первого теста после удаления, поведение должно остаться 
+    // аналогичным
+    {
+        i1 = e_emplace(r, e, cmp);
+        munit_assert_not_null(i1);
+        i2 = e_emplace(r, e, cmp);
+        munit_assert_null(i2);
+    }
+
+    if (e_verbose) {
+        printf("\n");
+        printf("test_emplace_double: i2 %p\n", i2);
+    }
 
     e_free(r);
     return MUNIT_OK;
@@ -874,9 +1013,11 @@ MunitResult test_view_simple(const MunitParameter params[], void* userdata) {
         { 
             char *s = e_entities2table_alloc2(r);
             if (s) {
-                koh_term_color_set(KOH_TERM_MAGENTA);
-                printf("test_view_simple: %s \n", s);
-                koh_term_color_reset();
+                if (e_verbose) {
+                    koh_term_color_set(KOH_TERM_MAGENTA);
+                    printf("test_view_simple: %s \n", s);
+                    koh_term_color_reset();
+                }
                 free(s);
             }
         }
@@ -1795,7 +1936,11 @@ MunitResult test_entities2table_alloc(const MunitParameter prms[], void* ud) {
 
         // проверить по шаблону {..0,..1,2} где точки обозначают любые 
         // пробельные символы
+#ifdef RIGHT_NULL
+        const char *pattern = "{\\s*1\\s*,\\s*2\\s*,\\s*3\\s*,\\s*}";
+#else
         const char *pattern = "{\\s*0\\s*,\\s*1\\s*,\\s*2\\s*,\\s*}";
+#endif
         int match = koh_str_match(s, NULL, pattern);
         munit_assert(match != false);
         /*printf("match %d for pattern '%s'\n", match, pattern);*/
@@ -1972,12 +2117,23 @@ MunitResult test_new_free(
 
 MunitResult test_create(const MunitParameter params[], void* userdata) {
 
+#ifdef RIGHT_NULL
+    int base = 1;
+#else
+    int base = 0;
+#endif
+
     // create 0
     {
         ecs_t *r = e_new(NULL);
         e_id e = e_create(r);
         munit_assert(e.id != e_null.id);
-        printf("test_create: e %lld\n", (long long)e.id);
+
+        munit_assert(e.ord == base);
+        //printf("test_creat: e.ver %d\n", e.ver);
+        munit_assert(e.ver == 0);
+
+        //printf("test_create: e %lld\n", (long long)e.id);
         e_free(r);
     }
     
@@ -1990,12 +2146,17 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         munit_assert(e0.id != e_null.id);
         munit_assert(e1.id != e_null.id);
         munit_assert(e2.id != e_null.id);
-        munit_assert_long(e0.id, ==, 0);
-        munit_assert_long(e1.id, ==, 1);
-        munit_assert_long(e2.id, ==, 2);
+
+        munit_assert_long(e0.ord, ==, base + 0);
+        munit_assert_long(e1.ord, ==, base + 1);
+        munit_assert_long(e2.ord, ==, base + 2);
+
+        /*
         printf("test_create: e0 %lld\n", (long long)e0.id);
         printf("test_create: e1 %lld\n", (long long)e1.id);
         printf("test_create: e2 %lld\n", (long long)e2.id);
+        */
+
         e_free(r);
     }
 
@@ -2008,15 +2169,21 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         munit_assert(e0.id != e_null.id);
         munit_assert(e1.id != e_null.id);
         munit_assert(e2.id != e_null.id);
-        munit_assert_long(e0.id, ==, 0);
-        munit_assert_long(e1.id, ==, 1);
-        munit_assert_long(e2.id, ==, 2);
+
+        munit_assert_long(e0.id, ==, base + 0);
+        munit_assert_long(e1.id, ==, base + 1);
+        munit_assert_long(e2.id, ==, base + 2);
+
         munit_assert(e_valid(r, e0) == true);
         munit_assert(e_valid(r, e1) == true);
         munit_assert(e_valid(r, e2) == true);
+
+        /*
         printf("test_create: e0 %lld\n", (long long)e0.id);
         printf("test_create: e1 %lld\n", (long long)e1.id);
         printf("test_create: e2 %lld\n", (long long)e2.id);
+        */
+
         e_free(r);
     }
 
@@ -2029,15 +2196,21 @@ MunitResult test_create(const MunitParameter params[], void* userdata) {
         munit_assert(e0.id != e_null.id);
         munit_assert(e1.id != e_null.id);
         munit_assert(e2.id != e_null.id);
-        munit_assert_long(e0.id, ==, 0);
-        munit_assert_long(e1.id, ==, 1);
-        munit_assert_long(e2.id, ==, 2);
+
+        munit_assert_long(e0.id, ==, base + 0);
+        munit_assert_long(e1.id, ==, base + 1);
+        munit_assert_long(e2.id, ==, base + 2);
+
         munit_assert(e_valid(r, e0) == true);
         munit_assert(e_valid(r, e1) == true);
         munit_assert(e_valid(r, e2) == true);
+
+        /*
         printf("test_create: e0 %lld\n", (long long)e0.id);
         printf("test_create: e1 %lld\n", (long long)e1.id);
         printf("test_create: e2 %lld\n", (long long)e2.id);
+        */
+
         e_free(r);
     }
 
@@ -2194,38 +2367,51 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
     // create 1 entity + destroy 
     {
         ecs_t *r = e_new(NULL);
-        e_print_entities(r);
+
+        //e_print_entities(r);
+
         e_id e = e_create(r);
-        e_print_entities(r);
+
+        //e_print_entities(r);
+
         munit_assert(e.id != e_null.id);
         munit_assert_int(r->entities_num, ==, 1);
         e_destroy(r, e);
         munit_assert_int(r->entities_num, ==, 0);
-        printf("test_create_destroy: e %lld\n", (long long)e.id);
-        e_print_entities(r);
+
+        //printf("test_create_destroy: e %lld\n", (long long)e.id);
+        //e_print_entities(r);
+
         e_free(r);
     }
     
     // create 1 entity + double destroy 
     {
         ecs_t *r = e_new(NULL);
-        e_print_entities(r);
+
+        //e_print_entities(r);
+
         e_id e = e_create(r);
-        e_print_entities(r);
+
+        //e_print_entities(r);
+
         munit_assert(e.id != e_null.id);
         munit_assert_int(r->entities_num, ==, 1);
         e_destroy(r, e);
         e_destroy(r, e);
         munit_assert_int(r->entities_num, ==, 0);
-        printf("test_create_destroy: e %lld\n", (long long)e.id);
-        e_print_entities(r);
+
+        //printf("test_create_destroy: e %lld\n", (long long)e.id);
+        //e_print_entities(r);
+
         e_free(r);
     }
     
     // create 4 entity + destroy 
     {
         ecs_t *r = e_new(NULL);
-        e_print_entities(r);
+        //e_print_entities(r);
+        
         e_id e0 = e_create(r);
         /*e_print_entities(r);*/
         munit_assert(e0.id != e_null.id);
@@ -2260,7 +2446,7 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
         munit_assert(e_valid(r, e2));
 
         /*printf("test_create_destroy: e %ld\n", e);*/
-        e_print_entities(r);
+        //e_print_entities(r);
         e_free(r);
     }
     
@@ -2271,23 +2457,22 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
         ecs_t *r = e_new(NULL);
         for (int i = 0; i < 10; i++) {
 
+            /*
             printf("test_create_destroy: before e_create()\n");
             e_print_entities(r);
-
             printf("test_create_destroy: with iterations: i %d\n", i);
+            */
+
             e_id e0 = e_create(r),
                  e1 = e_create(r),
                  e2 = e_create(r);
 
-            printf("test_create_destroy: after e_create()\n");
-            e_print_entities(r);
+            //printf("test_create_destroy: after e_create()\n");
+            //e_print_entities(r);
 
             munit_assert(e0.id != e_null.id);
             munit_assert(e1.id != e_null.id);
             munit_assert(e2.id != e_null.id);
-            /*munit_assert_long(e0, ==, 0);*/
-            /*munit_assert_long(e1, ==, 1);*/
-            /*munit_assert_long(e2, ==, 2);*/
             munit_assert(e_valid(r, e0) == true);
             munit_assert(e_valid(r, e1) == true);
             munit_assert(e_valid(r, e2) == true);
@@ -2295,15 +2480,16 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
             e_destroy(r, e1);
             e_destroy(r, e2);
 
-            printf("test_create_destroy: after e_destroy()\n");
-            e_print_entities(r);
+            //printf("test_create_destroy: after e_destroy()\n");
+            //e_print_entities(r);
 
             munit_assert(e_valid(r, e0) == false);
             munit_assert(e_valid(r, e1) == false);
             munit_assert(e_valid(r, e2) == false);
-            printf("test_create: e0 %lld\n", (long long)e0.id);
-            printf("test_create: e1 %lld\n", (long long)e1.id);
-            printf("test_create: e2 %lld\n", (long long)e2.id);
+
+            //printf("test_create: e0 %lld\n", (long long)e0.id);
+            //printf("test_create: e1 %lld\n", (long long)e1.id);
+            //printf("test_create: e2 %lld\n", (long long)e2.id);
         }
         e_free(r);
     }
@@ -2317,7 +2503,7 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
 static MunitTest test_e_internal[] = {
 
     {
-      (char*) "/num",
+      "/num",
       test_num,
       NULL,
       NULL,
@@ -2327,7 +2513,16 @@ static MunitTest test_e_internal[] = {
 
 
     {
-      (char*) "/each",
+      "/each_determ",
+      test_each_determ,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    {
+      "/each",
       test_each,
       NULL,
       NULL,
@@ -2336,7 +2531,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/valid",
+      "/valid",
       test_valid,
       NULL,
       NULL,
@@ -2345,7 +2540,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/sparse_set",
+      "/sparse_set",
       test_sparse_set,
       NULL,
       NULL,
@@ -2354,7 +2549,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/new_free",
+      "/new_free",
       test_new_free,
       NULL,
       NULL,
@@ -2363,7 +2558,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/entities2table_alloc",
+      "/entities2table_alloc",
       test_entities2table_alloc,
       NULL,
       NULL,
@@ -2372,7 +2567,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/create",
+      "/create",
       test_create,
       NULL,
       NULL,
@@ -2381,7 +2576,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/create_destroy",
+      "/create_destroy",
       test_create_destroy,
       NULL,
       NULL,
@@ -2390,7 +2585,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/emplace_1",
+      "/emplace_1",
       test_emplace_1,
       NULL,
       NULL,
@@ -2399,7 +2594,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/emplace_2",
+      "/emplace_2",
       test_emplace_2,
       NULL,
       NULL,
@@ -2408,7 +2603,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/orphan",
+      "/orphan",
       test_orphan,
       NULL,
       NULL,
@@ -2417,7 +2612,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/has",
+      "/has",
       test_has,
       NULL,
       NULL,
@@ -2426,7 +2621,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/types",
+      "/types",
       test_types,
       NULL,
       NULL,
@@ -2435,7 +2630,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/view_get",
+      "/view_get",
       test_view_get,
       NULL,
       NULL,
@@ -2444,7 +2639,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/view_single",
+      "/view_single",
       test_view_single,
       NULL,
       NULL,
@@ -2453,7 +2648,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/view_simple",
+      "/view_simple",
       test_view_simple,
       NULL,
       NULL,
@@ -2462,7 +2657,7 @@ static MunitTest test_e_internal[] = {
     },
 
     {
-      (char*) "/view_simple",
+      "/view_simple",
       test_view_simple,
       NULL,
       NULL,
@@ -2472,7 +2667,7 @@ static MunitTest test_e_internal[] = {
 
     /*
     {
-      (char*) "/view_multi",
+      "/view_multi",
       test_view_multi,
       NULL,
       NULL,
@@ -2533,6 +2728,9 @@ static inline void ecs_assert(ecs_t *r) {
     assert(r->entities);
     assert(r->entities_num >= 0);
     // проверить на наличие свободных индексов для сущностей
+    if (r->stack_last < 0) {
+        koh_trap();
+    }
     assert(r->stack_last >= 0);
 }
 
@@ -2589,15 +2787,21 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
 
     // создать хранилище если еще не
     if (!s) {
-        printf(
-            "e_assure: '%s' storages_size %d\n",
-            cp_type.name, r->storages_size
-        );
+
+        if (e_verbose) {
+            printf(
+                "e_assure: '%s' storages_size %d\n",
+                cp_type.name, r->storages_size
+            );
+        }
+
         if (r->storages_size + 1 == r->storages_cap) {
             printf(
                 "e_assure: storages_cap %d is not enough\n", r->storages_cap
             );
+            abort();
         }
+
         s = &r->storages[r->storages_size++];
         memset(s, 0, sizeof(*s));
 
@@ -2640,9 +2844,9 @@ ecs_t *e_new(e_options *opts) {
     assert(r);
 
     if (!opts) {
-        r->max_id = pow(2, 16);
+        r->max_id = pow(2, 16) + 1 /* резервный e_null */;
     } else {
-        r->max_id = opts->max_id;
+        r->max_id = opts->max_id + 1 /* резервный e_null */;
     }
 
     r->entities_num = 0;
@@ -2654,7 +2858,13 @@ ecs_t *e_new(e_options *opts) {
     assert(r->entities_ver);
 
     // заполнить стек свободными доступными индексами сущностей
+    // первым элементом из доступных будет с индексом 1, так как нуль
+    // зарезервирован для e_null
+#ifdef RIGHT_NULL
+    for (int64_t i = r->max_id - 1; i >= 1; i--) {
+#else
     for (int64_t i = r->max_id - 1; i >= 0; i--) {
+#endif
         // часть ver не используется в стеке индексов
         r->stack[r->stack_last++] = i;
     }
@@ -2726,6 +2936,7 @@ void e_free(ecs_t *r) {
     free(r);
 }
 
+// Обновляет информацию для imgui, может вызываться вне Begin()/End()
 static void imgui_update(ecs_t *r, e_cp_type cp_type) {
     size_t new_num = htable_count(r->cp_types);
 
@@ -2766,7 +2977,7 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     comp->priv.cp_id = htable_count(r->cp_types);
     comp->priv.cp_sizeof2 = next_eq_pow2(comp->cp_sizeof);
 
-    printf("e_register: priv.cp_sizeof2 %zu\n", comp->priv.cp_sizeof2);
+    //printf("e_register: priv.cp_sizeof2 %zu\n", comp->priv.cp_sizeof2);
     htable_add(r->set_cp_types, comp, sizeof(*comp), NULL, 0);
     htable_add_s(r->cp_types, comp->name, comp, sizeof(*comp));
 
@@ -3042,7 +3253,11 @@ void e_each(ecs_t* r, e_each_function fun, void* udata) {
     */
 
     int num = 0;
+#ifdef RIGHT_NULL
+    for (int i = 1; i < r->max_id; i++) {
+#else
     for (int i = 0; i < r->max_id; i++) {
+#endif
         if (r->entities[i]) {
             num++;
             if (fun(r, (e_id) { .ord = i, .ver = r->entities_ver[i], }, udata)) 
@@ -3298,7 +3513,7 @@ char *e_entities2table_alloc(ecs_t *r) {
 
 void e_print_entities(ecs_t *r) {
     char *s = e_entities2table_alloc(r);
-    assert(s);
+    //assert(s);
     if (s) {
         koh_term_color_set(KOH_TERM_BLUE);
         printf("%s\n", s);
@@ -3456,13 +3671,9 @@ static void entity_print_buf(ecs_t *r) {
 }
 
 static void entity_print(ecs_t *r) {
-    /*trace("de_gui: explore table\n");*/
     if (igTreeNode_Str("explore")) {
         assert(r->selected_type.name);
         assert(r->selected_type.cp_sizeof);
-        //assert(r->selected_type.str_repr);
-
-        //de_view_single v = de_view_single_create(r, r->selected_type);
         e_view v = e_view_create_single(r, r->selected_type);
         int i = 0;
         for (; e_view_valid(&v); e_view_next(&v), i++) {
@@ -3470,20 +3681,8 @@ static void entity_print(ecs_t *r) {
                 void *payload = e_view_get(&v, r->selected_type);
                 e_id e = e_view_entity(&v);
 
-                //if (de_ecs_verbose)
-                    //trace("entity_print: name %s\n", r->selected_type.name);
-
                 if (r->selected_type.str_repr(payload, e)) {
                     char **lines = r->selected_type.str_repr(payload, e);
-
-                    /*if (de_ecs_verbose)*/
-                        /*trace("entity_print: lines %p\n", lines);*/
-
-                    /*
-                    if (r->l && r->ref_filter_func)
-                        lines_print_filter(r, lines);
-                    else
-                    */
                     lines_print(lines);
                 }
                 igTreePop();
@@ -3673,8 +3872,10 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
         /*printf("e_types: '%s'\n", type_name);*/
         e_cp_type *type = htable_iter_value(&i, NULL);
 
-        const char *s = e_cp_type_2str(*type);
-        printf("e_types: %s\n", s);
+        if (e_verbose) {
+            const char *s = e_cp_type_2str(*type);
+            printf("e_types: %s\n", s);
+        }
 
         assert(type);
         if (e_has(r, e, *type)) {
@@ -3792,8 +3993,11 @@ const char *e_id2str(e_id e) {
     return buf;
 }
 
+#ifdef RIGHT_NULL
+const e_id e_null = { .id = 0, };
+#else
 const e_id e_null = { .id = INT64_MAX, };
-//const e_id e_null = { .id = 0, };
+#endif
 
 // }}}
 
@@ -3830,3 +4034,5 @@ static type_two type_two_create() {
 }
 
 // }}}
+
+bool e_verbose = false;
