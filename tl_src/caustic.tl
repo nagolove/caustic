@@ -3021,24 +3021,6 @@ function actions.rmdirs(_args: Args)
     --]]
 end
 
---[[
-function actions.run(_args: Args)
-    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    if verbose then
-        print('actions.run', inspect(_args))
-    end
-    local flags = table.concat(_args.flags, " ")
-    -- XXX: Передача --no-fork действительная только для программ собранных
-    -- с использованием библиотеки munit
-    -- XXX: Как выбрать подпроект который запускать(не всегда первый)?
-    if _args.c then
-        cmd_do(format("./%s", cfgs[1].artifact) .. flags)
-    else
-        cmd_do(format("gdb --args %s --no-fork ", cfgs[1].artifact) .. flags)
-    end
-end
---]]
-
 -- Проверяет аргументы и создает список модулей
 local function pre_init(_args: Args): {Dependency}
     local deps = {}
@@ -5047,6 +5029,21 @@ local function sub_make(
     ut.pop_dir(push_num)
 end
 
+local function put_gdbinit()
+    local gdbinit_exists = io.open(".gdbinit", "r")
+    if gdbinit_exists then
+        return
+    end
+
+    local dot_gdbinit = [[
+set confirm off
+r
+]]
+    local f = io.open(".gdbinit", "w")
+    f:write(dot_gdbinit)
+    f:close()
+end
+
 function actions.run(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     cmd_do("reset")
@@ -5059,18 +5056,9 @@ function actions.run(_args: Args)
         print('cmd', cmd)
         cmd_do(cmd)
     else
-        local gdbinit_exists = io.open(".gdbinit", "r")
-
-        if not gdbinit_exists then
-            local dot_gdbinit = [[
-set confirm off
-r
-]]
-            local f = io.open(".gdbinit", "w")
-            f:write(dot_gdbinit)
-            f:close()
-        end
-
+        put_gdbinit()
+        -- При использовании отладчика всегда добавляется аргумент командной
+        -- строки используемый в тестировании
         local cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork"
         print('cmd', cmd)
         cmd_do(cmd)

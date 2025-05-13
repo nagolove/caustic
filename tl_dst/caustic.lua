@@ -2916,6 +2916,7 @@ function actions.stage(_args)
    local Stage = inp:sub(1, 1):upper() .. inp:sub(2, #inp)
 
    local stage_c =
+
    [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
@@ -2979,6 +2980,8 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
     return (Stage*)st;
 }
 ]]
+
+
    stage_c = gsub(stage_c, "%$stage%$", stage)
    stage_c = gsub(stage_c, "%$Stage%$", Stage)
 
@@ -3017,24 +3020,6 @@ function actions.rmdirs(_args)
 
 
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 local function pre_init(_args)
@@ -5044,6 +5029,21 @@ local function sub_make(
    ut.pop_dir(push_num)
 end
 
+local function put_gdbinit()
+   local gdbinit_exists = io.open(".gdbinit", "r")
+   if gdbinit_exists then
+      return
+   end
+
+   local dot_gdbinit = [[
+set confirm off
+r
+]]
+   local f = io.open(".gdbinit", "w")
+   f:write(dot_gdbinit)
+   f:close()
+end
+
 function actions.run(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    cmd_do("reset")
@@ -5056,17 +5056,8 @@ function actions.run(_args)
       print('cmd', cmd)
       cmd_do(cmd)
    else
-      local gdbinit_exists = io.open(".gdbinit", "r")
+      put_gdbinit()
 
-      if not gdbinit_exists then
-         local dot_gdbinit = [[
-set confirm off
-r
-]]
-         local f = io.open(".gdbinit", "w")
-         f:write(dot_gdbinit)
-         f:close()
-      end
 
       local cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork"
       print('cmd', cmd)
