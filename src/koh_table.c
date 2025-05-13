@@ -12,6 +12,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+#include "koh_ecs.h"
 
 // XXX: POSIX shit
 #include <unistd.h>
@@ -368,7 +369,8 @@ void *htable_add(
 ) {
 
     assert(ht);
-    if (!key) return NULL;
+    if (!key || key_len <= 0)
+        return NULL;
 
     //print_table(ht);
     assert(key);
@@ -520,9 +522,12 @@ int64_t _htable_get_index(
         char *key_t = bucket_get_key(buck);
         assert(key_t);
 
-        if (buck->key_len != key_len)
-            /*break;*/
-            goto _next;
+        /*
+Разные ключи могут иметь одинаковые длины.
+Пробинг не должен останавливаться при длине — только при пустой ячейке.
+         */
+        //if (buck->key_len != key_len)
+        //    goto _next;
 
         int trgt_key_len = key_len > buck->key_len ? buck->key_len : key_len;
 
@@ -537,7 +542,7 @@ int64_t _htable_get_index(
         if (ht->f_keycmp(key_t, key, trgt_key_len) == 0)
             break;
 
-_next:
+//_next:
         index = (index + 1) % ht->cap;
     }
 
@@ -729,6 +734,11 @@ void htable_shrink(HTable *ht) {
 HTable *htable_union(HTable *a, HTable *b) {
     htable_assert(a);
     htable_assert(b);
+
+    if (a->f_hash != b->f_hash) {
+        printf("htable_union: only for tables with same hash function");
+        abort();
+    }
 
     HTableSetup u_setup = {
         .f_hash = a->f_hash,
@@ -2717,6 +2727,55 @@ static MunitResult test_htable_internal_compare_keys(
     return MUNIT_OK;
 }
 
+static HTable *_test_htable_internal_djb2_fnv64(HashFunction hasher) {
+    HTable *set = htable_new(&(HTableSetup) {
+        .f_key2str = htable_i64_str,
+        .f_hash = hasher,
+    });
+
+    const int num = 10;
+    for (int j = 0; j < num; ++j) {
+        int64_t e = j;
+        //printf("test_each_determ: e.id %ld\n", e.id);
+        htable_add_i64(set, e, NULL, 0);
+    }
+
+    const int num_2remove = 3;
+    int ids_2remove[] = { 3, 4, 5 };
+    for (int i = 0; i < num_2remove; i++) {
+        e_id e = { .ord =  ids_2remove[i], .ver = 0 };
+        /*printf("%ld ", e);*/
+        htable_remove_i64(set, e.id);
+        /*munit_assert(htable_remove_i64(set, ids_2remove[i]) == true);*/
+    }
+
+    return set;
+}
+
+static MunitResult test_htable_internal_djb2_fnv64(
+    const MunitParameter params[], void* data
+) {
+
+    for (int i = 0; i < 100; i++) {
+        HTable *set_d = _test_htable_internal_djb2_fnv64(koh_hasher_djb2),
+               *set_f = _test_htable_internal_djb2_fnv64(koh_hasher_fnv64);
+
+        int64_t count_d = htable_count(set_d),
+                cound_f = htable_count(set_f);
+
+        //printf("test_htable_internal_djb2_fnv64: set_d count %ld\n", count_d);
+        //printf("test_htable_internal_djb2_fnv64: set_f count %ld\n", cound_f);
+
+        munit_assert(count_d == cound_f);
+
+        htable_free(set_d);
+        htable_free(set_f);
+    }
+
+    return MUNIT_OK;
+}
+
+
 static MunitResult test_koh_hashers_search(
     const MunitParameter params[], void* data
 ) {
@@ -2869,6 +2928,12 @@ static MunitResult test_htable_internal_singles(
 
 // {{{ Tests definitions
 static MunitTest test_htable_internal[] = {
+
+    {
+        "/test_htable_internal_djb2_fnv64",
+        test_htable_internal_djb2_fnv64,
+        NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL
+    },
 
     {
         "/test_koh_hashers_search",

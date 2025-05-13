@@ -33,6 +33,8 @@ typedef int (*HTableKeyCmp)(const void *a, const void *b, size_t len);
 
 typedef struct HTableSetup {
     // По умолчанию для сравнения ключей используется memcmp()
+    // Для таблиц, которые хранять числа с плавающей точкой использовать 
+    // специальные функции сравнения cmp_f32, cmp_f64
     HTableKeyCmp    f_keycmp;
     HTableOnRemove  f_on_remove;
     HashFunction    f_hash;
@@ -104,11 +106,13 @@ int64_t htable_count(HTable *ht);
 
 // Только если установлены функции обратного вызова для ключей и значений.
 // Возвращает выделенную память.
-char *htable_save_alloc(HTable *ht);
+//char *htable_save_alloc(HTable *ht);
+
 // Загрузить из Луа таблицы представленной строкой
 bool htable_load(HTable *ht, const char *lua_code);
 
 // Возвращает новую таблицу, объединяя а и б. 
+// Только для таблиц с одинаковыми функция хеширования
 // Если ключи равны, то берется значение из a
 // Параметры новой таблицы (функция хэширования, преобразователи ключей,
 // функции удаления, указатель на пользовательские данные) берутся из a
@@ -246,3 +250,16 @@ static inline bool htable_remove_i32(HTable *ht, int key) {
     return htable_remove(ht, &key, sizeof(key));
 }
 // }}} 
+
+// Для таблиц, которые хранять числа с плавающей точкой использовать 
+// специальные функции сравнения cmp_f32, cmp_f64
+
+static inline int cmp_f32(const void *a, const void *b, size_t len) {
+    float fa = *(float*)a, fb = *(float*)b;
+    return (fa > fb) - (fa < fb); // не учитывает NaN!
+}
+
+static inline int cmp_f64(const void *a, const void *b, size_t len) {
+    double fa = *(double*)a, fb = *(double*)b;
+    return (fa > fb) - (fa < fb); // не учитывает NaN!
+}
