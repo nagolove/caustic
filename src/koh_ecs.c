@@ -15,8 +15,6 @@
 #include "koh_routine.h"
 #include "koh_b2.h"
 
-#define RIGHT_NULL
-
 // test types {{{
 typedef char type_one;
 
@@ -3994,7 +3992,9 @@ const char *e_id2str(e_id e) {
 }
 
 #ifdef RIGHT_NULL
-const e_id e_null = { .id = 0, };
+// Используется дефайн, не переменная. Лучше для применения в инициализаторах
+// статических переменных.
+//const e_id e_null = { .id = 0, };
 #else
 const e_id e_null = { .id = INT64_MAX, };
 #endif

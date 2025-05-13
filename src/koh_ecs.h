@@ -6,11 +6,12 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "munit.h"
+#include <stdint.h>
+#include <string.h>
 #include "koh_strbuf.h"
+#include "munit.h"
 
-/* An item stored in a sparse set. */
-/*typedef int64_t e_id;*/
+#define RIGHT_NULL
 
 /*
 Добавить поддержку уникалькости идентификаторов через версии:
@@ -301,9 +302,13 @@ e_id e_each_entity(e_each_iter *i);
 int e_cp_type_cmp(e_cp_type a, e_cp_type b);
 
 // Недостижымый элемент, который всегда отсутствует в системе.
-// TODO: Сделать так, что-бы пустой элемент равнялся нулю.
-// e_null.id = 0 
+#ifdef RIGHT_NULL
+// Используется дефайн, не переменная. Лучше для применения в инициализаторах
+// статических переменных.
+#define e_null ((e_id) { { 0, 0 } })
+#else
 extern const e_id e_null;
+#endif
 
 static inline uint32_t e_id_ver(e_id e) {
     return ((e_idu)e).ver;
@@ -386,6 +391,6 @@ static inline bool e_view_valid(e_view* v) {
     e_view v_zero = {};
     assert(memcmp(v, &v_zero, sizeof(v_zero)) != 0);
 
-    return v->current_entity.id != e_null.id;
+    return (v->current_entity.id != e_null.id);
 }
 
