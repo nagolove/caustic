@@ -594,6 +594,18 @@ const char *b2BodyId_id_to_str(b2BodyId id) {
     return buf;
 }
 
+const char *b2ShapeId_tostr(b2ShapeId id) {
+    static char slots[5][128] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+    sprintf(
+        buf, "{ index = %d, world = %hd, revision = %hu }",
+        id.index1, id.world0, id.generation
+    );
+    return buf;
+}
+
 const char *b2ShapeId_id_to_str(b2ShapeId id) {
     static char buf[128];
     sprintf(

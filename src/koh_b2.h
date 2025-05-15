@@ -93,7 +93,9 @@ char **b2ShapeDef_to_str(b2ShapeDef sd);
 char **b2BodyDef_to_str(b2BodyDef bd);
 char **b2BodyId_to_str(b2BodyId id);
 const char *b2BodyId_id_to_str(b2BodyId id);
+__attribute_deprecated__
 const char *b2ShapeId_id_to_str(b2ShapeId id);
+const char *b2ShapeId_tostr(b2ShapeId id);
 const char *b2BodyType_to_str(b2BodyType bt);
 const char *b2ShapeType_to_str(b2ShapeType st);
 
