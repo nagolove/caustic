@@ -13,10 +13,10 @@
 
 #define RIGHT_NULL
 
-/*
-Добавить поддержку уникалькости идентификаторов через версии:
-Добавить поддержку версии
- */
+// TODO: Сделать функцию удаления всех сущностей связанных с компонентом
+// данного типа
+// XXX: можно ли удалять сущности в процессе цикла по компонентам?
+
 typedef union {
     struct {
                  // порядковый номер индекс в массиве
@@ -45,6 +45,8 @@ typedef struct e_cp_type_private {
     size_t      cp_sizeof2; 
 } e_cp_type_private;
 
+typedef struct e_cp_type e_cp_type;
+
 typedef struct e_cp_type {
     // WARN: Нельзя использовать один и тот-же e_cp_type в разных экземплярах
     // ecs так как e_cp_type_private возможно должны иметь разные значения
@@ -55,13 +57,13 @@ typedef struct e_cp_type {
                           
     void        (*on_emplace)(void *payload, e_id e); 
     void        (*on_destroy)(void *payload, e_id e);
+    void        (*on_destroy2)(void *payload, e_id e, const e_cp_type *t);
 
     // вызывается один раз при e_register() и один раз при e_free()
     void        (*on_init)(struct e_cp_type *type);
     void        (*on_shutdown)(struct e_cp_type *type);
 
-    // какие-то пользовательские данные
-    // XXX: Для чего они нужны? 
+    // Пользовательские данные, могут использоваться в on_destroy2()
     void        *udata;
 
     // Для компонентного проводника.
@@ -394,3 +396,10 @@ static inline bool e_view_valid(e_view* v) {
     return (v->current_entity.id != e_null.id);
 }
 
+static inline bool e_is_null(e_id e) {
+    return e.id == e_null.id;
+}
+
+static inline bool e_is_not_null(e_id e) {
+    return e.id != e_null.id;
+}

@@ -68,7 +68,11 @@ typedef struct e_storage {
                 // размер округленный до степени 2
                 cp_sizeof2; 
     SparseSet   sparse;
+
+    e_cp_type   type;
+
     void        (*on_destroy)(void *payload, e_id e);
+    void        (*on_destroy2)(void *payload, e_id e, const e_cp_type *t);
     void        (*on_emplace)(void *payload, e_id e);
     char        name[64];
     // TODO: Хранить указателья на ect_t для дополнительных проверок
@@ -2810,6 +2814,14 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         s->cp_sizeof2 = cp_type.priv.cp_sizeof2;
         s->on_emplace = cp_type.on_emplace;
         s->on_destroy = cp_type.on_destroy;
+        s->on_destroy2 = cp_type.on_destroy2;
+
+        if (cp_type.on_destroy2 && cp_type.on_destroy) {
+            printf("e_assure: only onde destroy function allowed\n");
+            abort();
+        }
+
+        s->type = cp_type;
 
         strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
         s->name[sizeof(s->name) - 1] = 0;
@@ -2953,7 +2965,6 @@ static void imgui_update(ecs_t *r, e_cp_type cp_type) {
         r->selected = new_ptr;
 
         memset(r->selected, 0, sz);
-        //trace("type_register: r->selected was zeroed\n");
     }
 
     r->selected_num = new_num;
@@ -3099,10 +3110,14 @@ static void e_storage_remove(e_storage *s, e_id e) {
     int64_t pos2remove = s->sparse.sparse[e.ord];
     ss_remove(&s->sparse, e.ord);
 
+    char *cp_data = s->cp_data;
+    void *payload = &cp_data[pos2remove * s->cp_sizeof];
+
     if (s->on_destroy) {
-        char *cp_data = s->cp_data;
-        void *payload = &cp_data[pos2remove * s->cp_sizeof];
         s->on_destroy(payload, e);
+    }
+    if (s->on_destroy2) {
+        s->on_destroy2(payload, e, &s->type);
     }
 
     // swap (memmove because if cp_data_size 1 it will overlap dst and source.
@@ -3708,7 +3723,7 @@ void e_gui_buf(ecs_t *r) {
     // }}}
 
     ImVec2 outer_size = {0., 0.};
-    const int columns_num = 8;
+    const int columns_num = 9;
     if (igBeginTable("components", columns_num, table_flags, outer_size, 0.)) {
 
         igTableSetupColumn("cp_id", 0, 0, 0);
@@ -3717,8 +3732,9 @@ void e_gui_buf(ecs_t *r) {
         igTableSetupColumn("num", 0, 0, 3);
         igTableSetupColumn("initial_cap", 0, 0, 4);
         igTableSetupColumn("on_destroy", 0, 0, 5);
-        igTableSetupColumn("on_emplace", 0, 0, 6);
-        igTableSetupColumn("description", 0, 0, 7);
+        igTableSetupColumn("on_destroy2", 0, 0, 6);
+        igTableSetupColumn("on_emplace", 0, 0, 7);
+        igTableSetupColumn("description", 0, 0, 8);
         igTableHeadersRow();
 
         struct TypeCtx ctx = {
@@ -3794,7 +3810,7 @@ void e_gui(ecs_t *r, e_id e) {
     igText("r->ref_filter_func %d\n", r->ref_filter_func);
 
     ImVec2 outer_size = {0., 0.};
-    const int columns_num = 8;
+    const int columns_num = 9;
     if (igBeginTable("components", columns_num, table_flags, outer_size, 0.)) {
 
         igTableSetupColumn("cp_id", 0, 0, 0);
@@ -3803,8 +3819,9 @@ void e_gui(ecs_t *r, e_id e) {
         igTableSetupColumn("num", 0, 0, 3);
         igTableSetupColumn("initial_cap", 0, 0, 4);
         igTableSetupColumn("on_destroy", 0, 0, 5);
-        igTableSetupColumn("on_emplace", 0, 0, 6);
-        igTableSetupColumn("description", 0, 0, 7);
+        igTableSetupColumn("on_destroy2", 0, 0, 6);
+        igTableSetupColumn("on_emplace", 0, 0, 7);
+        igTableSetupColumn("description", 0, 0, 8);
         igTableHeadersRow();
 
         struct TypeCtx ctx = {
@@ -3904,7 +3921,7 @@ const char *e_cp_type_2str(e_cp_type c) {
     memset(buf, 0, sizeof(buf));
     char *pbuf = buf;
 
-    char ptr_str[64] = {};
+    char ptr_str[256] = {};
 
 #define ptr2str(ptr) (sprintf(ptr_str, "'%p'", ptr), ptr_str)
 
@@ -3913,6 +3930,7 @@ const char *e_cp_type_2str(e_cp_type c) {
     pbuf += sprintf(pbuf, "cp_sizeof = %zu, ", c.cp_sizeof);
     pbuf += sprintf(pbuf, "on_emplace = %s, ", ptr2str(c.on_emplace));
     pbuf += sprintf(pbuf, "on_destroy = %s, ", ptr2str(c.on_destroy));
+    pbuf += sprintf(pbuf, "on_destroy2 = %s, ", ptr2str(c.on_destroy2));
     pbuf += sprintf(pbuf, "str_repr = %s, ", ptr2str(c.str_repr));
     pbuf += sprintf(pbuf, "name = '%s', ", c.name);
     pbuf += sprintf(pbuf, "description = '%s', ", c.description);
@@ -3958,6 +3976,7 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
         a.cp_sizeof == b.cp_sizeof &&
         a.on_emplace == b.on_emplace &&
         a.on_destroy == b.on_destroy &&
+        a.on_destroy2 == b.on_destroy2 &&
         a.str_repr == b.str_repr &&
         !r_name &&
         !r_desctiprion &&
