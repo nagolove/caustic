@@ -35,6 +35,14 @@
 #define KOH_ATTR_FORMAT(f, s) __attribute__((__format__(__printf__, f, s))) 
 #define KOH_HIDDEN __attribute__((visibility("hidden")))
 
+typedef int64_t     i64;
+typedef uint64_t    u64;
+typedef int32_t     i32;
+typedef uint32_t    u32;
+typedef int16_t     i16;
+typedef uint16_t    u16;
+typedef int8_t      i8;
+typedef uint8_t     u8;
 
 struct Common {
     bool quit;
