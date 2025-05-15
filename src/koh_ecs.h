@@ -403,3 +403,5 @@ static inline bool e_is_null(e_id e) {
 static inline bool e_is_not_null(e_id e) {
     return e.id != e_null.id;
 }
+
+const char *htable_eid_str(const void *data, int len);

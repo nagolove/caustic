@@ -4052,6 +4052,15 @@ static type_two type_two_create() {
     };
 }
 
+const char *htable_eid_str(const void *data, int len) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    assert(data);
+    const e_id *e = data;
+    sprintf(buf, "%s", e_id2str(*e));
+    return buf;
+}
+
 // }}}
 
 bool e_verbose = false;
