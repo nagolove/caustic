@@ -19,6 +19,9 @@
 #include <fcntl.h>
 #include <malloc.h>
 
+#define XXH_INLINE_ALL
+#include "xxhash.h"
+
 bool htable_verbose = false;
 
 #define HTABLE_DEBUG_BUCKET 1
@@ -372,12 +375,9 @@ void *htable_add(
     if (!key || key_len <= 0)
         return NULL;
 
-    //print_table(ht);
     assert(key);
     assert(key_len > 0);
     assert(value_len >= 0);
-    // INFO: Зачем нужно было условие снизу?
-    //assert((value && value_len > 0) || (!value && value_len == 0));
 
     if (value_len == 0)
         value = NULL;
@@ -387,22 +387,6 @@ void *htable_add(
 
     int64_t index = _htable_get_index(ht, key, key_len, NULL);
 
-    /*
-    if (htable_verbose)
-        printf(
-            "htable_add: key '%s', key_len %d, value %p, value_len %d"
-            ", index %zu, cap %zu\n",
-            (char*)key, key_len, value, value_len, index, ht->cap
-        );
-    // */
-
-    /*
-    if (index != INT64_MAX) {
-        bucket_print(ht, ht->arr[index], stdout, NULL);
-        printf("\n");
-    }
-    */
-
     // Ключ есть в таблице, обновить значение
     if (index != INT64_MAX) {
         ht->arr[index] = bucket_update_value(
@@ -411,8 +395,6 @@ void *htable_add(
         /*printf("value updated, value %p\n", value);*/
         return value ? bucket_get_value(ht->arr[index]) : NULL;
     }
-
-    /*printf("before extend:\n");*/
 
     // Расширяю таблицу при определенном пороге загрузки
     if (ht->taken >= ht->cap * ht->extend_coef)
@@ -648,7 +630,8 @@ HTable *htable_new(struct HTableSetup *setup) {
         //ht->f_hash = koh_hasher_fnv64;
         
         // Использование детерминированной хеш функции
-        ht->f_hash = koh_hasher_djb2;
+        //ht->f_hash = koh_hasher_djb2;
+        ht->f_hash = (void*)XXH3_64bits;
     }
 
     if (htable_verbose)

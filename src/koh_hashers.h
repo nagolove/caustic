@@ -25,5 +25,7 @@ const char *koh_hashers_name_by_funcptr(void *func_ptr);
 // XXX: mum лучше не использовать
 Hash_t koh_hasher_mum(const void *data, size_t len);
 Hash_t koh_hasher_fnv64(const void *data, size_t len);
+Hash_t koh_hasher_xxhash(const void *data, size_t len);
+
 // Для текстовых строк
 Hash_t koh_hasher_djb2(const void *data, size_t len);

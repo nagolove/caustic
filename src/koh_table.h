@@ -66,6 +66,9 @@ static inline void *htable_add_u32(
 static inline void *htable_add_i64(
     HTable *ht, int64_t key, void *value, int value_len
 );
+static inline void *htable_add_u64(
+    HTable *ht, u64 key, void *value, int value_len
+);
 
 // Доступ к элементам
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len);
@@ -228,6 +231,12 @@ static inline void *htable_add_i32(
 
 static inline void *htable_add_u32(
     HTable *ht, uint32_t key, void *value, int value_len
+) {
+    return htable_add(ht, &key, sizeof(key), value, value_len);
+}
+
+static inline void *htable_add_u64(
+    HTable *ht, u64 key, void *value, int value_len
 ) {
     return htable_add(ht, &key, sizeof(key), value, value_len);
 }

@@ -3,7 +3,12 @@
 #include "koh_hashers.h"
 
 #include "mum.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
+
+#define XXH_INLINE_ALL
+#include "xxhash.h"
 
 Hash_t koh_seed = 0;
 
@@ -58,4 +63,9 @@ Hash_t koh_hasher_djb2(const void *data, size_t len) {
 
     return hash;
     // }}}
+}
+
+Hash_t koh_hasher_xxhash(const void *data, size_t len) {
+    printf("koh_hasher_xxhash:\n");
+    return XXH3_64bits(data, len);
 }
