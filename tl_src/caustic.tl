@@ -1296,6 +1296,28 @@ modules = {
     {
         disabled = false,
         copy_for_wasm = true,
+        description = "hash function for tables",
+        custom_defines = nil,
+        dir = "xxhash",
+        includes = { 
+            "xxhash",
+        },
+        libdirs = { "xxhash", },
+        links = { "xxhash" },
+        links_internal = {},
+        name = "xxhash",
+        url_action = "git",
+        build = build_with_make_common,
+        url = "https://github.com/Cyan4973/xxHash.git",
+        --update = update_default,
+    },
+    -- }}}
+
+
+    -- {{{
+    {
+        disabled = false,
+        copy_for_wasm = true,
         description = "ttf fonts manipulation",
         custom_defines = nil,
         dir = "freetype",
@@ -4779,12 +4801,14 @@ local function sub_make(
         -- }}}
     }
 
+    --[[
     if _args.link then
         if verbose then
             print("using flto")
         end
-        table.insert(flags, "-flto")
+        table.insert(flags, "-flto=4")
     end
+    --]]
 
     local debugs = {}
 
@@ -4805,6 +4829,8 @@ local function sub_make(
         table.insert(flags, "-O3")
         -- отключить assert()
         table.insert(flags, "-DNDEBUG")
+        -- для лучшего встраивания функций
+        table.insert(flags, "-flto=4")
 
         defines_apply(flags, cfg.release_define)
     end
