@@ -579,7 +579,6 @@ static void toolmode_init(Stage_SpriteLoader *st) {
         "sector",
         "polyline",
     };
-    int labels_num = sizeof(labels) / sizeof(labels[0]);
     const enum MetaLoaderType items[] = {
         MLT_RECTANGLE,
         MLT_RECTANGLE_ORIENTED,
@@ -587,7 +586,11 @@ static void toolmode_init(Stage_SpriteLoader *st) {
         MLT_POLYLINE,
     };
     int items_num = sizeof(items) / sizeof(items[0]);
+
+#ifndef NDEBUG
+    int labels_num = sizeof(labels) / sizeof(labels[0]);
     assert(labels_num == items_num);
+#endif
 
     st->toolmode_combo = gui_combo_init(
         (const char**)labels, (const void*)items,
@@ -1676,9 +1679,6 @@ static void gui_right_layers_group(Stage_SpriteLoader *st) {
             lua_pop(vm, 1);
 
             igText("%s", name);
-            int top = lua_gettop(vm);
-
-            assert(top == lua_gettop(vm));
 
             bool visible = false;
             const char *visible_str = "visible";

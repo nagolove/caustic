@@ -146,7 +146,6 @@ typedef struct CameraProcessDrag {
 
 typedef struct CameraAutomat {
     Camera2D *cam;
-
     TimerMan *tm;
     double   last_scroll[64];
     int      i;
@@ -344,8 +343,9 @@ bool koh_is_fname_image_ext(const char *fname);
 
 char *points2table_alloc(const Vector2 *points, int points_num);
 
-// Возвращает указатель на статический буфер максимальной длины 1024 
-// заполненный символами в диапазоне 'a'-'A'
+// Возвращает указатель на статический буфер заполненный символами в 
+// диапазоне 'a'-'A'.
+// В случае неудачи из-за нехватки буфера возвращает NULL
 const char *koh_str_gen_aA(size_t len);
 
 // XXX: Функция протестирована?

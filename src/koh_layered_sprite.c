@@ -22,7 +22,10 @@ void layered_sprite_bake(struct LayeredSprite *ls) {
     assert(ls->vm);
     lua_State *vm = ls->vm;
     int max_num = sizeof(ls->textures) / sizeof(ls->textures[0]);
-    assert(ls->num < max_num);
+    if (ls->num >= max_num) {
+        printf("layered_sprite_bake: textures buffer is full\n");
+        exit(EXIT_FAILURE);
+    }
 
     int top = lua_gettop(ls->vm);
 

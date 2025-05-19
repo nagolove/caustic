@@ -304,7 +304,10 @@ inline static void world_shape_render_circle2(
     b2BodyId body_id = b2Shape_GetBody(shape_id);
 
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
-    assert(shape_type == b2_circleShape);
+    if (shape_type != b2_circleShape) {
+        printf("world_shape_render_circle2: shape_type is not a circle\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Преобразования координаты из локальных в глобальные
     Vector2 center = b2Vec2_to_Vector2(
@@ -392,7 +395,11 @@ inline static void world_shape_render_circle(
     b2BodyId body_id = b2Shape_GetBody(shape_id);
 
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
-    assert(shape_type == b2_circleShape);
+    //assert(shape_type == b2_circleShape);
+    if (shape_type != b2_circleShape) {
+        printf("world_shape_render_circle: shape_type should be a circle\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Преобразования координаты из локальных в глобальные
     Vector2 center = b2Vec2_to_Vector2(

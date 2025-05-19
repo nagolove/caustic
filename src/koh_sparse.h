@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 // {{{ SparseSet implementation
 
@@ -84,7 +85,10 @@ static inline SparseSet ss_alloc( int64_t max_id ) {
     /* Maximum possible value of the ss_id_t. */
     static const int64_t ss_id_max = INT64_MAX - 1;
 
-    assert( max_id > 0 && max_id <= ss_id_max );
+    if (max_id < 0 || max_id >= ss_id_max) {
+        printf("ss_alloc: max_id %ld is not in required range\n", max_id);
+        exit(EXIT_FAILURE);
+    }
 
     size_t   array_size = sizeof( int64_t ) * ( max_id + 1 );
     SparseSet ss         = { 0 };

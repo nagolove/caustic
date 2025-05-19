@@ -10,6 +10,20 @@
 #include <string.h>
 #include "koh_strbuf.h"
 #include "munit.h"
+#include "koh_common.h"
+
+/*
+TODO: предложения gpt:
+Создать обёртку e_assert(), которая в debug режиме вызывает assert(), а в релизе логирует ошибку или вызывает abort().
+
+Инкапсулировать выделение памяти в e_alloc(), e_free() — позволит логировать и обрабатывать ошибки централизованно.
+
+Добавить "мета"-флаги для сущностей и компонентов — active, enabled, dirty, pending_destroy.
+
+Сделать e_register() идемпотентным — не регистрировать типы повторно.
+
+Ввести понятие "пулов" (опционально) — чтобы хранить однотипные компоненты в непрерывной памяти.
+*/
 
 #define RIGHT_NULL
 
@@ -28,8 +42,7 @@ typedef union {
                  ver;
     };
     // поле для сравнения на равенство по значению
-    // XXX: Почему знаковое число, если компоненты объединения - беззнаковые?
-    int64_t id;
+    u64 id;
 } e_idu;
 
 _Static_assert(sizeof(e_idu) == 8, "only 64bit machines allowed");
@@ -164,6 +177,7 @@ size_t e_num(ecs_t* r, e_cp_type cp_type);
     Warning: attempting to use invalid entity results in undefined behavior
 */
 void e_remove(ecs_t* r, e_id e, e_cp_type cp_type);
+void e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type);
 
 /*
     Checks if the entity has the given component
@@ -298,6 +312,8 @@ bool e_each_valid(e_each_iter *i);
 void e_each_next(e_each_iter *i);
 e_id e_each_entity(e_each_iter *i);
 
+// XXX: Малополезная функция так как сравнивает кучу полей с указателями.
+// Можно обойтись strcmp(a.name, b.name)
 // Возвращает 0 если типы имеют одинаковые поля.
 // Указатели на функции сравниваются по значению.
 // Строки сравниваются по содержимому.
@@ -390,8 +406,10 @@ int main() {
 static inline bool e_view_valid(e_view* v) {
     assert(v);
 
+#ifndef NDEBUG
     e_view v_zero = {};
     assert(memcmp(v, &v_zero, sizeof(v_zero)) != 0);
+#endif
 
     return (v->current_entity.id != e_null.id);
 }

@@ -2721,9 +2721,18 @@ MunitSuite test_e_suite_internal = {
 
 // {{{ ecs implementation
 
-void e_test_init() {
-    printf("e_test_init:\n");
+#ifdef NDEBUG
+
+static inline void ecs_assert(ecs_t *r) {
 }
+
+static inline void cp_type_assert(e_cp_type cp_type) {
+}
+
+static inline void entity_assert(ecs_t *r, e_id e) {
+}
+
+#else
 
 static inline void ecs_assert(ecs_t *r) {
     assert(r);
@@ -2740,6 +2749,16 @@ static inline void cp_type_assert(e_cp_type cp_type) {
     assert(cp_type.cp_sizeof > 0);
     assert(strlen(cp_type.name) > 0);
 }
+
+static inline void entity_assert(ecs_t *r, e_id e) {
+    if (e.id != e_null.id) {
+        assert(e.ord >= 0);
+        assert(e.ord < r->max_id);
+        assert(e.ver >= 0);
+    }
+}
+
+#endif
 
 // Проверить по имени - зарегистрирован ли тип данных.
 static bool cp_is_registered(ecs_t *r, e_cp_type cp_type) {
@@ -3041,14 +3060,6 @@ e_id e_create(ecs_t* r) {
     */
 
     return e;
-}
-
-static inline void entity_assert(ecs_t *r, e_id e) {
-    if (e.id != e_null.id) {
-        assert(e.ord >= 0);
-        assert(e.ord < r->max_id);
-        assert(e.ver >= 0);
-    }
 }
 
 void e_destroy(ecs_t* r, e_id e) {
@@ -3883,7 +3894,13 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
     for (HTableIterator i = htable_iter_new(r->cp_types);
         htable_iter_valid(&i); htable_iter_next(&i)) {
         const char *type_name = htable_iter_key(&i, NULL);
+
         assert(type_name);
+        if (!type_name) {
+            printf("e_types: type_name is NULL\n");
+            exit(EXIT_FAILURE);
+        }
+
         /*printf("e_types: '%s'\n", type_name);*/
         e_cp_type *type = htable_iter_value(&i, NULL);
 
@@ -3962,6 +3979,7 @@ e_id e_each_entity(e_each_iter *i) {
     return e_null;
 }
 
+/*
 int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
     assert(a.name);
     assert(b.name);
@@ -3982,6 +4000,7 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
         !r_desctiprion &&
         a.initial_cap == b.initial_cap);
 }
+*/
 
 e_id *e_entities_alloc(ecs_t *r, size_t *num) {
     ecs_assert(r);
@@ -4064,3 +4083,20 @@ const char *htable_eid_str(const void *data, int len) {
 // }}}
 
 bool e_verbose = false;
+
+
+void e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type) {
+    ecs_assert(r);
+    assert(e_valid(r, e));
+    cp_is_registered_assert(r, cp_type);
+
+    if (e_get(r, e, cp_type)) {
+        e_storage_remove(e_assure(r, cp_type), e);
+    }
+}
+
+int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
+    return 
+        strcmp(a.name, b.name) == 0 &&
+        a.cp_sizeof == b.cp_sizeof;
+}

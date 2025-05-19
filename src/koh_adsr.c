@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 void adsr_init(struct ADSR *envelope) {
@@ -27,6 +28,10 @@ bool adsr_update(struct ADSR *envelope, double *value) {
     double dt = now - envelope->time_last;
 
     assert(dt >= 0.);
+    if (dt < 0.) {
+        printf("adsr_update: dt < 0.\n");
+        exit(EXIT_FAILURE);
+    }
 
     double ad = envelope->attack + envelope->decay;
     double ads = envelope->attack + envelope->decay + envelope->sustain;

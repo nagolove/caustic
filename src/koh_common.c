@@ -753,6 +753,9 @@ void koh_qsort_soa(
 
 // XXX: Плавная прокрутка масштаба
 bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
+    const float zoom_min = 0.01f;
+    const float zoom_max = 100.0f;
+
     assert(cps);
     assert(cps->cam);
     float mouse_wheel = GetMouseWheelMove();
@@ -761,6 +764,11 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
                         IsKeyDown(cps->modifier_key_down) : true;
     bool wheel_in_eps = mouse_wheel > EPSILON || mouse_wheel < -EPSILON;
     float dscale_value = cps->dscale_value;
+
+    if (!isfinite(cam->zoom)) {
+        cam->zoom = zoom_min;
+    }
+
     if (IsKeyDown(cps->boost_modifier_key_down)) {
         //trace("koh_camera_process_mouse_scale_wheel: boosted\n");
         dscale_value *= dscale_value_boost;
@@ -772,12 +780,19 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
         /*);*/
         const float d = copysignf(dscale_value, mouse_wheel);
         /*trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);*/
-        cam->zoom = cam->zoom + d;
-        Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
-        //cam->target = Vector2Add(cam->target, delta);
-        cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
+
+
+        cam->zoom = fminf(fmaxf(cam->zoom + d, zoom_min), zoom_max);
+        //cam->zoom = cam->zoom + d;
+        //
+        if (cam->zoom > EPSILON) {
+            Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
+            //cam->target = Vector2Add(cam->target, delta);
+            cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
+        }
         return true;
     }
+
     return false;
 }
 
@@ -1909,7 +1924,9 @@ const char *koh_str_gen_aA(size_t len) {
     static char buf[1024 * 4];
     char *pbuf = buf;
     size_t buf_len = sizeof(buf) / sizeof(buf[0]);
-    assert(buf_len > len);
+
+    if (buf_len >= len)
+        return NULL;
 
     for (size_t i = 0; i < len; i++)
         *pbuf++ = rand() % 2 ? 'a' : 'A' + rand() % 26;
@@ -2244,13 +2261,7 @@ void cam_auto_shutdown(CameraAutomat *ca) {
 
 bool tmr_scroll_update(Timer *t) {
     CameraAutomat *ca = t->data;
-    /*float dscale_value = ca->dscale_value;*/
     Camera2D *cam = ca->cam;
-
-    /*float mouse_wheel = GetMouseWheelMove();*/
-    /*const float d = copysignf(dscale_value, mouse_wheel);*/
-    /*trace("tmr_scroll_update: mouse_wheel %f, d %f\n", mouse_wheel, d);*/
-
     float zoom_new = cam->zoom + ca->dscale_value;
     if (zoom_new > cam_zoom_min && zoom_new < cam_zoom_max) {
         cam->zoom = cam->zoom + ca->dscale_value;
@@ -2258,9 +2269,9 @@ bool tmr_scroll_update(Timer *t) {
         cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
     } else 
         return true;
-
     return false;
 }
+
 
 void cam_auto_update(CameraAutomat *ca) {
     timerman_update(ca->tm);
@@ -2275,13 +2286,11 @@ void cam_auto_update(CameraAutomat *ca) {
         ca->last_scroll[ca->i] = now;
     }
 
-    /*
     // TODO: Добавить модификатор для ускорения перемотки
-    if (IsKeyDown(cps->boost_modifier_key_down)) {
-        //trace("koh_camera_process_mouse_scale_wheel: boosted\n");
-        dscale_value *= dscale_value_boost;
-    }
-    */
+    //if (IsKeyDown(cps->boost_modifier_key_down)) {
+    //    //trace("koh_camera_process_mouse_scale_wheel: boosted\n");
+    //    dscale_value *= dscale_value_boost;
+    //}
 
     printf("-----\n");
     for (int j = 0; j < num; j++) {
@@ -2305,12 +2314,15 @@ void cam_auto_update(CameraAutomat *ca) {
 
         if (timerman_num(ca->tm, NULL) == 0) {
             trace("cam_auto_update: timerman_add\n");
-            int err = timerman_add(ca->tm, (TimerDef) {
+            int timer = timerman_add(ca->tm, (TimerDef) {
                 .data = ca,
                 .duration = 0.1,
                 .on_update = tmr_scroll_update,
             });
-            assert(err);
+            assert(timer);
+            if (timer == -1) {
+                printf("cam_auto_update: timer == -1\n");
+            }
         }
     }
 }

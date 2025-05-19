@@ -1641,7 +1641,13 @@ static void lines_print_filter(de_ecs *r, char **lines) {
     lua_settop(r->l, 0);
 
     int type = lua_rawgeti(r->l, LUA_REGISTRYINDEX, r->ref_filter_func);
-    assert(type == LUA_TFUNCTION);
+    if (type != LUA_TFUNCTION) {
+        printf(
+            "lines_print_filter: type is not function, %s\n",
+            lua_typename(r->l, type)
+        );
+        exit(EXIT_FAILURE);
+    }
 
     if (luaL_dostring(r->l, halfmegabuf) != LUA_OK) {
         const char *msg = lua_tostring(r->l, -1);
@@ -2177,17 +2183,17 @@ static MunitResult test_try_get_none_existing_component(
 
         cell = NULL;
         cell = de_try_get(r, en, cp_cell);
-        assert(cell);
+        munit_assert_not_null(cell);
 
         ///////////// !!!!!
         triple = NULL;
         triple = de_try_get(r, en, cp_triple);
-        assert(!triple);
+        munit_assert(!triple);
         ///////////// !!!!!
 
         cell = NULL;
         cell = de_try_get(r, en, cp_cell);
-        assert(cell);
+        munit_assert_not_null(cell);
     }
 
     de_ecs_free(r);

@@ -216,9 +216,15 @@ static void last_points_copy(
 
     const int last_points_num = sizeof(internal->last_points) /
                                 sizeof(internal->last_points[0]);
-    assert(points_num == last_points_num);
+    if (points_num == last_points_num) {
     for (int u = 0; u < points_num; u++)
         internal->last_points[u] = points[u];
+    } else {
+        printf(
+            "last_points_copy: points_num %d != last_points_num %d\n",
+            points_num, last_points_num
+        );
+    }
 }
 
 static void rectanglea_handles_check(

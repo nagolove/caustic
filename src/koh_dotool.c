@@ -790,7 +790,12 @@ static void write_gui_ini(const dotool_ctx_t *ctx, const char *fname) {
     int sz = strlen(ctx->ini_data);
     int items_num = fwrite(ctx->ini_data, sz, 1, file);
     //trace("write_gui_ini: sz %d, items_num %d\n", sz, items_num);
-    assert(1 == items_num);
+    if (1 != items_num) {
+        printf(
+            "write_gui_ini: fwrite() should return 1, not %d\n",
+            items_num
+        );
+    }
     fclose(file);
 }
 

@@ -1514,14 +1514,18 @@ void beh_check_under_mouse2(struct CheckUnderMouseOpts2 *opts) {
         .e = e,
     };
 
-    int err = timerman_add(opts->tm, (struct TimerDef) {
+    // XXX: Как-то можно использовать err?
+    int timer = timerman_add(opts->tm, (struct TimerDef) {
         .duration = opts->duration,
         .on_update = update_shape_under_mouse,
         .on_stop = stop_shape_under_mouse,
         .data = &ctx,
         .sz = sizeof(ctx),
     });
-    assert(err);
+    assert(timer);
+    if (timer == -1) {
+        printf("beh_check_under_mouse2: timer == -1\n");
+    }
 }
 
 void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
@@ -1578,14 +1582,17 @@ void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
         .e = e,
     };
 
-    int err = timerman_add(opts->tm, (struct TimerDef) {
+    int timer = timerman_add(opts->tm, (struct TimerDef) {
         .duration = opts->duration,
         .on_update = update_shape_under_mouse,
         .on_stop = stop_shape_under_mouse,
         .data = &ctx,
         .sz = sizeof(ctx),
     });
-    assert(err);
+    assert(timer);
+    if (timer == -1) {
+        printf("beh_check_under_mouse: timer == -1\n");
+    }
 }
 
 // Удалить тела и сущности которые столкнулись с сенсорами
