@@ -631,7 +631,7 @@ HTable *htable_new(struct HTableSetup *setup) {
         
         // Использование детерминированной хеш функции
         //ht->f_hash = koh_hasher_djb2;
-        ht->f_hash = (void*)XXH3_64bits;
+        ht->f_hash = XXH3_64bits;
     }
 
     if (htable_verbose)
