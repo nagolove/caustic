@@ -438,3 +438,4 @@ static inline void em_setup_screen_size(int *_w, int *_h) {
 #endif
 }
 
+#define assume(cond) do { if (!(cond)) __builtin_unreachable(); } while (0)
