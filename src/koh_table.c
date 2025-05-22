@@ -26,6 +26,8 @@ bool htable_verbose = false;
 
 #define HTABLE_DEBUG_BUCKET 1
 
+#define ht_f_hash XXH3_64bits
+
 /*
 структура корзинки таблицы:
 ------------------------------------------------------
@@ -55,7 +57,7 @@ typedef struct HTable {
 
     HTableKeyCmp    f_keycmp;
     HTableOnRemove  f_on_remove;
-    HashFunction    f_hash;
+    //HashFunction    f_hash;
     HTableData2Str  f_key2str, f_val2str;
 
     void            *userdata;
@@ -86,7 +88,7 @@ static Bucket *bucket_alloc(int key_len, int value_len);
 static inline void htable_assert(HTable *t) {
     assert(t);
     assert(t->arr);
-    assert(t->f_hash);
+    //assert(t->f_hash);
     assert(t->cap >= 0);
     assert(t->taken >= 0);
     assert(t->f_keycmp);
@@ -293,7 +295,7 @@ void htable_extend(HTable *ht, int64_t new_cap) {
     assert(ht);
     assert(ht->cap >= 0);
     assert(ht->taken);
-    assert(ht->f_hash);
+    //assert(ht->f_hash);
     assert(ht->arr);
     assert(new_cap > 0);
     assert(ht->cap < new_cap);
@@ -315,7 +317,8 @@ void htable_extend(HTable *ht, int64_t new_cap) {
     for (int64_t j = 0; j < ht->cap; j++) {
         if (ht->arr[j]) {
             // XXX: Зачем пересчитывать значение хэша?
-            ht->arr[j]->key_hash = ht->f_hash(
+            //ht->arr[j]->key_hash = ht->f_hash(
+            ht->arr[j]->key_hash = ht_f_hash(
                 bucket_get_key(ht->arr[j]), ht->arr[j]->key_len
             );
             _htable_add_uniq(&tmp, ht->arr[j]);
@@ -402,7 +405,7 @@ void *htable_add(
 
     assert(ht->taken < ht->cap);
 
-    Hash_t hash = ht->f_hash(key, key_len);
+    Hash_t hash = ht_f_hash(key, key_len);
     index = hash % ht->cap;
 
     while (ht->arr[index])
@@ -490,7 +493,7 @@ int64_t _htable_get_index(
     assert(key_len > 0);
     assert(key);
 
-    int64_t index = ht->f_hash(key, key_len) % ht->cap;
+    int64_t index = ht_f_hash(key, key_len) % ht->cap;
 
     //XXX: Почему происходит только одна проба, когда несколько элементов
     //лежат подряд?
@@ -614,13 +617,14 @@ HTable *htable_new(struct HTableSetup *setup) {
 
     if (setup) {
         ht->f_on_remove = setup->f_on_remove;
-        ht->f_hash = setup->f_hash;
+        //ht->f_hash = setup->f_hash;
         ht->f_key2str = setup->f_key2str;
         ht->f_val2str = setup->f_val2str;
         ht->f_keycmp = setup->f_keycmp ? setup->f_keycmp : memcmp;
         ht->userdata = setup->userdata;
     }
 
+    /*
     if (!ht->f_hash) {
         // XXX: Смотри тест test_htable_internal_remove_i64()
         // ht->f_hash = koh_hasher_mum;
@@ -633,12 +637,15 @@ HTable *htable_new(struct HTableSetup *setup) {
         //ht->f_hash = koh_hasher_djb2;
         ht->f_hash = XXH3_64bits;
     }
+*/
 
+    /*
     if (htable_verbose)
         printf(
             "htable_new: capacity %lld, hash functions %s\n",
             (long long)ht->cap, koh_hashers_name_by_funcptr(ht->f_hash)
         );
+    */
 
     ht->arr = calloc(ht->cap, sizeof(ht->arr[0]));
     ht->taken = 0;
@@ -718,13 +725,15 @@ HTable *htable_union(HTable *a, HTable *b) {
     htable_assert(a);
     htable_assert(b);
 
+    /*
     if (a->f_hash != b->f_hash) {
         printf("htable_union: only for tables with same hash function");
         abort();
     }
+    */
 
     HTableSetup u_setup = {
-        .f_hash = a->f_hash,
+        //.f_hash = a->f_hash,
         .f_val2str = a->f_val2str,
         .f_key2str = a->f_key2str,
         .userdata = a->userdata,
