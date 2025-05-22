@@ -4090,7 +4090,7 @@ void e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type) {
     assert(e_valid(r, e));
     cp_is_registered_assert(r, cp_type);
 
-    if (e_get(r, e, cp_type)) {
+    if (e_has(r, e, cp_type)) {
         e_storage_remove(e_assure(r, cp_type), e);
     }
 }
