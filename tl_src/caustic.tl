@@ -1096,6 +1096,9 @@ local function build_box2c_common(dep: Dependency)
         insert(t, '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ')
     end
 
+    -- XXX: В релизе проверки довольно дорогие
+    --cmake -B build -DBOX2D_VALIDATE=OFF
+
     cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
         '-DCMAKE_BUILD_TYPE=Debug ' ..
         '-DBOX2D_VALIDATE=ON ' ..
