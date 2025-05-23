@@ -1096,6 +1096,9 @@ local function build_box2c_common(dep)
       insert(t, '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ')
    end
 
+
+
+
    cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
    '-DCMAKE_BUILD_TYPE=Debug ' ..
    '-DBOX2D_VALIDATE=ON ' ..
@@ -4853,7 +4856,12 @@ local function sub_make(
       end
    end
 
-   flags = ut.merge_tables(flags, { "-Wall", "-fPIC" })
+   flags = ut.merge_tables(flags, {
+      "-Wall",
+
+      "-Watomic-implicit-seq-cst",
+      "-fPIC",
+   })
    flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
    if verbose then

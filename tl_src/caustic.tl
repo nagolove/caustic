@@ -4856,7 +4856,12 @@ local function sub_make(
         end
     end
 
-    flags = ut.merge_tables(flags, { "-Wall", "-fPIC", })
+    flags = ut.merge_tables(flags, { 
+        "-Wall",
+        -- всегда делать store/load явно для атомиков
+        "-Watomic-implicit-seq-cst", 
+        "-fPIC", 
+    })
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
     if verbose then
