@@ -114,6 +114,12 @@ local cache: Cache
 
 local flags_sanitazer = {
 
+    -- TODO: Сделать опцию для сборки с проверкой тредов.
+    -- Как будет выглядеть такая опция? 
+    -- К каким командам она будет применяться?
+    -- Типа koh make -t
+    -- TODO: Сделать сборку всей щелочи под clang
+    -- Типа koh make --clang 
     --[[
     "-fsanitize=thread,leak",
     "-fsanitize-address-use-after-scope",
@@ -998,7 +1004,14 @@ local function build_raylib_common(dep: Dependency)
 
         chdir("src")
         cmd_do("make clean")
-        local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+        --insert(c, "-pthread")
+        local ccf = 'CFLAGS="-O2 -g -pthread -matomics -mbulk-memory"'
+        --local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+        -- TODO: Поддержка атомиков в веб сборке рейлиб'а
+        local cmd = format(
+            format("make %s PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", ccf),
+            EMSDK
+        )
         print('cmd', cmd)
         cmd_do(cmd)
         cmd_do("mv libraylib.web.a libraylib.a")
@@ -1129,7 +1142,11 @@ local function utf8proc_after_build(_: Dependency)
 end
 
 local function build_munit_common(dep: Dependency)
-    cmd_do(compiler[dep.target] .. " -c munit.c")
+    local flags = ""
+    if dep.target == "wasm" then
+        flags = "-pthread"
+    end
+    cmd_do(compiler[dep.target] .. " -c munit.c " .. flags)
     cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
 end
 
@@ -1306,7 +1323,7 @@ modules = {
             "xxhash",
         },
         libdirs = { "xxhash", },
-        links = { "xxhash" },
+        --links = { "xxhash" },
         links_internal = {},
         name = "xxhash",
         url_action = "git",
@@ -4310,6 +4327,13 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         .. "-sDEMANGLE_SUPPORT=1 "
         .. " -sERROR_ON_UNDEFINED_SYMBOLS=0 "
 
+        .. "-s USE_PTHREADS=1 "
+        .. "-pthread "
+        .. "-matomics " 
+        .. "-mbulk-memory "
+
+        .. "-s PTHREAD_POOL_SIZE=4 "
+
         .. " -DPLATFORM_WEB " 
         .. "-s USE_GLFW=3 " 
         .. "-s ASSERTIONS "
@@ -4330,6 +4354,8 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         --.. path_abs_third_party['wasm'] 
         --.. "/raylib/src/minshell.html "
     end
+
+    print("cmd:", cmd)
 
     cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
                  table.concat(libsdirs, " ") .. " " ..
@@ -4817,6 +4843,8 @@ local function sub_make(
 
     if target == 'wasm' then
         insert(flags, "-Os")
+        --insert(flags, "-pthread -matomics -mbulk-memory")
+        insert(flags, "-pthread")
     end
 
     if not _args.release then
@@ -4858,9 +4886,17 @@ local function sub_make(
 
     flags = ut.merge_tables(flags, { 
         "-Wall",
+        "-Wcast-qual",
+        "-Wstrict-aliasing",
+
+        -- XXX: в gcc не работает
         -- всегда делать store/load явно для атомиков
-        "-Watomic-implicit-seq-cst", 
+        --"-Watomic-implicit-seq-cst", 
+
+        --"-Watomics",
+
         "-fPIC", 
+        "-latomic",
     })
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 

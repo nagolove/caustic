@@ -119,6 +119,12 @@ local flags_sanitazer = {
 
 
 
+
+
+
+
+
+
    "-fsanitize=undefined,address",
    "-fsanitize-address-use-after-scope",
 }
@@ -998,7 +1004,14 @@ local function build_raylib_common(dep)
 
       chdir("src")
       cmd_do("make clean")
-      local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
+
+      local ccf = 'CFLAGS="-O2 -g -pthread -matomics -mbulk-memory"'
+
+
+      local cmd = format(
+      format("make %s PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", ccf),
+      EMSDK)
+
       print('cmd', cmd)
       cmd_do(cmd)
       cmd_do("mv libraylib.web.a libraylib.a")
@@ -1129,7 +1142,11 @@ local function utf8proc_after_build(_)
 end
 
 local function build_munit_common(dep)
-   cmd_do(compiler[dep.target] .. " -c munit.c")
+   local flags = ""
+   if dep.target == "wasm" then
+      flags = "-pthread"
+   end
+   cmd_do(compiler[dep.target] .. " -c munit.c " .. flags)
    cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
 end
 
@@ -1306,7 +1323,7 @@ modules = {
          "xxhash",
       },
       libdirs = { "xxhash" },
-      links = { "xxhash" },
+
       links_internal = {},
       name = "xxhash",
       url_action = "git",
@@ -4310,6 +4327,13 @@ local function project_link(ctx, cfg, _args)
       "-sDEMANGLE_SUPPORT=1 " ..
       " -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
 
+      "-s USE_PTHREADS=1 " ..
+      "-pthread " ..
+      "-matomics " ..
+      "-mbulk-memory " ..
+
+      "-s PTHREAD_POOL_SIZE=4 " ..
+
       " -DPLATFORM_WEB " ..
       "-s USE_GLFW=3 " ..
       "-s ASSERTIONS " ..
@@ -4330,6 +4354,8 @@ local function project_link(ctx, cfg, _args)
 
 
    end
+
+   print("cmd:", cmd)
 
    cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
    table.concat(libsdirs, " ") .. " " ..
@@ -4817,6 +4843,8 @@ local function sub_make(
 
    if target == 'wasm' then
       insert(flags, "-Os")
+
+      insert(flags, "-pthread")
    end
 
    if not _args.release then
@@ -4858,9 +4886,17 @@ local function sub_make(
 
    flags = ut.merge_tables(flags, {
       "-Wall",
+      "-Wcast-qual",
+      "-Wstrict-aliasing",
 
-      "-Watomic-implicit-seq-cst",
+
+
+
+
+
+
       "-fPIC",
+      "-latomic",
    })
    flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
