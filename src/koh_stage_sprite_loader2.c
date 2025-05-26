@@ -991,7 +991,12 @@ static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
             case MLT_RECTANGLE: {
                 struct MetaLoaderRectangle *obj_rect;
                 obj_rect = (struct MetaLoaderRectangle*)objects.objs[j];
-                str_repr = (char*)rect2str(obj_rect->rect);
+
+                const char *tmp = rect2str(obj_rect->rect);
+                if (!tmp)
+                    tmp = "";
+                str_repr = strdup(tmp);
+                str_repr_allocated = true;
                 break;
             }
             case MLT_RECTANGLE_ORIENTED:

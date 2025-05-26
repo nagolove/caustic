@@ -232,8 +232,8 @@ _exit:
 }
 
 struct CompareCtx {
-    StrSet *set;
-    bool    eq;
+    const StrSet    *set;
+    bool            eq;
 };
 
 static StrSetAction iter_compare(const char *key, void *udata) {
@@ -245,11 +245,11 @@ static StrSetAction iter_compare(const char *key, void *udata) {
     return SSA_next;
 }
 
-bool strset_compare(const StrSet *s1, const StrSet *s2) {
+bool strset_compare(StrSet *s1, StrSet *s2) {
     assert(s1);
     assert(s2);
     struct CompareCtx ctx = {
-        .set = (StrSet*)s2,
+        .set = (const StrSet*)s2,
         .eq = true,
     };
     strset_each((StrSet*)s1, iter_compare, &ctx);
@@ -290,7 +290,7 @@ static StrSetAction iter_diffence(const char *key, void *udata) {
     return SSA_next;
 }
 
-StrSet *strset_difference(const StrSet *s1, const StrSet *s2) {
+StrSet *strset_difference(StrSet *s1, StrSet *s2) {
     assert(s1);
     assert(s2);
 

@@ -31,7 +31,10 @@ static HTableAction iter_print_sound(
 ) {
     struct SoundArray *sound_arr = value;
     //console_buf_write("[%s] - %d variations\n", (char*)key, sound_arr->num);
-    printf("iter_print_sound: [%s] - %d variations\n", (char*)key, sound_arr->num);
+    printf(
+        "iter_print_sound: [%s] - %d variations\n",
+        (const char*)key, sound_arr->num
+    );
     return HTABLE_ACTION_NEXT;
 }
 
@@ -52,7 +55,7 @@ int l_sound_play(lua_State *lua) {
 void sfx_init() {
     trace("sfx_init:\n");
     sounds_tbl = htable_new(&(struct HTableSetup) {
-        .f_hash = koh_hasher_mum,
+        //.f_hash = koh_hasher_mum,
         .cap = 64,
     });
 

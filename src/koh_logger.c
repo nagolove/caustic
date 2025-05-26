@@ -63,7 +63,7 @@ void trace_filter_add(const char *pattern) {
     size_t      erroffset = 0;
     uint32_t    flags = 0;
     fe->r = pcre2_compile(
-        (unsigned char*)pattern, 
+        (const u8*)pattern, 
         PCRE2_ZERO_TERMINATED, flags, 
         &errnumner, &erroffset, 
         NULL
@@ -98,7 +98,7 @@ bool filter_match(const char *string) {
 #endif
         size_t str_len = strlen(string);
         int rc = pcre2_match(
-            filters[j].r, (unsigned char*)string,
+            filters[j].r, (const u8*)string,
             str_len, 0, 0, 
             filters[j].match_data, NULL
         );

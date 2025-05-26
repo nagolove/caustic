@@ -2,7 +2,7 @@
 // vim: fdm=marker
 #include "koh_hashers.h"
 
-#include "mum.h"
+//#include "mum.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -19,7 +19,7 @@ void koh_hashers_init() {
 struct HashFunctionDef koh_hashers[] = {
     { .f = koh_hasher_fnv64, .fname = "fnv64" },
     { .f = koh_hasher_djb2, .fname = "djb2" },
-    { .f = koh_hasher_mum, .fname = "mum" },
+    //{ .f = koh_hasher_mum, .fname = "mum" },
     { .f = NULL, .fname = NULL },
 };
 
@@ -31,18 +31,20 @@ const char *koh_hashers_name_by_funcptr(void *func_ptr) {
     return NULL;
 }
 
+/*
 Hash_t koh_hasher_mum(const void *data, size_t len) {
     // {{{
     assert(koh_seed != 0);
     return mum_hash(data, len, koh_seed);
     // }}}
 }
+*/
 
 Hash_t koh_hasher_fnv64(const void *data, size_t len) {
     // {{{
 	size_t i;
 	uint64_t h = 0xcbf29ce484222325ull;
-	const char *c = (char*)data;
+	const char *c = (const char*)data;
 
 	for (i = 0; i < len; i++) {
 		h = (h * 0x100000001b3ll) ^ c[i];

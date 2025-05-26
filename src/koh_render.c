@@ -293,7 +293,7 @@ void render_v4_with_tex2(const RenderTexOpts *opts) {
     Texture2D       texture = opts->texture;
     const Vector2   *verts = opts->verts;
     Color           tint = opts->tint;
-    Vector2         *uv = (Vector2*)opts->uv;
+    const Vector2   *uv = (const Vector2*)opts->uv;
 
     // Check if texture is valid
     if (texture.id <= 0)

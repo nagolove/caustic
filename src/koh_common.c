@@ -328,7 +328,7 @@ int u8_codeptlen(const char *str) {
     int len = strlen(str), totalread = 0, i = 0, cdp;
 
     do {
-        int bytesread = utf8proc_iterate((utf8proc_uint8_t*)pstr, -1, &cdp);
+        int bytesread = utf8proc_iterate((const u8*)pstr, -1, &cdp);
 
         pstr += bytesread;
 
@@ -674,7 +674,7 @@ const char * remove_suffix(const char *str) {
 }
 
 
-const char *get_basename(const char *path) {
+const char *get_basename(char *path) {
     static char buf[512] = {0};
     memset(buf, 0, sizeof(buf));
     char* ret = basename((char*)path);
@@ -1052,7 +1052,7 @@ static bool match(struct FilesSearchResult *fsr, const char *str) {
 
     found = pcre2_match(
         fsr->internal->regex.pcre.r,
-        (unsigned char*)str,
+        (const u8*)str,
         strlen(str), 
         0, 0, fsr->internal->regex.pcre.match_data, NULL
     );
@@ -1457,7 +1457,7 @@ void koh_search_files_exclude_pcre(
     int errnumner;
     size_t erroffset;
     pcre2_code *regex = pcre2_compile(
-        (unsigned char*)exclude_pattern, 
+        (const u8*)exclude_pattern, 
         PCRE2_ZERO_TERMINATED,
         0,
         &errnumner,
@@ -1852,7 +1852,7 @@ bool koh_str_match(const char *str, size_t *str_len, const char *pattern) {
     uint32_t flags = 0;
 
     r = pcre2_compile(
-        (unsigned char*)pattern, 
+        (const u8*)pattern, 
         PCRE2_ZERO_TERMINATED, flags, 
         &errnumner, &erroffset, 
         NULL
@@ -1872,7 +1872,7 @@ bool koh_str_match(const char *str, size_t *str_len, const char *pattern) {
     assert(match_data);
 
     int rc = pcre2_match(
-        r, (unsigned char*)str, str_len ? *str_len : strlen(str), 
+        r, (const u8*)str, str_len ? *str_len : strlen(str), 
         0, 0, match_data, NULL
     );
     //printf("rc %d\n", rc);
@@ -1943,9 +1943,9 @@ char *koh_str_sub_alloc(
     size_t erroffset;
 
     // Длина исходной строки
-    PCRE2_SIZE subject_length = strlen((char *)subject);
+    PCRE2_SIZE subject_length = strlen((const char *)subject);
     // Длина строки замены
-    PCRE2_SIZE replacement_length = strlen((char *)replacement);
+    PCRE2_SIZE replacement_length = strlen((const char *)replacement);
 
     // Создание компилятора регулярных выражений
     pcre2_code *re = pcre2_compile(
@@ -1979,7 +1979,7 @@ char *koh_str_sub_alloc(
         PCRE2_SUBSTITUTE_GLOBAL,        // Флаги замены (глобальная замена)
         NULL,                           // Набор совпадений
         NULL,                           // Память для набора совпадений
-        (unsigned char*)replacement,    // Строка замены
+        (const u8*)replacement,    // Строка замены
         replacement_length,             // Длина строки замены
         result,                         // Буфер для результата
         &result_length                  // Длина буфера результата
@@ -2471,3 +2471,17 @@ const char *Vector2_arr_tostr(Vector2 *arr, size_t num) {
     return buf;
 }
 
+
+#if defined(PLATFORM_WEB)
+// Объявляем JavaScript-функцию, возвращающую количество логических ядер
+EM_JS(int, get_hardware_concurrency, (), {
+  if (navigator && navigator.hardwareConcurrency)
+    return navigator.hardwareConcurrency;
+  else
+    return 1; // fallback
+});
+#else
+int get_hardware_concurrency() {
+    return (int)sysconf(_SC_NPROCESSORS_ONLN);
+}
+#endif

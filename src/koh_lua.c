@@ -340,7 +340,7 @@ static void type_alloc(const char *mtname, const Reg_ext *methods) {
     new->next = typelist;
     new->mtname = strdup(mtname);
 
-    Reg_ext *cur = (Reg_ext*)methods - 1;
+    const Reg_ext *cur = (const Reg_ext*)methods - 1;
     while (true) {
         if (max_fields_num <= 0) {
             trace(
@@ -368,7 +368,7 @@ static void type_alloc(const char *mtname, const Reg_ext *methods) {
 static void fill_methods_table(
     lua_State *lua, const char *mtname, const Reg_ext *methods
 ) {
-    Reg_ext *cur = (Reg_ext*)methods - 1;
+    const Reg_ext *cur = (const Reg_ext*)methods - 1;
     luaL_newmetatable(lua, mtname);
 
     lua_pushvalue(lua, -1);
@@ -402,7 +402,7 @@ static void fill_help_table(
 ) {
     // табличка со справкой
     lua_createtable(lua, 0, 0);
-    Reg_ext *cur = (Reg_ext*)methods - 1;
+    const Reg_ext *cur = (const Reg_ext*)methods - 1;
 
     while (true) {
         if (max_fields_num<= 0) {
@@ -528,7 +528,7 @@ char *L_table_serpent_alloc(lua_State *l, enum L_DumpError *err) {
     // наличие библиотек в виртуальной машине по причинам безопасности.
     luaL_openlibs(l);
 
-    if (luaL_loadstring(l, (char*)serpent_lua) != LUA_OK) {
+    if (luaL_loadstring(l, (const char*)serpent_lua) != LUA_OK) {
         printf(
             "L_table_dump2allocated_str: luaL_loadstring error '%s'\n",
             lua_tostring(l, -1)
@@ -605,7 +605,7 @@ char *L_table_dump2allocated_str(lua_State *l) {
     );
     */
 
-    if (luaL_loadstring(l, (char*)serpent_lua) != LUA_OK) {
+    if (luaL_loadstring(l, (const char*)serpent_lua) != LUA_OK) {
         printf(
             "L_table_dump2allocated_str: luaL_loadstring error '%s'\n",
             lua_tostring(l, -1)
@@ -895,7 +895,9 @@ struct Pair {
 };
 
 static int cmp(const void *a, const void * b) {
-    return strcmp(((struct Pair*)a)->name, ((struct Pair*)b)->name);
+    const char *_a = ((const struct Pair*)a)->name,
+               *_b = ((const struct Pair*)b)->name;
+    return strcmp(_a, _b);
 }
 
 void sc_register_all_functions(void) {

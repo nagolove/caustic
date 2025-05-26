@@ -184,7 +184,7 @@ static HTableAction iter_list(
     const void *key, int key_len, void *value, int value_len, void *udata
 ) {
     /*console_buf_write(">%s", (char*)key);*/
-    trace("inotifier_list: %s\n", (char*)key);
+    trace("inotifier_list: %s\n", (const char*)key);
     return HTABLE_ACTION_NEXT;
 }
 
@@ -208,7 +208,7 @@ void inotifier_init() {
 
     in.tbl = htable_new(&(struct HTableSetup) {
         .cap    = MAX_WATCHED_FILES,
-        .f_hash = koh_hasher_mum,
+        //.f_hash = koh_hasher_mum,
     });
 
     in.fd = inotify_init1(IN_NONBLOCK);

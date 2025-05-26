@@ -59,7 +59,7 @@ static void draw_polygon(
     float line_thick = context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
-    Vector2 *verts = (Vector2*)vertices;
+    const Vector2 *verts = (const Vector2*)vertices;
     for (int i = 0; i < vertexCount - 1; i++) {
         DrawLineEx(
             verts[i], verts[i + 1], line_thick, b2Color_to_Color(color)
@@ -89,7 +89,7 @@ static void draw_solid_polygon(
     float line_thick = context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
-    Vector2 *verts = (Vector2*)vertices;
+    const Vector2 *verts = (const Vector2*)vertices;
     DrawTriangleFan(verts, vertexCount, b2Color_to_Color(color));
 
     Color solid_color = BLACK;

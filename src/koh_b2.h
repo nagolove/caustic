@@ -184,7 +184,9 @@ void box2d_gui(struct WorldCtx *wctx);
 
 // TODO: Область камеры не должна превышать область экран, то есть
 // GetScreenWidth(), GetScreenHeight()
+
 // FIXME: Заменить Camera2D *cam на Camera2D cam
+// Зачем это делать?
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     assert(cam);
 
@@ -221,6 +223,7 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
         );
         abort();
     }
+
     return aabb;
 }
 

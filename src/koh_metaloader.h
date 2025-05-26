@@ -225,8 +225,8 @@ struct MetaLoaderObjects2 metaloader_objects_get2(
 void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *object);
 
 struct MetaLoaderObject2Str {
-    const char  *s;
-    bool        is_allocated;
+    char  *s;
+    bool  is_allocated;
 };
 
 struct MetaLoaderObject2Str metaloader_object2str(

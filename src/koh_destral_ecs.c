@@ -603,11 +603,11 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
 int de_cp_type_cmp_adaptor(const void *a, const void *b, size_t len) {
     assert(a);
     assert(b);
-    return de_cp_type_cmp(*(de_cp_type*)a, *(de_cp_type*)b);
+    return de_cp_type_cmp(*(const de_cp_type*)a, *(const de_cp_type*)b);
 }
 
 const char *de_cp_type2str_adaptor(const void *data, int data_len) {
-    return de_cp_type_2str(*(de_cp_type*)data);
+    return de_cp_type_2str(*(const de_cp_type*)data);
 }
 
 de_ecs* de_ecs_new() {

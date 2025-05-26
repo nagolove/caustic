@@ -30,10 +30,10 @@ void strset_free(StrSet *set);
 void strset_remove(StrSet *set, const char *key);
 void strset_removen(StrSet *set, const char *key, size_t key_len);
 void strset_each(StrSet *set, StrSetEachCallback cb, void *udata);
-bool strset_compare(const StrSet *s1, const StrSet *s2);
+bool strset_compare(StrSet *s1, StrSet *s2);
 bool strset_compare_strs(const StrSet *s1, char **lines, size_t lines_num);
 // Создает новое множество строк из разницы s1 - s2
-StrSet *strset_difference(const StrSet *s1, const StrSet *s2);
+StrSet *strset_difference(StrSet *s1, StrSet *s2);
 // Увеличивает емкость контейнера в двое, производит перехеширование
 void strset_extend(StrSet *set);
 void strset_print(StrSet *set, FILE *f);

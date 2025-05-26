@@ -118,7 +118,7 @@ Rectangle rect_from_arr(const float xywh[4]);
 // строку без суффикса
 const char * remove_suffix(const char *str);
 
-const char *get_basename(const char *path);
+const char *get_basename(char *path);
 
 typedef int (*QSortCmpFunc)(void *a, void *b);
 typedef void (*QSortSwapFunc)(size_t index1, size_t index2, void *udata);
@@ -439,3 +439,8 @@ static inline void em_setup_screen_size(int *_w, int *_h) {
 }
 
 #define assume(cond) do { if (!(cond)) __builtin_unreachable(); } while (0)
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+
+int get_hardware_concurrency();

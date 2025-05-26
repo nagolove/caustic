@@ -100,12 +100,12 @@ static inline uint32_t get_aligned_size(uint32_t size) {
     return (size + (htable_aligment - 1)) & ~(htable_aligment - 1);
 }
 
-static inline void *bucket_get_key(const Bucket *bucket) {
+static inline void *bucket_get_key(Bucket *bucket) {
     assert(bucket);
     return (char*)bucket + get_aligned_size(sizeof(*bucket));
 }
 
-static inline void *bucket_get_value(const Bucket *bucket) {
+static inline void *bucket_get_value(Bucket *bucket) {
     assert(bucket);
     assert(bucket->key_len > 0);
     return (char*)bucket + get_aligned_size(sizeof(*bucket)) +
@@ -2190,7 +2190,7 @@ static void _test_htable_internal_add_get_remove_get_float(HashFunction f) {
         htable_add_f32(t, key_src, &val, sizeof(val));
         // Проверить ключ
         val_get = htable_get_f32(t, key_src, NULL);
-        munit_assert(*(int*)val_get == val);
+        munit_assert(*(const int*)val_get == val);
 
         // Удалить ключ
         htable_remove_f32(t, key_src);
@@ -2456,7 +2456,8 @@ void S_free(S s) {
 static void S_on_remove(
     const void *key, int key_len, void *value, int value_len, void *userdata
 ) {
-    S *s = (void*)key;
+    assert(key);
+    const S *s = (const void*)key;
     S_free(*s);
 }
 
@@ -2778,9 +2779,11 @@ static MunitResult test_koh_hashers_search(
     munit_assert_not_null(name);
     munit_assert_string_equal(name, "fnv64");
 
+    /*
     name = koh_hashers_name_by_funcptr(koh_hasher_mum);
     munit_assert_not_null(name);
     munit_assert_string_equal(name, "mum");
+    */
 
     name = koh_hashers_name_by_funcptr(koh_hasher_djb2);
     munit_assert_not_null(name);

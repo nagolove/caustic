@@ -171,7 +171,7 @@ static inline const char *htable_i32_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%d", *(int*)data);
+    sprintf(buf, "%d", *(const int*)data);
     return buf;
 }
 
@@ -179,7 +179,7 @@ static inline const char *htable_u32_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%u", *(int*)data);
+    sprintf(buf, "%u", *(const int*)data);
     return buf;
 }
 
@@ -187,7 +187,7 @@ static inline const char *htable_f32_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%f", *(float*)data);
+    sprintf(buf, "%f", *(const float*)data);
     return buf;
 }
 
@@ -195,7 +195,7 @@ static inline const char *htable_i64_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%lld", (long long)*(int64_t*)data);
+    sprintf(buf, "%lld", (long long)*(const int64_t*)data);
     return buf;
 }
 
@@ -203,7 +203,7 @@ static inline const char *htable_str_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%.*s", (int)sizeof(buf) - 10, (char*)data);
+    sprintf(buf, "%.*s", (int)sizeof(buf) - 10, (const char*)data);
     return buf;
 }
 
@@ -211,7 +211,7 @@ static inline const char *htable_char_str(const void *data, int len) {
     static char buf[128] = {};
     memset(buf, 0, sizeof(buf));
     assert(data);
-    sprintf(buf, "%d", *(char*)data);
+    sprintf(buf, "%d", *(const char*)data);
     return buf;
 }
 // }}}
@@ -264,11 +264,11 @@ static inline bool htable_remove_i32(HTable *ht, int key) {
 // специальные функции сравнения cmp_f32, cmp_f64
 
 static inline int cmp_f32(const void *a, const void *b, size_t len) {
-    float fa = *(float*)a, fb = *(float*)b;
+    float fa = *(const float*)a, fb = *(const float*)b;
     return (fa > fb) - (fa < fb); // не учитывает NaN!
 }
 
 static inline int cmp_f64(const void *a, const void *b, size_t len) {
-    double fa = *(double*)a, fb = *(double*)b;
+    double fa = *(const double*)a, fb = *(const double*)b;
     return (fa > fb) - (fa < fb); // не учитывает NaN!
 }

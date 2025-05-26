@@ -2,6 +2,7 @@
 // vim: fdm=marker
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -86,7 +87,10 @@ static inline SparseSet ss_alloc( int64_t max_id ) {
     static const int64_t ss_id_max = INT64_MAX - 1;
 
     if (max_id < 0 || max_id >= ss_id_max) {
-        printf("ss_alloc: max_id %ld is not in required range\n", max_id);
+        printf(
+            "ss_alloc: max_id %" PRId64 " is not in required range\n",
+            max_id
+        );
         exit(EXIT_FAILURE);
     }
 

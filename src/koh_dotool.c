@@ -593,9 +593,9 @@ void dotool_exec_script(struct dotool_ctx *ctx, const char *script_fname) {
         pthread_mutex_unlock(ctx->mutex);
 
         trace("dotool_exec_script: before execve\n");
-        const char *abs_path = realpath(script_fname, NULL);
+        char *abs_path = realpath(script_fname, NULL),
+             *xdotool_path = "/usr/bin/xdotool";
         trace("dotool_exec_script: abs_path %s\n", abs_path);
-        const char *xdotool_path = "/usr/bin/xdotool";
 
         setenv("CAUSTIC_XDOTOOL_FNAME", "", 1);
         execve(
