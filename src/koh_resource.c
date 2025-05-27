@@ -342,6 +342,18 @@ static void *copy_alloc(void *ptr, size_t sz) {
     return cp;
 }
 
+Shader reslist_load_shader(ResList *l, const char *fname) {
+    assert(l);
+    assert(fname);
+    Shader s = LoadShader(NULL, fname);
+    R *r = reslist_add(l);
+    r->type = RT_SHADER;
+    assert(strlen(fname) < sizeof(r->fname));
+    strncpy(r->fname, fname, sizeof(r->fname));
+    r->raylib_object = copy_alloc(&s, sizeof(s));
+    return s;
+}
+
 Texture reslist_load_texture(ResList *l, const char *fname) {
     assert(l);
     assert(fname);

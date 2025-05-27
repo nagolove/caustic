@@ -2921,7 +2921,6 @@ static TestDestroyCtx facade_create() {
     return (TestDestroyCtx) {
         .r = de_ecs_new(),
         .map_entt2Desc = htable_new(&(HTableSetup) {
-            .f_hash = koh_hasher_mum,
             .f_on_remove = map_on_remove,
             .f_key2str = htable_u32_str,
             .f_val2str = map_val2str,

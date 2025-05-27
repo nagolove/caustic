@@ -444,3 +444,5 @@ static inline void em_setup_screen_size(int *_w, int *_h) {
 
 
 int get_hardware_concurrency();
+
+

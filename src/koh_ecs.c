@@ -3118,6 +3118,8 @@ bool e_valid(ecs_t* r, e_id e) {
 }
 
 static void e_storage_remove(e_storage *s, e_id e) {
+    assert(s);
+    assert(s->sparse.sparse);
     int64_t pos2remove = s->sparse.sparse[e.ord];
     ss_remove(&s->sparse, e.ord);
 
@@ -3259,6 +3261,24 @@ void* e_get(ecs_t* r, e_id e, e_cp_type cp_type) {
         return &cp_data[sparse_index * s->cp_sizeof];
     } else 
         return NULL;
+}
+
+void* e_get_fast(ecs_t* r, e_id e, e_cp_type cp_type) {
+    ecs_assert(r);
+    entity_assert(r, e);
+    cp_type_assert(cp_type);
+
+    e_storage *s = e_assure(r, cp_type);
+
+    // Индекс в линейном маcсиве
+    int64_t sparse_index = s->sparse.sparse[e.ord];
+    assert(sparse_index >= 0);
+    assert(sparse_index < s->sparse.max);
+
+    char *cp_data = s->cp_data;
+    assert(cp_data);
+
+    return &cp_data[sparse_index * s->cp_sizeof];
 }
 
 void e_each(ecs_t* r, e_each_function fun, void* udata) {

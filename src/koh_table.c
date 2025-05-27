@@ -497,7 +497,9 @@ int64_t _htable_get_index(
 
     //XXX: Почему происходит только одна проба, когда несколько элементов
     //лежат подряд?
-    
+   
+    i32 cmp = 0;
+
     // Максимальное время поиска - проверить все элементы массива
     for (int64_t i = 0; i < ht->cap; i++) {
         Bucket *buck = ht->arr[index];
@@ -508,26 +510,17 @@ int64_t _htable_get_index(
         assert(key_t);
 
         /*
-Разные ключи могут иметь одинаковые длины.
-Пробинг не должен останавливаться при длине — только при пустой ячейке.
+            Разные ключи могут иметь одинаковые длины.
+            Пробинг не должен останавливаться при длине — только при пустой ячейке.
          */
-        //if (buck->key_len != key_len)
-        //    goto _next;
-
         int trgt_key_len = key_len > buck->key_len ? buck->key_len : key_len;
 
-        /*
-        printf("probing:");
-        bucket_print(ht, buck, stdout, NULL);
-        printf("\n");
-        */
+        cmp = ht->f_keycmp(key_t, key, trgt_key_len);
 
         // Если ключ найден - прерывание цикла
-        /*if (memcmp(key_t, key, trgt_key_len) == 0)*/
-        if (ht->f_keycmp(key_t, key, trgt_key_len) == 0)
+        if (cmp == 0)
             break;
 
-//_next:
         index = (index + 1) % ht->cap;
     }
 
@@ -536,24 +529,15 @@ int64_t _htable_get_index(
     if (!buck)
         return INT64_MAX;
 
+#ifndef NDEBUG
     char *key_t = bucket_get_key(buck);
     assert(key_t);
-
-    /*
-    if (htable_verbose) 
-        printf("_htable_get: index %ld\n", index);
-
-    if (htable_verbose && ht->f_key2str) {
-        printf("_htable_get: key '%s'\n", ht->f_key2str(key_t, buck->key_len));
-    }
-    */
+#endif
 
     if (buck->key_len != key_len)
         return INT64_MAX;
 
-    int trgt_key_len = key_len > buck->key_len ? buck->key_len : key_len;
-    /*if (!memcmp(key_t, key, trgt_key_len)) {*/
-    if (!ht->f_keycmp(key_t, key, trgt_key_len)) {
+    if (!cmp) {
         if (value_len)
             *value_len = buck->value_len;
         return index;

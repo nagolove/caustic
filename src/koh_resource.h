@@ -21,6 +21,7 @@ Font reslist_load_font(ResList *l, const char *fname, int size);
 Texture reslist_load_texture(ResList *l, const char *fname);
 Texture reslist_load_tex(ResList *l, const char *fname);
 RenderTexture2D reslist_load_rt(ResList *l, int w, int h);
+Shader reslist_load_shader(ResList *l, const char *fname);
 ////////////////////////////////////////////////////////////////////
 
 //void reslist_reload_all(ResList *l);

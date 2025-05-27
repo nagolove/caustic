@@ -195,6 +195,10 @@ bool e_has(ecs_t* r, e_id e, const e_cp_type cp_type);
 */
 void* e_get(ecs_t* r, e_id e, e_cp_type cp_type);
 
+// Аналогично e_get(), но без проверки верности сущности и её наличия 
+// в системе.
+void* e_get_fast(ecs_t* r, e_id e, e_cp_type cp_type);
+
 // Если возвращает истину, то цикл прерывается
 typedef bool (*e_each_function)(ecs_t* r, e_id e, void* ud);
 
