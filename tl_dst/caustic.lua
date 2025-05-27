@@ -380,8 +380,8 @@ local function search_and_load_cfgs_up(fname)
       "search_and_load_cfgs_up: could not load config in " ..
       "'%s' with '%s', fname '%s', aborting",
       lfs.currentdir(),
-      fname,
-      errmsg))
+      errmsg,
+      fname))
 
       os.exit(1)
    end
@@ -992,7 +992,8 @@ local function build_raylib_common(dep)
       local c = {}
       insert(c, "-DPLATFORM=Desktop ")
       insert(c, "-DBUILD_EXAMPLES=ON ")
-      insert(c, "-DCMAKE_BUILD_TYPE=Debug")
+
+      insert(c, "-DCMAKE_BUILD_TYPE=Release")
       cmd_do("cmake " .. table.concat(c, " ") .. " .")
 
       cmd_do("make -j")
@@ -1114,7 +1115,7 @@ local function build_box2c_common(dep)
 
    cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
    '-DCMAKE_BUILD_TYPE=Debug ' ..
-   '-DBOX2D_VALIDATE=ON ' ..
+
    '-DBOX2D_BENCHMARKS=OFF ' ..
    '-DBOX2D_BUILD_DOCS=OFF ' ..
    '-DBOX2D_SAMPLES=OFF .')
@@ -1358,25 +1359,24 @@ modules = {
 
 
 
+   {
+      disabled = false,
+      description = "color worms moving on texture",
+      custom_defines = nil,
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      dir = "wormseffect",
+      includes = {
+         "wormseffect",
+      },
+      libdirs = { "wormseffect" },
+      links = { "worms_effect" },
+      links_internal = {},
+      name = "wormseffect",
+      url_action = "git",
+      build = build_with_make_common,
+      build_w = build_with_make_common,
+      url = "git@github.com:nagolove/raylib_colorwormseffect.git",
+   },
 
 
 
@@ -2230,18 +2230,12 @@ end
 
 
 
-
 local parser_setup = {
 
 
    dist = {
       options = {},
       summary = [[build binary distribution]],
-   },
-
-   make_projects = {
-      options = { "-n --name" },
-      summary = [[compile all projects from projects.lua]],
    },
 
    project = {
@@ -2348,11 +2342,22 @@ local parser_setup = {
    selftest_status = {
       summary = "print git status for selftest.lua entries",
    },
-   projects_status2 = {
-      summary = "call lazygit for projects.lua entries",
-   },
    projects_status = {
-      summary = "print git status for projects.lua entries",
+      summary = [[
+call lazygit for projects.lua entries
+    with -g option just call 'git status' for each entry
+]],
+      flags = {
+         { "-g --git", "run `git status` instead of lazygit" },
+      },
+   },
+
+
+
+
+
+   projects_make = {
+      summary = "make projects from projects.lua",
    },
    selftest_push = {
       summary = "call git push for selftest.lua entries",
@@ -2373,7 +2378,9 @@ local parser_setup = {
 
 
 
+
 local actions = {}
+
 
 
 
@@ -2531,9 +2538,7 @@ function actions.dist(_args)
 end
 
 
-
-
-function actions.make_projects(_args)
+function actions.projects_make(_args)
    local list = loadfile(path_caustic .. "/projects.lua")();
 
    errexit_uv = false
@@ -3253,30 +3258,19 @@ function actions.selftest_push(_args)
    end
 end
 
-local function git_status2(dirlist_fname)
+local function git_status2(dirlist_fname, _args)
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(dirlist_fname)()
       ut.push_current_dir()
       for _, dir in ipairs(test_dirs) do
          chdir(dir)
-         cmd_do("lazygit")
-      end
-      ut.pop_dir()
-   end)
-   if not ok then
-      print(format("Could not load %s with %s", dirlist_fname, errmsg))
-      os.exit(1)
-   end
-end
 
-local function git_status(dirlist_fname)
-   local ok, errmsg = pcall(function()
-      local test_dirs = loadfile(dirlist_fname)()
-      ut.push_current_dir()
-      for _, dir in ipairs(test_dirs) do
-         chdir(dir)
          printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
-         cmd_do("git status")
+         if _args.g then
+            cmd_do("git status")
+         else
+            cmd_do("lazygit")
+         end
       end
       ut.pop_dir()
    end)
@@ -3284,18 +3278,14 @@ local function git_status(dirlist_fname)
       print(format("Could not load %s with %s", dirlist_fname, errmsg))
       os.exit(1)
    end
-end
-
-function actions.projects_status2(_args)
-   git_status2(path_caustic .. "/projects.lua")
 end
 
 function actions.projects_status(_args)
-   git_status2(path_caustic .. "/projects.lua")
+   git_status2(path_caustic .. "/projects.lua", _args)
 end
 
 function actions.selftest_status(_args)
-   git_status(path_caustic .. "/selftest.lua")
+   git_status2(path_caustic .. "/selftest.lua", _args)
 end
 
 function actions.selftest(_args)

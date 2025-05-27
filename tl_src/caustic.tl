@@ -380,8 +380,8 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
             "search_and_load_cfgs_up: could not load config in " ..
             "'%s' with '%s', fname '%s', aborting",
             lfs.currentdir(),
-            fname,
-            errmsg 
+            errmsg,
+            fname
         ))
         os.exit(1)
     end
@@ -992,7 +992,8 @@ local function build_raylib_common(dep: Dependency)
         local c = {}
         insert(c, "-DPLATFORM=Desktop ")
         insert(c, "-DBUILD_EXAMPLES=ON ")
-        insert(c, "-DCMAKE_BUILD_TYPE=Debug")
+        --insert(c, "-DCMAKE_BUILD_TYPE=Debug")
+        insert(c, "-DCMAKE_BUILD_TYPE=Release")
         cmd_do("cmake " .. table.concat(c, " ") .. " .")
         --cmd_do("make clean")
         cmd_do("make -j")
@@ -1114,7 +1115,7 @@ local function build_box2c_common(dep: Dependency)
 
     cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
         '-DCMAKE_BUILD_TYPE=Debug ' ..
-        '-DBOX2D_VALIDATE=ON ' ..
+        --'-DBOX2D_VALIDATE=ON ' ..
         '-DBOX2D_BENCHMARKS=OFF ' ..
         '-DBOX2D_BUILD_DOCS=OFF ' ..
         '-DBOX2D_SAMPLES=OFF .'
@@ -1358,7 +1359,6 @@ modules = {
     -- }}}
 
     -- TODO: Включать только те модули, которые объявлены в bld.lua
-    --[[
     {
         disabled = false,
         description = "color worms moving on texture",
@@ -2171,56 +2171,55 @@ end
 local record Actions
     -- {{{
     --anim_convert: function(Args)
-    run: function(Args)
-    dist: function(Args)
+    --projects_status2: function(Args)
     build: function(Args)
     compile_flags: function(Args)
     dependencies: function(Args)
     deps: function(Args)
+    dist: function(Args)
     init: function(Args)
     make: function(Args)
     project: function(Args)
+    projects_make: function(Args)
+    projects_status: function(Args)
     publish: function(Args)
     remove: function(Args)
     rmdirs: function(Args)
+    run: function(Args)
     selftest: function(Args)
     selftest_lg: function(Args)
     selftest_push: function(Args)
     selftest_status: function(Args)
-    projects_status: function(Args)
-    projects_status2: function(Args)
     stage: function(Args)
-    unit: function(Args)
     test: function(Args)
-    verbose: function(Args)
+    unit: function(Args)
     update: function(Args)
-    make_projects: function(Args)
+    verbose: function(Args)
     -- }}}
 end
 
 local enum ActionsEnum
     -- {{{
-    "run"
-    "make_projects"
-    "dist"
-    "project"
     "build"
     "compile_flags"
     "deps"
-    "update"
-    "projects_status"
-    "projects_status2"
+    "dist"
     "init"          
     "make"
+    "project"
+    "projects_make"
+    "projects_status"
     "publish"
     "remove"
+    "run"
     "selftest"
     "selftest_lg"
-    "selftest_status"
     "selftest_push"
+    "selftest_status"
     "test"
-    "verbose"
     "unit"
+    "update"
+    "verbose"
     -- }}}
 end
 
@@ -2237,11 +2236,6 @@ local parser_setup: {string:ParserSetup} = {
     dist = {
         options = {},
         summary = [[build binary distribution]],
-    },
-
-    make_projects = {
-        options = { "-n --name", },
-        summary = [[compile all projects from projects.lua]],
     },
 
     project = {
@@ -2348,11 +2342,22 @@ local parser_setup: {string:ParserSetup} = {
     selftest_status = {
         summary = "print git status for selftest.lua entries",
     },
-    projects_status2 = {
-        summary = "call lazygit for projects.lua entries",
+    projects_status = {
+        summary = [[
+call lazygit for projects.lua entries
+    with -g option just call 'git status' for each entry
+]],
+        flags = {
+            { "-g --git", "run `git status` instead of lazygit" },
+        }
     },
+    --[[
     projects_status = {
         summary = "print git status for projects.lua entries",
+    },
+    --]]
+    projects_make = {
+        summary = "make projects from projects.lua",
     },
     selftest_push = {
         summary = "call git push for selftest.lua entries",
@@ -2365,6 +2370,7 @@ local parser_setup: {string:ParserSetup} = {
     },
 }
 -- }}}
+
 local record Node
     value: any
     childs: {Node}
@@ -2377,6 +2383,7 @@ local actions: Actions = {}
 
 local record Args
     -- {{{
+    g: string           -- вызывать git status вместо lazygit
     debug: string
     stage: boolean
     t: Target
@@ -2531,9 +2538,7 @@ function actions.dist(_args: Args)
 end
 
 -- Собирает все проекты из path_caustic/projects.lua
--- TODO: Не останавливать программу сборки если компиляция прошла неудачно,
--- пытаться собрать все проекты
-function actions.make_projects(_args: Args)
+function actions.projects_make(_args: Args)
     local list = loadfile(path_caustic .. "/projects.lua")() as {string};
 
     errexit_uv = false
@@ -3253,30 +3258,19 @@ function actions.selftest_push(_args: Args)
     end
 end
 
-local function git_status2(dirlist_fname: string)
+local function git_status2(dirlist_fname: string, _args: Args)
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(dirlist_fname)() as {string}
         ut.push_current_dir()
         for _, dir in ipairs(test_dirs) do
             chdir(dir)
-            cmd_do("lazygit")
-        end
-        ut.pop_dir()
-    end)
-    if not ok then
-        print(format("Could not load %s with %s", dirlist_fname, errmsg))
-        os.exit(1)
-    end
-end
-
-local function git_status(dirlist_fname: string)
-    local ok, errmsg: boolean, string = pcall(function()
-        local test_dirs = loadfile(dirlist_fname)() as {string}
-        ut.push_current_dir()
-        for _, dir in ipairs(test_dirs) do
-            chdir(dir)
+            --print('git_status2:', lfs.currentdir())
             printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
-            cmd_do("git status")
+            if _args.g then
+                cmd_do("git status")
+            else
+                cmd_do("lazygit")
+            end
         end
         ut.pop_dir()
     end)
@@ -3284,18 +3278,14 @@ local function git_status(dirlist_fname: string)
         print(format("Could not load %s with %s", dirlist_fname, errmsg))
         os.exit(1)
     end
-end
-
-function actions.projects_status2(_args: Args)
-    git_status2(path_caustic .. "/projects.lua")
 end
 
 function actions.projects_status(_args: Args)
-    git_status2(path_caustic .. "/projects.lua")
+    git_status2(path_caustic .. "/projects.lua", _args)
 end
 
 function actions.selftest_status(_args: Args)
-    git_status(path_caustic .. "/selftest.lua")
+    git_status2(path_caustic .. "/selftest.lua", _args)
 end
 
 function actions.selftest(_args: Args)
