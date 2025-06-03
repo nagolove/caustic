@@ -445,4 +445,11 @@ static inline void em_setup_screen_size(int *_w, int *_h) {
 
 int get_hardware_concurrency();
 
+// Примитивный многочлен: x^64 + x^4 + x^3 + x + 1
+#define LFSR64_POLY 0x000000000000001B
 
+// static uint64_t lfsr = 1; // начальное состояние (≠ 0)
+static inline u64 lfsr64_next(u64 lfsr) {
+    lfsr = (lfsr >> 1) ^ (-(lfsr & 1u) & LFSR64_POLY);
+    return lfsr;
+}
