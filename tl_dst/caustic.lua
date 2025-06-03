@@ -3012,7 +3012,7 @@ static void stage_$stage$_leave(Stage_$Stage$ *st) {
 }
 
 Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
-    assert(hk_store);
+    //assert(hk_store);
     Stage_$Stage$ *st = calloc(1, sizeof(*st));
     st->parent.data = hk_store;
 
