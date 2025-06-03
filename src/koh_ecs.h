@@ -115,6 +115,8 @@ void e_free(ecs_t *r);
 // операциях. 
 // Функция изменяет значения поля структуры priv по указателю comp и 
 // возвращает измененный результат который должен быт сохранен.
+// TODO: Ничего не менять в e_cp_type, что-бы можно было в разных экземплярах
+// ecs_t использовать одни и теже компоненты
 // t+
 e_cp_type e_register(ecs_t *r, e_cp_type *comp);
 
@@ -272,6 +274,8 @@ e_view e_view_create_single(ecs_t* r, e_cp_type cp_type);
 static inline bool e_view_valid(e_view* v);
 e_id e_view_entity(e_view* v);
 // Если тип не найден, то возвращает NULL
+// XXX: Сделать отладочную проверку если cp_type не входит в набор типов 
+// которые представлены в данном e_view?
 void* e_view_get(e_view *v, e_cp_type cp_type);
 void e_view_next(e_view* v);
 
