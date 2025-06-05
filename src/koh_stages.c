@@ -452,11 +452,13 @@ void stages_gui_window(StagesStore *ss) {
         // }}}
     }
 
+    /*
     static char stage_str_argument[64] = {};
     igInputText(
         "stage string argument",
         stage_str_argument, sizeof(stage_str_argument), input_flags, 0, NULL
     );
+    */
 
     if (igButton("switch to selected stage", (ImVec2) {0, 0})) {
         const Stage *selected = get_selected_stage(ss);

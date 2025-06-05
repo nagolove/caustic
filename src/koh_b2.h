@@ -132,6 +132,10 @@ static inline const char *b2Vec2_to_str(b2Vec2 v) {
     return buf;
 }
 
+static inline const char *b2Vec2_tostr(b2Vec2 v) {
+    return b2Vec2_to_str(v);
+}
+
 static inline b2Vec2 Vector2_to_Vec2(Vector2 v) {
     return (b2Vec2) { v.x, v.y };
 }
