@@ -77,10 +77,12 @@ static inline const char *Rectangle_tostr(Rectangle r) {
     return buf;
 }
 
+/*
 static inline Vector2 Vector2_from_str(const char *str) {
     Vector2 r = {};
     return r;
 }
+*/
 
 // TODO: Переписать все функции преобразования буфера на слоты со счетчиком.
 static inline const char *Vector2_tostr(Vector2 v) {

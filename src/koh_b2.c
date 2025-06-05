@@ -1038,3 +1038,16 @@ const char *b2MassData_tostr(b2MassData md) {
 
     return buf;
 }
+
+const char *b2Circle_tostr(b2Circle c) {
+    static char slots[5][128] = {};
+    static int index = 0;
+    char *buf = slots[index], *pbuf = buf;
+    index = (index + 1) % 5;
+
+    pbuf += sprintf(pbuf, "{\n");
+    pbuf += sprintf(pbuf, "center = { %f, %f},\n", c.center.x, c.center.y);
+    pbuf += sprintf(pbuf, "radius = %f,\n", c.radius);
+    sprintf(pbuf, "}\n");
+    return buf;
+}

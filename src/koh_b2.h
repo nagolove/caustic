@@ -319,3 +319,4 @@ static inline void world_draw_debug(struct WorldCtx *wctx) {
 }
 
 const char *b2MassData_tostr(b2MassData md);
+const char *b2Circle_tostr(b2Circle c);
