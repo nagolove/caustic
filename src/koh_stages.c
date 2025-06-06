@@ -373,7 +373,7 @@ void stages_gui_window(StagesStore *ss) {
         ImGuiTableFlags_Sortable |
         ImGuiTableFlags_SortMulti ;
 
-    ImGuiInputTextFlags input_flags = 0;
+    //ImGuiInputTextFlags input_flags = 0;
 
     ImVec2 outer_size = {0., 0.};
     const int columns_num = 8;
