@@ -577,6 +577,23 @@ local function find_and_remove_cmake_cache()
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
 end
 
+local function build_llama(_: Dependency)
+    ut.push_current_dir()
+
+    find_and_remove_cmake_cache()
+    local cmd1 = "cmake -B build "
+        .. "-DLLAMA_BUILD_TESTS=OFF "
+        .. "-DLLAMA_BUILD_EXAMPLES=OFF "
+        .. "-DLLAMA_BUILD_TOOLS=OFF "
+        .. "-DBUILD_SHARED_LIBS=OFF"
+
+    local cmd2 = "cmake --build build -j"
+    cmd_do(cmd1)
+    cmd_do(cmd2)
+
+    ut.pop_dir()
+end
+
 local function build_freetype_common(dep: Dependency)
     print('build_freetype_common', dep.target)
     print('currentdir', lfs.currentdir())
@@ -1289,6 +1306,7 @@ end
 -- Но повторное копирование не требуется. Добавлять путь для LUA_PATH
 -- TODO: Добавить возможность добавления библиотекой дефайнов для 
 -- компилятора, в частности для разрешения пути.
+-- TODO: Вынести в отдельный файл?
 modules = {
 
     --[[
@@ -1312,6 +1330,37 @@ modules = {
     },
     -- }}}
     --]]
+
+    -- {{{
+    {
+        disabled = false,
+        copy_for_wasm = false,
+        description = "llm interface",
+        custom_defines = nil,
+        dir = "llama_cpp",
+        includes = { 
+            "llama_cpp/include",
+            "llama_cpp/ggml/include",
+        },
+        libdirs = { 
+            "llama_cpp/build/src", 
+            "llama_cpp/build/ggml/src",
+            "llama_cpp/build/common",
+        },
+        links = {
+            --"stdc++",
+            "ggml",
+            "llama",
+        },
+        links_internal = {},
+        name = "llama_cpp",
+        url_action = "git",
+        build = build_llama,
+        url = "https://github.com/ggerganov/llama.cpp",
+        --update = update_default,
+    },
+    -- }}}
+
 
     -- {{{
     {
@@ -4301,6 +4350,9 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     if _args.target == 'wasm' then
         artifact = artifact .. ".html"
     end
+
+    printc("%{blue}switched to g++%{reset}")
+    cc = "g++ "
     local cmd = cc .. " -o \"" .. artifact .. "\" "
 
     -- Добавить какие-то wasm флаги
