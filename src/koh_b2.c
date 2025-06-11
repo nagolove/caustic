@@ -588,7 +588,7 @@ char **b2BodyId_to_str(b2BodyId body_id) {
 const char *b2BodyId_id_to_str(b2BodyId id) {
     static char buf[128];
     sprintf(
-        buf, "{ index = %d, world = %hd, revision = %hu }",
+        buf, "{ index1 = %d, world0 = %hd, generation = %hu }",
         id.index1, id.world0, id.generation
     );
     return buf;
@@ -600,7 +600,7 @@ const char *b2ShapeId_tostr(b2ShapeId id) {
     index = (index + 1) % 5;
     char *buf = slots[index];
     sprintf(
-        buf, "{ index = %d, world = %hd, revision = %hu }",
+        buf, "{ index1 = %d, world0 = %hd, generation = %hu }",
         id.index1, id.world0, id.generation
     );
     return buf;
@@ -617,7 +617,10 @@ const char *b2ShapeId_id_to_str(b2ShapeId id) {
 
 
 const char *b2Polygon_to_str(const b2Polygon *poly) {
-    static char buf[256];
+    static char slots[5][256];
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
     char *pbuf = buf;
     assert(poly);
     pbuf += sprintf(pbuf, "{ ");
@@ -626,7 +629,7 @@ const char *b2Polygon_to_str(const b2Polygon *poly) {
             break;
         pbuf += sprintf(pbuf, "%s, ", b2Vec2_to_str(poly->vertices[i]));
     }
-    pbuf += sprintf(pbuf, "} ");
+    sprintf(pbuf, "} ");
     return buf;
 }
 
