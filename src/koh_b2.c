@@ -586,7 +586,10 @@ char **b2BodyId_to_str(b2BodyId body_id) {
 #undef STR_NUM
 
 const char *b2BodyId_id_to_str(b2BodyId id) {
-    static char buf[128];
+    static char slots[5][128] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
     sprintf(
         buf, "{ index1 = %d, world0 = %hd, generation = %hu }",
         id.index1, id.world0, id.generation
