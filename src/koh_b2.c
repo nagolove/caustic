@@ -1057,3 +1057,35 @@ const char *b2Circle_tostr(b2Circle c) {
     sprintf(pbuf, "}\n");
     return buf;
 }
+
+void b2DistanceJointDef_gui(b2DistanceJointDef *jdef) {
+    assert(jdef);
+
+    // XXX: Вынести в аргумент функции
+    const float max_len = 512.f;
+
+    igSliderFloat("length", &jdef->length, 0.f, max_len, "%f", 0);
+    igCheckbox("enableSpring", &jdef->enableSpring);
+    igSliderFloat("hertz", &jdef->hertz, 0., 120.f, "%.2f", 0);
+    igSliderFloat("dampingRatio", &jdef->dampingRatio, 0., 1., "%f", 0);
+    igCheckbox("enableLimit", &jdef->enableLimit);
+    igSliderFloat("minLength", &jdef->minLength, 0.f, max_len, "%f", 0);
+    igSliderFloat("maxLength", &jdef->maxLength, 0.f, max_len, "%f", 0);
+    igCheckbox("enableMotor", &jdef->enableMotor);
+    const char *capt = "maxMotorForce [H]";
+    igSliderFloat(capt, &jdef->maxMotorForce, 0.f, 3e6, "%f", 0);
+    igSliderFloat("motorSpeed [m/s]", &jdef->motorSpeed, 0.f, 3e6f, "%f", 0);
+    igCheckbox("collideConnected", &jdef->collideConnected);
+}
+
+
+const char *b2ShapeType_tostr(b2ShapeType type) {
+    const char *map[] = {
+        [b2_circleShape] = "b2_circleShape",
+        [b2_capsuleShape] = "b2_capsuleShape",
+        [b2_segmentShape] = "b2_segmentShape",
+        [b2_polygonShape] = "b2_polygonShape",
+        [b2_chainSegmentShape] = "b2_chainSegmentShape",
+    };
+    return map[type];
+}

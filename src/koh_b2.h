@@ -324,3 +324,6 @@ static inline void world_draw_debug(struct WorldCtx *wctx) {
 
 const char *b2MassData_tostr(b2MassData md);
 const char *b2Circle_tostr(b2Circle c);
+
+void b2DistanceJointDef_gui(b2DistanceJointDef *jdef);
+const char *b2ShapeType_tostr(b2ShapeType type);
