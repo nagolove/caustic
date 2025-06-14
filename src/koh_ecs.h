@@ -55,7 +55,7 @@ typedef struct e_cp_type_private {
     // выравненный на степень 2 размер
     // TODO: выравнять на размер указателя
     // XXX: Не используется.
-    size_t      cp_sizeof2; 
+    //size_t      cp_sizeof2; 
 } e_cp_type_private;
 
 typedef struct e_cp_type e_cp_type;
@@ -432,3 +432,7 @@ static inline bool e_is_not_null(e_id e) {
 }
 
 const char *htable_eid_str(const void *data, int len);
+
+// Проверить по имени - зарегистрирован ли тип данных.
+// Возвращает истину если тип зарегестрирован в системе.
+bool e_is_cp_registered(ecs_t *r, e_cp_type cp_type);

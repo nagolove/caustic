@@ -64,9 +64,9 @@ typedef struct e_storage {
                 cp_data_initial_cap;
 
                 // размер элемента данных в cp_data
-    size_t      cp_sizeof,
+    size_t      cp_sizeof;
                 // размер округленный до степени 2
-                cp_sizeof2; 
+                //cp_sizeof2; 
     SparseSet   sparse;
 
     e_cp_type   type;
@@ -2760,18 +2760,15 @@ static inline void entity_assert(ecs_t *r, e_id e) {
 
 #endif
 
-// Проверить по имени - зарегистрирован ли тип данных.
-static bool cp_is_registered(ecs_t *r, e_cp_type cp_type) {
+bool e_is_cp_registered(ecs_t *r, e_cp_type cp_type) {
     ecs_assert(r);
-    /*return !htable_get(r->set_cp_types, &cp_type, sizeof(cp_type), NULL);*/
-    /*return !htable_get_s(r->set_cp_types, cp_type.name, NULL);*/
     return htable_get_s(r->cp_types, cp_type.name, NULL);
 }
 
 // TODO: Сделать проверку отключаемой
 static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
 #ifndef KOH_ECS_NO_ERROR_HANDLING
-    if (!cp_is_registered(r, cp_type)) {
+    if (!e_is_cp_registered(r, cp_type)) {
         printf(
             "e_cp_is_registered: '%s' type is not registered\n",
             cp_type.name
@@ -2830,7 +2827,7 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         s->cp_data_initial_cap = cp_data_initial_cap;
         s->cp_id = cp_type.priv.cp_id;
         s->cp_sizeof = cp_type.cp_sizeof;
-        s->cp_sizeof2 = cp_type.priv.cp_sizeof2;
+        //s->cp_sizeof2 = cp_type.priv.cp_sizeof2;
         s->on_emplace = cp_type.on_emplace;
         s->on_destroy = cp_type.on_destroy;
         s->on_destroy2 = cp_type.on_destroy2;
@@ -2995,15 +2992,17 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     assert(comp);
 
     // Проверка идет только по имени типа
-    if (cp_is_registered(r, *comp)) {
+    if (e_is_cp_registered(r, *comp)) {
         printf("e_register: type '%s' already registered\n", comp->name);
         abort();
     }
 
     imgui_update(r, *comp);
 
+    // XXX: Плохо, что меняется значение comp->priv.cp_id
     comp->priv.cp_id = htable_count(r->cp_types);
-    comp->priv.cp_sizeof2 = next_eq_pow2(comp->cp_sizeof);
+
+    printf("e_register: comp.name '%s'\n", comp->name);
 
     //printf("e_register: priv.cp_sizeof2 %zu\n", comp->priv.cp_sizeof2);
     htable_add(r->set_cp_types, comp, sizeof(*comp), NULL, 0);
