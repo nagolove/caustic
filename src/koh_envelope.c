@@ -46,10 +46,10 @@ static const Color color_handle_ruler = YELLOW;
 static const Color color_handle_supreme = BLACK;
 static const Color color_line_default = BLUE;
 static const Color color_line_marked = GREEN;
-static const Color color_player = GREEN;
+static const Color color_player = RED;
 static const Color color_ruler = BLACK;
 static const double player_duration = 10.;
-static const float player_radius = 60.f;
+static const float player_radius = 6.f;
 static const int grid_step = 10;
 
 enum EnvelopeMode {
