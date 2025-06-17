@@ -2760,15 +2760,16 @@ static inline void entity_assert(ecs_t *r, e_id e) {
 
 #endif
 
-bool e_is_cp_registered(ecs_t *r, e_cp_type cp_type) {
+bool e_is_cp_registered(ecs_t *r, const char *cp_type_name) {
     ecs_assert(r);
-    return htable_get_s(r->cp_types, cp_type.name, NULL);
+    assert(cp_type_name);
+    return htable_get_s(r->cp_types, cp_type_name, NULL);
 }
 
 // TODO: Сделать проверку отключаемой
 static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
 #ifndef KOH_ECS_NO_ERROR_HANDLING
-    if (!e_is_cp_registered(r, cp_type)) {
+    if (!e_is_cp_registered(r, cp_type.name)) {
         printf(
             "e_cp_is_registered: '%s' type is not registered\n",
             cp_type.name
@@ -2992,7 +2993,7 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     assert(comp);
 
     // Проверка идет только по имени типа
-    if (e_is_cp_registered(r, *comp)) {
+    if (e_is_cp_registered(r, comp->name)) {
         printf("e_register: type '%s' already registered\n", comp->name);
         abort();
     }
@@ -3000,7 +3001,20 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     imgui_update(r, *comp);
 
     // XXX: Плохо, что меняется значение comp->priv.cp_id
-    comp->priv.cp_id = htable_count(r->cp_types);
+    // Какое может быть решения? Я хочу создавать несколько разных
+    // ecs_t с частично разными наборами компонентов.
+    if (!comp->manual_cp_id)
+        comp->priv.cp_id = htable_count(r->cp_types);
+    else {
+        assert(comp->priv.cp_id < 128);
+
+        HTableIterator i = htable_iter_new(r->cp_types);
+        for (; htable_iter_valid(&i); htable_iter_next(&i)) {
+            e_cp_type *type = htable_iter_value(&i, NULL);
+            //printf("e_register: '%zu'\n", type->priv.cp_id);
+            assert(type->priv.cp_id != comp->priv.cp_id);
+        }
+    }
 
     printf("e_register: comp.name '%s'\n", comp->name);
 

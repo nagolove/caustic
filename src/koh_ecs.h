@@ -51,19 +51,15 @@ typedef e_idu e_id;
 
 typedef struct e_cp_type_private {
     // идентифатор, устанавливается внутри e_register()
+    // или вручную
+    // XXX: Может дать другой тип?
     size_t      cp_id; 
-    // выравненный на степень 2 размер
-    // TODO: выравнять на размер указателя
-    // XXX: Не используется.
-    //size_t      cp_sizeof2; 
 } e_cp_type_private;
 
 typedef struct e_cp_type e_cp_type;
 
 typedef struct e_cp_type {
-    // WARN: Нельзя использовать один и тот-же e_cp_type в разных экземплярах
-    // ecs так как e_cp_type_private возможно должны иметь разные значения
-    // для разных ecs
+    bool        manual_cp_id;
     e_cp_type_private priv;
     // component sizeof
     size_t      cp_sizeof; 
@@ -435,4 +431,4 @@ const char *htable_eid_str(const void *data, int len);
 
 // Проверить по имени - зарегистрирован ли тип данных.
 // Возвращает истину если тип зарегестрирован в системе.
-bool e_is_cp_registered(ecs_t *r, e_cp_type cp_type);
+bool e_is_cp_registered(ecs_t *r, const char *cp_type);
