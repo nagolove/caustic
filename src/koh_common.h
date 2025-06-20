@@ -460,3 +460,6 @@ static inline u64 lfsr64_next(u64 lfsr) {
     lfsr = (lfsr >> 1) ^ (-(lfsr & 1u) & LFSR64_POLY);
     return lfsr;
 }
+
+bool bit_calculator_gui(const char *caption, u64 *value);
+const char *uint64_to_str_bin(uint64_t value);

@@ -2485,3 +2485,125 @@ int get_hardware_concurrency() {
     return (int)sysconf(_SC_NPROCESSORS_ONLN);
 }
 #endif
+
+const char *uint64_to_str_bin(uint64_t value) {
+    static char buf[128] = {};
+    memset(buf, 0, sizeof(buf));
+    
+    for (int i = 0; i < 64; i++) {
+        buf[i] = (value & (1ULL << (uint64_t)i)) ? '1' : '0';
+    }
+
+    buf[64] = '\0';  // Null-terminate the string
+    return buf;
+}
+
+bool bit_calculator_gui(const char *caption, u64 *value) {
+    assert(caption);
+    assert(value);
+
+    // {{{
+    if (igCollapsingHeader_TreeNodeFlags(caption, 0)) {
+
+        /*
+        bool opened = true;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
+        igBegin("x86_64 bit calculator", &opened, flags);
+        */
+
+        static bool bits[64] = {};
+        size_t bits_num = sizeof(bits) / sizeof(bits[0]);
+
+        static int spacing = 19;
+        //igSliderInt("spacing", &spacing, 0, 100, "%d", 0);
+
+        for (int i = bits_num; i; i--) {
+            igText("%.2d", i - 1);
+            if (i - 1 != 0)
+                igSameLine(0., spacing);
+        }
+
+        ImVec4  col_checkmark = {0.5, 0., 0., 1.},
+                col_framebg = {0.5, 0.5, 0.5, 1.},
+                col_hovered = { 0., 0.7, 0., 1.};
+
+        //igListBox_FnStrPtr("style", &style, getter, NULL, values_num , 10);
+        //trace("bit_calculator_gui: style %d\n", style);
+
+        for (int i = 0; i < bits_num; i++) {
+            char checkbox_id[32] = {};
+            sprintf(checkbox_id, "##%d", i);
+
+            //igPushStyleColor_Vec4(ImGuiCol_CheckMark, checkbox_color);
+            igPushStyleColor_Vec4(ImGuiCol_FrameBg, col_framebg);
+            igPushStyleColor_Vec4(ImGuiCol_FrameBgHovered, col_hovered);
+            igPushStyleColor_Vec4(ImGuiCol_CheckMark, col_checkmark);
+
+            igCheckbox(checkbox_id, &bits[i]);
+
+            //igSameLine(0., 0.);
+            //igText("|");
+
+            igPopStyleColor(3);
+
+            if (i + 1 != bits_num)
+                igSameLine(0., 10.);
+        }
+
+        uint64_t result = 0;
+        for (int i = 0; i < bits_num; i++) {
+            result = (result << 1) | bits[i];
+        }
+
+        //trace("bit_calculator_gui:\n");
+
+        const int buf_len = 128;
+        char buf_bin[buf_len],
+             buf_oct[buf_len],
+             buf_dec[buf_len],
+             buf_hex[buf_len];
+
+        memset(buf_bin, 0, sizeof(buf_bin));
+        memset(buf_oct, 0, sizeof(buf_oct));
+        memset(buf_dec, 0, sizeof(buf_dec));
+        memset(buf_hex, 0, sizeof(buf_hex));
+
+        sprintf(buf_bin, "%s", uint64_to_str_bin(result));
+        sprintf(buf_oct, "%llo", (unsigned long long)result);
+        sprintf(buf_dec, "%llu", (unsigned long long)result);
+        sprintf(buf_hex, "%llx", (unsigned long long)result);
+
+        //size_t buf_len = sizeof(buf) / sizeof(buf[0]);
+        //ImGuiInputFlags input_flags = 0;
+
+        /*
+        igText("bin:");
+        igSameLine(0., 10.);
+        igInputText("##input", buf_bin, buf_len, input_flags, NULL, NULL);
+
+        igText("oct:");
+        igSameLine(0., 10.);
+        igInputText("##input", buf_oct, buf_len, input_flags, NULL, NULL);
+
+        igText("dec:");
+        igSameLine(0., 10.);
+        igInputText("##input", buf_dec, buf_len, input_flags, NULL, NULL);
+
+        igText("hex:");
+        igSameLine(0., 10.);
+        igInputText("##input", buf_hex, buf_len, input_flags, NULL, NULL);
+        */
+
+        //sscanf(buf, "%lu", &result);
+        for (uint64_t i = 0; i < bits_num; i++) {
+            //bool bit = !!(result & (1 << i));
+            //bits[i] = bit;
+        }
+        // */
+
+        //igEnd();
+    // }}}
+    }
+
+    return false;
+}
