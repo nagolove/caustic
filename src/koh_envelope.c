@@ -20,7 +20,9 @@
 // TODO: Сделать высоту первой точки - нулем, при любом её положении
 typedef struct Envelope {
     Vector2         *points;
-    float           *lengths, *lengths_sorted, *angles;
+    float           *lengths, 
+                    //*lengths_sorted, 
+                    *angles;
     float           length_full;
     int             points_num, poins_cap;
     RenderTexture2D rt_main, rt_text;
@@ -59,6 +61,7 @@ enum EnvelopeMode {
 
 // forward declarations {{{
 
+void env_bake(Envelope_t e);
 void env_input_reset(Envelope_t e);
 static void env_new_points(Envelope_t e, size_t cap);
 static void env_point_add_default(Envelope_t e);
@@ -105,7 +108,9 @@ void env_point_add(Envelope_t e, Vector2 pos) {
     // XXX: Проверить сортировку
     size_t sz = sizeof(e->points[0]);
     koh_qsort(e->points, e->points_num, sz, cmp_points, NULL);
-    e->baked = false;
+
+    //e->baked = false;
+    env_bake(e);
 }
 
 // XXX: Если есть созданные точки кривой и включено прилипание, то 
@@ -453,7 +458,7 @@ void env_reset(Envelope_t e) {
     memset(e->points, 0, sizeof(e->points[0]) * e->poins_cap);
     memset(e->lengths, 0, sizeof(e->lengths[0]) * e->poins_cap);
     memset(e->angles, 0, sizeof(e->angles[0]) * e->poins_cap);
-    memset(e->lengths_sorted, 0, sizeof(e->lengths_sorted[0]) * e->poins_cap);
+    //memset(e->lengths_sorted, 0, sizeof(e->lengths_sorted[0]) * e->poins_cap);
     e->points_num = 0;
     e->length_full = 0;
     e->baked = false;
@@ -626,9 +631,11 @@ static void env_new_points(Envelope_t e, size_t cap) {
     e->points = realloc(e->points, cap * sizeof(e->points[0]));
     e->lengths = realloc(e->lengths, cap * sizeof(e->lengths[0]));
     e->angles = realloc(e->angles, cap * sizeof(e->angles[0]));
+    /*
     e->lengths_sorted = realloc(
         e->lengths_sorted, cap * sizeof(e->lengths_sorted[0])
     );
+    */
 }
 
 Envelope_t env_new(EnvelopeOpts opts) {
@@ -679,10 +686,13 @@ Envelope_t env_new(EnvelopeOpts opts) {
 }
 
 static void env_free_points(Envelope_t e) {
+
+    /*
     if (e->lengths_sorted) {
         free(e->lengths_sorted);
         e->lengths_sorted = NULL;
     }
+    */
 
     if (e->angles) {
         free(e->angles);
@@ -723,10 +733,12 @@ void env_free(Envelope_t e) {
     free(e);
 }
 
+/*
 static int cmp(const void *a, const void *b, void *ud) {
     const float *_a = a, *_b = b;
     return *_a - *_b;
 }
+*/
 
 static float len(Vector2 a, Vector2 b) {
     trace("len: a %s, b %s\n", Vector2_tostr(a), Vector2_tostr(b));
@@ -745,15 +757,16 @@ void env_bake(Envelope_t e) {
         );
     }
 
+    e->length_full = 0.f;
     for (int i = 0; i < lengths_num; i++) {
-        e->lengths[i] = len(e->points[i + 1], e->points[i]);
+        e->length_full += e->lengths[i] = len(e->points[i + 1], e->points[i]);
     }
 
+    /*
     for (int i = 0; i < lengths_num; i++) {
         trace("env_bake: len %f\n", e->lengths[i]);
     }
     trace("\n"); 
-    // */
 
     for (int i = 0; i < lengths_num; i++) {
         e->lengths_sorted[i] = e->lengths[i];
@@ -769,14 +782,15 @@ void env_bake(Envelope_t e) {
 
     // Расчитать длину всей кривой
     // Сперва складывать наименьшие величины
+    /*
     float length_full = 0.f;
     for (int i = 0; i < lengths_num; i++) {
-        /*trace("env_bak: delta %f\n", e->lengths_sorted[i]);*/
         length_full += e->lengths_sorted[i];
         trace("env_bake: length_full %f\n", length_full);
     }
-
     e->length_full = length_full;
+    */
+
     trace("length_full: %f\n", e->length_full);
 
     for (int i = 0; i < lengths_num; i++) {
