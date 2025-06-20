@@ -824,8 +824,22 @@ void L_free(lua_State *l) {
 }
 
 void L_call(lua_State *l, const char *func_name, bool *is_ok) {
-    lua_getglobal(l, func_name);  // Получаем функцию update() из глобальной области Lua
-    lua_call(l, 0, 0);
+    assert(l);
+    assert(func_name);
+    // Получаем функцию update() из глобальной области Lua
+
+    printf("L_call: 0 [%s]\n", L_stack_dump(l));;
+
+    int type = lua_getglobal(l, func_name);  
+
+    printf("L_call: 1 [%s]\n", L_stack_dump(l));;
+
+    if (type == LUA_TFUNCTION) {
+        lua_call(l, 0, 0);
+    } else {
+    }
+
+    printf("L_call: 2 [%s]\n", L_stack_dump(l));;
 }
 
 
