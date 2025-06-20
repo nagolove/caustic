@@ -327,3 +327,6 @@ const char *b2Circle_tostr(b2Circle c);
 
 void b2DistanceJointDef_gui(b2DistanceJointDef *jdef);
 const char *b2ShapeType_tostr(b2ShapeType type);
+
+bool b2QueryFilter_gui(const char *caption, b2QueryFilter *qf, float spacing);
+bool b2Filter_gui(const char *caption, b2Filter *qf, float spacing);

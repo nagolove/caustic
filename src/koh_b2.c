@@ -1,3 +1,5 @@
+/* vim: fdm=marker */
+
 #include "koh_b2.h"
 
 #include "body.h"
@@ -1088,4 +1090,88 @@ const char *b2ShapeType_tostr(b2ShapeType type) {
         [b2_chainSegmentShape] = "b2_chainSegmentShape",
     };
     return map[type];
+}
+
+static bool u64_bit_gui(
+    const char *caption, const char *uniq_caption, u64 *value, float spacing
+) {
+    assert(caption);
+    assert(value);
+    assert(uniq_caption);
+
+    igText(caption);
+
+    bool bits[64] = {},
+         ret = false;
+    size_t bits_num = sizeof(bits) / sizeof(bits[0]);
+
+    for (int i = 0; i < bits_num; i++) {
+        bits[i] = (*value & (1ULL << i)) != 0;
+    }
+
+    for (int i = 0; i < bits_num; i++) {
+        igText("%.2d", i);
+        if (i + 1 != bits_num)
+            igSameLine(0., spacing);
+    }
+
+    ImVec4  col_checkmark = {0.5, 0., 0., 1.},
+            col_framebg = {0.5, 0.5, 0.5, 1.},
+            col_hovered = { 0., 0.7, 0., 1.};
+
+    for (int i = 0; i < bits_num; i++) {
+        char checkbox_id[256] = {};
+        snprintf(
+            checkbox_id, sizeof(checkbox_id),
+            "##%s_%s_%d",
+            caption, uniq_caption, i
+        );
+
+        //printf("u64_bit_gui: checkbox_id '%s'\n", checkbox_id);
+
+        igPushStyleColor_Vec4(ImGuiCol_FrameBg, col_framebg);
+        igPushStyleColor_Vec4(ImGuiCol_FrameBgHovered, col_hovered);
+        igPushStyleColor_Vec4(ImGuiCol_CheckMark, col_checkmark);
+
+        ret |= igCheckbox(checkbox_id, &bits[i]);
+
+        igPopStyleColor(3);
+
+        if (i + 1 != bits_num)
+            igSameLine(0., 10.);
+    }
+
+    uint64_t result = 0;
+    for (int i = 0; i < bits_num; i++) {
+        if (bits[i]) result |= (1ULL << i);
+    }
+
+    if (ret)
+        *value = result;
+
+    return ret;
+}
+
+bool b2QueryFilter_gui(const char *caption, b2QueryFilter *qf, float spacing) {
+    assert(caption);
+    assert(qf);
+    bool ret = false;
+    if (igCollapsingHeader_TreeNodeFlags(caption, 0)) {
+        u64 *cb = &qf->categoryBits;
+        ret |= u64_bit_gui("categoryBits", caption, cb, spacing);
+        ret |= u64_bit_gui("maskBits", caption, &qf->maskBits, spacing);
+    }
+    return ret;
+}
+
+bool b2Filter_gui(const char *caption, b2Filter *qf, float spacing) {
+    assert(caption);
+    assert(qf);
+    bool ret = false;
+    if (igCollapsingHeader_TreeNodeFlags(caption, 0)) {
+        u64 *cb = &qf->categoryBits;
+        ret |= u64_bit_gui("categoryBits", caption, cb, spacing);
+        ret |= u64_bit_gui("maskBits", caption, &qf->maskBits, spacing);
+    }
+    return ret;
 }
