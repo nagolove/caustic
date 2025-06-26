@@ -138,3 +138,10 @@ void camp_update(CameraProcessor *cp) {
         cam->offset = cp->offset_target;
     }
 }
+
+void camp_reset(CameraProcessor *cp) {
+    assert(cp);
+    assert(cp->cam);
+    cp->cam->zoom = 1.f;
+    cp->cam->offset = Vector2Zero();
+}

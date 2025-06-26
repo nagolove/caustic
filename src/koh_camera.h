@@ -35,3 +35,4 @@ typedef struct CameraProcessorOpts {
 void camp_init(CameraProcessor *cp, CameraProcessorOpts opts);
 void camp_shutdown(CameraProcessor *cp);
 void camp_update(CameraProcessor *cp);
+void camp_reset(CameraProcessor *cp);

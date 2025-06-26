@@ -871,7 +871,7 @@ const char *camera2str(Camera2D cam, bool multiline) {
     snprintf(
         buf,
         sizeof(buf) - 1,
-        "offset = %s%s target = %s%s rotation = %f%s zoom = %f", 
+        "{ offset = %s%s target = %s%s rotation = %f%s zoom = %f }", 
         Vector2_tostr(cam.offset), mt,
         Vector2_tostr(cam.target), mt,
         cam.rotation, mt,
