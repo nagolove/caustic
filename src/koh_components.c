@@ -284,7 +284,7 @@ e_id spawn_poly2(struct WorldCtx *wctx, struct PolySetup2 setup, e_id *_e) {
         *cp_body_id = body;
     b2ShapeDef shape_def = b2DefaultShapeDef();
     shape_def.density = setup.density ? *setup.density : 1.0 * 0.1;
-    shape_def.friction = setup.friction ? *setup.friction : 0.5;
+    shape_def.material.friction = setup.friction ? *setup.friction : 0.5;
     if (cp_r_opts) {
         shape_def.userData = (void*)e.id;
     }
@@ -343,7 +343,7 @@ e_id spawn_triangle2(struct WorldCtx *wctx, struct TriangleSetup2 setup) {
     if (cp_r_opts)
         shape_def.userData = (void*)e.id;
     shape_def.density = 1.0;
-    shape_def.friction = 0.5;
+    shape_def.material.friction = 0.5;
 
     // XXX: Направление обхода вершин?
     b2Vec2 vertices[3] = {
@@ -421,7 +421,7 @@ de_entity spawn_poly(
         *cp_body_id = body;
     b2ShapeDef shape_def = b2DefaultShapeDef();
     shape_def.density = setup.density ? *setup.density : 1.0 * 0.1;
-    shape_def.friction = setup.friction ? *setup.friction : 0.5;
+    shape_def.material.friction = setup.friction ? *setup.friction : 0.5;
     if (cp_r_opts)
         shape_def.userData = (void*)(uintptr_t)e;
     b2CreatePolygonShape(body, &shape_def, &poly);
@@ -474,7 +474,7 @@ de_entity spawn_triangle(
     if (cp_r_opts)
         shape_def.userData = (void*)(uintptr_t)e;
     shape_def.density = 1.0;
-    shape_def.friction = 0.5;
+    shape_def.material.friction = 0.5;
 
     // XXX: Направление обхода вершин?
     b2Vec2 vertices[3] = {
@@ -669,7 +669,7 @@ e_id spawn_segment2(WorldCtx *wctx, SegmentSetup2 *setup) {
     b2ShapeDef shape_def = b2DefaultShapeDef();
     shape_def.userData = (void*)(intptr_t)e.id;
     shape_def.density = 1.0;
-    shape_def.friction = 0.5;
+    shape_def.material.friction = 0.5;
     shape_def.isSensor = setup->sensor;
     b2Polygon poly;
 
@@ -775,7 +775,7 @@ de_entity spawn_segment(struct WorldCtx *wctx, struct SegmentSetup *setup) {
     b2ShapeDef shape_def = b2DefaultShapeDef();
     shape_def.userData = (void*)(uintptr_t)e;
     shape_def.density = 1.0;
-    shape_def.friction = 0.5;
+    shape_def.material.friction = 0.5;
     shape_def.isSensor = setup->sensor;
     b2Polygon poly;
 
@@ -1473,10 +1473,11 @@ void beh_check_under_mouse2(struct CheckUnderMouseOpts2 *opts) {
             .center = { mp.x, mp.y, },
             .radius = 2.,
         };
-        b2World_OverlapCircle(
-            opts->wctx->world, &circle,
-            b2Transform_identity, b2DefaultQueryFilter(),
-            test_point, &shape_under_mouse
+
+        b2ShapeProxy proxy = b2MakeProxy(&circle.center, 1, circle.radius);
+        b2World_OverlapShape(
+            opts->wctx->world, &proxy, 
+            b2DefaultQueryFilter(), test_point, &shape_under_mouse
         );
     }
 
@@ -1542,10 +1543,11 @@ void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
             .center = { mp.x, mp.y, },
             .radius = 2.,
         };
-        b2World_OverlapCircle(
-            opts->wctx->world, &circle,
-            b2Transform_identity, b2DefaultQueryFilter(),
-            test_point, &shape_under_mouse
+
+        b2ShapeProxy proxy = b2MakeProxy(&circle.center, 1, circle.radius);
+        b2World_OverlapShape(
+            opts->wctx->world, &proxy,
+            b2DefaultQueryFilter(), test_point, &shape_under_mouse
         );
     }
 

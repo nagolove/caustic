@@ -256,19 +256,20 @@ static void draw_string(
 
 b2DebugDraw b2_world_dbg_draw_create2() {
     return (struct b2DebugDraw) {
-        .DrawPolygon = draw_polygon,
-        .DrawSolidPolygon = draw_solid_polygon,
-        //.DrawRoundedPolygon = draw_rounded_polygon,
-        .DrawCircle = draw_circle,
-        .DrawSolidCircle = draw_solid_circle,
-        .DrawSolidCapsule = draw_solid_capsule,
-        .DrawSegment = draw_segment,
-        .DrawTransform = draw_transform,
-        .DrawPoint = draw_point,
-        .DrawString = draw_string,
+        .DrawPolygonFcn = draw_polygon,
+        .DrawSolidPolygonFcn = draw_solid_polygon,
+        //.DrawRoundedPolygonFcn = draw_rounded_polygon,
+        .DrawCircleFcn = draw_circle,
+        .DrawSolidCircleFcn = draw_solid_circle,
+        .DrawSolidCapsuleFcn = draw_solid_capsule,
+        .DrawSegmentFcn = draw_segment,
+        .DrawTransformFcn = draw_transform,
+        .DrawPointFcn = draw_point,
+        .DrawStringFcn = draw_string,
         .drawShapes = true,
         .drawJoints = true,
-        .drawAABBs = true,
+        //.drawAABBs = true,
+        .drawBounds = true,
         .drawMass = true,
         .drawGraphColors = true,
     };
@@ -277,19 +278,20 @@ b2DebugDraw b2_world_dbg_draw_create2() {
 
 b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
     return (struct b2DebugDraw) {
-        .DrawPolygon = draw_polygon,
-        .DrawSolidPolygon = draw_solid_polygon,
-        //.DrawRoundedPolygon = draw_rounded_polygon,
-        .DrawCircle = draw_circle,
-        .DrawSolidCircle = draw_solid_circle,
-        .DrawSolidCapsule = draw_solid_capsule,
-        .DrawSegment = draw_segment,
-        .DrawTransform = draw_transform,
-        .DrawPoint = draw_point,
-        .DrawString = draw_string,
+        .DrawPolygonFcn = draw_polygon,
+        .DrawSolidPolygonFcn = draw_solid_polygon,
+        //.DrawRoundedPolygonFcn = draw_rounded_polygon,
+        .DrawCircleFcn = draw_circle,
+        .DrawSolidCircleFcn = draw_solid_circle,
+        .DrawSolidCapsuleFcn = draw_solid_capsule,
+        .DrawSegmentFcn = draw_segment,
+        .DrawTransformFcn = draw_transform,
+        .DrawPointFcn = draw_point,
+        .DrawStringFcn = draw_string,
         .drawShapes = true,
         .drawJoints = true,
-        .drawAABBs = true,
+        //.drawAABBs = true,
+        .drawBounds = true,
         .drawMass = true,
         .drawGraphColors = true,
         .context = wctx,
@@ -462,7 +464,7 @@ char **b2BodyDef_to_str(b2BodyDef bd) {
     p(lines[i++], "userData = %llu,",  (unsigned long long)user_data); 
     p(lines[i++], "enableSleep = %s,",  bd.enableSleep ? "true" : "false");    
     p(lines[i++], "isAwake = %s,",  bd.isAwake ? "true" : "false");    
-    p(lines[i++], "fixedRotation = %s,",  bd.fixedRotation ? "true" : "false");  
+    //p(lines[i++], "fixedRotation = %s,",  bd.fixedRotation ? "true" : "false");  
     p(lines[i++], "isEnabled = %s,",  bd.isEnabled ? "true" : "false");  
     p(lines[i++], "}");
     lines[i] = NULL;
@@ -481,8 +483,8 @@ char **b2ShapeDef_to_str(b2ShapeDef sd) {
     p(lines[i++], "{");
     uint64_t user_data = (uint64_t)(sd.userData ? sd.userData : 0);
     p(lines[i++], "userData = %llu,", (unsigned long long)user_data);
-    p(lines[i++], "friction = %f,", sd.friction);
-    p(lines[i++], "restitution = %f,", sd.restitution);
+    p(lines[i++], "friction = %f,", sd.material.friction);
+    p(lines[i++], "restitution = %f,", sd.material.restitution);
     p(lines[i++], "density = %f,", sd.density);
     p(lines[i++], "}");
 
@@ -1077,7 +1079,7 @@ void b2DistanceJointDef_gui(b2DistanceJointDef *jdef) {
     const char *capt = "maxMotorForce [H]";
     igSliderFloat(capt, &jdef->maxMotorForce, 0.f, 3e6, "%f", 0);
     igSliderFloat("motorSpeed [m/s]", &jdef->motorSpeed, 0.f, 3e6f, "%f", 0);
-    igCheckbox("collideConnected", &jdef->collideConnected);
+    igCheckbox("collideConnected", &jdef->base.collideConnected);
 }
 
 
