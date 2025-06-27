@@ -1,49 +1,125 @@
-#!/usr/bin/env bash
+
+#!/bin/bash
 
 # Печатать выполняемую команду оболочки
 set -x
-# Прерывать выполнение сценария если код возврата команды не обработан условием и не равен 0
-set -e 
+# Прерывать выполнение сценария при ошибке
+set -e
 
-#export CAUSTIC_PATH=$HOME/caustic
-#export PATH=/home/testuser/.luarocks/lib/luarocks/rocks-5.4/tl/0.15.2-1/bin/:$PATH
+echo "🔍 Проверка дистрибутива..."
 
-#sudo apt install git build-essential lua5.1 luarocks cmake curl vim luajit libzzip-dev libcurl4-nss-dev 
-#sudo apt install libx11-dev libx11-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev
+# Проверка дистрибутива — только openSUSE Tumbleweed
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    if [[ "$ID" != "opensuse-tumbleweed" && "$ID_LIKE" != *"suse"* ]]; then
+        echo "❌ Этот скрипт предназначен только для openSUSE Tumbleweed."
+        exit 1
+    fi
+else
+    echo "❌ Не удалось определить дистрибутив. Файл /etc/os-release не найден."
+    exit 1
+fi
 
-# TODO: Подготовить команды для archlinux
-# yay -S zziplib
+# Функция настройки openSUSE Tumbleweed
+setup_suse() {
+    echo "📁 Проверка существования директории ~/caustic..."
+    CAUSTIC_DIR="$HOME/caustic"
 
+    if [ -d "$CAUSTIC_DIR" ]; then
+        echo "❌ Каталог $CAUSTIC_DIR уже существует. Прерывание."
+        exit 1
+    fi
 
-#sudo apt install libgl1-mesa-glx
+    echo "🔄 Обновление информации о пакетах..."
+    sudo zypper refresh
 
-#sudo apt install liblua5.4-dev
-#luarocks install serpent --local 
-#luarocks install serpent --lua-version 5.4 --local
-#luarocks install tl --lua-version 5.4 --local
-#luarocks install luaposix --lua-version 5.4 --local
-#luarocks install inspect --lua-version 5.4 --local
-#luarocks install tabular --lua-version 5.4 --local
-#luarocks install ansicolors --lua-version 5.4 --local
-#luarocks install luafilesystem --lua-version 5.4 --local
+    echo "🧪 Проверка наличия gcc..."
+    if ! command -v gcc &>/dev/null; then
+        echo "➡ Установка gcc..."
+        sudo zypper install -y gcc
+    else
+        echo "✅ gcc уже установлен."
+    fi
 
-#LUA_VER="5.1"
-LUA_VER="5.4"
-#sudo apt install libzip-dev 
-luarocks install luazip --local --lua-version $LUA_VER
+    echo "🧪 Проверка наличия git..."
+    if ! command -v git &>/dev/null; then
+        echo "➡ Установка git..."
+        sudo zypper install -y git
+    else
+        echo "✅ git уже установлен."
+    fi
 
-luarocks install lua-curl --local
-#luarocks install lua-curl CURL_INCDIR=/usr/include/x86_64-linux-gnu --local
+    echo "🧪 Проверка наличия lua54..."
+    if ! command -v lua54 &>/dev/null; then
+        echo "➡ Установка lua54..."
+        sudo zypper install -y lua54
+    else
+        echo "✅ lua54 уже установлен."
+    fi
 
-luarocks install serpent --local --lua-version $LUA_VER
-luarocks install tl --local --lua-version $LUA_VER
-luarocks install luaposix --local --lua-version $LUA_VER
-luarocks install inspect --local --lua-version $LUA_VER
-luarocks install tabular --local --lua-version $LUA_VER
-luarocks install ansicolors --local --lua-version $LUA_VER
-luarocks install luafilesystem --local --lua-version $LUA_VER
-luarocks install luasocket --local --lua-version $LUA_VER
-luarocks install dkjson --local --lua-version $LUA_VER
-luarocks install luaposix --local --lua-version $LUA_VER
-luarocks install lanes --local --lua-version $LUA_VER
-luarocks install compat53 --local --lua-version $LUA_VER
+    echo "➡ Установка luarocks и зависимостей..."
+    sudo zypper install -y lua54-luarocks cmake lua54-devel libcurl-devel readline-devel
+
+    #echo "📥 Клонирование репозитория Caustic..."
+    #git clone --depth=1 git@github.com:nagolove/caustic.git "$CAUSTIC_DIR"
+    #
+    #echo "📂 Переход в директорию проекта: $CAUSTIC_DIR"
+    #cd "$CAUSTIC_DIR"
+
+    echo "📥 Проверка необходимости клонирования репозитория Caustic..."
+
+    # Если уже находимся в $HOME/caustic и это Git-репозиторий с нужным файлом — клонирование не нужно
+    if [[ "$PWD" == "$HOME/caustic" && -d ".git" && -f "tl_dst/caustic.lua" ]]; then
+        echo "✅ Вы уже находитесь в корректной директории caustic с необходимыми файлами. Клонирование не требуется."
+    else
+        if [ -d "$CAUSTIC_DIR" ]; then
+            echo "❌ Каталог $CAUSTIC_DIR уже существует и не является ожидаемым репозиторием. Прерывание."
+            exit 1
+        fi
+
+        echo "📥 Клонирование репозитория Caustic..."
+        git clone --depth=1 git@github.com:nagolove/caustic.git "$CAUSTIC_DIR"
+
+        echo "📂 Переход в директорию проекта: $CAUSTIC_DIR"
+        cd "$CAUSTIC_DIR"
+    fi
+
+    LUA_VER="5.4"
+
+    echo "📦 Установка Lua-библиотек через luarocks..."
+    luarocks install lua-curl --local
+    luarocks install serpent --local --lua-version $LUA_VER
+    luarocks install tl --local --lua-version $LUA_VER
+    luarocks install luaposix --local --lua-version $LUA_VER
+    luarocks install inspect --local --lua-version $LUA_VER
+    luarocks install tabular --local --lua-version $LUA_VER
+    luarocks install ansicolors --local --lua-version $LUA_VER
+    luarocks install luafilesystem --local --lua-version $LUA_VER
+    luarocks install luasocket --local --lua-version $LUA_VER
+    luarocks install compat53 --local --lua-version $LUA_VER
+    luarocks install luv --local --lua-version $LUA_VER
+    luarocks install readline --local --lua-version $LUA_VER
+
+    echo "🛠️ Добавление переменных окружения в ~/.bashrc..."
+    BASHRC="$HOME/.bashrc"
+
+    if [ ! -f "$BASHRC" ]; then
+        echo "❌ Файл ~/.bashrc не найден. Невозможно добавить CAUSTIC_PATH и PATH."
+        exit 1
+    fi
+
+    if ! grep -q 'CAUSTIC_PATH=' "$BASHRC"; then
+        echo 'export CAUSTIC_PATH="$HOME/caustic"' >> "$BASHRC"
+    fi
+
+    if ! grep -q 'export PATH=.*$CAUSTIC_PATH' "$BASHRC"; then
+        echo 'export PATH="$CAUSTIC_PATH:$PATH"' >> "$BASHRC"
+    fi
+
+    echo "✅ Установка завершена успешно."
+    echo "🔁 Перезапустите терминал или выполните:"
+    echo "    source ~/.bashrc"
+}
+
+# Запуск функции установки
+setup_suse
