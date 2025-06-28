@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+
+# Печатать выполняемую команду оболочки
+#set -x
+# Прерывать выполнение сценария при ошибке
 set -e
-set -x
 
 # Проверка на наличие CAUSTIC_PATH
 if [ -z "$CAUSTIC_PATH" ]; then
@@ -17,7 +20,7 @@ LUAROCKS_BIN=$(luarocks --local --lua-version=$LUA_VER path --lr-bin)
 # Добавляем tl_dst/?.lua в путь
 CAUSTIC_MODULE_PATH="$CAUSTIC_PATH/tl_dst/?.lua"
 
-echo $CAUSTIC_MODULE_PATH
+#echo $CAUSTIC_MODULE_PATH
 
 # Объединение путей
 export LUA_PATH="$LUA_PATH_STR;$CAUSTIC_MODULE_PATH"
