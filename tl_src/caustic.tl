@@ -1516,6 +1516,7 @@ modules = {
         copy_for_wasm = true,
     },
 
+    --[[
     {
         disabled = false,
         copy_for_wasm = true,
@@ -1530,6 +1531,7 @@ modules = {
         url_action = "git",
         url = "https://github.com/vnmakarov/mum-hash",
     },
+    --]]
 
     {
         disabled = false,
