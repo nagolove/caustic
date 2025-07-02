@@ -575,6 +575,7 @@ end
 
 local function find_and_remove_cmake_cache()
    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+   cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
 end
 
 local function build_llama(_)
@@ -1405,7 +1406,7 @@ modules = {
    },
 
 
-
+   --[[
    {
       disabled = false,
       description = "color worms moving on texture",
@@ -1424,6 +1425,7 @@ modules = {
       build_w = build_with_make_common,
       url = "git@github.com:nagolove/raylib_colorwormseffect.git",
    },
+   --]]
 
 
 
