@@ -255,6 +255,7 @@ static void draw_string(
 }
 
 b2DebugDraw b2_world_dbg_draw_create2() {
+#ifndef B2_LATEST
     return (struct b2DebugDraw) {
         .DrawPolygon = draw_polygon,
         .DrawSolidPolygon = draw_solid_polygon,
@@ -272,10 +273,29 @@ b2DebugDraw b2_world_dbg_draw_create2() {
         .drawMass = true,
         .drawGraphColors = true,
     };
+#else
+    return (struct b2DebugDraw) {
+        .DrawPolygonFcn = draw_polygon,
+        .DrawSolidPolygonFcn = draw_solid_polygon,
+        .DrawCircleFcn = draw_circle,
+        .DrawSolidCircleFcn = draw_solid_circle,
+        .DrawSolidCapsuleFcn = draw_solid_capsule,
+        .DrawSegmentFcn = draw_segment,
+        .DrawTransformFcn = draw_transform,
+        .DrawPointFcn = draw_point,
+        .DrawStringFcn = draw_string,
+        .drawShapes = true,
+        .drawJoints = true,
+        .drawBounds = true,
+        .drawMass = true,
+        .drawGraphColors = true,
+    };
+#endif
 }
 
 
 b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
+#ifndef B2_LATEST
     return (struct b2DebugDraw) {
         .DrawPolygon = draw_polygon,
         .DrawSolidPolygon = draw_solid_polygon,
@@ -294,6 +314,25 @@ b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
         .drawGraphColors = true,
         .context = wctx,
     };
+#else
+    return (struct b2DebugDraw) {
+        .DrawPolygonFcn = draw_polygon,
+        .DrawSolidPolygonFcn = draw_solid_polygon,
+        .DrawCircleFcn = draw_circle,
+        .DrawSolidCircleFcn = draw_solid_circle,
+        .DrawSolidCapsuleFcn = draw_solid_capsule,
+        .DrawSegmentFcn = draw_segment,
+        .DrawTransformFcn = draw_transform,
+        .DrawPointFcn = draw_point,
+        .DrawStringFcn = draw_string,
+        .drawShapes = true,
+        .drawJoints = true,
+        .drawBounds = true,
+        .drawMass = true,
+        .drawGraphColors = true,
+        .context = wctx,
+    };
+#endif
 }
 
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num) {
@@ -462,7 +501,11 @@ char **b2BodyDef_to_str(b2BodyDef bd) {
     p(lines[i++], "userData = %llu,",  (unsigned long long)user_data); 
     p(lines[i++], "enableSleep = %s,",  bd.enableSleep ? "true" : "false");    
     p(lines[i++], "isAwake = %s,",  bd.isAwake ? "true" : "false");    
+#ifdef B2_LATEST
+    //p(lines[i++], "fixedRotation = %s,",  bd.fixedRotation ? "true" : "false");  
+#else
     p(lines[i++], "fixedRotation = %s,",  bd.fixedRotation ? "true" : "false");  
+#endif
     p(lines[i++], "isEnabled = %s,",  bd.isEnabled ? "true" : "false");  
     p(lines[i++], "}");
     lines[i] = NULL;
@@ -481,8 +524,15 @@ char **b2ShapeDef_to_str(b2ShapeDef sd) {
     p(lines[i++], "{");
     uint64_t user_data = (uint64_t)(sd.userData ? sd.userData : 0);
     p(lines[i++], "userData = %llu,", (unsigned long long)user_data);
+
+#ifdef B2_LATEST
+    p(lines[i++], "friction = %f,", sd.material.friction);
+    p(lines[i++], "restitution = %f,", sd.material.restitution);
+#else
     p(lines[i++], "friction = %f,", sd.friction);
     p(lines[i++], "restitution = %f,", sd.restitution);
+#endif
+
     p(lines[i++], "density = %f,", sd.density);
     p(lines[i++], "}");
 
@@ -1077,7 +1127,11 @@ void b2DistanceJointDef_gui(b2DistanceJointDef *jdef) {
     const char *capt = "maxMotorForce [H]";
     igSliderFloat(capt, &jdef->maxMotorForce, 0.f, 3e6, "%f", 0);
     igSliderFloat("motorSpeed [m/s]", &jdef->motorSpeed, 0.f, 3e6f, "%f", 0);
+
+#ifndef B2_LATEST
     igCheckbox("collideConnected", &jdef->collideConnected);
+#endif
+
 }
 
 
@@ -1175,3 +1229,44 @@ bool b2Filter_gui(const char *caption, b2Filter *qf, float spacing) {
     }
     return ret;
 }
+
+#ifdef B2_LATEST
+/// Overlap test for all shapes that *potentially* overlap the provided AABB
+/*
+b2TreeStats b2World_OverlapAABB( b2WorldId worldId, b2AABB aabb, b2QueryFilter filter, b2OverlapResultFcn* fcn,
+											  void* context ) {
+}
+*/
+
+/// Overlap test for for all shapes that overlap the provided point.
+b2TreeStats b2World_OverlapPoint( b2WorldId worldId, b2Vec2 point, b2Transform transform,
+												b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
+    b2ShapeProxy proxy = b2MakeProxy(&point, 1, 1.f);
+    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+
+}
+
+/// Overlap test for for all shapes that overlap the provided circle. A zero radius may be used for a point query.
+b2TreeStats b2World_OverlapCircle( b2WorldId worldId, const b2Circle* circle, b2Transform transform,
+												b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
+    b2ShapeProxy proxy = b2MakeProxy(&circle->center, 1, circle->radius);
+    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+}
+
+/*
+/// Overlap test for all shapes that overlap the provided capsule
+b2TreeStats b2World_OverlapCapsule( b2WorldId worldId, const b2Capsule* capsule, b2Transform transform,
+												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
+    b2ShapeProxy proxy = b2MakeProxy(&point, 1, 1.f);
+    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+}
+*/
+
+/// Overlap test for all shapes that overlap the provided polygon
+b2TreeStats b2World_OverlapPolygon( b2WorldId worldId, const b2Polygon* polygon, b2Transform transform,
+												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
+    b2ShapeProxy proxy = b2MakeProxy(polygon->vertices, polygon->count, polygon->radius);
+    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+}
+
+#endif

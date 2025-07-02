@@ -330,3 +330,29 @@ const char *b2ShapeType_tostr(b2ShapeType type);
 
 bool b2QueryFilter_gui(const char *caption, b2QueryFilter *qf, float spacing);
 bool b2Filter_gui(const char *caption, b2Filter *qf, float spacing);
+
+#define B2_LATEST
+
+#ifdef B2_LATEST
+/// Overlap test for all shapes that *potentially* overlap the provided AABB
+/*
+b2TreeStats b2World_OverlapAABB( b2WorldId worldId, b2AABB aabb, b2QueryFilter filter, b2OverlapResultFcn* fcn,
+											  void* context );
+                                              */
+
+/// Overlap test for for all shapes that overlap the provided point.
+b2TreeStats b2World_OverlapPoint( b2WorldId worldId, b2Vec2 point, b2Transform transform,
+												b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context );
+
+/// Overlap test for for all shapes that overlap the provided circle. A zero radius may be used for a point query.
+b2TreeStats b2World_OverlapCircle( b2WorldId worldId, const b2Circle* circle, b2Transform transform,
+												b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context );
+
+/// Overlap test for all shapes that overlap the provided capsule
+b2TreeStats b2World_OverlapCapsule( b2WorldId worldId, const b2Capsule* capsule, b2Transform transform,
+												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context );
+
+/// Overlap test for all shapes that overlap the provided polygon
+b2TreeStats b2World_OverlapPolygon( b2WorldId worldId, const b2Polygon* polygon, b2Transform transform,
+												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context );
+#endif
