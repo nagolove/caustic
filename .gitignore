@@ -1,7 +1,9 @@
-./3rd_party/*
-./3rd_party/
-./wasm_3rd_party/*
+modules_*
+obj_linux
+obj_wasm
 cache.lua
+#src/stq6LTr3
+.vim-bookmarks
 *.bak
 *~
 #*.aseprite
