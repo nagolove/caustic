@@ -418,6 +418,7 @@ void trace_enable(bool state) {
 
 // Custom logging function
 // TODO: Использовать trace() внутри или нет?
+// XXX: Падает из-за рекурсии
 void koh_log_custom(int msgType, const char *text, va_list args) {
     printf("[%.4f] ", GetTime());
 
