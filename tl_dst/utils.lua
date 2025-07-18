@@ -1,9 +1,7 @@
 local lfs = require('lfs')
 
-
 local format = string.format
 local dir_stack = {}
-
 
 
 

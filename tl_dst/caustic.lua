@@ -85,10 +85,10 @@ local argparse = require('argparse')
 local ut = require("utils")
 local Cache = require("cache")
 local uv = require("luv")
-local lanes = require("lanes").configure()
+
 local rl = require("readline")
 local readline = rl.readline
-local sleep = require("socket").sleep
+
 local format = string.format
 local match = string.match
 
@@ -1307,6 +1307,7 @@ end
 
 
 
+
 modules = {
 
 
@@ -1345,6 +1346,7 @@ modules = {
       libdirs = {
          "llama_cpp/build/src",
          "llama_cpp/build/ggml/src",
+         "llama_cpp/build/common",
       },
       links = {
 
@@ -1406,7 +1408,7 @@ modules = {
    },
 
 
-   --[[
+
    {
       disabled = false,
       description = "color worms moving on texture",
@@ -1425,7 +1427,6 @@ modules = {
       build_w = build_with_make_common,
       url = "git@github.com:nagolove/raylib_colorwormseffect.git",
    },
-   --]]
 
 
 
@@ -1516,20 +1517,22 @@ modules = {
       copy_for_wasm = true,
    },
 
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      build = nil,
-      description = "mum hash functions",
-      dir = "mum-hash",
-      includes = { "mum-hash" },
-      libdirs = { "mum-hash" },
-      links = {},
-      links_internal = {},
-      name = "mum_hash",
-      url_action = "git",
-      url = "https://github.com/vnmakarov/mum-hash",
-   },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
    {
       disabled = false,
@@ -2201,19 +2204,21 @@ local function _dependency_init(dep)
    after_init(dep)
 end
 
-local function wait_threads(threads)
-   local waiting = true
-   while waiting do
-      waiting = false
-      for _, thread in ipairs(threads) do
-         if thread.status == 'running' then
-            waiting = true
-            break
-         end
-      end
-      sleep(0.01)
-   end
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3186,9 +3191,11 @@ function actions.init(_args)
 
    require('compat53')
 
-   local threads = {}
-   local opt_tbl = { required = { "lfs", "compat53" } }
-   local func = lanes.gen("*", opt_tbl, _dependency_init)
+
+
+
+
+
 
    local single_thread = true
 
@@ -3204,22 +3211,29 @@ function actions.init(_args)
          if single_thread then
             _dependency_init(dep)
          else
+            assert("Single thread only")
 
-            local lane_thread = (func)(dep, path)
 
-            table.insert(threads, lane_thread)
+
+
+
+
+
+
          end
       end
    end
 
-   if #threads ~= 0 then
-      print(tabular(threads))
-      wait_threads(threads)
-      for _, thread in ipairs(threads) do
-         local result, errcode = thread:join()
-         print(result, errcode)
-      end
-   end
+
+
+
+
+
+
+
+
+
+
 
    ut.pop_dir()
 end
@@ -4223,6 +4237,10 @@ end
 local function run_parallel_uv(queue)
 
 
+   print(inspect(queue))
+   print("os.exit(1)")
+   os.exit(1)
+
    local errcode = 0
 
    local buf_err, buf_out = {}, {}
@@ -4762,6 +4780,7 @@ local function print_sorted_string(objfiles)
    end)
    print(tabular(objfiles_sorted))
 end
+
 
 local function dependencies_set_target(target)
    for _, dep in ipairs(modules) do

@@ -4237,6 +4237,10 @@ end
 local function run_parallel_uv(queue: {Task})
     --printc("%{cyan}currentdir " .. lfs.currentdir() .. "%{reset}")
 
+    print(inspect(queue))
+    print("os.exit(1)")
+    os.exit(1)
+
     local errcode = 0
 
     local buf_err, buf_out = {}, {}
@@ -4777,6 +4781,7 @@ local function print_sorted_string(objfiles: {string})
     print(tabular(objfiles_sorted))
 end
 
+-- XXX: Что делает эта функция? Зачем?
 local function dependencies_set_target(target: Target)
     for _, dep in ipairs(modules) do
         dep.target = target
