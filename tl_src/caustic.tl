@@ -85,10 +85,10 @@ local argparse   = require 'argparse'
 local ut         = require "utils"
 local Cache      = require "cache"
 local uv         = require "luv"
-local lanes      = require "lanes".configure()
+--local lanes      = require "lanes".configure()
 local rl         = require "readline"
 local readline   = rl.readline
-local sleep      = require "socket".sleep
+--local sleep      = require "socket".sleep
 local format     = string.format
 local match      = string.match
 --- }}}
@@ -2204,6 +2204,7 @@ local function _dependency_init(dep: Dependency): any
     after_init(dep)
 end
 
+--[[
 local function wait_threads(threads: {lanes.Thread})
     local waiting = true
     while waiting do
@@ -2217,6 +2218,7 @@ local function wait_threads(threads: {lanes.Thread})
         sleep(0.01 as integer)
     end
 end
+--]]
 
 -- }}} 
 
@@ -3189,9 +3191,11 @@ function actions.init(_args: Args)
 
 	require 'compat53'
 
+    --[[
     local threads: {lanes.Thread} = {}
     local opt_tbl = { required = {"lfs", "compat53" }, }
     local func = lanes.gen("*", opt_tbl, _dependency_init)
+    --]]
 
 	local single_thread = true
 
@@ -3207,14 +3211,20 @@ function actions.init(_args: Args)
 			if single_thread then
 				_dependency_init(dep)
 			else
+                assert("Single thread only")
+
+                --[[
 				local type Dependency_init = function(Dependency, string): any
 				local lane_thread = (func as Dependency_init)(dep, path) 
 					as lanes.Thread
 				table.insert(threads, lane_thread)
+                --]]
+
 			end
         end
     end
 
+    --[[
 	if #threads ~= 0 then
 		print(tabular(threads))
 		wait_threads(threads)
@@ -3223,6 +3233,7 @@ function actions.init(_args: Args)
 			print(result, errcode)
 		end
 	end
+    --]]
 
     ut.pop_dir()
 end

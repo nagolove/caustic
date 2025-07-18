@@ -1,9 +1,7 @@
 local lfs = require 'lfs'
---local inspect = require 'inspect'
 
 local format = string.format
 local dir_stack: {string} = {}
---require "caustic"
 
 -- Удалить последнюю наклонную черту если она есть и путь не указывает в
 -- корень файловой системы
