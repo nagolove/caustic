@@ -1,4 +1,4 @@
-/* vim: fdm=marker */
+// vim: fdm=marker 
 
 /*
  Сперва сделать выполнение последовательным.
@@ -38,6 +38,203 @@ typedef struct ThreadData {
 static std::atomic<int> done_count = 0;
 // Всего задач
 static int total_tasks = 0;
+
+void run_tasks_serial(Task* tasks, int task_count);
+void run_tasks_parallel(Task* tasks, int task_count);
+
+static int l_run_tasks(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+
+    int opt_index = 2;
+    const char *mode = "parallel";
+    int max_parallel = sysconf(_SC_NPROCESSORS_ONLN);
+
+    if (!lua_isnoneornil(L, opt_index)) {
+        luaL_checktype(L, opt_index, LUA_TTABLE);
+        lua_getfield(L, opt_index, "mode");
+        if (lua_isstring(L, -1)) mode = lua_tostring(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, opt_index, "max");
+        if (lua_isinteger(L, -1)) {
+            max_parallel = (int)lua_tointeger(L, -1);
+            if (max_parallel <= 0) max_parallel = 1;
+        }
+        lua_pop(L, 1);
+    }
+
+    int task_count = (int)lua_rawlen(L, 1);
+    if (task_count > MAX_TASKS) {
+        return luaL_error(L, "too many tasks (max %d)", MAX_TASKS);
+    }
+
+    Task *tasks = (Task*)calloc(task_count, sizeof(Task));
+    if (!tasks) return luaL_error(L, "OOM");
+
+    // Временное хранилище для strdup чтоб потом освободить:
+    char **allocated = NULL;
+    int alloc_cap = task_count * 8;
+    int alloc_sz = 0;
+    allocated = (char**)malloc(sizeof(char*) * alloc_cap);
+
+    auto store_dup = [&](const char *s) {
+        if (!s) return (const char*)NULL;
+        char *cpy = strdup(s);
+        if (!cpy) return (const char*)NULL;
+        if (alloc_sz >= alloc_cap) {
+            alloc_cap *= 2;
+            allocated = (char**)realloc(allocated, sizeof(char*) * alloc_cap);
+        }
+        allocated[alloc_sz++] = cpy;
+        return (const char*)cpy;
+    };
+
+    for (int i = 0; i < task_count; ++i) {
+        lua_rawgeti(L, 1, i + 1);          // stack: task_table
+        if (!lua_istable(L, -1)) {
+            // очистка ниже
+            for (int k = 0; k < alloc_sz; ++k) free(allocated[k]);
+            free(allocated); free(tasks);
+            return luaL_error(L, "queue[%d] not a table", i+1);
+        }
+
+        lua_getfield(L, -1, "cmd");
+        const char *cmd = luaL_checkstring(L, -1);
+        tasks[i].cmd = store_dup(cmd);
+        lua_pop(L, 1);
+
+        // args
+        lua_getfield(L, -1, "args");
+        int argn = 0;
+        if (lua_istable(L, -1)) {
+            int len = (int)lua_rawlen(L, -1);
+            if (len >= MAX_ARGS) len = MAX_ARGS - 1;
+            for (int a = 0; a < len; ++a) {
+                lua_rawgeti(L, -1, a + 1);
+                const char *astr = luaL_checkstring(L, -1);
+                tasks[i].args[argn++] = store_dup(astr);
+                lua_pop(L, 1);
+            }
+        } else if (!lua_isnil(L, -1)) {
+            luaL_error(L, "queue[%d].args must be table or nil", i+1);
+        }
+        lua_pop(L, 1); // pop args table
+        tasks[i].args[argn] = NULL;
+
+        lua_pop(L, 1); // pop task_table
+    }
+
+    if (strcmp(mode, "serial") == 0) {
+        run_tasks_serial(tasks, task_count);
+    } else {
+        run_tasks_parallel(tasks, task_count, max_parallel);
+    }
+
+    // Освобождение
+    for (int k = 0; k < alloc_sz; ++k) free(allocated[k]);
+    free(allocated);
+    free(tasks);
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_run_tasks(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+
+    int opt_index = 2;
+    const char *mode = "parallel";
+    int max_parallel = sysconf(_SC_NPROCESSORS_ONLN);
+
+    if (!lua_isnoneornil(L, opt_index)) {
+        luaL_checktype(L, opt_index, LUA_TTABLE);
+        lua_getfield(L, opt_index, "mode");
+        if (lua_isstring(L, -1)) mode = lua_tostring(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, opt_index, "max");
+        if (lua_isinteger(L, -1)) {
+            max_parallel = (int)lua_tointeger(L, -1);
+            if (max_parallel <= 0) max_parallel = 1;
+        }
+        lua_pop(L, 1);
+    }
+
+    int task_count = (int)lua_rawlen(L, 1);
+    if (task_count > MAX_TASKS) {
+        return luaL_error(L, "too many tasks (max %d)", MAX_TASKS);
+    }
+
+    Task *tasks = (Task*)calloc(task_count, sizeof(Task));
+    if (!tasks) return luaL_error(L, "OOM");
+
+    // Временное хранилище для strdup чтоб потом освободить:
+    char **allocated = NULL;
+    int alloc_cap = task_count * 8;
+    int alloc_sz = 0;
+    allocated = (char**)malloc(sizeof(char*) * alloc_cap);
+
+    auto store_dup = [&](const char *s) {
+        if (!s) return (const char*)NULL;
+        char *cpy = strdup(s);
+        if (!cpy) return (const char*)NULL;
+        if (alloc_sz >= alloc_cap) {
+            alloc_cap *= 2;
+            allocated = (char**)realloc(allocated, sizeof(char*) * alloc_cap);
+        }
+        allocated[alloc_sz++] = cpy;
+        return (const char*)cpy;
+    };
+
+    for (int i = 0; i < task_count; ++i) {
+        lua_rawgeti(L, 1, i + 1);          // stack: task_table
+        if (!lua_istable(L, -1)) {
+            // очистка ниже
+            for (int k = 0; k < alloc_sz; ++k) free(allocated[k]);
+            free(allocated); free(tasks);
+            return luaL_error(L, "queue[%d] not a table", i+1);
+        }
+
+        lua_getfield(L, -1, "cmd");
+        const char *cmd = luaL_checkstring(L, -1);
+        tasks[i].cmd = store_dup(cmd);
+        lua_pop(L, 1);
+
+        // args
+        lua_getfield(L, -1, "args");
+        int argn = 0;
+        if (lua_istable(L, -1)) {
+            int len = (int)lua_rawlen(L, -1);
+            if (len >= MAX_ARGS) len = MAX_ARGS - 1;
+            for (int a = 0; a < len; ++a) {
+                lua_rawgeti(L, -1, a + 1);
+                const char *astr = luaL_checkstring(L, -1);
+                tasks[i].args[argn++] = store_dup(astr);
+                lua_pop(L, 1);
+            }
+        } else if (!lua_isnil(L, -1)) {
+            luaL_error(L, "queue[%d].args must be table or nil", i+1);
+        }
+        lua_pop(L, 1); // pop args table
+        tasks[i].args[argn] = NULL;
+
+        lua_pop(L, 1); // pop task_table
+    }
+
+    if (strcmp(mode, "serial") == 0) {
+        run_tasks_serial(tasks, task_count);
+    } else {
+        run_tasks_parallel(tasks, task_count, max_parallel);
+    }
+
+    // Освобождение
+    for (int k = 0; k < alloc_sz; ++k) free(allocated[k]);
+    free(allocated);
+    free(tasks);
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
 
 int run_task(void* arg) {
     ThreadData* td = (ThreadData*)arg;
@@ -134,6 +331,19 @@ void run_tasks_parallel_no_spin(Task* tasks, int task_count) {
 void run_tasks_serial(Task* tasks, int task_count) {
 }
 
+static int preload_mymod(lua_State *L) {
+    //luaL_loadbuffer(L, (const char*)mymod_lua, mymod_lua_len, "mymod.lua");
+    return 1;
+}
+
+void register_embedded(lua_State *L) {
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "preload");
+    lua_pushcfunction(L, preload_mymod);
+    lua_setfield(L, -2, "mymod"); // require("mymod")
+    lua_pop(L, 2);
+}
+
 int main(int argc, char **argv) {
     std::string line;
     auto quit = linenoise::Readline("hello> ", line);
@@ -142,28 +352,23 @@ int main(int argc, char **argv) {
         printf("main: quit\n");
     }
 
+    lua_State *l = luaL_newstate();
+    luaL_openlibs(l); /
 
-    // TODO: Инициализация Луа
+    // Расширяем package.path
+    lua_getglobal(l, "package");
+    lua_getfield(l, -1, "path");
+    const char *old_path = lua_tostring(l, -1);
+    std::string new_path = std::string(old_path ? old_path : "")
+        + ";./?.lua;./?/init.lua;./scripts/?.lua";
+    lua_pop(l, 1);
+    lua_pushlstring(l, new_path.c_str(), new_path.size());
+    lua_setfield(l, -2, "path");
+    lua_pop(l, 1); // pop package
 
-    // TODO: Подключение всех стандартных либ
+    lua_pushcfunction(l, l_run_tasks);
+    lua_setglobal(l, "run_tasks");
 
-    // TODO: Установка package.path
-
-
-    // TODO: Зарегистрировать С функцию в луа под именем run_tasks()
-    /* Функция будет Си реализацией следущего кода:
-
-        Код на Teal
-        global record Task
-            cmd: string
-            args: {string}
-        end
-        // TODO: Написать разбор queue из С и формирование массива Task
-        local function run_parallel_uv(queue: {Task})
-            ...
-        end
-
-        */
 
     // TODO: Предложить как лучше встраивать пачку Луа файлов в си код.
     // Это необходимо что-бы не было зависимостей от файлов которые можно
@@ -172,6 +377,6 @@ int main(int argc, char **argv) {
     
     // TODO: Здесь написать загрузку строк tl_dst как Луа модулей
 
-    // TODO: Деинициализация Луа
+    lua_close(l);
     return EXIT_SUCCESS;
 }
