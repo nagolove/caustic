@@ -1850,6 +1850,21 @@ modules = {
         url_action = "git",
         url = "https://github.com/krychu/wfc.git",
     },
+
+
+    {
+        dir = "libtess2",
+        build = nil,
+        build_w = nil,
+        copy_for_wasm = true,
+        --depends = {'stb'},
+        description = "разбиение контуров на треугольники",
+        name = 'libtess2',
+        url_action = "git",
+        url = "https://github.com/memononen/libtess2",
+    },
+
+
 }
 
 -- {{{ functions
@@ -4237,9 +4252,9 @@ end
 local function run_parallel_uv(queue: {Task})
     --printc("%{cyan}currentdir " .. lfs.currentdir() .. "%{reset}")
 
-    print(inspect(queue))
-    print("os.exit(1)")
-    os.exit(1)
+    --print(inspect(queue))
+    --print("os.exit(1)")
+    --os.exit(1)
 
     local errcode = 0
 
