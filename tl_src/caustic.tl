@@ -2320,14 +2320,16 @@ end
 
 local record Actions
     -- {{{
+
     --anim_convert: function(Args)
     --projects_status2: function(Args)
-    ctags: function(Args)
     build: function(Args)
     compile_flags: function(Args)
+    ctags: function(Args)
     dependencies: function(Args)
     deps: function(Args)
     dist: function(Args)
+    files_koh: function(Args)
     init: function(Args)
     make: function(Args)
     project: function(Args)
@@ -2346,15 +2348,18 @@ local record Actions
     unit: function(Args)
     update: function(Args)
     verbose: function(Args)
+
     -- }}}
 end
 
 local enum ActionsEnum
     -- {{{
+
     "build"
     "compile_flags"
     "deps"
     "dist"
+    "files_koh"
     "init"          
     "make"
     "project"
@@ -2371,6 +2376,7 @@ local enum ActionsEnum
     "unit"
     "update"
     "verbose"
+
     -- }}}
 end
 
@@ -2387,6 +2393,10 @@ local parser_setup: {string:ParserSetup} = {
     dist = {
         options = {},
         summary = [[build binary distribution]],
+    },
+
+    files_koh = {
+        summary = [[get list of caustic files for chunking = modules + src]],
     },
 
     ctags = {
@@ -5324,6 +5334,30 @@ local function extract_source_file(task: Task): string
     return nil
 end
 
+function actions.files_koh(_args: Args)
+    for _, module in ipairs(modules) do
+        ut.push_current_dir()
+
+        if module.dir then
+            local ok, msg = chdir(path_rel_third_party .. "/" .. module.dir)
+            if not ok then
+                print("actions.files_koh:", msg)
+            end
+
+            printc("%{blue}" .. lfs.currentdir() .. "%{reset}") 
+
+            local pipe = io.popen([[fd ".*\.c$|.*\.h$|.*\.md$|.*\.lua$"]])
+            for line in pipe:lines() do
+                print(line)
+            end
+            print()
+
+        end
+
+        ut.pop_dir()
+    end
+end
+
 function actions.ctags(_args: Args) 
     -- XXX: Добавить пути включаемых файлов
 
@@ -5468,31 +5502,3 @@ if arg then
     main()
 end
 
--- TODO: Написать разбиение на чанки для векторизации
---[[
-
-Ты луа программист, специалист по llm, семантическому поиску и созданию 
-ai-агентов.
-
-Я делаю llm ассистента для своей сборочной системы и фреймворка. 
-Фреймворк использует библиотеки третьих лиц и мой код. Он предназначен для
-разработки игр. Проекты - игровые приложения, их каталоги лежат вне фреймворка.
-
-Система сборки написана на луа. Код фреймворка - C и С++. 
-Сперва я получаю весь код и делаю чанки в виде луа таблиц. 
-Затем делаю кеш при помощи hnswlib. 
-Затем создаю промпт и отправляю запрос к lm-studio через http апи.
-
-Все работает как cli приложение - сборка, создание проекта и ассистент в одной
-программе.
-
-К либе hnswlib надо сделать луа интерфейс.
-
-Спроси непонятные детали.
-Вопрос - как я могу организовать выполнение действий, обратную связь от llm?
-LLM дает ответ - типа дай инфу по таким функциям. Как это сделать, что-бы 
-работало не только в одну сторону.
-
-Получить ast для данного файла
-clang++ -Xclang -ast-dump -fsyntax-only src/h_main.c
---]]
