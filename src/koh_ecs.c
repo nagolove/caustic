@@ -4133,3 +4133,58 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
         strcmp(a.name, b.name) == 0 &&
         a.cp_sizeof == b.cp_sizeof;
 }
+
+
+koh_ecs koh_ecs_get() {
+    koh_ecs r = {};
+
+    r.e_new = e_new;
+    r.e_free = e_free;
+    r.e_register = e_register;
+    r.e_create = e_create;
+    r.e_destroy = e_destroy;
+    r.e_valid = e_valid;
+    r.e_remove_all = e_remove_all;
+    r.e_emplace = e_emplace;
+    r.e_num = e_num;
+    r.e_remove = e_remove;
+    r.e_remove_safe = e_remove_safe;
+    r.e_has = e_has;
+    r.e_get = e_get;
+    r.e_get_fast = e_get_fast;
+    r.e_each = e_each;
+    r.e_orphan = e_orphan;
+    r.e_orphans_each = e_orphans_each;
+    r.e_view_create = e_view_create;
+    r.e_view_create_single = e_view_create_single;
+    r.e_view_valid = e_view_valid;
+    r.e_view_entity = e_view_entity;
+    r.e_view_get = e_view_get;
+    r.e_view_next = e_view_next;
+    r.e_entities_alloc = e_entities_alloc;
+    r.e_clone = e_clone;
+    r.e_print_entities = e_print_entities;
+    r.e_entities2table_alloc = e_entities2table_alloc;
+    r.e_entities2table_alloc2 = e_entities2table_alloc2;
+    r.e_gui = e_gui;
+    r.e_gui_buf = e_gui_buf;
+    r.e_types_print = e_types_print;
+    r.e_types = e_types;
+    r.e_cp_type_2str = e_cp_type_2str;
+    r.e_each_begin = e_each_begin;
+    r.e_each_valid = e_each_valid;
+    r.e_each_next = e_each_next;
+    r.e_each_entity = e_each_entity;
+    r.e_cp_type_cmp = e_cp_type_cmp;
+    r.e_id_ver = e_id_ver;
+    r.e_id_ord = e_id_ord;
+    r.e_from_void = e_from_void;
+    r.e_build = e_build;
+    r.e_id2str = e_id2str;
+    r.e_is_null = e_is_null;
+    r.e_is_not_null = e_is_not_null;
+    r.htable_eid_str = htable_eid_str;
+    r.e_is_cp_registered = e_is_cp_registered;
+
+    return r;
+}

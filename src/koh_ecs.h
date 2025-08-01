@@ -432,3 +432,57 @@ const char *htable_eid_str(const void *data, int len);
 // Проверить по имени - зарегистрирован ли тип данных.
 // Возвращает истину если тип зарегестрирован в системе.
 bool e_is_cp_registered(ecs_t *r, const char *cp_type);
+
+// {{{
+typedef struct koh_ecs {
+    ecs_t *(*e_new)(e_options *opts);
+    void (*e_free)(ecs_t *r);
+    e_cp_type (*e_register)(ecs_t *r, e_cp_type *comp);
+    e_id (*e_create)(ecs_t* r);
+    void (*e_destroy)(ecs_t* r, e_id e);
+    bool (*e_valid)(ecs_t* r, e_id e);
+    void (*e_remove_all)(ecs_t* r, e_id e);
+    void* (*e_emplace)(ecs_t* r, e_id e, e_cp_type cp_type);
+    size_t (*e_num)(ecs_t* r, e_cp_type cp_type);
+    void (*e_remove)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void (*e_remove_safe)(ecs_t* r, e_id e, e_cp_type cp_type);
+    bool (*e_has)(ecs_t* r, e_id e, const e_cp_type cp_type);
+    void* (*e_get)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void* (*e_get_fast)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void (*e_each)(ecs_t* r, e_each_function fun, void* udata);
+    bool (*e_orphan)(ecs_t* r, e_id e);
+    void (*e_orphans_each)(ecs_t* r, e_each_function fun, void* udata);
+    e_view (*e_view_create)(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
+    e_view (*e_view_create_single)(ecs_t* r, e_cp_type cp_type);
+    bool (*e_view_valid)(e_view* v);
+    e_id (*e_view_entity)(e_view* v);
+    void* (*e_view_get)(e_view *v, e_cp_type cp_type);
+    void (*e_view_next)(e_view* v);
+    e_id *(*e_entities_alloc)(ecs_t *r, size_t *num);
+    ecs_t *(*e_clone)(ecs_t *r);
+    void (*e_print_entities)(ecs_t *r);
+    char *(*e_entities2table_alloc)(ecs_t *r);
+    char *(*e_entities2table_alloc2)(ecs_t *r);
+    void (*e_gui)(ecs_t *r, e_id e);
+    void (*e_gui_buf)(ecs_t *r);
+    void (*e_types_print)(ecs_t *r);
+    e_cp_type **(*e_types)(ecs_t *r, e_id e, int *num);
+    const char *(*e_cp_type_2str)(e_cp_type c);
+    e_each_iter (*e_each_begin)(ecs_t *r);
+    bool (*e_each_valid)(e_each_iter *i);
+    void (*e_each_next)(e_each_iter *i);
+    e_id (*e_each_entity)(e_each_iter *i);
+    int (*e_cp_type_cmp)(e_cp_type a, e_cp_type b);
+    uint32_t (*e_id_ver)(e_id e);
+    uint32_t (*e_id_ord)(e_id e);
+    e_id (*e_from_void)(void *p);
+    e_id (*e_build)(uint32_t ord, uint32_t ver);
+    const char *(*e_id2str)(e_id e);
+    bool (*e_is_null)(e_id e);
+    bool (*e_is_not_null)(e_id e);
+    const char *(*htable_eid_str)(const void *data, int len);
+    bool (*e_is_cp_registered)(ecs_t *r, const char *cp_type);
+} koh_ecs;
+// }}}
+
+koh_ecs koh_ecs_get();
