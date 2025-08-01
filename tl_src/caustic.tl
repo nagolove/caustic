@@ -2322,6 +2322,7 @@ local record Actions
     -- {{{
     --anim_convert: function(Args)
     --projects_status2: function(Args)
+    ctags: function(Args)
     build: function(Args)
     compile_flags: function(Args)
     dependencies: function(Args)
@@ -2386,6 +2387,10 @@ local parser_setup: {string:ParserSetup} = {
     dist = {
         options = {},
         summary = [[build binary distribution]],
+    },
+
+    ctags = {
+        summary = [[build ctags file for project]],
     },
 
     project = {
@@ -4523,7 +4528,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         printc("project_link: %{blue}" .. cmd .. "%{reset}")
     end
 
-    --printc("project_link: %{blue}" .. cmd .. "%{reset}")
+    printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
     cmd_do(cmd)
 end
@@ -4884,12 +4889,16 @@ local function dependencies_set_target(target: Target)
     end
 end
 
+local type MakeDriver = function(queue: {Task})
+
 -- Идея - файлы описания зависимостей могут лежать вне каустики.
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
 local function sub_make(
-    _args: Args, cfg: Cfg, target: Target, push_num?: integer
+    _args: Args, cfg: Cfg, target: Target, driver: MakeDriver, 
+    push_num?: integer 
 )
+    assert(driver)
     _args.target = target
 
     dependencies_set_target(target)
@@ -4940,6 +4949,9 @@ local function sub_make(
 
     -- FIXME: Почему сборка caustic не запускается из каталога caustic_path/src
     cache = Cache.new(cache_name)
+    -- Список файлов для перекомпиляции выводимый пользователю
+    --local repr_queu = {}
+
     local exclude = {}
 
     -- Исключить некоторые файлы
@@ -5101,9 +5113,6 @@ local function sub_make(
     local tasks: {Task} = {}
     local cwd = lfs.currentdir() .. "/"
 
-    -- Список файлов для перекомпиляции выводимый пользователю
-    local repr_queu = {}
-
     -- }}}
 
     local output_dir = "."
@@ -5176,9 +5185,9 @@ local function sub_make(
         table.insert(tasks, task)
 
         -- XXX: Кэширование работает вообще?
-        if cache:should_recompile(file, task) then
-            table.insert(repr_queu, file)
-        end
+        --if cache:should_recompile(file, task) then
+            --table.insert(repr_queu, file)
+        --end
 
         table.insert(objfiles, _output)
     end
@@ -5189,8 +5198,7 @@ local function sub_make(
         --print(tabular(repr_queu))
     end
 
-    -- использовать libuv
-    run_parallel_uv(tasks)
+    driver(tasks)
 
     cache:save()
     cache = nil
@@ -5233,7 +5241,7 @@ local function sub_make(
             local_cfg.debug_define = cfg.debug_define
             --print(tabular(local_cfg))
 
-            sub_make(args, local_cfg, target)
+            sub_make(args, local_cfg, target, run_parallel_uv)
         end
 
         ut.pop_dir()
@@ -5302,10 +5310,65 @@ function actions.make(_args: Args)
 
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
-    --print('actions.make: target', target)
     for _, cfg in ipairs(cfgs) do
-        sub_make(_args, cfg, target, push_num)
+        sub_make(_args, cfg, target, run_parallel_uv, push_num)
     end
+end
+
+local function extract_source_file(task: Task): string
+    for i = 1, #task.args do
+        if task.args[i] == "-c" then
+            return task.args[i + 1]
+        end
+    end
+    return nil
+end
+
+function actions.ctags(_args: Args) 
+    -- XXX: Добавить пути включаемых файлов
+
+    local tasks = {}
+
+    local function on_tasks(queue: {Task})
+        for _, v in ipairs(queue) do
+            table.insert(tasks, v)
+        end
+    end
+
+    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    local target = _args.t or "linux"
+    for _, cfg in ipairs(cfgs) do
+        sub_make(_args, cfg, target, on_tasks, push_num)
+    end
+
+    local sources = {}
+    for _, task in ipairs(tasks) do
+        local src = extract_source_file(task)
+        if src then
+            table.insert(sources, src)
+        else
+            print("src is nil")
+            print(debug.traceback())
+        end
+    end
+
+    --print(inspect(tasks))
+
+    --[[
+    f — функции
+    p — прототипы
+    v — переменные
+    s — структуры
+    u — union
+    m — члены
+    e — enum
+    d — define
+    --]]
+
+    local cmd = "ctags --c-kinds=+fpvsumed " .. table.concat(sources, " ")
+    --print(inspect(sources))
+    --print("cmd", cmd)
+    cmd_do(cmd)
 end
 
 local function do_parser_setup(
