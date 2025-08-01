@@ -1301,6 +1301,83 @@ end
 
 
 
+local libtess2_premake5 = [[
+local action = _ACTION or ""
+
+workspace "libtess2"
+    location "Build"
+    configurations { "Debug", "Release" }
+    platforms { "x64", "x86" }
+
+    filter "configurations:Debug"
+        defines { "DEBUG" }
+        symbols "On"
+        warnings "Extra"
+
+    filter "configurations:Release"
+        defines { "NDEBUG" }
+        optimize "On"
+        warnings "Extra"
+
+project "tess2"
+    kind "StaticLib"
+    language "C"
+    targetdir "Build"
+    includedirs { "Include", "Source" }
+    files { "Source/**.c" }
+
+project "example"
+    kind "ConsoleApp"
+    language "C"
+    targetdir "Build"
+    includedirs { "Include", "Contrib" }
+    files { "Example/example.c", "Contrib/**.c" }
+    links { "tess2" }
+
+    filter "system:linux"
+        linkoptions { "`pkg-config --libs glfw3`" }
+        links { "GL", "GLU", "m", "GLEW" }
+        defines { "NANOVG_GLEW" }
+
+    filter "system:windows"
+        links { "glfw3", "gdi32", "winmm", "user32", "GLEW", "glu32", "opengl32" }
+        defines { "NANOVG_GLEW" }
+
+    filter "system:macosx"
+        links { "glfw3" }
+        linkoptions {
+            "-framework OpenGL",
+            "-framework Cocoa",
+            "-framework IOKit",
+            "-framework CoreVideo"
+        }
+
+]]
+
+local function libtess2_after_init(_)
+   printc('%{green}libtess2_after_init:%{green}')
+   printc(lfs.currentdir())
+
+   local f = io.open("premake5.lua", "w")
+   if not f then
+      printc('libtess2_after_init: could not create premake5.lua')
+      return
+   end
+
+   f:write(libtess2_premake5)
+   f:close()
+
+end
+
+local function build_libtess2_common(_)
+   cmd_do("premake5 gmake")
+   ut.push_current_dir()
+   chdir("Build")
+   cmd_do("make")
+   ut.pop_dir()
+end
+
+
 
 
 
@@ -1854,10 +1931,14 @@ modules = {
 
    {
       dir = "libtess2",
-      build = nil,
-      build_w = nil,
+      after_init = libtess2_after_init,
+      build = build_libtess2_common,
+      build_w = build_libtess2_common,
       copy_for_wasm = true,
-
+      includes = { "libtess2/Include" },
+      libdirs = { "utf8proc/Build" },
+      links = { "libtess2/Build" },
+      links_internal = { "tess2" },
       description = "разбиение контуров на треугольники",
       name = 'libtess2',
       url_action = "git",
@@ -2299,12 +2380,17 @@ end
 
 
 
+
 local parser_setup = {
 
 
    dist = {
       options = {},
       summary = [[build binary distribution]],
+   },
+
+   ctags = {
+      summary = [[build ctags file for project]],
    },
 
    project = {
@@ -4442,7 +4528,7 @@ local function project_link(ctx, cfg, _args)
       printc("project_link: %{blue}" .. cmd .. "%{reset}")
    end
 
-
+   printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
    cmd_do(cmd)
 end
@@ -4806,9 +4892,13 @@ end
 
 
 
-local function sub_make(
-   _args, cfg, target, push_num)
 
+
+local function sub_make(
+   _args, cfg, target, driver,
+   push_num)
+
+   assert(driver)
    _args.target = target
 
    dependencies_set_target(target)
@@ -4859,6 +4949,9 @@ local function sub_make(
 
 
    cache = Cache.new(cache_name)
+
+
+
    local exclude = {}
 
 
@@ -5021,9 +5114,6 @@ local function sub_make(
    local cwd = lfs.currentdir() .. "/"
 
 
-   local repr_queu = {}
-
-
 
    local output_dir = "."
 
@@ -5095,9 +5185,9 @@ local function sub_make(
       table.insert(tasks, task)
 
 
-      if cache:should_recompile(file, task) then
-         table.insert(repr_queu, file)
-      end
+
+
+
 
       table.insert(objfiles, _output)
    end
@@ -5108,8 +5198,7 @@ local function sub_make(
 
    end
 
-
-   run_parallel_uv(tasks)
+   driver(tasks)
 
    cache:save()
    cache = nil
@@ -5152,7 +5241,7 @@ local function sub_make(
          local_cfg.debug_define = cfg.debug_define
 
 
-         sub_make(args, local_cfg, target)
+         sub_make(args, local_cfg, target, run_parallel_uv)
       end
 
       ut.pop_dir()
@@ -5221,10 +5310,65 @@ function actions.make(_args)
 
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
-
    for _, cfg in ipairs(cfgs) do
-      sub_make(_args, cfg, target, push_num)
+      sub_make(_args, cfg, target, run_parallel_uv, push_num)
    end
+end
+
+local function extract_source_file(task)
+   for i = 1, #task.args do
+      if task.args[i] == "-c" then
+         return task.args[i + 1]
+      end
+   end
+   return nil
+end
+
+function actions.ctags(_args)
+
+
+   local tasks = {}
+
+   local function on_tasks(queue)
+      for _, v in ipairs(queue) do
+         table.insert(tasks, v)
+      end
+   end
+
+   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
+   local target = _args.t or "linux"
+   for _, cfg in ipairs(cfgs) do
+      sub_make(_args, cfg, target, on_tasks, push_num)
+   end
+
+   local sources = {}
+   for _, task in ipairs(tasks) do
+      local src = extract_source_file(task)
+      if src then
+         table.insert(sources, src)
+      else
+         print("src is nil")
+         print(debug.traceback())
+      end
+   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   local cmd = "ctags --c-kinds=+fpvsumed " .. table.concat(sources, " ")
+
+
+   cmd_do(cmd)
 end
 
 local function do_parser_setup(
@@ -5274,17 +5418,6 @@ local function do_parser_setup(
       end
    end
 end
-
-
-
-
-
-
-
-
-
-
-
 
 local function main()
    KOH_VERBOSE = nil
