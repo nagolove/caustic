@@ -2381,12 +2381,22 @@ end
 
 
 
+
+
+
+
+
+
 local parser_setup = {
 
 
    dist = {
       options = {},
       summary = [[build binary distribution]],
+   },
+
+   files_koh = {
+      summary = [[get list of caustic files for chunking = modules + src]],
    },
 
    ctags = {
@@ -5322,6 +5332,30 @@ local function extract_source_file(task)
       end
    end
    return nil
+end
+
+function actions.files_koh(_args)
+   for _, module in ipairs(modules) do
+      ut.push_current_dir()
+
+      if module.dir then
+         local ok, msg = chdir(path_rel_third_party .. "/" .. module.dir)
+         if not ok then
+            print("actions.files_koh:", msg)
+         end
+
+         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+
+         local pipe = io.popen([[fd ".*\.c$|.*\.h$|.*\.md$|.*\.lua$"]])
+         for line in pipe:lines() do
+            print(line)
+         end
+         print()
+
+      end
+
+      ut.pop_dir()
+   end
 end
 
 function actions.ctags(_args)
