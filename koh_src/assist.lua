@@ -28,6 +28,8 @@ function Assist:send(str)
     local body = json.encode({
         model = "google/gemma-3-12b",  -- id из /v1/models
         messages = {
+            { role = "system", content = "Ты LLM-ассистент сборочной системы, который отвечает строго в JSON-командах." },
+            { role = "user", content = "Кто ты?" },
             { role = "user", content = str }
         }
     })
@@ -78,4 +80,4 @@ end
 
 local a = Assist.new()
 print(a:models_list())
-print(a:send("Привет!"))
+print(a:send("Какая инфомация тебе доступна?"))

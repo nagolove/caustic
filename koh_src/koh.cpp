@@ -8,9 +8,14 @@
  */
 
 
-#include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+
+#include "hnswlib/hnswlib.h"  // Подключаем библиотеку hnswlib (поиск ближайших соседей)
+#include <random>                  // Для генерации случайных чисел
+#include <queue>                   // Для приоритетной очереди (нужна для результата поиска)
+#include <iostream>                // Для вывода информации в консоль
 
 #include "linenoise.hpp"
 #include <stdio.h>
@@ -127,104 +132,7 @@ static int l_run_tasks(lua_State *L) {
     if (strcmp(mode, "serial") == 0) {
         run_tasks_serial(tasks, task_count);
     } else {
-        run_tasks_parallel(tasks, task_count, max_parallel);
-    }
-
-    // Освобождение
-    for (int k = 0; k < alloc_sz; ++k) free(allocated[k]);
-    free(allocated);
-    free(tasks);
-
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-static int l_run_tasks(lua_State *L) {
-    luaL_checktype(L, 1, LUA_TTABLE);
-
-    int opt_index = 2;
-    const char *mode = "parallel";
-    int max_parallel = sysconf(_SC_NPROCESSORS_ONLN);
-
-    if (!lua_isnoneornil(L, opt_index)) {
-        luaL_checktype(L, opt_index, LUA_TTABLE);
-        lua_getfield(L, opt_index, "mode");
-        if (lua_isstring(L, -1)) mode = lua_tostring(L, -1);
-        lua_pop(L, 1);
-
-        lua_getfield(L, opt_index, "max");
-        if (lua_isinteger(L, -1)) {
-            max_parallel = (int)lua_tointeger(L, -1);
-            if (max_parallel <= 0) max_parallel = 1;
-        }
-        lua_pop(L, 1);
-    }
-
-    int task_count = (int)lua_rawlen(L, 1);
-    if (task_count > MAX_TASKS) {
-        return luaL_error(L, "too many tasks (max %d)", MAX_TASKS);
-    }
-
-    Task *tasks = (Task*)calloc(task_count, sizeof(Task));
-    if (!tasks) return luaL_error(L, "OOM");
-
-    // Временное хранилище для strdup чтоб потом освободить:
-    char **allocated = NULL;
-    int alloc_cap = task_count * 8;
-    int alloc_sz = 0;
-    allocated = (char**)malloc(sizeof(char*) * alloc_cap);
-
-    auto store_dup = [&](const char *s) {
-        if (!s) return (const char*)NULL;
-        char *cpy = strdup(s);
-        if (!cpy) return (const char*)NULL;
-        if (alloc_sz >= alloc_cap) {
-            alloc_cap *= 2;
-            allocated = (char**)realloc(allocated, sizeof(char*) * alloc_cap);
-        }
-        allocated[alloc_sz++] = cpy;
-        return (const char*)cpy;
-    };
-
-    for (int i = 0; i < task_count; ++i) {
-        lua_rawgeti(L, 1, i + 1);          // stack: task_table
-        if (!lua_istable(L, -1)) {
-            // очистка ниже
-            for (int k = 0; k < alloc_sz; ++k) free(allocated[k]);
-            free(allocated); free(tasks);
-            return luaL_error(L, "queue[%d] not a table", i+1);
-        }
-
-        lua_getfield(L, -1, "cmd");
-        const char *cmd = luaL_checkstring(L, -1);
-        tasks[i].cmd = store_dup(cmd);
-        lua_pop(L, 1);
-
-        // args
-        lua_getfield(L, -1, "args");
-        int argn = 0;
-        if (lua_istable(L, -1)) {
-            int len = (int)lua_rawlen(L, -1);
-            if (len >= MAX_ARGS) len = MAX_ARGS - 1;
-            for (int a = 0; a < len; ++a) {
-                lua_rawgeti(L, -1, a + 1);
-                const char *astr = luaL_checkstring(L, -1);
-                tasks[i].args[argn++] = store_dup(astr);
-                lua_pop(L, 1);
-            }
-        } else if (!lua_isnil(L, -1)) {
-            luaL_error(L, "queue[%d].args must be table or nil", i+1);
-        }
-        lua_pop(L, 1); // pop args table
-        tasks[i].args[argn] = NULL;
-
-        lua_pop(L, 1); // pop task_table
-    }
-
-    if (strcmp(mode, "serial") == 0) {
-        run_tasks_serial(tasks, task_count);
-    } else {
-        run_tasks_parallel(tasks, task_count, max_parallel);
+        run_tasks_parallel(tasks, task_count);
     }
 
     // Освобождение
@@ -344,6 +252,76 @@ void register_embedded(lua_State *L) {
     lua_pop(L, 2);
 }
 
+int search() {
+    int dim = 16;               // Размерность векторов (например, 16 признаков на один элемент)
+    int max_elements = 10000;   // Максимальное число элементов в индексе
+    int M = 16;                 // Параметр связности графа. Чем больше — тем лучше точность, но больше памяти
+    int ef_construction = 200;  // Контролирует качество построения графа: больше = точнее, но медленнее
+
+    // Инициализируем пространство (метрику L2 — евклидово расстояние)
+    hnswlib::L2Space space(dim);
+
+    // Создаём индекс HNSW. Передаём пространство, макс. число элементов и параметры построения
+    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+
+    // Генерация случайных данных размером [max_elements x dim]
+    std::mt19937 rng;
+    rng.seed(47);  // Фиксируем сид генератора, чтобы получить одинаковые данные каждый раз
+    std::uniform_real_distribution<> distrib_real;  // Распределение чисел от 0 до 1
+
+    // Выделяем память под данные
+    float* data = new float[dim * max_elements];
+    for (int i = 0; i < dim * max_elements; i++) {
+        data[i] = distrib_real(rng);  // Заполняем случайными числами
+    }
+
+    // Добавляем каждый вектор в индекс
+    for (int i = 0; i < max_elements; i++) {
+        // data + i * dim — указатель на i‑й вектор
+        // i — уникальный идентификатор вектора
+        alg_hnsw->addPoint(data + i * dim, i);
+    }
+
+    // Тестируем качество поиска: ищем каждый вектор сам по себе и проверяем, находит ли он себя
+    float correct = 0;
+    for (int i = 0; i < max_elements; i++) {
+        // Ищем ближайший элемент к текущему вектору
+        auto result = alg_hnsw->searchKnn(data + i * dim, 1);  // top‑1 результат
+        auto label = result.top().second;  // Получаем ID найденного вектора
+        if (label == i) correct++;  // Проверяем, верно ли найден сам себе
+    }
+
+    float recall = correct / max_elements;
+    std::cout << "Recall: " << recall << "\n";  // Показываем точность (recall)
+
+    // Сохраняем индекс в бинарный файл
+    std::string hnsw_path = "hnsw.bin";
+    alg_hnsw->saveIndex(hnsw_path);
+
+    // Удаляем текущий индекс (эмуляция перезапуска)
+    delete alg_hnsw;
+
+    // Загружаем индекс из файла
+    alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, hnsw_path);
+
+    // Повторно проверяем точность уже на загруженном индексе
+    correct = 0;
+    for (int i = 0; i < max_elements; i++) {
+        auto result = alg_hnsw->searchKnn(data + i * dim, 1);
+        auto label = result.top().second;
+        if (label == i) correct++;
+    }
+
+    recall = (float)correct / max_elements;
+    std::cout << "Recall of deserialized index: " << recall << "\n";
+
+    // Очищаем память
+    delete[] data;
+    delete alg_hnsw;
+
+    return 0;
+}
+
 int main(int argc, char **argv) {
     std::string line;
     auto quit = linenoise::Readline("hello> ", line);
@@ -353,7 +331,7 @@ int main(int argc, char **argv) {
     }
 
     lua_State *l = luaL_newstate();
-    luaL_openlibs(l); /
+    luaL_openlibs(l); 
 
     // Расширяем package.path
     lua_getglobal(l, "package");
