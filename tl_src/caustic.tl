@@ -1300,6 +1300,83 @@ end
 
 -- }}}
 
+
+local libtess2_premake5 = [[
+local action = _ACTION or ""
+
+workspace "libtess2"
+    location "Build"
+    configurations { "Debug", "Release" }
+    platforms { "x64", "x86" }
+
+    filter "configurations:Debug"
+        defines { "DEBUG" }
+        symbols "On"
+        warnings "Extra"
+
+    filter "configurations:Release"
+        defines { "NDEBUG" }
+        optimize "On"
+        warnings "Extra"
+
+project "tess2"
+    kind "StaticLib"
+    language "C"
+    targetdir "Build"
+    includedirs { "Include", "Source" }
+    files { "Source/**.c" }
+
+project "example"
+    kind "ConsoleApp"
+    language "C"
+    targetdir "Build"
+    includedirs { "Include", "Contrib" }
+    files { "Example/example.c", "Contrib/**.c" }
+    links { "tess2" }
+
+    filter "system:linux"
+        linkoptions { "`pkg-config --libs glfw3`" }
+        links { "GL", "GLU", "m", "GLEW" }
+        defines { "NANOVG_GLEW" }
+
+    filter "system:windows"
+        links { "glfw3", "gdi32", "winmm", "user32", "GLEW", "glu32", "opengl32" }
+        defines { "NANOVG_GLEW" }
+
+    filter "system:macosx"
+        links { "glfw3" }
+        linkoptions {
+            "-framework OpenGL",
+            "-framework Cocoa",
+            "-framework IOKit",
+            "-framework CoreVideo"
+        }
+
+]]
+
+local function libtess2_after_init(_: Dependency)
+    printc('%{green}libtess2_after_init:%{green}')
+    printc(lfs.currentdir())
+
+    local f = io.open("premake5.lua", "w")
+    if not f then
+        printc('libtess2_after_init: could not create premake5.lua')
+        return
+    end
+
+    f:write(libtess2_premake5)
+    f:close()
+
+end
+
+local function build_libtess2_common(_: Dependency)
+    cmd_do("premake5 gmake")
+    ut.push_current_dir()
+    chdir("Build")
+    cmd_do("make")
+    ut.pop_dir()
+end
+
 -- XXX:  Любые сборки которые попадают в сеть должны быть без отладочной 
 -- информации, с максимальной оптимизацией. В целях безопасности
 -- TODO: Определить действие для Lua библиотек, которые должны быть 
@@ -1854,10 +1931,14 @@ modules = {
 
     {
         dir = "libtess2",
-        build = nil,
-        build_w = nil,
+        after_init = libtess2_after_init,
+        build = build_libtess2_common,
+        build_w = build_libtess2_common,
         copy_for_wasm = true,
-        --depends = {'stb'},
+        includes = { "libtess2/Include" },
+        libdirs = { "utf8proc/Build" },
+        links = { "libtess2/Build" },
+        links_internal = { "tess2" },
         description = "разбиение контуров на треугольники",
         name = 'libtess2',
         url_action = "git",
