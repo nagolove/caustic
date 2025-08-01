@@ -5334,27 +5334,158 @@ local function extract_source_file(task)
    return nil
 end
 
-function actions.files_koh(_args)
+
+
+
+
+
+
+
+
+
+
+local chunk_lines_num = 40
+local chunk_lines_overlap = 5
+
+local function slice2chunks(fname)
+
+   local f = io.open(fname, "r")
+   if not f then return nil end
+
+   local chunks = {}
+   local lines = {}
+   local i = 0
+   local abs_line = 0
+
+   local line_start = 0
+
+   local ok, errmsg = pcall(function()
+      for line in f:lines() do
+         abs_line = abs_line + 1
+         i = i + 1
+
+         table.insert(lines, line)
+
+         if i == 1 then
+            line_start = abs_line
+         end
+
+         if i == chunk_lines_num then
+            local chunk_text = table.concat(lines, "\n")
+            local line_end = abs_line
+
+            local chunk = {
+               file = fname,
+               line_start = line_start,
+               line_end = line_end,
+               text = chunk_text,
+               id = string.format("%s:%d", fname, line_start),
+
+               embedding = nil,
+            }
+
+            table.insert(chunks, chunk)
+
+
+            lines = { table.unpack(lines, chunk_lines_num - chunk_lines_overlap + 1) }
+            i = #lines
+         end
+      end
+
+      f:close()
+   end)
+
+   if not ok then
+      print("slice2chunks: error", errmsg)
+      return nil
+   end
+
+   return chunks
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function _files_koh()
+   local result = {}
+   local extensions_t = {
+      ".*\\.c$",
+      ".*\\.cpp$",
+      ".*\\.h$",
+      ".*\\.hpp$",
+      ".*\\.md$",
+      ".*\\.lua$",
+   }
+   local extensions = table.concat(extensions_t, "|")
+   local cmd = format([[fd "%s"]], extensions)
+
    for _, module in ipairs(modules) do
       ut.push_current_dir()
 
       if module.dir then
-         local ok, msg = chdir(path_rel_third_party .. "/" .. module.dir)
+         local rel_dir = path_rel_third_party .. "/" .. module.dir
+         local ok, msg = chdir(rel_dir)
          if not ok then
             print("actions.files_koh:", msg)
          end
 
          printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
 
-         local pipe = io.popen([[fd ".*\.c$|.*\.h$|.*\.md$|.*\.lua$"]])
+         local pipe = io.popen(cmd)
+         local abs_path = path_caustic .. "/" .. rel_dir .. "/"
          for line in pipe:lines() do
-            print(line)
+            local result_line = abs_path .. line
+            table.insert(result, result_line)
          end
          print()
 
       end
 
       ut.pop_dir()
+   end
+
+   return result
+end
+
+function actions.files_koh(_args)
+   local files = _files_koh()
+   print(tabular(files))
+
+   for _, fname in ipairs(files) do
+      local chunks = slice2chunks(fname)
+      for _, chunk in ipairs(chunks) do
+         print(inspect(chunk))
+      end
    end
 end
 
