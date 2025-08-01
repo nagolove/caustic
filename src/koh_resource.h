@@ -19,6 +19,8 @@ void reslist_free(ResList *l);
 Font reslist_load_font_unicode(ResList *l, const char *fname, int size);
 Font reslist_load_font(ResList *l, const char *fname, int size);
 Texture reslist_load_texture(ResList *l, const char *fname);
+// XXX: Если текстура не загружена, а лог выключен - как узнать об ошибке?
+// Что лучше - возвращать еденичную текстуру или пустую?
 Texture reslist_load_tex(ResList *l, const char *fname);
 RenderTexture2D reslist_load_rt(ResList *l, int w, int h);
 Shader reslist_load_shader(ResList *l, const char *fname);

@@ -6,6 +6,16 @@
 
 extern bool koh_verbose_input;
 
+/* 
+    NOTE: InputGamepadDrawer и InputKbMouseDrawer требуют следующих ресурсов
+    
+    "assets/gfx/xbox.png"
+    "assets/gfx/mouse/mouse.png"
+    "assets/gfx/mouse/rb.png"
+    "assets/gfx/mouse/lb.png"
+    "assets/gfx/mouse/wheel.png"
+*/
+
 typedef struct InputKbMouseDrawer InputKbMouseDrawer;
 
 typedef struct InputKbMouseDrawerSetup {
