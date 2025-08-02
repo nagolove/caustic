@@ -5335,19 +5335,135 @@ local function extract_source_file(task: Task): string
 end
 
 local record Chunk
-    id: string
+    id: string          -- file:line_start
     file: string
     line_start: integer
     line_end: integer
     text: string
     embedding: string
-    hash: string -- xxHash64
+    -- XXX: хеш от чего, от текста?
+    hash: string -- xxHash64 
 end
 
 local chunk_lines_num = 40
 local chunk_lines_overlap = 5
 
+local record Chunker
+    step: function(line: string)
+    stop: function(): {Chunk}
+end
+
+-- id           строка для вывода в отладку, идентификатор объекта
+-- chunk_size   размер чанка в строках
+-- start_from   номер строки, с которой начинается сбор
+-- gap          количество строк зазора между чанками. 
+--              если == 0, то обработка идет последовательно
+local function make_chunker(
+    _: string, chunk_size: integer, start_from: integer, gap: integer
+): Chunker
+    assert(chunk_size > 0)
+    assert(start_from >= 0)
+    assert(gap >= 0)
+
+    local chunks, chunk: {Chunk}, {string} = {}, {}
+    local sz = 0          -- размер текущего чанка
+    local i = 0           -- сквозная нумерация строк
+
+    local coro = coroutine.create(function()
+        for _ = 1, start_from do
+            coroutine.yield()
+            i = i + 1
+        end
+
+        while true do
+            sz = chunk_size
+            while true do
+                local inp = coroutine.yield() as string
+                i = i + 1
+                sz = sz - 1
+                table.insert(chunk, inp)
+                if sz <= 0 then
+                    break
+                end
+            end
+
+            table.insert(chunks, {
+                text = table.concat(chunk, "\n"),
+                line_start = i,
+                line_end = i + chunk_size,
+            })
+            chunk = {}
+
+            for _ = 1, gap, 1 do
+                coroutine.yield()
+                i = i + 1
+            end
+        end
+
+    end)
+
+    -- Съедаю строку что-бы началь заполнение таблиц с первого элемента, а не
+    -- второго
+    coroutine.resume(coro, "")
+
+    return {
+        step = function(line)
+            assert(line)
+            coroutine.resume(coro, line)
+        end,
+        stop = function(): {Chunk}
+            if #chunk ~= 0 then
+                table.insert(chunks, {
+                    text = table.concat(chunk, "\n"),
+                    line_start = i,
+                    line_end = i + #chunk,
+                })
+            end
+            return chunks
+        end,
+    }
+end
+
+local function split2chunks(
+    fname: string, chunk_size: integer, overlap: integer
+): {Chunk}
+    assert(#fname > 0)
+    assert(chunk_size > 0)
+    assert(overlap >= 0)
+    assert(chunk_size > overlap)
+    local gap = chunk_size - overlap * 2
+    local m1, m2 = make_chunker("id1", chunk_size, 0, gap),
+                   make_chunker("id2", chunk_size, chunk_size - overlap, gap)
+
+    local f = io.open(fname, "r")
+    for line in f:lines() do
+        m1.step(line)
+        m2.step(line)
+    end
+
+    --[[
+    print(inspect(m1.stop()))
+    print ""
+    print(inspect(m2.stop()))
+    print ""
+    --]]
+    
+    local final_chunks = {}
+    for _, ch in ipairs(m1.stop()) do
+        table.insert(final_chunks, ch)
+    end
+    for _, ch in ipairs(m2.stop()) do
+        table.insert(final_chunks, ch)
+    end
+    return final_chunks
+end
+
+--[[
 local function slice2chunks(fname: string): {Chunk}
+    local attr = lfs.attributes(fname)
+    if not attr or (attr and attr.mode == 'directory') then
+        return {}
+    end
 
     local f = io.open(fname, "r")
     if not f then return nil end
@@ -5356,8 +5472,7 @@ local function slice2chunks(fname: string): {Chunk}
     local lines = {}
     local i = 0
     local abs_line = 0
-
-    local line_start = 0
+    --local line_start = 0
 
     local ok, errmsg: boolean, string = pcall(function()
         for line in f:lines() do
@@ -5377,10 +5492,10 @@ local function slice2chunks(fname: string): {Chunk}
 
                 local chunk: Chunk = {
                     file = fname,
-                    line_start = line_start,
+                    --line_start = line_start,
                     line_end = line_end,
                     text = chunk_text,
-                    id = string.format("%s:%d", fname, line_start),
+                    --id = string.format("%s:%d", fname, line_start),
                     --hash = xxhash64(chunk_text),
                     embedding = nil
                 }
@@ -5399,38 +5514,6 @@ local function slice2chunks(fname: string): {Chunk}
     if not ok then
         print("slice2chunks: error", errmsg)
         return nil
-    end
-
-    return chunks
-end
-
---[[
-local function slice2chunks(fname: string): {Chunk}
-    local f = io.open(fname, "r")
-
-    if not f then
-        return nil
-    end
-
-    local chunks = {}
-
-    local lines: {string} = {}
-    local chunk: Chunk = {}
-    local i = 0
-    local line_start, line_end = 0, 0
-    for line in f:lines() do
-        i = i + 1
-        table.insert(lines, line)
-
-        if i == chunk_lines_num then
-            chunk.text = table.concat(lines, "\n")
-            chunk.file = fname
-            table.insert(chunks, chunk)
-
-            chunk = {}
-            i = 0
-            lines = {}
-        end
     end
 
     return chunks
@@ -5478,16 +5561,40 @@ local function _files_koh(): {string}
     return result
 end
 
-function actions.files_koh(_args: Args)
-    local files = _files_koh()
-    print(tabular(files))
+--local assist = require 'assist'.new()
+--print('models_list', assist:models_list())
 
+function actions.files_koh(_args: Args)
+
+    local files = _files_koh()
+    --print(tabular(files))
     for _, fname in ipairs(files) do
-        local chunks = slice2chunks(fname)
+        local chunks = split2chunks(
+            fname, chunk_lines_num, chunk_lines_overlap
+        )
+        if chunks then
+            for _, chunk in ipairs(chunks) do
+                chunk.file = fname
+                chunk.id = fname .. ":" .. chunk.line_start
+                print(inspect(chunk))
+            end
+        end
+        break
+    end
+    --]]
+
+    --[[
+    local chunks = split2chunks(
+        "/home/nagolove/caustic/chunks.txt",
+        chunk_lines_num,
+        chunk_lines_overlap
+    )
+    if chunks then
         for _, chunk in ipairs(chunks) do
-            print(inspect(chunk))
+            print('chunk', inspect(chunk))
         end
     end
+    --]]
 end
 
 function actions.ctags(_args: Args) 
