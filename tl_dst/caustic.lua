@@ -5344,64 +5344,148 @@ end
 
 
 
+
 local chunk_lines_num = 40
 local chunk_lines_overlap = 5
 
-local function slice2chunks(fname)
 
-   local f = io.open(fname, "r")
-   if not f then return nil end
 
-   local chunks = {}
-   local lines = {}
+
+
+
+
+
+
+
+
+local function make_chunker(
+   _, chunk_size, start_from, gap)
+
+   assert(chunk_size > 0)
+   assert(start_from >= 0)
+   assert(gap >= 0)
+
+   local chunks, chunk = {}, {}
+   local sz = 0
    local i = 0
-   local abs_line = 0
 
-   local line_start = 0
-
-   local ok, errmsg = pcall(function()
-      for line in f:lines() do
-         abs_line = abs_line + 1
+   local coro = coroutine.create(function()
+      for _ = 1, start_from do
+         coroutine.yield()
          i = i + 1
+      end
 
-         table.insert(lines, line)
-
-         if i == 1 then
-            line_start = abs_line
+      while true do
+         sz = chunk_size
+         while true do
+            local inp = coroutine.yield()
+            i = i + 1
+            sz = sz - 1
+            table.insert(chunk, inp)
+            if sz <= 0 then
+               break
+            end
          end
 
-         if i == chunk_lines_num then
-            local chunk_text = table.concat(lines, "\n")
-            local line_end = abs_line
+         table.insert(chunks, {
+            text = table.concat(chunk, "\n"),
+            line_start = i,
+            line_end = i + chunk_size,
+         })
+         chunk = {}
 
-            local chunk = {
-               file = fname,
-               line_start = line_start,
-               line_end = line_end,
-               text = chunk_text,
-               id = string.format("%s:%d", fname, line_start),
-
-               embedding = nil,
-            }
-
-            table.insert(chunks, chunk)
-
-
-            lines = { table.unpack(lines, chunk_lines_num - chunk_lines_overlap + 1) }
-            i = #lines
+         for _ = 1, gap, 1 do
+            coroutine.yield()
+            i = i + 1
          end
       end
 
-      f:close()
    end)
 
-   if not ok then
-      print("slice2chunks: error", errmsg)
-      return nil
+
+
+   coroutine.resume(coro, "")
+
+   return {
+      step = function(line)
+         assert(line)
+         coroutine.resume(coro, line)
+      end,
+      stop = function()
+         if #chunk ~= 0 then
+            table.insert(chunks, {
+               text = table.concat(chunk, "\n"),
+               line_start = i,
+               line_end = i + #chunk,
+            })
+         end
+         return chunks
+      end,
+   }
+end
+
+local function split2chunks(
+   fname, chunk_size, overlap)
+
+   assert(#fname > 0)
+   assert(chunk_size > 0)
+   assert(overlap >= 0)
+   assert(chunk_size > overlap)
+   local gap = chunk_size - overlap * 2
+   local m1, m2 = make_chunker("id1", chunk_size, 0, gap),
+   make_chunker("id2", chunk_size, chunk_size - overlap, gap)
+
+   local f = io.open(fname, "r")
+   for line in f:lines() do
+      m1.step(line)
+      m2.step(line)
    end
 
-   return chunks
+
+
+
+
+
+
+
+   local final_chunks = {}
+   for _, ch in ipairs(m1.stop()) do
+      table.insert(final_chunks, ch)
+   end
+   for _, ch in ipairs(m2.stop()) do
+      table.insert(final_chunks, ch)
+   end
+   return final_chunks
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5477,16 +5561,40 @@ local function _files_koh()
    return result
 end
 
+local assist = require('assist').new()
+print('models_list', assist:models_list())
+
 function actions.files_koh(_args)
+
    local files = _files_koh()
-   print(tabular(files))
 
    for _, fname in ipairs(files) do
-      local chunks = slice2chunks(fname)
-      for _, chunk in ipairs(chunks) do
-         print(inspect(chunk))
+      local chunks = split2chunks(
+      fname, chunk_lines_num, chunk_lines_overlap)
+
+      if chunks then
+         for _, chunk in ipairs(chunks) do
+            chunk.file = fname
+            chunk.id = fname .. ":" .. chunk.line_start
+            print(inspect(chunk))
+         end
       end
+      break
    end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end
 
 function actions.ctags(_args)
