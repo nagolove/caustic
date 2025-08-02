@@ -5,6 +5,13 @@ return {
     gen_compat = 'off',
     gen_target = "5.4",
     source_dir = "tl_src",
+    --include_dir = "tl_src",
+    --exclude = {
+        --".*",
+        --".*\\.lua",
+        --"assist.lua",
+        --"*.tl",
+    --},
     include_dir = {
         "tl_src",
     },
