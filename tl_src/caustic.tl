@@ -2323,6 +2323,7 @@ local record Actions
 
     --anim_convert: function(Args)
     --projects_status2: function(Args)
+    ai: function(Args)
     build: function(Args)
     compile_flags: function(Args)
     ctags: function(Args)
@@ -2355,6 +2356,7 @@ end
 local enum ActionsEnum
     -- {{{
 
+    "ai"
     "build"
     "compile_flags"
     "deps"
@@ -2389,6 +2391,10 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    ai = {
+        summary = [[connect to ai assist]]
+    },
 
     dist = {
         options = {},
@@ -5340,7 +5346,8 @@ local record Chunk
     line_start: integer
     line_end: integer
     text: string
-    embedding: string
+    --embedding: string
+    embedding: {number}
     -- XXX: хеш от чего, от текста?
     hash: string -- xxHash64 
 end
@@ -5458,68 +5465,6 @@ local function split2chunks(
     return final_chunks
 end
 
---[[
-local function slice2chunks(fname: string): {Chunk}
-    local attr = lfs.attributes(fname)
-    if not attr or (attr and attr.mode == 'directory') then
-        return {}
-    end
-
-    local f = io.open(fname, "r")
-    if not f then return nil end
-
-    local chunks = {}
-    local lines = {}
-    local i = 0
-    local abs_line = 0
-    --local line_start = 0
-
-    local ok, errmsg: boolean, string = pcall(function()
-        for line in f:lines() do
-            abs_line = abs_line + 1
-            i = i + 1
-
-            table.insert(lines, line)
-
-            if i == 1 then
-                line_start = abs_line
-            end
-
-            -- XXX: Ошибки, захватывает больше чем chunk_lines_num строк
-            if i == chunk_lines_num then
-                local chunk_text = table.concat(lines, "\n")
-                local line_end = abs_line
-
-                local chunk: Chunk = {
-                    file = fname,
-                    --line_start = line_start,
-                    line_end = line_end,
-                    text = chunk_text,
-                    --id = string.format("%s:%d", fname, line_start),
-                    --hash = xxhash64(chunk_text),
-                    embedding = nil
-                }
-
-                table.insert(chunks, chunk)
-
-                -- сохраняем overlap
-                lines = { table.unpack(lines, chunk_lines_num - chunk_lines_overlap + 1) }
-                i = #lines
-            end
-        end
-
-        f:close()
-    end)
-
-    if not ok then
-        print("slice2chunks: error", errmsg)
-        return nil
-    end
-
-    return chunks
-end
---]]
-
 local function _files_koh(): {string}
     local result = {}
     local extensions_t = {
@@ -5561,27 +5506,57 @@ local function _files_koh(): {string}
     return result
 end
 
---local assist = require 'assist'.new()
---print('models_list', assist:models_list())
+local assist = require "assist"
+local llm_model = "google/gemma-3-12b"
 
 function actions.files_koh(_args: Args)
 
+    local zlib = require 'zlib'
+    -- Создаём поток сжатия
+    -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
+    local deflate = zlib.deflate(3, 15)
+    local serpent = require 'serpent'
+    local f = io.open("chunks.zlib", "w")
+    assert(f)
+
     local files = _files_koh()
-    --print(tabular(files))
+    print(tabular(files))
     for _, fname in ipairs(files) do
-        local chunks = split2chunks(
-            fname, chunk_lines_num, chunk_lines_overlap
-        )
-        if chunks then
-            for _, chunk in ipairs(chunks) do
-                chunk.file = fname
-                chunk.id = fname .. ":" .. chunk.line_start
-                print(inspect(chunk))
+        printc("%{yellow}fname" .. fname .. "%{yellow}")
+
+        local attr = lfs.attributes(fname)
+        if attr and attr.mode == 'file' then
+
+            local chunks = split2chunks(
+                fname, chunk_lines_num, chunk_lines_overlap
+            )
+            if chunks then
+                for _, chunk in ipairs(chunks) do
+                    chunk.file = fname
+                    chunk.id = fname .. ":" .. chunk.line_start
+
+                    --print(inspect(chunk))
+
+                    local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+                    local embedding = assist.embedding(llm_embedding_model, chunk.text)
+                    chunk.embedding = embedding
+                    --print('embedding', serpent.dump(embedding))
+                    local dump = serpent.dump(chunk)
+                    --print('dump', dump)
+
+                    local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
+                    print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
+                    f:write(compressed)
+                end
             end
         end
-        break
     end
     --]]
+
+    ---------------------------------------------------
+    ---------------------------------------------------
+    ---------------------------------------------------
+    ---------------------------------------------------
 
     --[[
     local chunks = split2chunks(
@@ -5589,12 +5564,73 @@ function actions.files_koh(_args: Args)
         chunk_lines_num,
         chunk_lines_overlap
     )
+
     if chunks then
         for _, chunk in ipairs(chunks) do
-            print('chunk', inspect(chunk))
+            --print('chunk', inspect(chunk))
+            local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+            local embedding = assist.embedding(llm_embedding_model, chunk.text)
+            chunk.embedding = embedding
+            --print('embedding', serpent.dump(embedding))
+            local dump = serpent.dump(chunk)
+            --print('dump', dump)
+
+            local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
+            print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
+            f:write(compressed)
         end
     end
     --]]
+
+    -- Завершаем сессию потока
+    local final, eof, _, _ = deflate("", "finish")
+    print("eof", eof)
+    f:write(final)
+end
+
+function actions.ai(_args: Args)
+    print("actions.ai")
+
+    local models = assist.models_list()
+    print(inspect(models))
+    
+    local msg = "%{green}send message%{green}: "
+    local inp: string
+
+    local chat: assist.LLMPayload = {
+        model = llm_model,
+        stream = true,
+        messages = {
+            { 
+                role = "system", 
+                --content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
+                content = "Ты ассистент в разработке игрового фреймворка и игр."
+            },
+        },
+    }
+
+    while true do
+        inp = readline(ansicolors(msg))
+
+        if inp == "exit" or inp == "quit" then
+            break
+        end
+
+        table.insert(chat.messages, {
+            role = 'user',
+            content = inp,
+        })
+
+        local responce = assist.send2llm(chat, function(responce_chunk)
+            io.write(responce_chunk as string)
+        end)
+        table.insert(chat.messages, {
+            role = 'assistant',
+            content = responce,
+        })
+        --print('responce', inspect(responce))
+    end
+
 end
 
 function actions.ctags(_args: Args) 
