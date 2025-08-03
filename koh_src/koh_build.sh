@@ -71,9 +71,28 @@ popd
 #    -L/usr/lib -llua5.4 -lm \
 #
 #
+
+#clang++ lua.cpp \
+#    -std=c++17 -g3 -Wall -fPIC \
+#    -I. -I./hnswlib \
+#    -o koh.exe \
+#    /usr/lib/liblua5.3.so \
+#    -lm
+
 clang++ lua.cpp \
-    -std=c++17 -g3 -Wall -fPIC \
+    -g3 -Wall -fPIC \
     -I. -I./hnswlib \
     -o koh.exe \
-    /usr/lib/liblua5.3.so \
-    -lm
+    -lm \
+    -llua \
+
+
+
+gcc lua.cpp \
+    -g3 -Wall -fPIC \
+    -I. -I./hnswlib \
+    -o koh.exe \
+    -I./lua \
+    -L./lua \
+    -lm \
+    -llua \

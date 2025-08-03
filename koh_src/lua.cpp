@@ -7,10 +7,12 @@
  В задачах не будет цикла ожидания.
  */
 
-
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+}
+
 #include <stdlib.h>
 
 int main(int argc, char **argv) {
