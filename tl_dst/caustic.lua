@@ -2387,8 +2387,14 @@ end
 
 
 
+
+
 local parser_setup = {
 
+
+   ai = {
+      summary = [[connect to ai assist]],
+   },
 
    dist = {
       options = {},
@@ -5345,6 +5351,7 @@ end
 
 
 
+
 local chunk_lines_num = 40
 local chunk_lines_overlap = 5
 
@@ -5561,25 +5568,53 @@ local function _files_koh()
    return result
 end
 
-local assist = require('assist').new()
-print('models_list', assist:models_list())
+
+
+
+local assist = require("assist")
+local llm_model = "google/gemma-3-12b"
 
 function actions.files_koh(_args)
 
+   local zlib = require('zlib')
+
+
+   local deflate = zlib.deflate(3, 15)
+   local serpent = require('serpent')
+   local f = io.open("chunks.zlib", "w")
+   assert(f)
+
    local files = _files_koh()
-
+   print(tabular(files))
    for _, fname in ipairs(files) do
-      local chunks = split2chunks(
-      fname, chunk_lines_num, chunk_lines_overlap)
+      printc("%{yellow}fname" .. fname .. "%{yellow}")
 
-      if chunks then
-         for _, chunk in ipairs(chunks) do
-            chunk.file = fname
-            chunk.id = fname .. ":" .. chunk.line_start
-            print(inspect(chunk))
+      local attr = lfs.attributes(fname)
+      if attr and attr.mode == 'file' then
+
+         local chunks = split2chunks(
+         fname, chunk_lines_num, chunk_lines_overlap)
+
+         if chunks then
+            for _, chunk in ipairs(chunks) do
+               chunk.file = fname
+               chunk.id = fname .. ":" .. chunk.line_start
+
+
+
+               local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+               local embedding = assist.embedding(llm_embedding_model, chunk.text)
+               chunk.embedding = embedding
+
+               local dump = serpent.dump(chunk)
+
+
+               local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
+               print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
+               f:write(compressed)
+            end
          end
       end
-      break
    end
 
 
@@ -5594,6 +5629,72 @@ function actions.files_koh(_args)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   local final, eof, _, _ = deflate("", "finish")
+   print("eof", eof)
+   f:write(final)
+end
+
+function actions.ai(_args)
+   print("actions.ai")
+
+   local models = assist.models_list()
+   print(inspect(models))
+
+   local msg = "%{green}send message%{green}: "
+   local inp
+
+   local chat = {
+      model = llm_model,
+      stream = true,
+      messages = {
+         {
+            role = "system",
+
+            content = "Ты ассистент в разработке игрового фреймворка и игр.",
+         },
+      },
+   }
+
+   while true do
+      inp = readline(ansicolors(msg))
+
+      if inp == "exit" or inp == "quit" then
+         break
+      end
+
+      table.insert(chat.messages, {
+         role = 'user',
+         content = inp,
+      })
+
+      local responce = assist.send2llm(chat, function(responce_chunk)
+         io.write(responce_chunk)
+      end)
+      table.insert(chat.messages, {
+         role = 'assistant',
+         content = responce,
+      })
+
+   end
 
 end
 
