@@ -76,6 +76,7 @@ install_lua_rocks() {
     # pacman -S mingw-w64-x86_64-headers-git mingw-w64-x86_64-toolchain
     # luarocks install luasocket WINDOWS_CFLAGS="-D_WIN32_WINNT=0x0601 -DWINVER=0x0601" WINDOWS_LDFLAGS="-lws2_32 -ladvapi32"
     
+    luarocks install lua-zlib --local
     luarocks install lua-curl --local
     luarocks install serpent --local --lua-version=$LUA_VER
     luarocks install tl --local --lua-version=$LUA_VER
