@@ -91,6 +91,7 @@ local readline   = rl.readline
 --local sleep      = require "socket".sleep
 local format     = string.format
 local match      = string.match
+local ceil       = math.ceil
 --- }}}
 
 -- XXX: Зачем этот код? Что он делает?
@@ -5342,11 +5343,10 @@ end
 
 local record Chunk
     id: string          -- file:line_start
-    file: string
+    file: string        -- abs file name
     line_start: integer
     line_end: integer
     text: string
-    --embedding: string
     embedding: {number}
     -- XXX: хеш от чего, от текста?
     hash: string -- xxHash64 
@@ -5465,7 +5465,28 @@ local function split2chunks(
     return final_chunks
 end
 
-local function _files_koh(): {string}
+local function _fd_code_in_cwd(extensions_t: {string}): {string}
+    local result: {string} = {}
+    local extensions = table.concat(extensions_t, "|")
+    local cmd = format([[fd "%s"]], extensions)
+
+    printc(
+        "_fd_code_in_cwd:" .. 
+        "%{blue}" .. lfs.currentdir() .. "%{reset}"
+    ) 
+
+    local pipe = io.popen(cmd)
+    local abs_path = lfs.currentdir() .. "/"
+    for line in pipe:lines() do
+        local result_line = abs_path .. line
+        table.insert(result, result_line)
+    end
+    print()
+
+    return result
+end
+
+local function _fd_code_in_modules(): {string}
     local result = {}
     local extensions_t = {
         ".*\\.c$",
@@ -5507,49 +5528,140 @@ local function _files_koh(): {string}
 end
 
 local assist = require "assist"
-local llm_model = "google/gemma-3-12b"
+--local llm_model = "google/gemma-3-12b"
+local llm_model = "mistral-7b-instruct-v0.1"
+
+local function format_size(bytes: integer): string
+    if bytes < 1024 * 1024 then
+        return string.format("%.2f KB", bytes / 1024)
+    else
+        return string.format("%.2f MB", bytes / (1024 * 1024))
+    end
+end
+
+local zlib = require 'zlib'
+local serpent = require 'serpent'
+local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+local embedding = assist.embedding
+
+local function process_file_embedding(
+    fname: string, deflate: zlib.Deflator, f: FILE
+)
+    local chunks_per_request = 4
+    local chunks: {Chunk}
+
+    chunks = split2chunks(
+        fname, chunk_lines_num, chunk_lines_overlap
+    )
+
+    if not chunks or #chunks == 0 then
+        return
+    end
+
+    for _, chunk in ipairs(chunks) do
+        chunk.file = fname
+        chunk.id = fname .. ":" .. chunk.line_start
+    end
+
+    local chunks_copy = ut.deepcopy(chunks)
+    local id2chunk: {string: Chunk} = {}
+
+    for _, ch in ipairs(chunks) do
+        id2chunk[ch.id] = ch
+    end
+
+    while #chunks_copy ~= 0 do
+        --print(chunks_copy, inspect(chunks_copy))
+        --print("#chunks_copy", #chunks_copy)
+
+        local embeddings_t: {string} = {}
+        local ids: {string} = {}
+
+        local real_chunks_num = math.min(chunks_per_request, #chunks_copy)
+        for _ = 1, real_chunks_num do
+            local chunk: Chunk = table.remove(chunks_copy, #chunks_copy)
+            if not chunk then
+                break
+            else
+                table.insert(ids, chunk.id)
+                table.insert(embeddings_t, chunk.text)
+            end
+        end
+
+        print("#embeddings_t", #embeddings_t)
+        print("embeddings_t", inspect(embeddings_t))
+
+        local vectors = embedding(llm_embedding_model, embeddings_t)
+
+        assert(
+            #vectors == #ids,
+            "embedding API returned inconsistent batch size"
+        )
+
+        for i, vector in ipairs(vectors) do
+            local chunk_id = ids[i]
+            id2chunk[chunk_id].embedding = vector
+        end
+    end
+
+    -- Весь файл записывается в поток сжатия
+    for _, chunk in ipairs(chunks) do
+        local dump = serpent.dump(chunk)
+        --print('dump', dump)
+        local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
+        print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
+        f:write(compressed)
+    end
+
+end
 
 function actions.files_koh(_args: Args)
-
-    local zlib = require 'zlib'
     -- Создаём поток сжатия
     -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
     local deflate = zlib.deflate(3, 15)
-    local serpent = require 'serpent'
-    local f = io.open("chunks.zlib", "w")
+    local f = io.open("chunks_koh.zlib", "w")
     assert(f)
 
-    local files = _files_koh()
-    print(tabular(files))
+    ut.push_current_dir()
+    chdir("src")
+    cmd_do("ls -l")
+
+    local extensions_t = {
+        ".*\\.c$",
+        ".*\\.cpp$",
+        ".*\\.h$",
+        ".*\\.hpp$",
+        ".*\\.md$",
+        --".*\\.lua$",
+    }
+    local files = _fd_code_in_cwd(extensions_t)
+
+    print('files', inspect(files))
+    ut.pop_dir()
+
+    --print(tabular(files))
+
     for _, fname in ipairs(files) do
-        printc("%{yellow}fname" .. fname .. "%{yellow}")
-
         local attr = lfs.attributes(fname)
-        if attr and attr.mode == 'file' then
 
-            local chunks = split2chunks(
-                fname, chunk_lines_num, chunk_lines_overlap
-            )
-            if chunks then
-                for _, chunk in ipairs(chunks) do
-                    chunk.file = fname
-                    chunk.id = fname .. ":" .. chunk.line_start
-
-                    --print(inspect(chunk))
-
-                    local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-                    local embedding = assist.embedding(llm_embedding_model, chunk.text)
-                    chunk.embedding = embedding
-                    --print('embedding', serpent.dump(embedding))
-                    local dump = serpent.dump(chunk)
-                    --print('dump', dump)
-
-                    local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
-                    print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
-                    f:write(compressed)
-                end
-            end
+        if not attr then
+            goto _continue
         end
+
+        if attr.mode ~= 'file' then
+            goto _continue
+        end
+
+        printc(
+            "%{yellow}fname " .. fname .. "%{reset} " .. 
+            "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}"
+        )
+
+        process_file_embedding(fname, deflate, f)
+
+        ::_continue::
+
+        --break
     end
     --]]
 
@@ -5567,10 +5679,12 @@ function actions.files_koh(_args: Args)
 
     if chunks then
         for _, chunk in ipairs(chunks) do
-            --print('chunk', inspect(chunk))
+            print('chunk', inspect(chunk))
             local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-            local embedding = assist.embedding(llm_embedding_model, chunk.text)
-            chunk.embedding = embedding
+
+            --local embedding = assist.embedding(llm_embedding_model, chunk.text)
+            --chunk.embedding = embedding
+
             --print('embedding', serpent.dump(embedding))
             local dump = serpent.dump(chunk)
             --print('dump', dump)
@@ -5586,10 +5700,25 @@ function actions.files_koh(_args: Args)
     local final, eof, _, _ = deflate("", "finish")
     print("eof", eof)
     f:write(final)
+
 end
+
+--local signal = require("posix.signal")
 
 function actions.ai(_args: Args)
     print("actions.ai")
+
+    --local running = true
+
+    --[[
+    local function handle_sigint(_: any)
+        print("\nПолучен сигнал SIGINT (Ctrl+C). Завершаем...")
+        running = false
+    end
+    --]]
+
+    -- Назначаем обработчик сигнала
+    --signal.signal(signal.SIGINT, handle_sigint)
 
     local models = assist.models_list()
     print(inspect(models))
@@ -5624,6 +5753,9 @@ function actions.ai(_args: Args)
         local responce = assist.send2llm(chat, function(responce_chunk)
             io.write(responce_chunk as string)
         end)
+
+        --local responce = ""
+
         table.insert(chat.messages, {
             role = 'assistant',
             content = responce,
