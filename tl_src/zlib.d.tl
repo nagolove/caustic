@@ -6,12 +6,16 @@ local record zlib
 
    -- Version info
    version: function(): (integer, integer, integer | nil)
+    
+   type Deflator = function(string, string | nil): (string, boolean, integer, integer)
 
    -- Streaming deflate
-   deflate: function(compression_level: integer | nil, window_size: integer | nil): function(string, string | nil): (string, boolean, integer, integer)
+   deflate: function(compression_level: integer | nil, window_size: integer | nil): Deflator
+
+   type Inflator = function(string): (string, boolean, integer, integer)
 
    -- Streaming inflate
-   inflate: function(window_size: integer | nil): function(string): (string, boolean, integer, integer)
+   inflate: function(window_size: integer | nil): Inflator
 
    -- Checksum factories
    adler32: function(): function(string): integer
