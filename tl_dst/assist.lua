@@ -156,8 +156,19 @@ function send2llm(payload_table, on_get_data_chunk)
 end
 
 function embedding(modelname, text)
+    local text_tmp = {}
+    if type(text) == 'string' then
+        text_tmp = { text}
+    else 
+        assert(type(text) == 'table')
+        for _, text_node in ipairs(text) do
+            assert(type(text_node) == 'string')
+        end
+        text_tmp = text
+    end
+
     local payload = json.encode({
-        input = text,
+        input = text_tmp,
         model = modelname,
     })
 
@@ -187,10 +198,17 @@ function embedding(modelname, text)
     local full_response = table.concat(result)
     local response = json.decode(full_response)
 
+    assert(response)
+    assert(response.data)
+
     --print('response', inspect(response))
 
-    return response.data[1].embedding  -- массив чисел (vector)
-    --return {}
+    local embeddings = {}
+    for _, item in ipairs(response.data) do
+        table.insert(embeddings, item.embedding)
+    end
+    return embeddings
+
 end
 
 
@@ -203,6 +221,7 @@ local result = send2llm {
         { role = "system", content = "Ты ассистент..." },
         --{ role = "user", content = "Сколько будет 2+2?" }
         { role = "user", content = "Расскажи о Льве Николаевиче Толстом. Чем он занимался когда ему было 20 лет?" }
+        --{ role = "assistant", content = "ответ от llm" }
     },
     stream = true,
     --max_tokens = 2048,
