@@ -29,7 +29,7 @@ local record Assist
 
     send2llm: function(LLMPayload, function(responce_chunk: string)): string
     models_list: function(): {string}
-    embedding: function(modelname: string, text: string): {number}
+    embedding: function(modelname: string, text: string|{string}): {{number}}
 end
 
 return Assist
