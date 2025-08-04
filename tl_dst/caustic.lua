@@ -91,6 +91,7 @@ local readline = rl.readline
 
 local format = string.format
 local match = string.match
+local ceil = math.ceil
 
 
 
@@ -5351,7 +5352,6 @@ end
 
 
 
-
 local chunk_lines_num = 40
 local chunk_lines_overlap = 5
 
@@ -5465,69 +5465,28 @@ local function split2chunks(
    return final_chunks
 end
 
+local function _fd_code_in_cwd(extensions_t)
+   local result = {}
+   local extensions = table.concat(extensions_t, "|")
+   local cmd = format([[fd "%s"]], extensions)
+
+   printc(
+   "_fd_code_in_cwd:" ..
+   "%{blue}" .. lfs.currentdir() .. "%{reset}")
 
 
+   local pipe = io.popen(cmd)
+   local abs_path = lfs.currentdir() .. "/"
+   for line in pipe:lines() do
+      local result_line = abs_path .. line
+      table.insert(result, result_line)
+   end
+   print()
 
+   return result
+end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function _files_koh()
+local function _fd_code_in_modules()
    local result = {}
    local extensions_t = {
       ".*\\.c$",
@@ -5568,54 +5527,144 @@ local function _files_koh()
    return result
 end
 
-
-
-
 local assist = require("assist")
-local llm_model = "google/gemma-3-12b"
+
+local llm_model = "mistral-7b-instruct-v0.1"
+
+local function format_size(bytes)
+   if bytes < 1024 * 1024 then
+      return string.format("%.2f KB", bytes / 1024)
+   else
+      return string.format("%.2f MB", bytes / (1024 * 1024))
+   end
+end
+
+local zlib = require('zlib')
+local serpent = require('serpent')
+local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+local embedding = assist.embedding
+
+local function process_file_embedding(
+   fname, deflate, f)
+
+   local chunks_per_request = 4
+   local chunks
+
+   chunks = split2chunks(
+   fname, chunk_lines_num, chunk_lines_overlap)
+
+
+   if not chunks or #chunks == 0 then
+      return
+   end
+
+   for _, chunk in ipairs(chunks) do
+      chunk.file = fname
+      chunk.id = fname .. ":" .. chunk.line_start
+   end
+
+   local chunks_copy = ut.deepcopy(chunks)
+   local id2chunk = {}
+
+   for _, ch in ipairs(chunks) do
+      id2chunk[ch.id] = ch
+   end
+
+   while #chunks_copy ~= 0 do
+
+
+
+      local embeddings_t = {}
+      local ids = {}
+
+      local real_chunks_num = math.min(chunks_per_request, #chunks_copy)
+      for _ = 1, real_chunks_num do
+         local chunk = table.remove(chunks_copy, #chunks_copy)
+         if not chunk then
+            break
+         else
+            table.insert(ids, chunk.id)
+            table.insert(embeddings_t, chunk.text)
+         end
+      end
+
+      print("#embeddings_t", #embeddings_t)
+      print("embeddings_t", inspect(embeddings_t))
+
+      local vectors = embedding(llm_embedding_model, embeddings_t)
+
+      assert(
+      #vectors == #ids,
+      "embedding API returned inconsistent batch size")
+
+
+      for i, vector in ipairs(vectors) do
+         local chunk_id = ids[i]
+         id2chunk[chunk_id].embedding = vector
+      end
+   end
+
+
+   for _, chunk in ipairs(chunks) do
+      local dump = serpent.dump(chunk)
+
+      local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
+      print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
+      f:write(compressed)
+   end
+
+end
 
 function actions.files_koh(_args)
 
-   local zlib = require('zlib')
-
 
    local deflate = zlib.deflate(3, 15)
-   local serpent = require('serpent')
-   local f = io.open("chunks.zlib", "w")
+   local f = io.open("chunks_koh.zlib", "w")
    assert(f)
 
-   local files = _files_koh()
-   print(tabular(files))
+   ut.push_current_dir()
+   chdir("src")
+   cmd_do("ls -l")
+
+   local extensions_t = {
+      ".*\\.c$",
+      ".*\\.cpp$",
+      ".*\\.h$",
+      ".*\\.hpp$",
+      ".*\\.md$",
+
+   }
+   local files = _fd_code_in_cwd(extensions_t)
+
+   print('files', inspect(files))
+   ut.pop_dir()
+
+
+
    for _, fname in ipairs(files) do
-      printc("%{yellow}fname" .. fname .. "%{yellow}")
-
       local attr = lfs.attributes(fname)
-      if attr and attr.mode == 'file' then
 
-         local chunks = split2chunks(
-         fname, chunk_lines_num, chunk_lines_overlap)
-
-         if chunks then
-            for _, chunk in ipairs(chunks) do
-               chunk.file = fname
-               chunk.id = fname .. ":" .. chunk.line_start
-
-
-
-               local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-               local embedding = assist.embedding(llm_embedding_model, chunk.text)
-               chunk.embedding = embedding
-
-               local dump = serpent.dump(chunk)
-
-
-               local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
-               print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
-               f:write(compressed)
-            end
-         end
+      if not attr then
+         goto _continue
       end
+
+      if attr.mode ~= 'file' then
+         goto _continue
+      end
+
+      printc(
+      "%{yellow}fname " .. fname .. "%{reset} " ..
+      "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}")
+
+
+      process_file_embedding(fname, deflate, f)
+
+      ::_continue::
+
+
    end
+
+
 
 
 
@@ -5651,10 +5700,25 @@ function actions.files_koh(_args)
    local final, eof, _, _ = deflate("", "finish")
    print("eof", eof)
    f:write(final)
+
 end
+
+
 
 function actions.ai(_args)
    print("actions.ai")
+
+
+
+
+
+
+
+
+
+
+
+
 
    local models = assist.models_list()
    print(inspect(models))
@@ -5689,6 +5753,9 @@ function actions.ai(_args)
       local responce = assist.send2llm(chat, function(responce_chunk)
          io.write(responce_chunk)
       end)
+
+
+
       table.insert(chat.messages, {
          role = 'assistant',
          content = responce,
