@@ -5615,6 +5615,10 @@ local function process_file_embedding(
 
 end
 
+local function chunks_open(fname: string)
+
+end
+
 function actions.files_koh(_args: Args)
     -- Создаём поток сжатия
     -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
@@ -5662,37 +5666,6 @@ function actions.files_koh(_args: Args)
         ::_continue::
 
         --break
-    end
-    --]]
-
-    ---------------------------------------------------
-    ---------------------------------------------------
-    ---------------------------------------------------
-    ---------------------------------------------------
-
-    --[[
-    local chunks = split2chunks(
-        "/home/nagolove/caustic/chunks.txt",
-        chunk_lines_num,
-        chunk_lines_overlap
-    )
-
-    if chunks then
-        for _, chunk in ipairs(chunks) do
-            print('chunk', inspect(chunk))
-            local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-
-            --local embedding = assist.embedding(llm_embedding_model, chunk.text)
-            --chunk.embedding = embedding
-
-            --print('embedding', serpent.dump(embedding))
-            local dump = serpent.dump(chunk)
-            --print('dump', dump)
-
-            local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
-            print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
-            f:write(compressed)
-        end
     end
     --]]
 
