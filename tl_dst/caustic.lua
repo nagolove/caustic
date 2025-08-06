@@ -58,9 +58,13 @@ package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" ..
 
 path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" .. package.path
-package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
+package.cpath =
+path_caustic .. "/koh_src/lib?.so;" ..
+home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
+
+
 
 
 
@@ -2390,8 +2394,20 @@ end
 
 
 
+
+
+
+
 local parser_setup = {
 
+
+   xxhash = {
+      summary = [[testing xxhash32 and xxhash64 in lua]],
+   },
+
+   chunks_open = {
+      summary = [[function for testing chunks splitting system]],
+   },
 
    ai = {
       summary = [[connect to ai assist]],
@@ -5540,6 +5556,7 @@ local function format_size(bytes)
 end
 
 local zlib = require('zlib')
+local xxhash = require('xxhash')
 local serpent = require('serpent')
 local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 local embedding = assist.embedding
@@ -5615,6 +5632,51 @@ local function process_file_embedding(
 
 end
 
+function actions.xxhash(_)
+   local str = "Hello, mister Den!"
+   print('str', str)
+
+   print("xxhash32", xxhash.hash32(str))
+   print("xxhash64", xxhash.hash64(str))
+end
+
+local function load_chunks2table(fname)
+   local window_bits = 15
+   local stream = zlib.inflate(window_bits)
+
+   local infile = assert(io.open(fname, "rb"))
+   local chunk_size = 1024 * 128
+   local eof = false
+   local decompressed = {}
+
+   while not eof do
+
+      local chunk = infile:read(chunk_size)
+      if not chunk then break end
+
+      local out, finished = stream(chunk)
+      table.insert(decompressed, out or "")
+
+      if finished then
+         eof = true
+      end
+   end
+
+   infile:close()
+   local full_data = table.concat(decompressed)
+
+   return full_data
+end
+
+function actions.chunks_open(_)
+   local chunks = load_chunks2table("chunks_koh.zlib")
+
+   print('chunks', inspect(chunks))
+   local chunks_sz = #chunks
+   printc("%{blue}" .. format_size(chunks_sz) .. "%{reset}")
+
+end
+
 function actions.files_koh(_args)
 
 
@@ -5663,37 +5725,6 @@ function actions.files_koh(_args)
 
 
    end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
