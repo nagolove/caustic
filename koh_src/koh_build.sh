@@ -96,3 +96,11 @@ gcc lua.cpp \
     -L./lua \
     -lm \
     -llua \
+
+gcc ./lua_xxhash64.c \
+    -g3 -Wall -fPIC \
+    -I. \
+    -shared \
+    -o libxxhash.so \
+    -lm \
+    -llua \
