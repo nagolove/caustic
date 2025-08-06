@@ -58,10 +58,14 @@ package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
                -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
                path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
-package.cpath = home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
+package.cpath = 
+        path_caustic .. "/koh_src/lib?.so;" ..
+        home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
 -- }}}
+
+--print('package.cpath', package.cpath)
 
 -- {{{  global variables for module
 assert(path_caustic)
@@ -2322,6 +2326,7 @@ end
 local record Actions
     -- {{{
 
+    xxhash: function(Args)
     --anim_convert: function(Args)
     --projects_status2: function(Args)
     ai: function(Args)
@@ -2350,6 +2355,7 @@ local record Actions
     unit: function(Args)
     update: function(Args)
     verbose: function(Args)
+    chunks_open: function(Args)
 
     -- }}}
 end
@@ -2357,6 +2363,8 @@ end
 local enum ActionsEnum
     -- {{{
 
+    "xxhash"
+    "chunks_open"
     "ai"
     "build"
     "compile_flags"
@@ -2392,6 +2400,14 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    xxhash = {
+        summary = [[testing xxhash32 and xxhash64 in lua]]
+    },
+
+    chunks_open = {
+        summary = [[function for testing chunks splitting system]]
+    },
 
     ai = {
         summary = [[connect to ai assist]]
@@ -5540,6 +5556,7 @@ local function format_size(bytes: integer): string
 end
 
 local zlib = require 'zlib'
+local xxhash = require 'xxhash'
 local serpent = require 'serpent'
 local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 local embedding = assist.embedding
@@ -5615,7 +5632,48 @@ local function process_file_embedding(
 
 end
 
-local function chunks_open(fname: string)
+function actions.xxhash(_: Args)
+    local str = "Hello, mister Den!"
+    print('str', str)
+
+    print("xxhash32", xxhash.hash32(str))
+    print("xxhash64", xxhash.hash64(str))
+end
+
+local function load_chunks2table(fname: string): {Chunk}
+    local window_bits = 15 -- должен соответствовать тому, что использовался при deflate(3, 15)
+    local stream = zlib.inflate(window_bits)
+
+    local infile = assert(io.open(fname, "rb"))
+    local chunk_size = 1024 * 128
+    local eof = false
+    local decompressed = {}
+
+    while not eof do
+        --print("loop")
+        local chunk = infile:read(chunk_size)
+        if not chunk then break end
+
+        local out, finished = stream(chunk)
+        table.insert(decompressed, out or "")
+
+        if finished then
+            eof = true
+        end
+    end
+
+    infile:close()
+    local full_data = table.concat(decompressed)
+
+    return full_data as {Chunk}
+end
+
+function actions.chunks_open(_: Args)
+    local chunks = load_chunks2table("chunks_koh.zlib")
+
+    print('chunks', inspect(chunks))
+    local chunks_sz = #chunks
+    printc("%{blue}" .. format_size(chunks_sz) .. "%{reset}")
 
 end
 
