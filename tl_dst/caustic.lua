@@ -2398,6 +2398,8 @@ end
 
 
 
+
+
 local parser_setup = {
 
 
@@ -2416,6 +2418,10 @@ local parser_setup = {
    dist = {
       options = {},
       summary = [[build binary distribution]],
+   },
+
+   load_index = {
+      summary = [[load index from binary file to hnsw lib instance]],
    },
 
    files_koh = {
@@ -5522,7 +5528,7 @@ local function _fd_code_in_modules()
          local rel_dir = path_rel_third_party .. "/" .. module.dir
          local ok, msg = chdir(rel_dir)
          if not ok then
-            print("actions.files_koh:", msg)
+            print("_fd_code_in_modules", msg)
          end
 
          printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
@@ -5557,27 +5563,56 @@ end
 
 local zlib = require('zlib')
 local xxhash = require('xxhash')
+local hash32 = xxhash.hash32
 local serpent = require('serpent')
 local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 local embedding = assist.embedding
 
-local function process_file_embedding(
-   fname, deflate, f)
+local function shannon_entropy(str)
+   local freq = {}
+   local len = #str
+   for i = 1, len do
+      local c = string.sub(str, i, i)
+      freq[c] = (freq[c] or 0) + 1
+   end
+   local entropy = 0.
+   for _, count in pairs(freq) do
+      local p = count / len
+      entropy = entropy - p * math.log(p, 2.)
+   end
+   return entropy
+end
 
-   local chunks_per_request = 4
-   local chunks
+local function compression_ratio(data)
+   local def = zlib.deflate(zlib.BEST_SPEED, 8)
+   local compressed = def(data, "finish")
+   return #compressed / #data
+end
 
-   chunks = split2chunks(
-   fname, chunk_lines_num, chunk_lines_overlap)
+
+
+
+
+
+
+
+
+
+local function process_chunks_embedding(chunks)
+   local chunks_per_request = 17
+   assert(chunks)
+
+
+
+
+
+
+
+
 
 
    if not chunks or #chunks == 0 then
       return
-   end
-
-   for _, chunk in ipairs(chunks) do
-      chunk.file = fname
-      chunk.id = fname .. ":" .. chunk.line_start
    end
 
    local chunks_copy = ut.deepcopy(chunks)
@@ -5602,11 +5637,47 @@ local function process_file_embedding(
          else
             table.insert(ids, chunk.id)
             table.insert(embeddings_t, chunk.text)
+            local sh = shannon_entropy(chunk.text)
+            local ratio = compression_ratio(chunk.text)
+
+            io.write(
+            'shannon_entropy: ', sh, ' compression_ratio: ', ratio, " ")
+
+
+            if sh < 4.25 and ratio < 0.5 then
+               printc("%{green}simple chunk%{reset}")
+            elseif sh > 4.8 and ratio > 0.8 then
+               printc("%{red}complex chunk%{reset}")
+            else
+               printc("medium chunk")
+            end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
          end
       end
 
       print("#embeddings_t", #embeddings_t)
-      print("embeddings_t", inspect(embeddings_t))
+
 
       local vectors = embedding(llm_embedding_model, embeddings_t)
 
@@ -5620,17 +5691,93 @@ local function process_file_embedding(
          id2chunk[chunk_id].embedding = vector
       end
    end
-
-
-   for _, chunk in ipairs(chunks) do
-      local dump = serpent.dump(chunk)
-
-      local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
-      print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
-      f:write(compressed)
-   end
-
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function actions.xxhash(_)
    local str = "Hello, mister Den!"
@@ -5640,7 +5787,7 @@ function actions.xxhash(_)
    print("xxhash64", xxhash.hash64(str))
 end
 
-local function load_chunks2table(fname)
+local function load_chunks2string(fname)
    local window_bits = 15
    local stream = zlib.inflate(window_bits)
 
@@ -5663,25 +5810,137 @@ local function load_chunks2table(fname)
    end
 
    infile:close()
-   local full_data = table.concat(decompressed)
+   return table.concat(decompressed)
+end
 
-   return full_data
+local micro_hnswlib = require('micro_hnswlib')
+
+local function bin_to_hex(str)
+   return (str:gsub('.', function(byte)
+      return string.format('%02X', string.byte(byte))
+   end))
 end
 
 function actions.chunks_open(_)
-   local chunks = load_chunks2table("chunks_koh.zlib")
-
-   print('chunks', inspect(chunks))
-   local chunks_sz = #chunks
+   local chunks_str = load_chunks2string("chunks_koh.zlib")
+   local chunks_sz = #chunks_str
    printc("%{blue}" .. format_size(chunks_sz) .. "%{reset}")
 
+
+
+
+   local fn, errmsg = load(chunks_str)
+   if not fn then
+      print('errmsg', errmsg)
+      return
+   end
+
+   local chunks = fn()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   local M = 1500
+   local ef = 200
+   local searcher = micro_hnswlib.new(100000, M, ef)
+
+   local hash2chunk = {}
+
+   for _, ch in ipairs(chunks) do
+      ch.hash = hash32(ch.text)
+      assert(hash2chunk[ch.hash] == nil)
+      hash2chunk[ch.hash] = ch
+   end
+
+   print("hashing was finished")
+
+   local chunks_without_embeddings = {}
+
+   for _, ch in ipairs(chunks) do
+
+      if ch.embedding then
+
+         searcher:add(ch.embedding, ch.hash)
+      else
+         print("no embedding vector for chunk", bin_to_hex(ch.hash))
+         table.insert(chunks_without_embeddings, ch)
+      end
+   end
+
+   for _, ch in ipairs(chunks_without_embeddings) do
+      print(inspect(ch))
+      print()
+   end
+
+   print("embedding were loaded")
+   searcher:save("chunks.index")
+end
+
+function actions.load_index(_)
+   local chunks_str = load_chunks2string("chunks_koh.zlib")
+   local fn, errmsg = load(chunks_str)
+   if not fn then
+      print('errmsg', errmsg)
+      return
+   end
+
+   local chunks = fn()
+   local hash2chunk = {}
+
+   for _, ch in ipairs(chunks) do
+      ch.hash = hash32(ch.text)
+      assert(hash2chunk[ch.hash] == nil)
+      hash2chunk[ch.hash] = ch
+   end
+
+
+   local searcher = micro_hnswlib.load("chunks.index")
+
+
+   local inp = readline(ansicolors("%{green}query: %{reset}"))
+
+   local emb = embedding(llm_embedding_model, inp)
+
+
+
+   print()
+   print()
+   print()
+
+   assert(emb[1])
+   assert(#emb[1] == 4096)
+   local nearest = searcher:search_str(emb[1], 10)
+   for _, hash in ipairs(nearest) do
+      print(bin_to_hex(hash))
+   end
+
+   for _, hash in ipairs(nearest) do
+      local ch = hash2chunk[hash]
+      if ch then
+         print(ch.text)
+      end
+   end
 end
 
 function actions.files_koh(_args)
+   cmd_do("lms server start")
+
 
 
    local deflate = zlib.deflate(3, 15)
-   local f = io.open("chunks_koh.zlib", "w")
+
+   local dest_zlib_fname = "chunks_koh_tmp.zlib"
+   local f = io.open(dest_zlib_fname, "w")
    assert(f)
 
    ut.push_current_dir()
@@ -5703,6 +5962,7 @@ function actions.files_koh(_args)
 
 
 
+   local chunks = {}
    for _, fname in ipairs(files) do
       local attr = lfs.attributes(fname)
 
@@ -5719,7 +5979,20 @@ function actions.files_koh(_args)
       "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}")
 
 
-      process_file_embedding(fname, deflate, f)
+      local chunks_tmp = split2chunks(
+      fname, chunk_lines_num, chunk_lines_overlap)
+
+
+      for _, chunk in ipairs(chunks_tmp) do
+         chunk.file = fname
+         chunk.id = fname .. ":" .. chunk.line_start
+      end
+
+      for _, ch in ipairs(chunks_tmp) do
+         table.insert(chunks, ch)
+      end
+
+
 
       ::_continue::
 
@@ -5727,14 +6000,74 @@ function actions.files_koh(_args)
    end
 
 
+   process_chunks_embedding(chunks)
 
-   local final, eof, _, _ = deflate("", "finish")
-   print("eof", eof)
+
+   local dump = serpent.dump(chunks)
+
+   local compressed, eof_1, bytes_in, bytes_out = deflate(dump, nil)
+   print("eof", eof_1, "bytes_in", bytes_in, "bytes_out", bytes_out)
+   f:write(compressed)
+
+
+   local final, eof_2, _, _ = deflate("", "finish")
+   print("eof", eof_2)
    f:write(final)
 
 end
 
 
+
+
+
+
+
+local function create_searcher()
+   local chunks_str = load_chunks2string("chunks_koh.zlib")
+   local fn, errmsg = load(chunks_str)
+   if not fn then
+      print('errmsg', errmsg)
+      return
+   end
+
+   local chunks = fn()
+   local hash2chunk = {}
+
+   for _, ch in ipairs(chunks) do
+      ch.hash = hash32(ch.text)
+      assert(hash2chunk[ch.hash] == nil)
+      hash2chunk[ch.hash] = ch
+   end
+
+   local searcher = micro_hnswlib.load("chunks.index")
+
+
+   return {
+      query = function(q)
+         local emb = embedding(llm_embedding_model, q)
+
+         assert(emb[1])
+         assert(#emb[1] == 4096)
+         local nearest = searcher:search_str(emb[1], 10)
+
+
+
+
+
+         local texts = {}
+
+         for _, hash in ipairs(nearest) do
+            local ch = hash2chunk[hash]
+            if ch then
+
+               table.insert(texts, ch.text)
+            end
+         end
+
+         return texts
+      end,
+   }
+end
 
 function actions.ai(_args)
    print("actions.ai")
@@ -5769,8 +6102,12 @@ function actions.ai(_args)
       },
    }
 
+
+   local searcher = create_searcher()
    while true do
       inp = readline(ansicolors(msg))
+
+      local texts = table.concat(searcher.query(inp), "\n")
 
       if inp == "exit" or inp == "quit" then
          break
@@ -5778,6 +6115,9 @@ function actions.ai(_args)
 
       table.insert(chat.messages, {
          role = 'user',
+
+
+
          content = inp,
       })
 
