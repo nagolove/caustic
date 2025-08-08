@@ -49,46 +49,7 @@ make MYCFLAGS="-fPIC"
 popd
 
 
-    #-Ilua -L./lua -llua \
-
-#c++ koh.cpp  \
-#    -std=c++17 -g3 -Wall -fPIC \
-#    -I. -I./hnswlib  \
-#    -lm \
-#    $(pkg-config lua5.4 --cflags --libs) \
-#    -o koh.exe
-
-
-
-
-    #-Ilua -L./lua -llua \
-#clang++ lua.cpp  \
-#    -v \
-#    -std=c++17 -g3 -Wall -fPIC \
-#    -I. -I./hnswlib  \
-#    -o koh.exe \
-#    -lm \
-#    -L/usr/lib -llua5.4 -lm \
-#
-#
-
-#clang++ lua.cpp \
-#    -std=c++17 -g3 -Wall -fPIC \
-#    -I. -I./hnswlib \
-#    -o koh.exe \
-#    /usr/lib/liblua5.3.so \
-#    -lm
-
-clang++ lua.cpp \
-    -g3 -Wall -fPIC \
-    -I. -I./hnswlib \
-    -o koh.exe \
-    -lm \
-    -llua \
-
-
-
-gcc lua.cpp \
+g++ lua.cpp \
     -g3 -Wall -fPIC \
     -I. -I./hnswlib \
     -o koh.exe \
@@ -102,5 +63,14 @@ gcc ./lua_xxhash64.c \
     -I. \
     -shared \
     -o libxxhash.so \
+    -lm \
+    -llua \
+
+
+g++ ./micro_hnswlib.cpp \
+    -g3 -Wall -fPIC \
+    -I. -I./hnswlib \
+    -shared \
+    -o libmicro_hnswlib.so \
     -lm \
     -llua \
