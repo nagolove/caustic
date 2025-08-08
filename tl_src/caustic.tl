@@ -2337,6 +2337,7 @@ local record Actions
     deps: function(Args)
     dist: function(Args)
     files_koh: function(Args)
+    load_index: function(Args)
     init: function(Args)
     make: function(Args)
     project: function(Args)
@@ -2371,6 +2372,7 @@ local enum ActionsEnum
     "deps"
     "dist"
     "files_koh"
+    "load_index"
     "init"          
     "make"
     "project"
@@ -2416,6 +2418,10 @@ local parser_setup: {string:ParserSetup} = {
     dist = {
         options = {},
         summary = [[build binary distribution]],
+    },
+
+    load_index = {
+        summary = [[load index from binary file to hnsw lib instance]],
     },
 
     files_koh = {
@@ -5363,9 +5369,9 @@ local record Chunk
     line_start: integer
     line_end: integer
     text: string
-    embedding: {number}
+    embedding: {number} -- 4096 
     -- XXX: хеш от чего, от текста?
-    hash: string -- xxHash64 
+    hash: string -- xxHash32, строка длиной 4
 end
 
 local chunk_lines_num = 40
@@ -5522,7 +5528,7 @@ local function _fd_code_in_modules(): {string}
             local rel_dir = path_rel_third_party .. "/" .. module.dir
             local ok, msg = chdir(rel_dir)
             if not ok then
-                print("actions.files_koh:", msg)
+                print("_fd_code_in_modules", msg)
             end
 
             printc("%{blue}" .. lfs.currentdir() .. "%{reset}") 
@@ -5557,16 +5563,156 @@ end
 
 local zlib = require 'zlib'
 local xxhash = require 'xxhash'
+local hash32 = xxhash.hash32
 local serpent = require 'serpent'
 local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 local embedding = assist.embedding
 
+local function shannon_entropy(str: string): number
+    local freq: {string: number} = {}
+    local len = #str
+    for i = 1, len do
+        local c = string.sub(str, i, i)
+        freq[c] = (freq[c] or 0) + 1
+    end
+    local entropy = 0.
+    for _, count in pairs(freq) do
+        local p = count / len
+        entropy = entropy - p * math.log(p, 2.)
+    end
+    return entropy
+end
+
+local function compression_ratio(data: string): number
+    local def = zlib.deflate(zlib.BEST_SPEED, 8)
+    local compressed = def(data, "finish")
+    return #compressed / #data
+end
+
+--[[
+Как я бы встроил в пайплайн
+Шаг 1: Быстрая проверка длины чанка (отсекаем совсем короткие/пустые).
+Шаг 2: Символьная энтропия (дёшево).
+Шаг 3: Если энтропия близка к порогу → проверка через zlib.deflate() для более точного решения.
+Шаг 4: Если ratio < threshold → отправляем в «простой» батч.
+Так ты получаешь баланс между скоростью и точностью.
+--]]
+
+local function process_chunks_embedding(chunks: {Chunk})
+    local chunks_per_request = 17
+    assert(chunks)
+
+    -- XXX: lms ps --json
+    -- XXX: lms ls --json
+
+    -- XXX: Использовать чанки не от одного файла, а от всех, что-бы батчи
+    -- были всегда полностью заполненными
+    --chunks = split2chunks(
+    --    fname, chunk_lines_num, chunk_lines_overlap
+    --)
+
+    if not chunks or #chunks == 0 then
+        return
+    end
+
+    local chunks_copy = ut.deepcopy(chunks)
+    local id2chunk: {string: Chunk} = {}
+
+    for _, ch in ipairs(chunks) do
+        id2chunk[ch.id] = ch
+    end
+
+    while #chunks_copy ~= 0 do
+        --print(chunks_copy, inspect(chunks_copy))
+        --print("#chunks_copy", #chunks_copy)
+
+        local embeddings_t: {string} = {}
+        local ids: {string} = {}
+
+        local real_chunks_num = math.min(chunks_per_request, #chunks_copy)
+        for _ = 1, real_chunks_num do
+            local chunk: Chunk = table.remove(chunks_copy, #chunks_copy)
+            if not chunk then
+                break
+            else
+                table.insert(ids, chunk.id)
+                table.insert(embeddings_t, chunk.text)
+                local sh = shannon_entropy(chunk.text)
+                local ratio = compression_ratio(chunk.text)
+
+                io.write(
+                    'shannon_entropy: ', sh, ' compression_ratio: ', ratio, " "
+                )
+
+                if sh < 4.25 and ratio < 0.5 then
+                    printc("%{green}simple chunk%{reset}")
+                elseif sh > 4.8 and ratio > 0.8 then
+                    printc("%{red}complex chunk%{reset}")
+                else
+                    printc("medium chunk")
+                end
+
+                --[[
+Как интерпретировать для фильтрации
+H < ~4.2 и ratio < 0.5 → явный boilerplate, можно безопасно относить к «простым» чанкам.
+
+H > ~4.8 и ratio > 0.8 → вероятно, насыщенный уникальный код, не стоит в батче перегружать.
+
+Если показатели расходятся (H низкая, ratio высокая или наоборот) — лучше дополнительно проверить токенную энтропию или длину чанка.
+                --]]
+
+                --[[
+Как можно проверить, обрабатываются ли батчи параллельно в LM Studio
+Сделать батч с:
+
+одним длинным чанком
+
+10-ю одинаковыми короткими чанками
+
+Если время обработки (и GPU-нагрузка) в случае (2) приблизительно такое же, как в случае (1) — значит, выполняется параллельно.
+
+Если в случае (2) время ≈ 10× больше, чем в случае (1) — значит, идёт последовательная обработка внутри батча.
+                --]]
+            end
+        end
+
+        print("#embeddings_t", #embeddings_t)
+        --print("embeddings_t", inspect(embeddings_t))
+
+        local vectors = embedding(llm_embedding_model, embeddings_t)
+
+        assert(
+            #vectors == #ids,
+            "embedding API returned inconsistent batch size"
+        )
+
+        for i, vector in ipairs(vectors) do
+            local chunk_id = ids[i]
+            id2chunk[chunk_id].embedding = vector
+        end
+    end
+end
+
+--[[
+local enum ChunkEntropy
+    "simple"
+    "medium"
+    "complex"
+end
+--]]
+
+--[[
 local function process_file_embedding(
     fname: string, deflate: zlib.Deflator, f: FILE
 )
     local chunks_per_request = 4
     local chunks: {Chunk}
 
+    -- XXX: lms ps --json
+    -- XXX: lms ls --json
+
+    -- XXX: Использовать чанки не от одного файла, а от всех, что-бы батчи
+    -- были всегда полностью заполненными
     chunks = split2chunks(
         fname, chunk_lines_num, chunk_lines_overlap
     )
@@ -5606,7 +5752,7 @@ local function process_file_embedding(
         end
 
         print("#embeddings_t", #embeddings_t)
-        print("embeddings_t", inspect(embeddings_t))
+        --print("embeddings_t", inspect(embeddings_t))
 
         local vectors = embedding(llm_embedding_model, embeddings_t)
 
@@ -5622,15 +5768,16 @@ local function process_file_embedding(
     end
 
     -- Весь файл записывается в поток сжатия
-    for _, chunk in ipairs(chunks) do
-        local dump = serpent.dump(chunk)
-        --print('dump', dump)
-        local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
-        print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
-        f:write(compressed)
-    end
+    --for _, chunk in ipairs(chunks) do
+    --end
 
+    local dump = serpent.dump(chunks)
+    --print('dump', dump)
+    local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
+    print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
+    f:write(compressed)
 end
+--]]
 
 function actions.xxhash(_: Args)
     local str = "Hello, mister Den!"
@@ -5640,7 +5787,7 @@ function actions.xxhash(_: Args)
     print("xxhash64", xxhash.hash64(str))
 end
 
-local function load_chunks2table(fname: string): {Chunk}
+local function load_chunks2string(fname: string): string
     local window_bits = 15 -- должен соответствовать тому, что использовался при deflate(3, 15)
     local stream = zlib.inflate(window_bits)
 
@@ -5663,25 +5810,137 @@ local function load_chunks2table(fname: string): {Chunk}
     end
 
     infile:close()
-    local full_data = table.concat(decompressed)
+    return table.concat(decompressed)
+end
 
-    return full_data as {Chunk}
+local micro_hnswlib = require 'micro_hnswlib'
+
+local function bin_to_hex(str: string): string
+    return (str:gsub('.', function(byte: string): string
+        return string.format('%02X', string.byte(byte))
+    end))
 end
 
 function actions.chunks_open(_: Args)
-    local chunks = load_chunks2table("chunks_koh.zlib")
-
-    print('chunks', inspect(chunks))
-    local chunks_sz = #chunks
+    local chunks_str = load_chunks2string("chunks_koh.zlib")
+    local chunks_sz = #chunks_str
     printc("%{blue}" .. format_size(chunks_sz) .. "%{reset}")
 
+    --print(chunks_str)
+
+    --local ok, chunks = serpent.load(chunks_str) as {Chunk}
+    local fn, errmsg = load(chunks_str)
+    if not fn then
+        print('errmsg', errmsg)
+        return
+    end
+
+    local chunks = fn() as {Chunk}
+
+    --if not chunks then
+    --    print(
+    --end
+
+    --print('chunks', inspect(chunks))
+
+    --print(inspect(chunks[1]))
+    --print('type(chunks)', type(chunks))
+    --print(chunks_str:sub(1, 100))
+
+    --chunks[1].embedding = nil
+    --print(inspect(chunks[1]))
+
+    local M = 1500
+    local ef = 200
+    local searcher = micro_hnswlib.new(100000, M, ef)
+
+    local hash2chunk: {string: Chunk} = {}
+
+    for _, ch in ipairs(chunks) do
+        ch.hash = hash32(ch.text)
+        assert(hash2chunk[ch.hash] == nil)
+        hash2chunk[ch.hash] = ch
+    end
+
+    print("hashing was finished")
+
+    local chunks_without_embeddings: {Chunk} = {}
+
+    for _, ch in ipairs(chunks) do
+        --assert(ch.embedding)
+        if ch.embedding then
+            --print("#ch.embeddings", #ch.embedding)
+            searcher:add(ch.embedding, ch.hash)
+        else
+            print("no embedding vector for chunk", bin_to_hex(ch.hash))
+            table.insert(chunks_without_embeddings, ch)
+        end
+    end
+
+    for _, ch in ipairs(chunks_without_embeddings) do
+        print(inspect(ch))
+        print()
+    end
+
+    print("embedding were loaded")
+    searcher:save("chunks.index")
+end
+
+function actions.load_index(_: Args)
+    local chunks_str = load_chunks2string("chunks_koh.zlib")
+    local fn, errmsg = load(chunks_str)
+    if not fn then
+        print('errmsg', errmsg)
+        return
+    end
+
+    local chunks = fn() as {Chunk}
+    local hash2chunk: {string: Chunk} = {}
+
+    for _, ch in ipairs(chunks) do
+        ch.hash = hash32(ch.text)
+        assert(hash2chunk[ch.hash] == nil)
+        hash2chunk[ch.hash] = ch
+    end
+
+
+    local searcher = micro_hnswlib.load("chunks.index")
+    --searcher:save("chunks.index.copy")
+
+    local inp = readline(ansicolors("%{green}query: %{reset}"))
+
+    local emb = embedding(llm_embedding_model, inp)
+
+    --print('emb', inspect(emb))
+
+    print()
+    print()
+    print()
+
+    assert(emb[1])
+    assert(#emb[1] == 4096)
+    local nearest = searcher:search_str(emb[1], 10)
+    for _, hash in ipairs(nearest) do
+        print(bin_to_hex(hash))
+    end
+
+    for _, hash in ipairs(nearest) do
+        local ch = hash2chunk[hash]
+        if ch then
+            print(ch.text)
+        end
+    end
 end
 
 function actions.files_koh(_args: Args)
+    cmd_do("lms server start")
+
     -- Создаём поток сжатия
     -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
     local deflate = zlib.deflate(3, 15)
-    local f = io.open("chunks_koh.zlib", "w")
+    --local dest_zlib_fname = "chunks_koh.zlib"
+    local dest_zlib_fname = "chunks_koh_tmp.zlib"
+    local f = io.open(dest_zlib_fname, "w")
     assert(f)
 
     ut.push_current_dir()
@@ -5703,6 +5962,7 @@ function actions.files_koh(_args: Args)
 
     --print(tabular(files))
 
+    local chunks: {Chunk} = {}
     for _, fname in ipairs(files) do
         local attr = lfs.attributes(fname)
 
@@ -5719,7 +5979,20 @@ function actions.files_koh(_args: Args)
             "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}"
         )
 
-        process_file_embedding(fname, deflate, f)
+        local chunks_tmp = split2chunks(
+            fname, chunk_lines_num, chunk_lines_overlap
+        )
+
+        for _, chunk in ipairs(chunks_tmp) do
+            chunk.file = fname
+            chunk.id = fname .. ":" .. chunk.line_start
+        end
+
+        for _, ch in ipairs(chunks_tmp) do
+            table.insert(chunks, ch)
+        end
+
+        --process_file_embedding(fname, deflate, f)
 
         ::_continue::
 
@@ -5727,14 +6000,74 @@ function actions.files_koh(_args: Args)
     end
     --]]
 
+    process_chunks_embedding(chunks)
+
+    -- Весь файл записывается в поток сжатия
+    local dump = serpent.dump(chunks)
+    --print('dump', dump)
+    local compressed, eof_1, bytes_in, bytes_out = deflate(dump, nil)
+    print("eof", eof_1, "bytes_in", bytes_in, "bytes_out", bytes_out)
+    f:write(compressed)
+
     -- Завершаем сессию потока
-    local final, eof, _, _ = deflate("", "finish")
-    print("eof", eof)
+    local final, eof_2, _, _ = deflate("", "finish")
+    print("eof", eof_2)
     f:write(final)
 
 end
 
 --local signal = require("posix.signal")
+
+local record Searcher
+    query: function(q: string): {string}
+end
+
+local function create_searcher(): Searcher
+    local chunks_str = load_chunks2string("chunks_koh.zlib")
+    local fn, errmsg = load(chunks_str)
+    if not fn then
+        print('errmsg', errmsg)
+        return
+    end
+
+    local chunks = fn() as {Chunk}
+    local hash2chunk: {string: Chunk} = {}
+
+    for _, ch in ipairs(chunks) do
+        ch.hash = hash32(ch.text)
+        assert(hash2chunk[ch.hash] == nil)
+        hash2chunk[ch.hash] = ch
+    end
+
+    local searcher = micro_hnswlib.load("chunks.index")
+    --searcher:save("chunks.index.copy")
+
+    return {
+        query = function(q: string): {string}
+            local emb = embedding(llm_embedding_model, q)
+
+            assert(emb[1])
+            assert(#emb[1] == 4096)
+            local nearest = searcher:search_str(emb[1], 10)
+
+            --for _, hash in ipairs(nearest) do
+            --    print(bin_to_hex(hash))
+            --end
+
+            local texts: {string} = {}
+
+            for _, hash in ipairs(nearest) do
+                local ch = hash2chunk[hash]
+                if ch then
+                    --print(ch.text)
+                    table.insert(texts, ch.text)
+                end
+            end
+
+            return texts
+        end,
+    }
+end
 
 function actions.ai(_args: Args)
     print("actions.ai")
@@ -5769,8 +6102,12 @@ function actions.ai(_args: Args)
         },
     }
 
+
+    local searcher = create_searcher()
     while true do
         inp = readline(ansicolors(msg))
+
+        local texts = table.concat(searcher.query(inp), "\n")
 
         if inp == "exit" or inp == "quit" then
             break
@@ -5778,6 +6115,9 @@ function actions.ai(_args: Args)
 
         table.insert(chat.messages, {
             role = 'user',
+            --content = "Контекста кода : " .. texts .. 
+            --          "\n Вопрос пользователя :" .. inp,
+
             content = inp,
         })
 
