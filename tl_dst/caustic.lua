@@ -5553,8 +5553,9 @@ end
 
 local assist = require("assist")
 
-local llm_model = "mistral-7b-instruct-v0.1"
 
+
+local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
 local function format_size(bytes)
    if bytes < 1024 * 1024 then
@@ -6101,6 +6102,8 @@ local function create_searcher()
 
          for _, hash in ipairs(nearest) do
             local ch = hash2chunk[hash]
+
+
             if ch then
 
                local text = table.concat({
@@ -6166,11 +6169,19 @@ function actions.ai(_args)
 
 
 
+
+
+
+
+
+
    local models = assist.models_list()
    print(inspect(models))
 
    local welcome_str = "%{green}send message%{green}: "
    local inp
+
+
 
    local chat = {
       model = llm_model,
@@ -6179,7 +6190,9 @@ function actions.ai(_args)
          {
             role = "system",
 
-            content = "Ты ассистент в разработке игрового фреймворка и игр.",
+            content = "Ты ассистент в разработке игрового фреймворка и игр." ..
+            "Если недостаточно данных в исходном коде, то укажи маркер ::QUERY:: в конце ответа.",
+
          },
       },
    }
@@ -6187,6 +6200,7 @@ function actions.ai(_args)
    local searcher = create_searcher()
    while true do
       inp = readline(ansicolors(welcome_str))
+
 
       local texts = table.concat(searcher.query(inp), "\n")
 
