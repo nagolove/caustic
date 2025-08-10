@@ -114,7 +114,7 @@ function send2llm(payload_table, on_get_data_chunk)
             "Content-Length: " .. tostring(#json_payload)
         },
         postfields = json_payload,
-        timeout = 60 * 10,        -- Таймаут в секундах (общий)
+        timeout = 60 * 10 * 2,        -- Таймаут в секундах (общий)
         connecttimeout = 30, -- Таймаут подключения
         writefunction = function(chunk)
 
