@@ -5553,8 +5553,9 @@ end
 
 local assist = require "assist"
 --local llm_model = "google/gemma-3-12b"
-local llm_model = "mistral-7b-instruct-v0.1"
---local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
+--local llm_model = "mistral-7b-instruct-v0.1"
+-- XXX: Сделать выбор и показ текущей модели в чате
+local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
 local function format_size(bytes: integer): string
     if bytes < 1024 * 1024 then
@@ -5710,6 +5711,8 @@ H > ~4.8 и ratio > 0.8 → вероятно, насыщенный уникал�
         print("#embeddings_t", #embeddings_t)
         --print("embeddings_t", inspect(embeddings_t))
 
+        -- XXX: Добавлять в виде комментария имя файла чанк исходного кода 
+        -- и начальную строку 
         local vectors = embedding(llm_embedding_model, embeddings_t)
 
         assert(
@@ -5920,10 +5923,11 @@ end
 function actions.load_index(_: Args)
     -- XXX: Сделать загрузку быстрой. Как?
     -- Бинарный формат файла?
-    -- Файл отображать в память.
+    -- Файл отображать в память. mmap()
     --[[
     --]]
-    -- количество блоков записей | блок на 1024 записи 1 | блок на 1024 записи 2 | .. | запись 1 | запись 2 |
+    -- u64: количество блоков записей | блок на 1024 записи 1 | блок на 1024 записи 2 | .. | запись 1 | запись 2 |
+    -- блок - | u64 - смещение от начала файла, 64, ... |
     local chunks_str = load_chunks2string("chunks_koh.zlib")
 
     local fn, errmsg = load(chunks_str)
@@ -6101,6 +6105,8 @@ local function create_searcher(): Searcher
             -- если есть пробел текста, то указывать /* текст прощен */
             for _, hash in ipairs(nearest) do
                 local ch = hash2chunk[hash]
+                -- TODO: Словарь по файлам, потом сортировать по line_start
+                -- TODO: Убрать перекрытие чанков текста
                 if ch then
                     --print(ch.text)
                     local text = table.concat({
@@ -6158,19 +6164,27 @@ function actions.ai(_args: Args)
 
     --[[
     local function handle_sigint(_: any)
+        -- TODO: Если в цикле ответа, то прервать ответ, оставить чат
+        -- Если в цикле общего чата, то выйти из системы
         print("\nПолучен сигнал SIGINT (Ctrl+C). Завершаем...")
         running = false
     end
 
     -- Назначаем обработчик сигнала
+    -- XXX: Сделать обвязку типов для posix
     signal.signal(signal.SIGINT, handle_sigint)
     --]]
+
+
+    -- TODO: markdown анализатор
 
     local models = assist.models_list()
     print(inspect(models))
     
     local welcome_str = "%{green}send message%{green}: "
     local inp: string
+
+    --local relax = 0
 
     local chat: assist.LLMPayload = {
         model = llm_model,
@@ -6179,7 +6193,9 @@ function actions.ai(_args: Args)
             { 
                 role = "system", 
                 --content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
-                content = "Ты ассистент в разработке игрового фреймворка и игр."
+                content = "Ты ассистент в разработке игрового фреймворка и игр." .. 
+                          "Если недостаточно данных в исходном коде, то укажи маркер ::QUERY:: в конце ответа."
+                --content = "Если недостаточно данных в исходном коде, то укажи в формате имя_файла:строка .. "
             },
         },
     }
@@ -6188,6 +6204,7 @@ function actions.ai(_args: Args)
     while true do
         inp = readline(ansicolors(welcome_str))
 
+        -- XXX: Сделать контекстный поиск по запросу
         local texts = table.concat(searcher.query(inp), "\n")
 
         local f_tmp = io.open("contex.txt", "w")
