@@ -5374,6 +5374,8 @@ end
 
 
 
+
+
 local chunk_lines_num = 40
 local chunk_lines_overlap = 5
 
@@ -5553,6 +5555,7 @@ local assist = require("assist")
 
 local llm_model = "mistral-7b-instruct-v0.1"
 
+
 local function format_size(bytes)
    if bytes < 1024 * 1024 then
       return string.format("%.2f KB", bytes / 1024)
@@ -5589,6 +5592,7 @@ local function compression_ratio(data)
    return #compressed / #data
 end
 
+local json = require("dkjson")
 
 
 
@@ -5596,20 +5600,47 @@ end
 
 
 
+local function lms_instanse()
 
+   return {
+      is_up = function()
+         local code = os.execute('lms ps')
+         return code
+      end,
+
+      is_loaded = function(modelname)
+         local f = io.popen('lms ps --json')
+         local json_data = f:read("*a")
+         local models = json.decode(json_data)
+
+         for _, info in ipairs(models) do
+
+
+            assert(type(info) == 'string' or type(info) == 'table')
+         end
+
+         print("json_data", inspect(models))
+         f:close()
+         for _, target in ipairs(models) do
+            print('target', inspect(target))
+            if modelname == target then
+               return true
+            end
+         end
+         return false
+      end,
+
+      load = function(modelname)
+         cmd_do('lms load ' .. modelname)
+      end,
+   }
+end
+
+local lms = lms_instanse()
 
 local function process_chunks_embedding(chunks)
    local chunks_per_request = 17
    assert(chunks)
-
-
-
-
-
-
-
-
-
 
    if not chunks or #chunks == 0 then
       return
@@ -5887,7 +5918,14 @@ function actions.chunks_open(_)
 end
 
 function actions.load_index(_)
+
+
+
+
+
+
    local chunks_str = load_chunks2string("chunks_koh.zlib")
+
    local fn, errmsg = load(chunks_str)
    if not fn then
       print('errmsg', errmsg)
@@ -6056,11 +6094,22 @@ local function create_searcher()
 
          local texts = {}
 
+
+
+
+
+
          for _, hash in ipairs(nearest) do
             local ch = hash2chunk[hash]
             if ch then
 
-               table.insert(texts, ch.text)
+               local text = table.concat({
+                  "// file: " .. ch.file .. " , " ..
+                  "line_start " .. ch.line_start .. " , " ..
+                  "line_end " .. ch.line_end .. "\n\n",
+               })
+               text = text .. ch.text
+               table.insert(texts, text)
             end
          end
 
@@ -6071,6 +6120,39 @@ end
 
 function actions.ai(_args)
    print("actions.ai")
+
+   if not lms.is_up() then
+      cmd_do("nohup lmstudio &")
+
+      local i = 0
+      while not lms.is_up() do
+         os.execute("sleep 0.2")
+         i = i + 1
+         if i > 20 then
+            print("Could not start lmstudio")
+            return
+         end
+      end
+   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6087,7 +6169,7 @@ function actions.ai(_args)
    local models = assist.models_list()
    print(inspect(models))
 
-   local msg = "%{green}send message%{green}: "
+   local welcome_str = "%{green}send message%{green}: "
    local inp
 
    local chat = {
@@ -6102,12 +6184,15 @@ function actions.ai(_args)
       },
    }
 
-
    local searcher = create_searcher()
    while true do
-      inp = readline(ansicolors(msg))
+      inp = readline(ansicolors(welcome_str))
 
       local texts = table.concat(searcher.query(inp), "\n")
+
+      local f_tmp = io.open("contex.txt", "w")
+      f_tmp:write(texts)
+      f_tmp:close()
 
       if inp == "exit" or inp == "quit" then
          break
@@ -6115,15 +6200,17 @@ function actions.ai(_args)
 
       table.insert(chat.messages, {
          role = 'user',
+         content = "Контекста кода : " .. texts ..
+         "\n Вопрос пользователя :" .. inp,
 
 
-
-         content = inp,
       })
 
       local responce = assist.send2llm(chat, function(responce_chunk)
          io.write(responce_chunk)
       end)
+
+
 
 
 
