@@ -5368,9 +5368,11 @@ local record Chunk
     file: string        -- abs file name
     line_start: integer
     line_end: integer
+    -- При хранении в файле пишется как zlib сжатая строка
     text: string
+    -- При хранении в файле пишется как zlib сжатая строка
     embedding: {number} -- 4096 
-    -- XXX: хеш от чего, от текста?
+    --  Хеш от текста, считать его заранее
     hash: string -- xxHash32, строка длиной 4
 end
 
@@ -5552,6 +5554,7 @@ end
 local assist = require "assist"
 --local llm_model = "google/gemma-3-12b"
 local llm_model = "mistral-7b-instruct-v0.1"
+--local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
 local function format_size(bytes: integer): string
     if bytes < 1024 * 1024 then
@@ -5589,27 +5592,55 @@ local function compression_ratio(data: string): number
     return #compressed / #data
 end
 
---[[
-Как я бы встроил в пайплайн
-Шаг 1: Быстрая проверка длины чанка (отсекаем совсем короткие/пустые).
-Шаг 2: Символьная энтропия (дёшево).
-Шаг 3: Если энтропия близка к порогу → проверка через zlib.deflate() для более точного решения.
-Шаг 4: Если ratio < threshold → отправляем в «простой» батч.
-Так ты получаешь баланс между скоростью и точностью.
---]]
+local json = require("dkjson")  -- либо cjson, если у тебя другой JSON-модуль
+
+local record LMSInstanse
+    is_loaded: function(modelname: string): boolean
+    is_up: function(): boolean
+    load: function(modelname: string)
+end
+
+local function lms_instanse(): LMSInstanse
+
+    return {
+        is_up = function(): boolean
+            local code = os.execute('lms ps')
+            return code
+        end,
+
+        is_loaded = function(modelname: string): boolean
+            local f = io.popen('lms ps --json')
+            local json_data = f:read("*a")
+            local models = json.decode(json_data) as {string}
+
+            for _, info in ipairs(models) do
+                --print(type(info))
+                --print(inspect(info))
+                assert(type(info) == 'string' or type(info) == 'table')
+            end
+
+            print("json_data", inspect(models))
+            f:close()
+            for _, target in ipairs(models) do
+                print('target', inspect(target))
+                if modelname == target then
+                    return true
+                end
+            end
+            return false
+        end,
+
+        load = function(modelname: string): boolean
+            cmd_do('lms load ' .. modelname)
+        end,
+    }
+end
+
+local lms = lms_instanse()
 
 local function process_chunks_embedding(chunks: {Chunk})
     local chunks_per_request = 17
     assert(chunks)
-
-    -- XXX: lms ps --json
-    -- XXX: lms ls --json
-
-    -- XXX: Использовать чанки не от одного файла, а от всех, что-бы батчи
-    -- были всегда полностью заполненными
-    --chunks = split2chunks(
-    --    fname, chunk_lines_num, chunk_lines_overlap
-    --)
 
     if not chunks or #chunks == 0 then
         return
@@ -5887,7 +5918,14 @@ function actions.chunks_open(_: Args)
 end
 
 function actions.load_index(_: Args)
+    -- XXX: Сделать загрузку быстрой. Как?
+    -- Бинарный формат файла?
+    -- Файл отображать в память.
+    --[[
+    --]]
+    -- количество блоков записей | блок на 1024 записи 1 | блок на 1024 записи 2 | .. | запись 1 | запись 2 |
     local chunks_str = load_chunks2string("chunks_koh.zlib")
+
     local fn, errmsg = load(chunks_str)
     if not fn then
         print('errmsg', errmsg)
@@ -6056,11 +6094,22 @@ local function create_searcher(): Searcher
 
             local texts: {string} = {}
 
+            -- XXX: Сделать склейку из кода одним куском по file и 
+            -- line_start, 
+            -- line_end
+            -- Сверху писать имя файла
+            -- если есть пробел текста, то указывать /* текст прощен */
             for _, hash in ipairs(nearest) do
                 local ch = hash2chunk[hash]
                 if ch then
                     --print(ch.text)
-                    table.insert(texts, ch.text)
+                    local text = table.concat({
+                        "// file: " .. ch.file .. " , " .. 
+                        "line_start " .. ch.line_start .. " , " ..
+                        "line_end " .. ch.line_end .. "\n\n",
+                    })
+                    text = text .. ch.text
+                    table.insert(texts, text)
                 end
             end
 
@@ -6072,22 +6121,55 @@ end
 function actions.ai(_args: Args)
     print("actions.ai")
 
-    --local running = true
+    if not lms.is_up() then
+        cmd_do("nohup lmstudio &")
+
+        local i = 0
+        while not lms.is_up() do
+            os.execute("sleep 0.2")
+            i = i + 1
+            if i > 20 then
+                print("Could not start lmstudio")
+                return
+            end
+        end
+    end
+
+    --[[
+    -- XXX: С чем лучше сравнивать llm_model в is_loaded()?
+    if not lms.is_loaded(llm_model) then
+        lms.load(llm_model)
+        os.execute("sleep 2")
+        local i = 0
+        while not lms.is_loaded(llm_model) do
+            os.execute("sleep 1")
+            i = i + 1
+            if i > 20 then
+                printc(
+                    "Could not load %{blue}" .. 
+                    llm_model .. 
+                    "%{reset} model"
+                )
+                return
+            end
+        end
+    end
+    --]]
 
     --[[
     local function handle_sigint(_: any)
         print("\nПолучен сигнал SIGINT (Ctrl+C). Завершаем...")
         running = false
     end
-    --]]
 
     -- Назначаем обработчик сигнала
-    --signal.signal(signal.SIGINT, handle_sigint)
+    signal.signal(signal.SIGINT, handle_sigint)
+    --]]
 
     local models = assist.models_list()
     print(inspect(models))
     
-    local msg = "%{green}send message%{green}: "
+    local welcome_str = "%{green}send message%{green}: "
     local inp: string
 
     local chat: assist.LLMPayload = {
@@ -6102,12 +6184,15 @@ function actions.ai(_args: Args)
         },
     }
 
-
     local searcher = create_searcher()
     while true do
-        inp = readline(ansicolors(msg))
+        inp = readline(ansicolors(welcome_str))
 
         local texts = table.concat(searcher.query(inp), "\n")
+
+        local f_tmp = io.open("contex.txt", "w")
+        f_tmp:write(texts)
+        f_tmp:close()
 
         if inp == "exit" or inp == "quit" then
             break
@@ -6115,16 +6200,18 @@ function actions.ai(_args: Args)
 
         table.insert(chat.messages, {
             role = 'user',
-            --content = "Контекста кода : " .. texts .. 
-            --          "\n Вопрос пользователя :" .. inp,
+            content = "Контекста кода : " .. texts .. 
+                      "\n Вопрос пользователя :" .. inp,
 
-            content = inp,
+            --content = inp,
         })
 
         local responce = assist.send2llm(chat, function(responce_chunk)
             io.write(responce_chunk as string)
         end)
 
+        -- XXX: Не правильно печатается последнее сообщение в чате, выпадает
+        -- после строки welcome_str
         --local responce = ""
 
         table.insert(chat.messages, {
