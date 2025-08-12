@@ -26,8 +26,9 @@ local record Assist
         stream: boolean
         max_tokens: integer
     end
-
-    send2llm: function(LLMPayload, function(responce_chunk: string)): string
+    
+    type OnWriteFunc = function(responce_chunk: string): boolean
+    send2llm: function(LLMPayload, func: OnWriteFunc): string
     models_list: function(): {string}
     embedding: function(modelname: string, text: string|{string}): {{number}}
 end
