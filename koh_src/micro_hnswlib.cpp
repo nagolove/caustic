@@ -190,6 +190,7 @@ struct HNSWHandle {
         auto res = index->searchKnn(norm_vec.data(), k);
         std::vector<int32_t> ids;
         while (!res.empty()) {
+            printf("search: dist %d\n", static_cast<int32_t>(res.top().first));
             ids.push_back(static_cast<int32_t>(res.top().second));
             res.pop();
         }
