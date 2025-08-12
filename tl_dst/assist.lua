@@ -102,9 +102,14 @@ print(a:send("Какая инфомация тебе доступна?"))
 local cURL = require("cURL")
 local json = require("dkjson")  -- или другой модуль JSON
 
+local function printc(...)
+    print(ansicolors(table.unpack(...)))
+end
+
 function send2llm(payload_table, on_get_data_chunk)
     local json_payload = json.encode(payload_table)
     local response = {}
+    local msg_quit = "%{red} closing curl query %{reset}"
 
     local easy = cURL.easy{
         url = "http://localhost:1234/v1/chat/completions",
@@ -131,13 +136,17 @@ function send2llm(payload_table, on_get_data_chunk)
                     local ok, data = pcall(json.decode, content)
                     if ok and data and data.choices and data.choices[1] then
                         local delta = data.choices[1].delta
-                        if delta and delta.content then
-
-                            --io.write(delta.content)  -- печатай по мере получения
+                        local content = delta and delta.content
+                        if content then
+                            --io.write(content)  -- печатай по мере получения
                             if type(on_get_data_chunk) == 'function' then
-                                on_get_data_chunk(delta.content)
+                                if on_get_data_chunk(content) == true then
+                                    -- XXX: Достаточно просто выйти из функции для окончания работы запроса?
+                                    printc(msg_quit)
+                                    return 0
+                                end
                             end
-                            table.insert(response, delta.content)
+                            table.insert(response, content)
 
                         end
                     end
