@@ -5472,13 +5472,6 @@ local function split2chunks(
         m2.step(line)
     end
 
-    --[[
-    print(inspect(m1.stop()))
-    print ""
-    print(inspect(m2.stop()))
-    print ""
-    --]]
-    
     local final_chunks = {}
     for _, ch in ipairs(m1.stop()) do
         table.insert(final_chunks, ch)
@@ -5735,84 +5728,6 @@ local enum ChunkEntropy
 end
 --]]
 
---[[
-local function process_file_embedding(
-    fname: string, deflate: zlib.Deflator, f: FILE
-)
-    local chunks_per_request = 4
-    local chunks: {Chunk}
-
-    -- XXX: lms ps --json
-    -- XXX: lms ls --json
-
-    -- XXX: Использовать чанки не от одного файла, а от всех, что-бы батчи
-    -- были всегда полностью заполненными
-    chunks = split2chunks(
-        fname, chunk_lines_num, chunk_lines_overlap
-    )
-
-    if not chunks or #chunks == 0 then
-        return
-    end
-
-    for _, chunk in ipairs(chunks) do
-        chunk.file = fname
-        chunk.id = fname .. ":" .. chunk.line_start
-    end
-
-    local chunks_copy = ut.deepcopy(chunks)
-    local id2chunk: {string: Chunk} = {}
-
-    for _, ch in ipairs(chunks) do
-        id2chunk[ch.id] = ch
-    end
-
-    while #chunks_copy ~= 0 do
-        --print(chunks_copy, inspect(chunks_copy))
-        --print("#chunks_copy", #chunks_copy)
-
-        local embeddings_t: {string} = {}
-        local ids: {string} = {}
-
-        local real_chunks_num = math.min(chunks_per_request, #chunks_copy)
-        for _ = 1, real_chunks_num do
-            local chunk: Chunk = table.remove(chunks_copy, #chunks_copy)
-            if not chunk then
-                break
-            else
-                table.insert(ids, chunk.id)
-                table.insert(embeddings_t, chunk.text)
-            end
-        end
-
-        print("#embeddings_t", #embeddings_t)
-        --print("embeddings_t", inspect(embeddings_t))
-
-        local vectors = embedding(llm_embedding_model, embeddings_t)
-
-        assert(
-            #vectors == #ids,
-            "embedding API returned inconsistent batch size"
-        )
-
-        for i, vector in ipairs(vectors) do
-            local chunk_id = ids[i]
-            id2chunk[chunk_id].embedding = vector
-        end
-    end
-
-    -- Весь файл записывается в поток сжатия
-    --for _, chunk in ipairs(chunks) do
-    --end
-
-    local dump = serpent.dump(chunks)
-    --print('dump', dump)
-    local compressed, eof, bytes_in, bytes_out = deflate(dump, nil)
-    print("eof", eof, "bytes_in", bytes_in, "bytes_out", bytes_out)
-    f:write(compressed)
-end
---]]
-
 function actions.xxhash(_: Args)
     local str = "Hello, mister Den!"
     print('str', str)
@@ -5920,6 +5835,87 @@ function actions.chunks_open(_: Args)
     searcher:save("chunks.index")
 end
 
+local record IndexSetup
+    files: {string}         -- абсолютные имена файлов
+    zlib_level: integer     -- уровень сжатия
+    zlib_window: integer    -- размер окна
+    index_fname: string      -- имя файла индекса
+end
+
+local function index_create(index_setup: IndexSetup)
+    assert(index_setup)
+
+    -- Создаём поток сжатия
+    -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
+    local level = index_setup.zlib_level or 3
+    local window = index_setup.zlib_window or 15
+    local deflate = zlib.deflate(level, window)
+
+    --local dest_zlib_fname = "chunks_koh.zlib"
+    local attr_index = lfs.attributes(index_setup.index_fname)
+    if attr_index then
+        print(format("index_create: file '%s' exists, aborting"))
+        os.exit(1)
+    end
+
+    local files = index_setup.files
+    assert(type(files) == 'table')
+
+    local dest_zlib_fname = "chunks_koh_tmp.zlib"
+    local f = io.open(dest_zlib_fname, "w")
+    assert(f)
+
+    local chunks: {Chunk} = {}
+    for _, fname in ipairs(files) do
+        local attr = lfs.attributes(fname)
+
+        if not attr then
+            goto _continue
+        end
+
+        if attr.mode ~= 'file' then
+            goto _continue
+        end
+
+        printc(
+            "%{yellow}fname " .. fname .. "%{reset} " .. 
+            "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}"
+        )
+
+        local chunks_tmp = split2chunks(
+            fname, chunk_lines_num, chunk_lines_overlap
+        )
+
+        for _, chunk in ipairs(chunks_tmp) do
+            chunk.file = fname
+            chunk.id = fname .. ":" .. chunk.line_start
+        end
+
+        for _, ch in ipairs(chunks_tmp) do
+            table.insert(chunks, ch)
+        end
+
+        ::_continue::
+
+    end
+    --]]
+
+    process_chunks_embedding(chunks)
+
+    -- Весь файл записывается в поток сжатия
+    local dump = serpent.dump(chunks)
+    --print('dump', dump)
+    local compressed, eof_1, bytes_in, bytes_out = deflate(dump, nil)
+    print("eof", eof_1, "bytes_in", bytes_in, "bytes_out", bytes_out)
+    f:write(compressed)
+
+    -- Завершаем сессию потока
+    local final, eof_2, _, _ = deflate("", "finish")
+    print("eof", eof_2)
+    f:write(final)
+
+end
+
 function actions.load_index(_: Args)
     -- XXX: Сделать загрузку быстрой. Как?
     -- Бинарный формат файла?
@@ -5977,14 +5973,6 @@ end
 function actions.files_koh(_args: Args)
     cmd_do("lms server start")
 
-    -- Создаём поток сжатия
-    -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
-    local deflate = zlib.deflate(3, 15)
-    --local dest_zlib_fname = "chunks_koh.zlib"
-    local dest_zlib_fname = "chunks_koh_tmp.zlib"
-    local f = io.open(dest_zlib_fname, "w")
-    assert(f)
-
     ut.push_current_dir()
     chdir("src")
     cmd_do("ls -l")
@@ -6004,68 +5992,27 @@ function actions.files_koh(_args: Args)
 
     --print(tabular(files))
 
-    local chunks: {Chunk} = {}
-    for _, fname in ipairs(files) do
-        local attr = lfs.attributes(fname)
-
-        if not attr then
-            goto _continue
-        end
-
-        if attr.mode ~= 'file' then
-            goto _continue
-        end
-
-        printc(
-            "%{yellow}fname " .. fname .. "%{reset} " .. 
-            "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}"
-        )
-
-        local chunks_tmp = split2chunks(
-            fname, chunk_lines_num, chunk_lines_overlap
-        )
-
-        for _, chunk in ipairs(chunks_tmp) do
-            chunk.file = fname
-            chunk.id = fname .. ":" .. chunk.line_start
-        end
-
-        for _, ch in ipairs(chunks_tmp) do
-            table.insert(chunks, ch)
-        end
-
-        --process_file_embedding(fname, deflate, f)
-
-        ::_continue::
-
-        --break
-    end
-    --]]
-
-    process_chunks_embedding(chunks)
-
-    -- Весь файл записывается в поток сжатия
-    local dump = serpent.dump(chunks)
-    --print('dump', dump)
-    local compressed, eof_1, bytes_in, bytes_out = deflate(dump, nil)
-    print("eof", eof_1, "bytes_in", bytes_in, "bytes_out", bytes_out)
-    f:write(compressed)
-
-    -- Завершаем сессию потока
-    local final, eof_2, _, _ = deflate("", "finish")
-    print("eof", eof_2)
-    f:write(final)
+    index_create({
+        files = files,
+        zlib_level = 3,
+        zlib_window = 15,
+        index_fname = "chunks_koh_tmp.zlib"
+    })
 
 end
-
---local signal = require("posix.signal")
 
 local record Searcher
     query: function(q: string): {string}
 end
 
-local function create_searcher(): Searcher
-    local chunks_str = load_chunks2string("chunks_koh.zlib")
+local function index_open(index_fname: string): Searcher
+    local attr_index = lfs.attributes(index_fname)
+    if not attr_index then
+        print(format("index_open: could not open file '%s', aborting"))
+        os.exit(1)
+    end
+
+    local chunks_str = load_chunks2string(index_fname)
     local fn, errmsg = load(chunks_str)
     if not fn then
         print('errmsg', errmsg)
@@ -6124,11 +6071,22 @@ local function create_searcher(): Searcher
     }
 end
 
+--content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
+local system_prompt = 
+    "Ты ассистент в разработке игрового фреймворка и игр." .. 
+    "Если недостаточно данных в исходном коде, то молча укажи маркер " .. 
+    "::QUERY:: в конце ответа."
+--content = "Если недостаточно данных в исходном коде, то укажи в формате имя_файла:строка .. "
+
 function actions.ai(_args: Args)
     print("actions.ai")
 
     if not lms.is_up() then
-        cmd_do("nohup lmstudio &")
+
+        -- создаёт новую сессию и отцепляет stdio
+        local cmd = "setsid sh -c " ..
+                    "'exec lmstudio </dev/null >/dev/null 2>&1' &"
+        os.execute(cmd)
 
         local i = 0
         while not lms.is_up() do
@@ -6141,7 +6099,7 @@ function actions.ai(_args: Args)
         end
     end
 
-    --[[
+    --[[ {{{
     -- XXX: С чем лучше сравнивать llm_model в is_loaded()?
     if not lms.is_loaded(llm_model) then
         lms.load(llm_model)
@@ -6160,21 +6118,30 @@ function actions.ai(_args: Args)
             end
         end
     end
-    --]]
+    --]] -- }}}
 
-    --[[
-    local function handle_sigint(_: any)
-        -- TODO: Если в цикле ответа, то прервать ответ, оставить чат
-        -- Если в цикле общего чата, то выйти из системы
-        print("\nПолучен сигнал SIGINT (Ctrl+C). Завершаем...")
-        running = false
+    local enum LoopState
+        "main"
+        "answer"
+        "quit"
     end
 
-    -- Назначаем обработчик сигнала
-    -- XXX: Сделать обвязку типов для posix
-    signal.signal(signal.SIGINT, handle_sigint)
-    --]]
+    local running = true
+    local loop_state: LoopState = 'main'
+    local return_to_main = false
 
+    local function handle_sigint(_: any)
+        if loop_state == 'answer' then
+            print("handle_sigint: return to main loop state")
+            return_to_main = true
+        else
+            print("return to os")
+            os.exit(1)
+        end
+    end
+
+    local signal = require("posix.signal")
+    signal.signal(signal.SIGINT, handle_sigint)
 
     -- TODO: markdown анализатор
 
@@ -6189,22 +6156,41 @@ function actions.ai(_args: Args)
     local chat: assist.LLMPayload = {
         model = llm_model,
         stream = true,
-        messages = {
-            { 
-                role = "system", 
-                --content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
-                content = "Ты ассистент в разработке игрового фреймворка и игр." .. 
-                          "Если недостаточно данных в исходном коде, то укажи маркер ::QUERY:: в конце ответа."
-                --content = "Если недостаточно данных в исходном коде, то укажи в формате имя_файла:строка .. "
-            },
-        },
+        messages = { { role = "system", content = system_prompt, }, },
     }
 
-    local searcher = create_searcher()
-    while true do
+    -- Команды начинаются с префикса ::
+    local commands = {
+        quit = function()
+            printc("%{green}quit%{reset}")
+            running = false
+        end,
+        exit = function()
+            printc("%{green}exit%{reset}")
+            running = false
+        end
+    }
+
+    local function parse_commands(s: string)
+        local cmd = string.match(s, "^::%S+")
+        if not cmd then
+            return
+        end
+        print('parse_commands: cmd', cmd)
+        for k, v in pairs(commands as {string:function})  do
+            if cmd == k then
+                v()
+            end
+        end
+    end
+
+    local searcher = index_open("chunks_koh.zlib")
+    while running do
         inp = readline(ansicolors(welcome_str))
 
-        -- XXX: Сделать контекстный поиск по запросу
+        parse_commands(inp)
+
+        -- XXX: Сделать контекстный поиск отключаемым
         local texts = table.concat(searcher.query(inp), "\n")
 
         local f_tmp = io.open("contex.txt", "w")
@@ -6223,8 +6209,15 @@ function actions.ai(_args: Args)
             --content = inp,
         })
 
-        local responce = assist.send2llm(chat, function(responce_chunk)
+        return_to_main = false
+        local send2llm = assist.send2llm
+        local responce = send2llm(chat, function(responce_chunk): boolean
             io.write(responce_chunk as string)
+            loop_state = 'answer'
+            if return_to_main then
+                return true
+            end
+            return false
         end)
 
         -- XXX: Не правильно печатается последнее сообщение в чате, выпадает
