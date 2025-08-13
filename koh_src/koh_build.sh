@@ -74,3 +74,13 @@ g++ ./micro_hnswlib.cpp \
     -o libmicro_hnswlib.so \
     -lm \
     -llua \
+
+
+
+g++ ./koh.cpp \
+    -g3 -Wall -fPIC \
+    -I. -I./hnswlib \
+    -shared \
+    -o libkoh.so \
+    -lm \
+    -llua \

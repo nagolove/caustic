@@ -1,32 +1,33 @@
 // vim: fdm=marker 
 
-/*
- Сперва сделать выполнение последовательным.
- Переделать так - сперва формируется массив с задачами
- Потом запускаются первые N задач.
- В задачах не будет цикла ожидания.
- */
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+}
 
-
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
+#define XXH_STATIC_LINKING_ONLY /* access advanced declarations */
+#define XXH_IMPLEMENTATION 
 
 #include "hnswlib/hnswlib.h"  // Подключаем библиотеку hnswlib (поиск ближайших соседей)
-#include <random>                  // Для генерации случайных чисел
-#include <queue>                   // Для приоритетной очереди (нужна для результата поиска)
-#include <iostream>                // Для вывода информации в консоль
-
-#include "linenoise.hpp"
+#include <atomic>
+#include <cmath>
+#include <cstring>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
-#include <threads.h>
-#include <atomic>
-#include <unistd.h>
 #include <string.h>
+#include <string>
+#include <threads.h>
+#include <unistd.h>
+#include <xxhash.h>  // Убедись, что путь правильный
+#include "linenoise.hpp"
 
 #define MAX_TASKS   256
 #define MAX_ARGS    128
+
+constexpr int hnsw_dim = 4096;
+#define HNSW_HANDLE "hnswlinb_handle"
+using hnsw_float = float;
 
 typedef struct Task {
     const char* cmd;
@@ -44,6 +45,12 @@ static std::atomic<int> done_count = 0;
 // Всего задач
 static int total_tasks = 0;
 
+/*
+ Сперва сделать выполнение последовательным.
+ Переделать так - сперва формируется массив с задачами
+ Потом запускаются первые N задач.
+ В задачах не будет цикла ожидания.
+ */
 void run_tasks_serial(Task* tasks, int task_count);
 void run_tasks_parallel(Task* tasks, int task_count);
 
@@ -244,6 +251,7 @@ static int preload_mymod(lua_State *L) {
     return 1;
 }
 
+/*
 void register_embedded(lua_State *L) {
     lua_getglobal(L, "package");
     lua_getfield(L, -1, "preload");
@@ -251,77 +259,10 @@ void register_embedded(lua_State *L) {
     lua_setfield(L, -2, "mymod"); // require("mymod")
     lua_pop(L, 2);
 }
+*/
 
-int search() {
-    int dim = 16;               // Размерность векторов (например, 16 признаков на один элемент)
-    int max_elements = 10000;   // Максимальное число элементов в индексе
-    int M = 16;                 // Параметр связности графа. Чем больше — тем лучше точность, но больше памяти
-    int ef_construction = 200;  // Контролирует качество построения графа: больше = точнее, но медленнее
-
-    // Инициализируем пространство (метрику L2 — евклидово расстояние)
-    hnswlib::L2Space space(dim);
-
-    // Создаём индекс HNSW. Передаём пространство, макс. число элементов и параметры построения
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
-
-    // Генерация случайных данных размером [max_elements x dim]
-    std::mt19937 rng;
-    rng.seed(47);  // Фиксируем сид генератора, чтобы получить одинаковые данные каждый раз
-    std::uniform_real_distribution<> distrib_real;  // Распределение чисел от 0 до 1
-
-    // Выделяем память под данные
-    float* data = new float[dim * max_elements];
-    for (int i = 0; i < dim * max_elements; i++) {
-        data[i] = distrib_real(rng);  // Заполняем случайными числами
-    }
-
-    // Добавляем каждый вектор в индекс
-    for (int i = 0; i < max_elements; i++) {
-        // data + i * dim — указатель на i‑й вектор
-        // i — уникальный идентификатор вектора
-        alg_hnsw->addPoint(data + i * dim, i);
-    }
-
-    // Тестируем качество поиска: ищем каждый вектор сам по себе и проверяем, находит ли он себя
-    float correct = 0;
-    for (int i = 0; i < max_elements; i++) {
-        // Ищем ближайший элемент к текущему вектору
-        auto result = alg_hnsw->searchKnn(data + i * dim, 1);  // top‑1 результат
-        auto label = result.top().second;  // Получаем ID найденного вектора
-        if (label == i) correct++;  // Проверяем, верно ли найден сам себе
-    }
-
-    float recall = correct / max_elements;
-    std::cout << "Recall: " << recall << "\n";  // Показываем точность (recall)
-
-    // Сохраняем индекс в бинарный файл
-    std::string hnsw_path = "hnsw.bin";
-    alg_hnsw->saveIndex(hnsw_path);
-
-    // Удаляем текущий индекс (эмуляция перезапуска)
-    delete alg_hnsw;
-
-    // Загружаем индекс из файла
-    alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, hnsw_path);
-
-    // Повторно проверяем точность уже на загруженном индексе
-    correct = 0;
-    for (int i = 0; i < max_elements; i++) {
-        auto result = alg_hnsw->searchKnn(data + i * dim, 1);
-        auto label = result.top().second;
-        if (label == i) correct++;
-    }
-
-    recall = (float)correct / max_elements;
-    std::cout << "Recall of deserialized index: " << recall << "\n";
-
-    // Очищаем память
-    delete[] data;
-    delete alg_hnsw;
-
-    return 0;
-}
-
+/*
+// {{{
 int main(int argc, char **argv) {
     std::string line;
     auto quit = linenoise::Readline("hello> ", line);
@@ -357,4 +298,291 @@ int main(int argc, char **argv) {
 
     lua_close(l);
     return EXIT_SUCCESS;
+}
+// }}}
+*/
+
+static void normalize_vector(std::vector<hnsw_float>& vec) {
+    hnsw_float norm = 0.0f;
+    for (auto v : vec) norm += v * v;
+    norm = std::sqrt(norm);
+    if (norm > 0.0f) {
+        for (auto& v : vec) v /= norm;
+    }
+}
+
+// Wrapper class
+struct HNSWHandle {
+    hnswlib::InnerProductSpace space;
+    std::unique_ptr<hnswlib::HierarchicalNSW<hnsw_float>> index;
+
+    HNSWHandle(int max_elements, int M, int ef)
+        : space(hnsw_dim) {
+        index = std::make_unique<hnswlib::HierarchicalNSW<hnsw_float>>(&space, max_elements, M, ef);
+    }
+
+    HNSWHandle(const std::string& path)
+        : space(hnsw_dim) {
+        index = std::make_unique<hnswlib::HierarchicalNSW<hnsw_float>>(&space, path);
+    }
+
+    void add(const std::vector<hnsw_float>& vec, int32_t id) {
+        std::vector<hnsw_float> norm_vec = vec;
+        normalize_vector(norm_vec);
+        index->addPoint(norm_vec.data(), id);
+    }
+
+    std::vector<int32_t> search(const std::vector<hnsw_float>& vec, int k) {
+        std::vector<hnsw_float> norm_vec = vec;
+        normalize_vector(norm_vec);
+        auto res = index->searchKnn(norm_vec.data(), k);
+        std::vector<int32_t> ids;
+        while (!res.empty()) {
+            printf("search: dist %d\n", static_cast<int32_t>(res.top().first));
+            ids.push_back(static_cast<int32_t>(res.top().second));
+            res.pop();
+        }
+        std::reverse(ids.begin(), ids.end());
+        return ids;
+    }
+
+    bool save(const std::string& path) {
+        try {
+            index->saveIndex(path);
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+};
+
+// Lua utils
+static HNSWHandle* check_handle(lua_State* L, int idx = 1) {
+    return *(HNSWHandle**)luaL_checkudata(L, idx, HNSW_HANDLE);
+}
+
+static std::vector<hnsw_float> get_vector(lua_State* L, int index) {
+    luaL_checktype(L, index, LUA_TTABLE);
+    int len = lua_rawlen(L, index);
+    if (len != hnsw_dim) {
+        luaL_error(
+            L, "vector must be of length %d, not %d len",
+            hnsw_dim, len
+        );
+    }
+    std::vector<hnsw_float> vec(hnsw_dim);
+    for (int i = 1; i <= hnsw_dim; i++) {
+        lua_rawgeti(L, index, i);
+        vec[i - 1] = static_cast<hnsw_float>(luaL_checknumber(L, -1));
+        lua_pop(L, 1);
+    }
+    return vec;
+}
+
+// hnswlinb.new
+static int l_new(lua_State* L) {
+    int max_elements = luaL_checkinteger(L, 1);
+    int M = luaL_checkinteger(L, 2);
+    int ef = luaL_checkinteger(L, 3);
+
+    auto** udata = (HNSWHandle**)lua_newuserdata(L, sizeof(HNSWHandle*));
+    *udata = new HNSWHandle(max_elements, M, ef);
+
+    luaL_getmetatable(L, HNSW_HANDLE);
+    lua_setmetatable(L, -2);
+    return 1;
+}
+
+// hnswlinb.load
+static int l_load(lua_State* L) {
+    const char* fname = luaL_checkstring(L, 1);
+
+    auto** udata = (HNSWHandle**)lua_newuserdata(L, sizeof(HNSWHandle*));
+    *udata = new HNSWHandle(fname);
+
+    luaL_getmetatable(L, HNSW_HANDLE);
+    lua_setmetatable(L, -2);
+    return 1;
+}
+
+// handle:add(vec, id)
+static int l_add(lua_State* L) {
+    auto* h = check_handle(L);
+    auto vec = get_vector(L, 2);
+
+    size_t len;
+    const char* id_str = luaL_checklstring(L, 3, &len);
+    if (len != 4) {
+        return luaL_error(L, "id must be a string of length 4");
+    }
+
+    int32_t id;
+    std::memcpy(&id, id_str, 4);
+    h->add(vec, id);
+    return 0;
+}
+
+// handle:search(vec, k) -> {string}
+static int l_search(lua_State* L) {
+    auto* h = check_handle(L);
+    auto vec = get_vector(L, 2);
+    int k = luaL_checkinteger(L, 3);
+
+    auto results = h->search(vec, k);
+
+    lua_newtable(L);
+    for (size_t i = 0; i < results.size(); i++) {
+        std::string s(4, '\0');
+        std::memcpy(&s[0], &results[i], 4);
+        lua_pushlstring(L, s.data(), 4);
+        lua_rawseti(L, -2, i + 1);
+    }
+    return 1;
+}
+
+// handle:save(fname)
+static int l_save(lua_State* L) {
+    auto* h = check_handle(L);
+    const char* fname = luaL_checkstring(L, 2);
+    bool ok = h->save(fname);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
+// __gc
+static int l_gc(lua_State* L) {
+    auto* h = check_handle(L);
+    delete h;
+    return 0;
+}
+
+// __tostring
+static int l_tostring(lua_State* L) {
+    auto* h = check_handle(L);
+    std::stringstream ss;
+    ss << "HNSWHandle<dim=" << hnsw_dim << ">";
+    lua_pushstring(L, ss.str().c_str());
+    return 1;
+}
+
+// handle:search_str(vec, k) -> {string(4)}
+static int l_search_str(lua_State* L) {
+    // та же реализация, что и l_search
+    auto* h = check_handle(L);
+    auto vec = get_vector(L, 2);
+    int k = luaL_checkinteger(L, 3);
+
+    auto results = h->search(vec, k);
+
+    lua_newtable(L);
+    for (size_t i = 0; i < results.size(); i++) {
+        std::string s(4, '\0');
+        std::memcpy(&s[0], &results[i], 4);
+        lua_pushlstring(L, s.data(), 4);
+        lua_rawseti(L, -2, i + 1);
+    }
+    return 1;
+}
+
+
+// handle methods
+static const luaL_Reg handle_methods[] = {
+    {"add", l_add},
+    {"search", l_search},
+    {"search_str", l_search_str},
+    {"save", l_save},
+    {"__gc", l_gc},
+    {"__tostring", l_tostring},
+    {NULL, NULL}
+};
+
+// module functions
+static const luaL_Reg module_funcs[] = {
+    {"new", l_new},
+    {"load", l_load},
+    {NULL, NULL}
+};
+
+extern "C" int luaopen_hnswlib(lua_State* L) {
+    luaL_newmetatable(L, HNSW_HANDLE);
+
+    lua_pushcfunction(L, l_gc);
+    lua_setfield(L, -2, "__gc");
+
+    lua_pushcfunction(L, l_tostring);
+    lua_setfield(L, -2, "__tostring");
+
+    lua_newtable(L);
+    luaL_setfuncs(L, handle_methods, 0);
+    lua_setfield(L, -2, "__index");
+
+    lua_pop(L, 1); // metatable
+
+    lua_newtable(L);
+    luaL_setfuncs(L, module_funcs, 0);
+    return 1;
+}
+
+// Lua: xxhash64(str) -> raw 8-byte string
+static int l_xxhash64_raw(lua_State* L) {
+    size_t len;
+    const char* data = luaL_checklstring(L, 1, &len);
+    uint64_t hash = XXH64(data, len, 0);  // seed = 0
+    // push 8 байт как строку
+    lua_pushlstring(L, (const char*)&hash, sizeof(hash));
+    return 1;
+}
+
+// Lua: xxhash32(str) -> raw 4-byte string
+static int l_xxhash32_raw(lua_State* L) {
+    size_t len;
+    const char* data = luaL_checklstring(L, 1, &len);
+    uint32_t hash = XXH32(data, len, 0);  // seed = 0
+    // push 4 байт как строку
+    lua_pushlstring(L, (const char*)&hash, sizeof(hash));
+    return 1;
+}
+
+int luaopen_xxhash(lua_State* L) {
+    lua_newtable(L);
+    lua_pushcfunction(L, l_xxhash64_raw);
+    lua_setfield(L, -2, "hash64");
+
+    lua_pushcfunction(L, l_xxhash32_raw);
+    lua_setfield(L, -2, "hash32");
+    return 1;
+}
+
+static int l_linenoise_readline(lua_State* L) {
+    auto line = linenoise::Readline(">> ");
+    lua_pushstring(L, line.c_str());
+    return 1;
+}
+
+int luaopen_linenoise(lua_State* L) {
+    lua_newtable(L);
+    lua_pushcfunction(L, l_linenoise_readline);
+    lua_setfield(L, -2, "readline");
+    return 1;
+}
+
+extern "C" int luaopen_koh(lua_State *L){
+    printf("luaopen_koh:\n");
+
+    lua_getglobal(L,"package");
+    lua_getfield(L,-1,"preload");
+
+    lua_pushcfunction(L, luaopen_xxhash);
+    lua_setfield(L,-2, "xxhash");
+
+    lua_pushcfunction(L, luaopen_hnswlib);
+    lua_setfield(L,-2, "hnswlib");
+
+    lua_pushcfunction(L, luaopen_linenoise);
+    lua_setfield(L,-2, "linenoise");
+
+
+    lua_pop(L,2);
+    lua_newtable(L);                    // вернуть пустую таблицу — модуль-заглушка
+    return 1;
 }
