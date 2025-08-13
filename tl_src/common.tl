@@ -4,6 +4,13 @@ global record Task
     args: {string}
 end
 
+global record ParserSetup
+    summary: string
+    options: {string}
+    flags: {{string}}
+    arguments: {{string|integer}}
+end
+
 --[[
 Пример структуры дерева проекта
 -- {{{

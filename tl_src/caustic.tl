@@ -58,7 +58,9 @@ package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
                -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
                path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
+
 package.cpath = 
+        --path_caustic .. "/koh_src/libkoh.so;" ..
         path_caustic .. "/koh_src/lib?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
@@ -66,6 +68,9 @@ package.cpath =
 -- }}}
 
 --print('package.cpath', package.cpath)
+
+-- INFO: Загружает xxhash, hnswlib, linenoise
+require 'koh'
 
 -- {{{  global variables for module
 assert(path_caustic)
@@ -76,6 +81,8 @@ assert(path_rel_win_third_party)
 
 -- requires and aliases {{{
 require "common"
+local linenoise  = require 'linenoise'
+local json       = require "dkjson"
 local gsub       = string.gsub
 local insert     = table.insert
 local tabular    = require "tabular".show
@@ -96,6 +103,12 @@ local readline   = rl.readline
 local format     = string.format
 local match      = string.match
 local ceil       = math.ceil
+local zlib       = require 'zlib'
+local hash32     = require 'xxhash'.hash32
+local hash64     = require 'xxhash'.hash64
+local serpent    = require 'serpent'
+local assist     = require "assist"
+local embedding  = assist.embedding
 --- }}}
 
 -- XXX: Зачем этот код? Что он делает?
@@ -103,7 +116,22 @@ if string.match(lfs.currentdir(), "tl_dst") then
     chdir("..")
 end
 
+--local llm_model = "google/gemma-3-12b"
+--local llm_model = "mistral-7b-instruct-v0.1"
+-- XXX: Сделать выбор и показ текущей модели в чате
+local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
+
+local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+
 -- globals {{{
+
+--content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
+local system_prompt = 
+    "Ты ассистент в разработке игрового фреймворка и игр." .. 
+    "Если недостаточно данных в исходном коде, то молча укажи маркер " .. 
+    "::QUERY:: в конце ответа."
+--content = "Если недостаточно данных в исходном коде, то укажи в формате имя_файла:строка .. "
+
 local site_repo = "nagolove.github.io"
 local cache_name    = "cache.lua"
 local verbose       = false
@@ -2332,6 +2360,7 @@ local record Actions
     ai: function(Args)
     build: function(Args)
     compile_flags: function(Args)
+    compile_commands: function(Args)
     ctags: function(Args)
     dependencies: function(Args)
     deps: function(Args)
@@ -2369,6 +2398,7 @@ local enum ActionsEnum
     "ai"
     "build"
     "compile_flags"
+    "compile_commands"
     "deps"
     "dist"
     "files_koh"
@@ -2391,13 +2421,6 @@ local enum ActionsEnum
     "verbose"
 
     -- }}}
-end
-
-local record ParserSetup
-    summary: string
-    options: {string}
-    flags: {{string}}
-    arguments: {{string|integer}}
 end
 
 local parser_setup: {string:ParserSetup} = {
@@ -2474,6 +2497,12 @@ local parser_setup: {string:ParserSetup} = {
         summary = "print compile_flags.txt to stdout",
         options = { "-t --target" },
     },
+
+    compile_commands = {
+        summary = "print compile_commands.json to stdout",
+        options = { "-t --target" },
+    },
+
     deps = {
         summary = "list of dependencies",
         flags = { 
@@ -2539,7 +2568,7 @@ local parser_setup: {string:ParserSetup} = {
     projects_status = {
         summary = [[
 call lazygit for projects.lua entries
-    with -g option just call 'git status' for each entry
+with -g option just call 'git status' for each entry
 ]],
         flags = {
             { "-g --git", "run `git status` instead of lazygit" },
@@ -4930,7 +4959,11 @@ end
 
 local type MakeDriver = function(queue: {Task})
 
--- Идея - файлы описания зависимостей могут лежать вне каустики.
+-- XXX: Идея - файлы описания зависимостей могут лежать вне каустики.
+-- Что за файлы?
+
+-- TODO: Возвращать функцией {Task}, работу по запуску не проводить
+
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
 local function sub_make(
@@ -5303,6 +5336,120 @@ local function sub_make(
     ut.pop_dir(push_num)
 end
 
+local function task_get_source(task: Task): string
+    for i = 1, #task.args do
+        if task.args[i] == "-c" then
+            return task.args[i + 1]
+        end
+    end
+    return nil
+end
+
+local function task_get_output(task: Task): string
+    for i = 1, #task.args do
+        if task.args[i] == "-o" then
+            return task.args[i + 1]
+        end
+    end
+    return nil
+end
+
+-- Возвращает копию таблицы задания, но без -lбиблиотека и без групп 
+-- -Wl,--start-group
+local function task_remove_libs(task: Task): Task
+    local copy = ut.deepcopy(task)
+    local args = copy.args
+    local i = 1
+    local in_group = false
+
+    while i <= #args do
+        local a = args[i]
+
+        -- начало/конец группы линкера
+        if a == "-Wl,--start-group" or string.match(a, "^%-Wl,--start%-group") then
+            in_group = true
+            table.remove(args, i)            -- удалить маркер
+        elseif a == "-Wl,--end-group" or string.match(a, "^%-Wl,--end%-group") then
+            in_group = false
+            table.remove(args, i)            -- удалить маркер
+        elseif in_group then
+            -- внутри группы удаляем всё: -l..., архивы, объекты и т.д.
+            table.remove(args, i)
+        elseif string.match(a, "^%-l%S+") then
+            -- обычные -lflags вне группы
+            table.remove(args, i)
+        elseif string.match(a, "^%-L%S+") then
+            -- обычные -Ldirs вне группы
+            table.remove(args, i)
+        -- опционально: выпиливать и явные архивы/шары вне группы
+        -- elseif string.match(a, "%.a$") or string.match(a, "%.so[%d%.-]*$") then
+        --     table.remove(args, i)
+        else
+            i = i + 1
+        end
+    end
+
+    return copy
+end
+
+function actions.compile_commands(_args: Args)
+    print(
+        "actions.compile_commands: currentdir", lfs.currentdir(),
+        "_args", inspect(_args)
+    )
+
+    cmd_do("cp compile_commands.json compile_commands.json.bak")
+
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+
+    local target = _args.target or _args.t
+    if not target then
+        print("actions.compile_commands: target set to default value 'linux'")
+        target = 'linux'
+    end
+    print('cfgs', inspect(cfgs))
+
+    local record JsonTask
+        directory: string
+        command: string
+        arguments: {string}
+        output: string
+        file: string
+    end
+
+    local tasks: {JsonTask} = {}
+
+    sub_make(_args, cfgs[1], target, function(q: {Task})
+        for _, task in ipairs(q) do
+            local task_no_libs = task_remove_libs(task)
+            local jt: JsonTask = {
+                directory = lfs.currentdir(),
+                file = task_get_source(task),
+                output = task_get_output(task),
+                --command = task_no_libs.cmd .. 
+                --          " " .. table.concat(task_no_libs.args, " "),
+                arguments = task_no_libs.args,
+            }
+            table.insert(jt.arguments, 1, task_no_libs.cmd)
+            table.insert(tasks, jt)
+        end
+    end)
+
+    --print(inspect(tasks))
+    --print(json.encode(tasks as {string:any}))
+
+    local t = tasks[1]
+    tasks = {}
+    tasks[1] = t
+
+    local js = json.encode(tasks as {string:any})
+    local f = io.open("compile_commands.json", "w")
+    if f then
+        f:write(js)
+    end
+
+end
+
 local function put_gdbinit()
     local gdbinit_exists = io.open(".gdbinit", "r")
     if gdbinit_exists then
@@ -5352,15 +5499,6 @@ function actions.make(_args: Args)
     for _, cfg in ipairs(cfgs) do
         sub_make(_args, cfg, target, run_parallel_uv, push_num)
     end
-end
-
-local function extract_source_file(task: Task): string
-    for i = 1, #task.args do
-        if task.args[i] == "-c" then
-            return task.args[i + 1]
-        end
-    end
-    return nil
 end
 
 local record Chunk
@@ -5544,12 +5682,6 @@ local function _fd_code_in_modules(): {string}
     return result
 end
 
-local assist = require "assist"
---local llm_model = "google/gemma-3-12b"
---local llm_model = "mistral-7b-instruct-v0.1"
--- XXX: Сделать выбор и показ текущей модели в чате
-local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
-
 local function format_size(bytes: integer): string
     if bytes < 1024 * 1024 then
         return string.format("%.2f KB", bytes / 1024)
@@ -5557,13 +5689,6 @@ local function format_size(bytes: integer): string
         return string.format("%.2f MB", bytes / (1024 * 1024))
     end
 end
-
-local zlib = require 'zlib'
-local xxhash = require 'xxhash'
-local hash32 = xxhash.hash32
-local serpent = require 'serpent'
-local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-local embedding = assist.embedding
 
 local function shannon_entropy(str: string): number
     local freq: {string: number} = {}
@@ -5585,8 +5710,6 @@ local function compression_ratio(data: string): number
     local compressed = def(data, "finish")
     return #compressed / #data
 end
-
-local json = require("dkjson")  -- либо cjson, если у тебя другой JSON-модуль
 
 local record LMSInstanse
     is_loaded: function(modelname: string): boolean
@@ -5732,8 +5855,8 @@ function actions.xxhash(_: Args)
     local str = "Hello, mister Den!"
     print('str', str)
 
-    print("xxhash32", xxhash.hash32(str))
-    print("xxhash64", xxhash.hash64(str))
+    print("xxhash32", hash32(str))
+    print("xxhash64", hash64(str))
 end
 
 local function load_chunks2string(fname: string): string
@@ -5762,7 +5885,7 @@ local function load_chunks2string(fname: string): string
     return table.concat(decompressed)
 end
 
-local micro_hnswlib = require 'micro_hnswlib'
+local hnswlib = require 'hnswlib'
 
 local function bin_to_hex(str: string): string
     return (str:gsub('.', function(byte: string): string
@@ -5801,7 +5924,7 @@ function actions.chunks_open(_: Args)
 
     local M = 1500
     local ef = 200
-    local searcher = micro_hnswlib.new(100000, M, ef)
+    local searcher = hnswlib.new(100000, M, ef)
 
     local hash2chunk: {string: Chunk} = {}
 
@@ -5942,7 +6065,7 @@ function actions.load_index(_: Args)
     end
 
 
-    local searcher = micro_hnswlib.load("chunks.index")
+    local searcher = hnswlib.load("chunks.index")
     --searcher:save("chunks.index.copy")
 
     local inp = readline(ansicolors("%{green}query: %{reset}"))
@@ -6028,7 +6151,7 @@ local function index_open(index_fname: string): Searcher
         hash2chunk[ch.hash] = ch
     end
 
-    local searcher = micro_hnswlib.load("chunks.index")
+    local searcher = hnswlib.load("chunks.index")
     --searcher:save("chunks.index.copy")
 
     return {
@@ -6070,13 +6193,6 @@ local function index_open(index_fname: string): Searcher
         end,
     }
 end
-
---content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
-local system_prompt = 
-    "Ты ассистент в разработке игрового фреймворка и игр." .. 
-    "Если недостаточно данных в исходном коде, то молча укажи маркер " .. 
-    "::QUERY:: в конце ответа."
---content = "Если недостаточно данных в исходном коде, то укажи в формате имя_файла:строка .. "
 
 function actions.ai(_args: Args)
     print("actions.ai")
@@ -6186,7 +6302,8 @@ function actions.ai(_args: Args)
 
     local searcher = index_open("chunks_koh.zlib")
     while running do
-        inp = readline(ansicolors(welcome_str))
+        --inp = readline(ansicolors(welcome_str))
+        inp = linenoise.readline()
 
         parse_commands(inp)
 
@@ -6252,7 +6369,7 @@ function actions.ctags(_args: Args)
 
     local sources = {}
     for _, task in ipairs(tasks) do
-        local src = extract_source_file(task)
+        local src = task_get_source(task)
         if src then
             table.insert(sources, src)
         else
@@ -6280,60 +6397,12 @@ function actions.ctags(_args: Args)
     cmd_do(cmd)
 end
 
-local function do_parser_setup(
-    parser: argparse.Parser, setup: {string:ParserSetup}
-)
-    local prnt = function(...:any) 
-        local x = table.unpack({...})
-        x = nil
-    end
-
-    prnt("do_parser_setup:")
-    for cmd_name, setup_tbl in pairs(setup) do
-
-        prnt("cmd_name", cmd_name)
-        prnt("setup_tbl", inspect(setup_tbl))
-
-        local p = parser:command(cmd_name)
-        if setup_tbl.summary then
-            prnt("add summary", setup_tbl.summary)
-            p:summary(setup_tbl.summary)
-        end
-        if setup_tbl.options then
-            for _, option in ipairs(setup_tbl.options) do
-                prnt("add option", option)
-                p:option(option)
-            end
-        end
-        if setup_tbl.flags then
-            for _, flag_tbl in ipairs(setup_tbl.flags) do
-                assert(type(flag_tbl[1]) == "string")
-                assert(type(flag_tbl[2]) == "string")
-                prnt("add flag", flag_tbl[1], flag_tbl[2])
-                p:flag(flag_tbl[1], flag_tbl[2])
-            end
-        end
-        if setup_tbl.arguments then
-            for _, argument_tbl in ipairs(setup_tbl.arguments) do
-                assert(type(argument_tbl[1]) == "string")
-                assert(type(argument_tbl[2]) == "string" or
-                       type(argument_tbl[2]) == "number")
-                prnt(
-                    "add argument",
-                    argument_tbl[1], argument_tbl[2]
-                )
-                p:argument(argument_tbl[1] as string):args(argument_tbl[2])
-            end
-        end
-    end
-end
-
 local function main()
     global KOH_VERBOSE: boolean = nil
 
     local parser = argparse()
 
-    do_parser_setup(parser, parser_setup)
+    ut.do_parser_setup(parser, parser_setup)
 
     parser:flag("-v --verbose", "use verbose output")
     parser:flag("-V --KOH_VERBOSE", "use debug verbose")
@@ -6376,4 +6445,3 @@ end
 if arg then
     main()
 end
-

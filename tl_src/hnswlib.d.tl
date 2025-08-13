@@ -1,5 +1,5 @@
 
-local record micro_hnswlinb
+local record hnswlinb
 
     -- это будет userdata с установленной метатаблицей
     record Handle
@@ -14,4 +14,4 @@ local record micro_hnswlinb
     load: function(fname: string): Handle
 end
 
-return micro_hnswlinb
+return hnswlinb
