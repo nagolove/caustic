@@ -1,5 +1,6 @@
 local lfs = require('lfs')
 
+require("common")
 local format = string.format
 local dir_stack = {}
 
@@ -306,6 +307,58 @@ local function assert_file(fname)
    end
 end
 
+local argparse = require('argparse')
+local inspect = require('inspect')
+
+local function do_parser_setup(
+   parser, setup)
+
+   local prnt = function(...)
+      local x = table.unpack({ ... })
+      x = nil
+   end
+
+   prnt("do_parser_setup:")
+   for cmd_name, setup_tbl in pairs(setup) do
+
+      prnt("cmd_name", cmd_name)
+      prnt("setup_tbl", inspect(setup_tbl))
+
+      local p = parser:command(cmd_name)
+      if setup_tbl.summary then
+         prnt("add summary", setup_tbl.summary)
+         p:summary(setup_tbl.summary)
+      end
+      if setup_tbl.options then
+         for _, option in ipairs(setup_tbl.options) do
+            prnt("add option", option)
+            p:option(option)
+         end
+      end
+      if setup_tbl.flags then
+         for _, flag_tbl in ipairs(setup_tbl.flags) do
+            assert(type(flag_tbl[1]) == "string")
+            assert(type(flag_tbl[2]) == "string")
+            prnt("add flag", flag_tbl[1], flag_tbl[2])
+            p:flag(flag_tbl[1], flag_tbl[2])
+         end
+      end
+      if setup_tbl.arguments then
+         for _, argument_tbl in ipairs(setup_tbl.arguments) do
+            assert(type(argument_tbl[1]) == "string")
+            assert(type(argument_tbl[2]) == "string" or
+            type(argument_tbl[2]) == "number")
+            prnt(
+            "add argument",
+            argument_tbl[1], argument_tbl[2])
+
+            p:argument(argument_tbl[1]):args(argument_tbl[2])
+         end
+      end
+   end
+end
+
+
 return {
    ripairs = ripairs,
    filter = filter,
@@ -321,4 +374,5 @@ return {
    template_dirs = template_dirs,
    deepcopy = deepcopy,
    assert_file = assert_file,
+   do_parser_setup = do_parser_setup,
 }
