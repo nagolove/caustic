@@ -126,10 +126,16 @@ local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 
 
 
+
+
+
 local system_prompt =
 "Ты ассистент в разработке игрового фреймворка и игр." ..
 "Если недостаточно данных в исходном коде, то молча укажи маркер " ..
 "::QUERY:: в конце ответа."
+
+
+
 
 
 local site_repo = "nagolove.github.io"
@@ -1962,6 +1968,10 @@ modules = {
    },
 
 
+
+
+
+
    {
       dir = "libtess2",
       after_init = libtess2_after_init,
@@ -1969,8 +1979,8 @@ modules = {
       build_w = build_libtess2_common,
       copy_for_wasm = true,
       includes = { "libtess2/Include" },
-      libdirs = { "utf8proc/Build" },
-      links = { "libtess2/Build" },
+      libdirs = { "libtess2/Build" },
+      links = { "tess2" },
       links_internal = { "tess2" },
       description = "разбиение контуров на треугольники",
       name = 'libtess2',
@@ -6131,7 +6141,9 @@ end
 local function index_open(index_fname)
    local attr_index = lfs.attributes(index_fname)
    if not attr_index then
-      print(format("index_open: could not open file '%s', aborting"))
+      print(format(
+      "index_open: could not open file '%s', aborting", index_fname))
+
       os.exit(1)
    end
 
@@ -6248,10 +6260,12 @@ function actions.ai(_args)
 
    local function handle_sigint(_)
       if loop_state == 'answer' then
-         print("handle_sigint: return to main loop state")
+         printc(
+         "\n%{red}handle_sigint: return to main loop state%{reset}\n")
+
          return_to_main = true
       else
-         print("return to os")
+         print("\n%{red}return to os%{reset}\n")
          os.exit(1)
       end
    end
@@ -6264,51 +6278,87 @@ function actions.ai(_args)
    local models = assist.models_list()
    print(inspect(models))
 
-   local welcome_str = "%{green}send message%{green}: "
+   local welcome_str_escape = ansicolors("%{green}send message%{green}: ")
    local inp
 
 
 
+   local base_message = { role = "system", content = system_prompt }
    local chat = {
       model = llm_model,
       stream = true,
-      messages = { { role = "system", content = system_prompt } },
+      messages = {
+         base_message,
+
+      },
    }
 
 
    local commands = {
       quit = function()
+
          printc("%{green}quit%{reset}")
          running = false
       end,
       exit = function()
+
          printc("%{green}exit%{reset}")
          running = false
       end,
+      ctx_erase = function()
+         chat.messages = {
+            base_message,
+         }
+      end,
+      ctx_view = function()
+         for _, msg in ipairs(chat.messages) do
+            print(inspect(msg))
+         end
+      end,
+      help = function()
+
+         local h = {
+            'quit, exit - выйти на хрен',
+            'help       - смотреть этот текст',
+            'erase_ctx  - очистить историю, сбросить контекст',
+         }
+
+         for _, line in ipairs(h) do
+            print(line)
+         end
+      end,
    }
 
-   local function parse_commands(s)
-      local cmd = string.match(s, "^::%S+")
+   local function eval_commands(s)
+      local cmd = string.match(s, "^::(%S+)")
       if not cmd then
          return
       end
-      print('parse_commands: cmd', cmd)
+
+
       for k, v in pairs(commands) do
+
          if cmd == k then
             v()
+            return true
          end
       end
+      return false
    end
 
+   linenoise.set_multiline(true)
    local searcher = index_open("chunks_koh.zlib")
    while running do
+      inp = linenoise.readline(welcome_str_escape)
 
-      inp = linenoise.readline()
+      if eval_commands(inp) then
+         goto continue
+      end
 
-      parse_commands(inp)
 
 
       local texts = table.concat(searcher.query(inp), "\n")
+
 
       local f_tmp = io.open("contex.txt", "w")
       f_tmp:write(texts)
@@ -6346,6 +6396,8 @@ function actions.ai(_args)
          content = responce,
       })
 
+
+      ::continue::
    end
 
 end
