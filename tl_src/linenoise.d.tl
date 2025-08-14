@@ -1,5 +1,6 @@
 local record linenoise
-    readline: function(): string
+    readline: function(welcome?: string): string
+    set_multiline: function(flag: boolean)
 end
 
 return linenoise
