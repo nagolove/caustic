@@ -553,8 +553,22 @@ int luaopen_xxhash(lua_State* L) {
     return 1;
 }
 
+static int l_linenoise_set_multiline(lua_State* L) {
+    if (!lua_isboolean(L, 1)) {
+        luaL_error(L, "l_linenoise_set_multiline: expected boolean\n");
+        return 0;
+    }
+    bool flag = lua_toboolean(L, 1);
+    printf("l_linenoise_set_multiline: flag %s\n", flag ? "true" : "false");
+    linenoise::SetMultiLine(flag);
+    return 0;
+}
+
 static int l_linenoise_readline(lua_State* L) {
-    auto line = linenoise::Readline(">> ");
+    std::string welcome = ">> ";
+    if (lua_isstring(L, 1)) 
+        welcome = lua_tostring(L, 1);
+    auto line = linenoise::Readline(welcome);
     lua_pushstring(L, line.c_str());
     return 1;
 }
@@ -563,6 +577,9 @@ int luaopen_linenoise(lua_State* L) {
     lua_newtable(L);
     lua_pushcfunction(L, l_linenoise_readline);
     lua_setfield(L, -2, "readline");
+
+    lua_pushcfunction(L, l_linenoise_set_multiline);
+    lua_setfield(L, -2, "set_multiline");
     return 1;
 }
 
