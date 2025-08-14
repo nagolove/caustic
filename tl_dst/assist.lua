@@ -101,6 +101,7 @@ print(a:send("Какая инфомация тебе доступна?"))
 
 local cURL = require("cURL")
 local json = require("dkjson")  -- или другой модуль JSON
+local ansicolors = require 'ansicolors'
 
 local function printc(...)
     print(ansicolors(table.unpack(...)))
@@ -127,38 +128,45 @@ function send2llm(payload_table, on_get_data_chunk)
             --return #data
 
             for line in chunk:gmatch("([^\n]*)\n?") do
-                if line:match("^data:") then
-                    local content = line:match("^data:%s*(.*)")
-                    if content == "[DONE]" then
-                        return
-                    end
+                if not line:match("^data:") then
+                    goto continue
+                end
 
-                    local ok, data = pcall(json.decode, content)
-                    if ok and data and data.choices and data.choices[1] then
-                        local delta = data.choices[1].delta
-                        local content = delta and delta.content
-                        if content then
-                            --io.write(content)  -- печатай по мере получения
-                            if type(on_get_data_chunk) == 'function' then
-                                if on_get_data_chunk(content) == true then
-                                    -- XXX: Достаточно просто выйти из функции для окончания работы запроса?
-                                    printc(msg_quit)
-                                    return 0
-                                end
+                --if line:match("^data:") then
+                local content = line:match("^data:%s*(.*)")
+                if content == "[DONE]" then
+                    return
+                end
+
+                local ok, data = pcall(json.decode, content)
+                if ok and data and data.choices and data.choices[1] then
+                    local delta = data.choices[1].delta
+                    local content = delta and delta.content
+                    if content then
+                        --io.write(content)  -- печатай по мере получения
+                        if type(on_get_data_chunk) == 'function' then
+                            if on_get_data_chunk(content) == true then
+                                -- XXX: Достаточно просто выйти из функции для окончания работы запроса?
+                                printc(msg_quit)
+                                --return -1
+                                return 0
                             end
-                            table.insert(response, content)
-
                         end
+                        table.insert(response, content)
                     end
                 end
             end
+            --end
+            ::continue::
             return #chunk
 
 
         end
     }
 
-    easy:perform()
+    pcall(function()
+        easy:perform()
+    end)
     easy:close()
 
     return table.concat(response)
