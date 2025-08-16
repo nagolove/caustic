@@ -5932,8 +5932,9 @@ function actions.chunks_open(_)
 
 
 
+
    local M = 1500
-   local ef = 200
+   local ef = 50
    local searcher = hnswlib.new(100000, M, ef)
 
    local hash2chunk = {}
@@ -6206,6 +6207,62 @@ local function index_open(index_fname)
    }
 end
 
+
+
+
+
+local function markdown_instance()
+   local in_code = false
+   local fence_char = ""
+   local fence_len = 0
+
+   return {
+      feed = function(inp)
+
+         if not in_code then
+
+
+            local c, _ = string.match(inp, "^%s*([`~])%1%1(%S*)%s*$")
+            if c then
+               in_code = true
+               fence_char = c
+
+               local f = string.match(inp, "^%s*(" .. c .. "+)")
+               fence_len = #f
+            end
+         else
+
+
+            local c = string.match(inp, "^%s*([`~])%1%1+%s*$")
+            if c and c == fence_char then
+
+               local f = string.match(inp, "^%s*(" .. fence_char .. "+)")
+               if #f >= fence_len then
+                  in_code = false
+                  fence_char = nil
+                  fence_len = 0
+               end
+            end
+         end
+
+
+         local out = inp
+
+         print('\n feef: in_code', in_code, "\n")
+
+         if in_code then
+
+            out = "\27[7m" .. inp .. "\27[0m"
+         end
+
+         return out
+      end,
+   }
+end
+
+
+local mkd = {}
+
 function actions.ai(_args)
    print("actions.ai")
 
@@ -6312,7 +6369,14 @@ function actions.ai(_args)
       end,
       ctx_view = function()
          for _, msg in ipairs(chat.messages) do
-            print(inspect(msg))
+            local role = msg.role
+            if role == "user" then
+               io.write(ansicolors("%{yellow}"))
+            elseif role == "assistant" then
+               io.write(ansicolors("%{blue}"))
+            end
+            io.write(inspect(msg) .. "\n%{reset}")
+
          end
       end,
       help = function()
@@ -6320,7 +6384,8 @@ function actions.ai(_args)
          local h = {
             'quit, exit - выйти на хрен',
             'help       - смотреть этот текст',
-            'erase_ctx  - очистить историю, сбросить контекст',
+            'ctx_reset  - очистить историю, сбросить контекст',
+            'ctx_view   - посмотреть содержимое истории',
          }
 
          for _, line in ipairs(h) do
@@ -6348,6 +6413,8 @@ function actions.ai(_args)
 
    linenoise.set_multiline(true)
    local searcher = index_open("chunks_koh.zlib")
+   local markdown = markdown_instance()
+
    while running do
       inp = linenoise.readline(welcome_str_escape)
 
@@ -6357,8 +6424,8 @@ function actions.ai(_args)
 
 
 
-      local texts = table.concat(searcher.query(inp), "\n")
 
+      local texts = ""
 
       local f_tmp = io.open("contex.txt", "w")
       f_tmp:write(texts)
@@ -6378,14 +6445,19 @@ function actions.ai(_args)
 
       return_to_main = false
       local send2llm = assist.send2llm
-      local responce = send2llm(chat, function(responce_chunk)
-         io.write(responce_chunk)
+
+      local function on_chunk(responce_chunk)
+         table.insert(mkd, responce_chunk)
+         local formated = markdown.feed(responce_chunk)
+         io.write(formated)
          loop_state = 'answer'
          if return_to_main then
             return true
          end
          return false
-      end)
+      end
+
+      local responce = send2llm(chat, on_chunk)
 
 
 
@@ -6400,6 +6472,8 @@ function actions.ai(_args)
       ::continue::
    end
 
+   local w = io.open("mkd_chunks.lua", "w")
+   w:write(serpent.dump(mkd))
 end
 
 function actions.ctags(_args)
@@ -6443,10 +6517,47 @@ function actions.ctags(_args)
 
 
 
-   local cmd = "ctags --c-kinds=+fpvsumed " .. table.concat(sources, " ")
+   local cmd = "ctags -R " ..
+   "--output-format=json " ..
+   "--fields=+neK " ..
+   "--extras=+q 2>&1 " ..
+   table.concat(sources, " ")
 
 
-   cmd_do(cmd)
+
+
+
+
+
+
+
+   local pipe = io.popen(cmd, "r")
+   assert(pipe)
+
+
+   local content = {}
+   for line in pipe:lines() do
+      local j = json.decode(line)
+      print("j", inspect(j))
+      table.insert(content, j)
+   end
+
+
+
+
+
+
+   assert(content)
+
+
+
+
+
+
+   local f = io.open("tags.lua", "w")
+   f:write(serpent.dump(content))
+
+   printc("%{blue}ctags%{reset}")
 end
 
 local function main()
