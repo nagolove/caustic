@@ -1340,7 +1340,8 @@ end
 -- }}}
 
 
-local libtess2_premake5 = [[
+local libtess2_premake5 = -- {{{
+[[
 local action = _ACTION or ""
 
 workspace "libtess2"
@@ -1391,7 +1392,7 @@ project "example"
             "-framework CoreVideo"
         }
 
-]]
+]] -- }}}
 
 local function libtess2_after_init(_: Dependency)
     printc('%{green}libtess2_after_init:%{green}')
@@ -1990,6 +1991,10 @@ modules = {
 
 
 }
+
+local record Modules
+    t: function(): {Dependency}
+end
 
 -- {{{ functions
 
@@ -2603,14 +2608,6 @@ with -g option just call 'git status' for each entry
     },
 }
 -- }}}
-
-local record Node
-    value: any
-    childs: {Node}
-    parents: {Node}
-    permament: boolean
-    temporary: boolean
-end
 
 local actions: Actions = {}
 
