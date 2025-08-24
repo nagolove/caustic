@@ -51,17 +51,6 @@ test_remove_double_slashes("/some///path/hi/")
 test_remove_double_slashes("/x/y/z/")
 --]]
 
--- TODO: Значение полученное из переменной окружения нужно проверить - является
--- ли оно абсолютным путем к существуюшему каталогу?
-local path_caustic = os.getenv("CAUSTIC_PATH")
-if not path_caustic then
-    print("CAUSTIC_PATH is nil")
-    os.exit(1)
-else
-    path_caustic = remove_last_backslash(path_caustic)
-    --print("CAUSTIC_PATH", path_caustic)
-end
-
 local function shallow_copy<X>(a: X): X
     if type(a) == 'table' then
         local ret = {}
@@ -358,21 +347,168 @@ local function do_parser_setup(
     end
 end
 
+local function cmd_do_execute(_cmd: string|{string})
+-- NOTE: Не использовать io.popen() так могут быть проблемы с кодом возврата
+    if verbose then
+        os.execute("echo `pwd`")
+    end
+    if type(_cmd) == 'string' then
+        if verbose then
+            print('cmd_do:', _cmd)
+        end
+        if not os.execute(_cmd as string) then
+            if verbose then
+                print(format('cmd was failed "%s"', _cmd))
+            end
+            if errexit then
+                os.exit(1)
+            end
+        end
+    elseif (type(_cmd) == 'table') then
+        for _, v in ipairs(_cmd as {string}) do
+            if verbose then
+                print('cmd_do', v)
+            end
+            if not os.execute(v) then
+                if verbose then
+                    print(format('cmd was failed "%s"', _cmd))
+                end
+                if errexit then
+                    os.exit(1)
+                end
+            end
+        end
+    else
+        print('Wrong type in cmd_do', type(_cmd))
+        if errexit then
+            os.exit(1)
+        end
+    end
+end
+
+--------------------------------------------------------------
+local cmd_do: function(cmd: string|{string}) = cmd_do_execute
+local ansicolors = require 'ansicolors'
+
+-- TODO: Проверка наличия fd
+local function find_and_remove_cmake_cache()
+    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
+    cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
+end
+
+local function printc(text: string)
+    print(ansicolors(text))
+end
+
+local function get_deps_name_map(deps?: {Dependency}): {string: Dependency}
+    assert(deps)
+    local map = {}
+    -- XXX: Что будет если deps == nil
+    for _, dep in ipairs(deps) do
+        if map[dep.name] then
+            print("get_deps_name_map: name dublicated", dep.name)
+            os.exit(1)
+        end
+        map[dep.name] = dep
+    end
+    return map
+end
+
+-- Сделать функцию для поиска строки в файле?
+local function match_in_file(fname: string, pattern: string): boolean
+    local f = io.open(fname)
+    assert(f)
+    local i = 0
+    for l in f:lines() do
+        i = i + 1
+        if string.match(l, pattern) then
+            return true;
+        end
+    end
+    --print("match_in_file:", i)
+    return false
+end
+
+local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
+local pattern_end   = "{CAUSTIC_PASTE_END}"
+
+local function paste_from_one_to_other(
+    src_fname: string, dst_fname: string,
+    guard_coro?: thread 
+)
+    print(format(
+        "paste_from_one_to_other: src_fname '%s', dst_fname '%s'",
+        src_fname, dst_fname
+    ))
+    local file_src = io.open(src_fname, "r")
+    local file_dst = io.open(dst_fname, "a+")
+
+    assert(file_src)
+    assert(file_dst)
+
+    local in_block = false
+    if guard_coro and type(guard_coro) == 'thread' then
+        local _, msg = coroutine.resume(guard_coro) as (boolean, string)
+        file_dst:write(msg)
+    end
+
+    for line in file_src:lines() do
+        if string.match(line, pattern_begin) then
+            in_block = true
+        end
+
+        if in_block then
+            --printc("%{yellow}" .. line .. "%{reset}")
+            file_dst:write(line .. "\n")
+        end
+
+        if in_block and string.match(line, pattern_end) then
+            in_block = false
+        end
+    end
+
+    if guard_coro and type(guard_coro) == 'thread' then
+        local _, msg = coroutine.resume(guard_coro) as (boolean, string)
+        file_dst:write(msg)
+    end
+
+    file_dst:close()
+end
+
+-- Тело функции для создания корутины которая за два прерывания возвращает
+-- защитников включаемого файла
+local function header_guard()
+    local rnd_num = math.random(10000, 20000)
+
+    coroutine.yield(table.concat({
+        format("#ifndef GUARD_%s", rnd_num),
+        format("#define GUARD_%s\n", rnd_num),
+    }, "\n"))
+
+    coroutine.yield("#endif\n")
+end
 
 return {
-    ripairs                 = ripairs,
-    filter                  = filter,
-    git_is_repo_clean       = git_is_repo_clean,
-    cat_file                = cat_file,
-    caustic_path_substitute = caustic_path_substitute,
-    filter_sources          = filter_sources,
-    merge_tables            = merge_tables,
-    pop_dir                 = pop_dir,
-    push_current_dir        = push_current_dir,
-    remove_last_backslash   = remove_last_backslash,
-    shallow_copy            = shallow_copy,
-    template_dirs           = template_dirs,
-    deepcopy                = deepcopy,
-    assert_file             = assert_file,
-    do_parser_setup         = do_parser_setup,
+    header_guard                = header_guard,
+    match_in_file               = match_in_file,
+    get_deps_name_map           = get_deps_name_map,
+    find_and_remove_cmake_cache = find_and_remove_cmake_cache,
+    cmd_do                      = cmd_do,
+    printc                      = printc,
+    ripairs                     = ripairs,
+    filter                      = filter,
+    git_is_repo_clean           = git_is_repo_clean,
+    cat_file                    = cat_file,
+    caustic_path_substitute     = caustic_path_substitute,
+    filter_sources              = filter_sources,
+    merge_tables                = merge_tables,
+    pop_dir                     = pop_dir,
+    push_current_dir            = push_current_dir,
+    shallow_copy                = shallow_copy,
+    template_dirs               = template_dirs,
+    deepcopy                    = deepcopy,
+    assert_file                 = assert_file,
+    do_parser_setup             = do_parser_setup,
+    remove_last_backslash       = remove_last_backslash,
+    paste_from_one_to_other     = paste_from_one_to_other,
 }
