@@ -1,40 +1,13 @@
 
 
 
-
-
-local function remove_last_backslash(path)
-   if #path > 1 and string.sub(path, -1, -1) == "/" then
-      return string.sub(path, 1, -1)
-   end
-   return path
-end
-
 local getenv = os.getenv
 local home = getenv("HOME")
 assert(home)
 
-local path_caustic = getenv("CAUSTIC_PATH")
-if not path_caustic then
-   print("CAUSTIC_PATH is nil")
-   os.exit(1)
-else
-   path_caustic = remove_last_backslash(path_caustic)
-end
-
-
-
-local path_rel_third_party = remove_last_backslash(
-getenv("CAUSTIC_MODULE_LINUX") or "modules_linux")
-
-
-local path_rel_wasm_third_party = remove_last_backslash(
-getenv("CAUSTIC_MODULE_WASM") or "modules_wasm")
-
-
-local path_rel_win_third_party = remove_last_backslash(
-getenv("CAUSTIC_MODULE_WIN") or "modules_windows")
-
+local glob = require("global")
+local ut = require("utils")
+local remove_last_backslash = ut.remove_last_backslash
 
 
 
@@ -50,18 +23,20 @@ getenv("CAUSTIC_MODULE_WIN") or "modules_windows")
 
 
 local lua_ver = "5.4"
+local e = glob.env_instance()
+assert(e.path_caustic)
 
 
-package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
-package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
+package.path = package.path .. ";" .. e.path_caustic .. "/?.lua;"
+package.path = package.path .. ";" .. e.path_caustic .. "/tl_dst/?.lua;"
 package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" ..
 
-path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" .. package.path
+e.path_caustic .. "/" .. e.path_rel_third_party .. "/json.lua/?.lua;" .. package.path
 
 package.cpath =
 
-path_caustic .. "/koh_src/lib?.so;" ..
+e.path_caustic .. "/koh_src/lib?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
@@ -73,14 +48,13 @@ package.cpath
 require('koh')
 
 
-assert(path_caustic)
-assert(path_rel_third_party)
-assert(path_rel_wasm_third_party)
-assert(path_rel_win_third_party)
+assert(e.path_caustic)
+assert(e.path_rel_third_party)
+assert(e.path_rel_wasm_third_party)
+assert(e.path_rel_win_third_party)
 
 
 
-require("common")
 local linenoise = require('linenoise')
 local json = require("dkjson")
 local gsub = string.gsub
@@ -93,7 +67,8 @@ local chdir = lfs.chdir
 local ansicolors = require('ansicolors')
 local inspect = require('inspect')
 local argparse = require('argparse')
-local ut = require("utils")
+local printc = ut.printc
+local cmd_do = ut.cmd_do
 local Cache = require("cache")
 local uv = require("luv")
 
@@ -140,13 +115,6 @@ local system_prompt =
 
 local site_repo = "nagolove.github.io"
 local cache_name = "cache.lua"
-local verbose = false
-
-
-local errexit = false
-local errexit_uv = true
-local pattern_begin = "{CAUSTIC_PASTE_BEGIN}"
-local pattern_end = "{CAUSTIC_PASTE_END}"
 local cache
 
 
@@ -168,54 +136,7 @@ local flags_sanitazer = {
    "-fsanitize-address-use-after-scope",
 }
 
-local compiler = {
-   ['linux'] = 'gcc',
-   ['wasm'] = 'emcc',
-   ['win'] = 'x86_64-w64-mingw32-gcc',
-
-}
-
-local ar = {
-   ['linux'] = 'ar',
-   ['wasm'] = 'emar',
-   ['win'] = 'x86_64-w64-mingw32-ar',
-}
-
-local cmake_toolchain_win = path_caustic .. "/toolchain-mingw64.cmake"
-ut.assert_file(cmake_toolchain_win)
-
-local cmake_toolchain_win_opt =
-"-DCMAKE_TOOLCHAIN_FILE=" ..
-cmake_toolchain_win
-
-local cmake = {
-   ["linux"] = "cmake ",
-   ["wasm"] = "emcmake cmake ",
-
-   ['win'] = "cmake ",
-}
-
-local make = {
-   ["linux"] = "make ",
-   ["wasm"] = "emmake make ",
-   ['win'] = 'make CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ ' ..
-   'CFLAGS="-I/usr/x86_64-w64-mingw32/include" ' ..
-   'LDFLAGS="-L/usr/x86_64-w64-mingw32/lib" ' ..
-   '-D_WIN32 -DWIN32 ',
-}
-
-local path_rel_third_party_t = {
-   ['linux'] = path_rel_third_party,
-   ['wasm'] = path_rel_wasm_third_party,
-   ['win'] = path_rel_win_third_party,
-}
-
-local path_abs_third_party = {
-   ["linux"] = path_caustic .. "/" .. path_rel_third_party,
-   ['wasm'] = path_caustic .. "/" .. path_rel_wasm_third_party,
-   ['win'] = path_caustic .. "/" .. path_rel_win_third_party,
-}
-
+ut.assert_file(e.cmake_toolchain_win)
 local libcaustic_name = {
    ["linux"] = "caustic_linux",
    ["wasm"] = "caustic_wasm",
@@ -240,12 +161,25 @@ local libcaustic_name = {
 
 
 
+
+
+local M = require('modules')
+local mods = M.modules_instance(e)
+
+
+
+
+
+
+
+
+
 if verbose then
-   tabular(path_caustic)
-   tabular(path_rel_third_party)
-   tabular(path_abs_third_party)
-   tabular(path_rel_wasm_third_party)
-   tabular(path_rel_win_third_party)
+   tabular(e.path_caustic)
+   tabular(e.path_rel_third_party)
+   tabular(e.path_abs_third_party)
+   tabular(e.path_rel_wasm_third_party)
+   tabular(e.path_rel_win_third_party)
 
 
 end
@@ -283,10 +217,6 @@ end
 
 
 
-
-local function printc(text)
-   print(ansicolors(text))
-end
 
 local function _write_file_bak(fname, data, bak_cnt)
    local b = io.open(fname, "r")
@@ -318,47 +248,6 @@ local function write_file_bak(fname, data)
    _write_file_bak(fname, data, 0)
 end
 
-local function cmd_do_execute(_cmd)
-
-   if verbose then
-      os.execute("echo `pwd`")
-   end
-   if type(_cmd) == 'string' then
-      if verbose then
-         print('cmd_do:', _cmd)
-      end
-      if not os.execute(_cmd) then
-         if verbose then
-            print(format('cmd was failed "%s"', _cmd))
-         end
-         if errexit then
-            os.exit(1)
-         end
-      end
-   elseif (type(_cmd) == 'table') then
-      for _, v in ipairs(_cmd) do
-         if verbose then
-            print('cmd_do', v)
-         end
-         if not os.execute(v) then
-            if verbose then
-               print(format('cmd was failed "%s"', _cmd))
-            end
-            if errexit then
-               os.exit(1)
-            end
-         end
-      end
-   else
-      print('Wrong type in cmd_do', type(_cmd))
-      if errexit then
-         os.exit(1)
-      end
-   end
-end
-
-
-local cmd_do = cmd_do_execute
 
 
 local function filter_sources_c(
@@ -430,7 +319,7 @@ local function search_and_load_cfgs_up(fname)
    local has_stuff = 0
    local stuff = {}
 
-   if lfs.currentdir() ~= path_caustic then
+   if lfs.currentdir() ~= e.path_caustic then
       for _, cfg in ipairs(cfgs) do
          if cfg.artifact then
             assert(type(cfg.artifact) == 'string')
@@ -564,682 +453,6 @@ end
 
 
 
-local modules
-
-
-
-local function get_deps_name_map(deps)
-   assert(deps)
-   local map = {}
-
-   for _, dep in ipairs(deps) do
-      if map[dep.name] then
-         print("get_deps_name_map: name dublicated", dep.name)
-         os.exit(1)
-      end
-      map[dep.name] = dep
-   end
-   return map
-end
-
-local function build_with_cmake_common(dep)
-   print('build_with_cmake: current dir', lfs.currentdir())
-   print('build_with_cmake: dep', inspect(dep))
-
-
-   local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=67108864" '
-
-
-   if dep.target == 'linux' then
-      linker_option = ''
-   end
-
-   local c1 = cmake[dep.target] .. linker_option .. " ."
-   local c2 = make[dep.target]
-   print("build_with_cmake_common: c1", c1)
-   print("build_with_cmake_common: c2", c2)
-   cmd_do(c1)
-   cmd_do(c2)
-end
-
-
-
-
-
-
-
-
-
-
-
-local function find_and_remove_cmake_cache()
-   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-   cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
-end
-
-local function build_llama(_)
-   ut.push_current_dir()
-
-   find_and_remove_cmake_cache()
-   local cmd1 = "cmake -B build " ..
-   "-DLLAMA_BUILD_TESTS=OFF " ..
-   "-DLLAMA_BUILD_EXAMPLES=OFF " ..
-   "-DLLAMA_BUILD_TOOLS=OFF " ..
-   "-DBUILD_SHARED_LIBS=OFF"
-
-   local cmd2 = "cmake --build build -j"
-   cmd_do(cmd1)
-   cmd_do(cmd2)
-
-   ut.pop_dir()
-end
-
-local function build_freetype_common(dep)
-   print('build_freetype_common', dep.target)
-   print('currentdir', lfs.currentdir())
-   ut.push_current_dir()
-
-   find_and_remove_cmake_cache()
-
-   local function toolchain()
-      if dep.target == 'win' then
-         return cmake_toolchain_win_opt
-      end
-      return " "
-   end
-
-   local cm = cmake[dep.target]
-   print("build_freetype_common: cmake", cm)
-   local c1 = cm .. " -E make_directory build " .. cmake_toolchain_win_opt
-   local c2 = cm .. " -E chdir build cmake " ..
-   "-DFT_DISABLE_HARFBUZZ=ON " ..
-   "-DFT_DISABLE_BROTLI=ON " ..
-   "-DFT_DISABLE_BZIP2=ON " ..
-   "-DFT_DISABLE_ZLIB=ON " ..
-   "-DFT_DISABLE_PNG=ON " ..
-   toolchain() ..
-   " .."
-
-   print("build_freetype_common: c1", c1)
-   print("build_freetype_common: c2", c2)
-
-
-   cmd_do({ c1, c2 })
-   chdir("build")
-
-
-   cmd_do(make[dep.target] .. " clean")
-   cmd_do(make[dep.target])
-
-   ut.pop_dir()
-end
-
-local function build_with_make_common(dep)
-   if dep.target == 'wasm' then
-      cmd_do("make clean")
-      cmd_do("emmake make")
-   elseif dep.target == 'linux' then
-      cmd_do("make clean")
-      cmd_do("make -j")
-   end
-end
-
-local function copy_headers_to_wfc(_)
-   print('copy_headers_to_wfc:', lfs.currentdir())
-   cmd_do("cp ../stb/stb_image.h .")
-   cmd_do("cp ../stb/stb_image_write.h .")
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function build_chipmunk(dep)
-   print("chipmunk_custom_build:", lfs.currentdir())
-   ut.push_current_dir()
-   chdir(dep.dir)
-
-
-
-   local opts = {
-      "BUILD_DEMOS=OFF",
-      "INSTALL_DEMOS=OFF",
-      "BUILD_SHARED=OFF",
-      "BUILD_STATIC=ON",
-      "INSTALL_STATIC=OFF",
-   }
-   for k, opt in ipairs(opts) do
-      opts[k] = "-D " .. opt
-   end
-
-   cmd_do(cmake[dep.target] .. " " .. table.concat(opts, " "))
-   cmd_do(make[dep.target])
-   ut.pop_dir()
-end
-
-
-local function build_pcre2_w(dep)
-   ut.push_current_dir()
-   print("build_pcre2_w: dep.dir", dep.dir)
-   chdir(dep.dir)
-   print("build_pcre2_w:", lfs.currentdir())
-
-   find_and_remove_cmake_cache()
-   cmd_do("emcmake cmake .")
-   cmd_do("emmake make")
-   ut.pop_dir()
-end
-
-local function build_pcre2(dep)
-   ut.push_current_dir()
-   print("pcre2_custom_build: dep.dir", dep.dir)
-   chdir(dep.dir)
-   print("pcre2_custom_build:", lfs.currentdir())
-
-   find_and_remove_cmake_cache()
-   cmd_do("cmake .")
-   cmd_do("make -j")
-   ut.pop_dir()
-end
-
-
-
-local function guard()
-   local rnd_num = math.random(10000, 20000)
-
-   coroutine.yield(table.concat({
-      format("#ifndef GUARD_%s", rnd_num),
-      format("#define GUARD_%s\n", rnd_num),
-   }, "\n"))
-
-   coroutine.yield("#endif\n")
-end
-
-
-
-
-local function paste_from_one_to_other(
-   src_fname, dst_fname,
-   guard_coro)
-
-   print(format(
-   "paste_from_one_to_other: src_fname '%s', dst_fname '%s'",
-   src_fname, dst_fname))
-
-   local file_src = io.open(src_fname, "r")
-   local file_dst = io.open(dst_fname, "a+")
-
-   assert(file_src)
-   assert(file_dst)
-
-   local in_block = false
-   if guard_coro and type(guard_coro) == 'thread' then
-      local _, msg = coroutine.resume(guard_coro)
-      file_dst:write(msg)
-   end
-
-   for line in file_src:lines() do
-      if string.match(line, pattern_begin) then
-         in_block = true
-      end
-
-      if in_block then
-
-         file_dst:write(line .. "\n")
-      end
-
-      if in_block and string.match(line, pattern_end) then
-         in_block = false
-      end
-   end
-
-   if guard_coro and type(guard_coro) == 'thread' then
-      local _, msg = coroutine.resume(guard_coro)
-      file_dst:write(msg)
-   end
-
-   file_dst:close()
-end
-
-local function build_cimgui_common(dep)
-   print('build_cimgui:', inspect(dep))
-
-   cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
-
-   print("current dir", lfs.currentdir())
-   local c = make[dep.target]
-   cmd_do(format("%s clean", c))
-   if dep.target == 'linux' then
-      cmd_do(format("%s -j CFLAGS=\"-g3 -DPLATFORM_DESKTOP\"", c))
-   elseif dep.target == 'wasm' then
-      local cmd = format("%s -j CFLAGS=\"-g3 -DPLATFORM_WEB=1\"", c)
-      printc("%{green}build_cimgui_common: " .. cmd .. "%{reset}")
-      cmd_do(cmd)
-   else
-      printc(
-      "%{red}build_cimgui_common:bad target" .. dep.target ..
-      "%{reset}")
-
-   end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function match_in_file(fname, pattern)
-   local f = io.open(fname)
-   assert(f)
-   local i = 0
-   for l in f:lines() do
-      i = i + 1
-      if string.match(l, pattern) then
-         return true
-      end
-   end
-
-   return false
-end
-
-local function cimgui_after_init(dep)
-   print("cimgui_after_init:", lfs.currentdir())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   ut.push_current_dir()
-   chdir(dep.dir)
-
-   print("cimgui_after_init:", lfs.currentdir())
-
-   local use_freetype = false
-
-   cmd_do('git submodule update --init --recursive --depth=1')
-   ut.push_current_dir()
-   chdir('generator')
-
-
-   local lua_path = 'LUA_PATH="./?.lua;"$LUA_PATH'
-
-   if use_freetype then
-      cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv freetype"')
-   else
-      cmd_do(lua_path .. ' ./generator.sh -t "internal noimstrv"')
-   end
-   ut.pop_dir()
-   print("cimgui_after_init: code was generated");
-
-   find_and_remove_cmake_cache()
-
-   assert(cmake[dep.target])
-
-   local path = path_abs_third_party[dep.target]
-   assert(path)
-
-
-
-
-
-
-
-
-   local cxx_flags = '-DCMAKE_CXX_FLAGS="'
-   local includes = get_deps_name_map(modules)["raylib"].includes
-   for _, include in ipairs(includes) do
-      local s = "-I" .. path_abs_third_party[dep.target] .. "/" .. include
-      cxx_flags = cxx_flags .. s .. " "
-   end
-   cxx_flags = cxx_flags .. '"'
-
-   local cmake_cmd = {
-      format('CXXFLAGS=\'-I%s/freetype/include -I%s/raylib/src\'', path, path),
-      cmake[dep.target],
-      "-DIMGUI_STATIC=1",
-      "-DNO_FONT_AWESOME=1",
-      cxx_flags,
-   }
-
-   print('cxx_flags', cxx_flags)
-
-   if dep.target == 'wasm' then
-      insert(cmake_cmd, "-DPLATFORM_WEB=1")
-   end
-
-   if use_freetype then
-      insert(cmake_cmd, "-DIMGUI_FREETYPE=1")
-      insert(cmake_cmd, "-DIMGUI_ENABLE_FREETYPE=1")
-   end
-
-   table.insert(cmake_cmd, " . ")
-
-   printc(
-   "%{blue} " .. format("cmake_cmd %s", inspect(cmake_cmd)) .. " %{reset}")
-
-   cmd_do(table.concat(cmake_cmd, " "))
-
-
-
-
-
-
-
-   local rlimgui_pattern =
-   "void%s*rlImGuiSetup(struct%s*igSetupOptions%s*%*opts);"
-   local dst_fname = path_abs_third_party[dep.target] .. "/cimgui/cimgui.h";
-
-
-   if not match_in_file(dst_fname, rlimgui_pattern) then
-
-      paste_from_one_to_other(
-      path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
-      dst_fname,
-      coroutine.create(guard))
-
-
-      paste_from_one_to_other(
-      path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
-      path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp")
-
-   else
-      printc(
-      "%{yellow}try to duplicate rlImGui stuff" ..
-      " in cimgui module%{reset}")
-
-   end
-
-   cmd_do("ls ..")
-   cmd_do("cp -r ../rlImGui/extras/ extras")
-
-   ut.pop_dir()
-end
-
-local function rlimgui_after_init(_)
-   print("rlimgui_after_init:", lfs.currentdir())
-end
-
-local function cimgui_after_build(_)
-   print("cimgui_after_build:", lfs.currentdir())
-   cmd_do("mv cimgui.a libcimgui.a")
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function build_raylib_common(dep)
-   find_and_remove_cmake_cache()
-
-
-
-
-
-
-
-
-
-
-
-
-
-   if dep.target == 'linux' then
-      local c = {}
-      insert(c, "-DPLATFORM=Desktop ")
-      insert(c, "-DBUILD_EXAMPLES=ON ")
-
-      insert(c, "-DCMAKE_BUILD_TYPE=Release")
-      cmd_do("cmake " .. table.concat(c, " ") .. " .")
-
-      cmd_do("make -j")
-
-
-      chdir('src')
-   elseif dep.target == 'wasm' then
-      local EMSDK = getenv('EMSDK')
-
-      chdir("src")
-      cmd_do("make clean")
-
-      local ccf = 'CFLAGS="-O2 -g -pthread -matomics -mbulk-memory"'
-
-
-      local cmd = format(
-      format("make %s PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", ccf),
-      EMSDK)
-
-      print('cmd', cmd)
-      cmd_do(cmd)
-      cmd_do("mv libraylib.web.a libraylib.a")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   end
-
-
-
-
-
-
-   local raylib_i =
-   [[
-%module raylib
-%{
-#include "raylib.h"
-%}
-
-%include "raylib.h"
-]]
-
-   local f = io.open("raylib.i", "w")
-   f:write(raylib_i)
-   f = nil
-
-   local raylib_wrap_h =
-   [[
-#include "lua.h"
-#include "lauxlib.h"
-// объявляем эту функцию — она из raylib_wrap.c
-extern int luaopen_raylib(lua_State *L);
-]]
-
-   f = io.open("raylib_wrap.h", "w")
-   f:write(raylib_wrap_h)
-   f = nil
-
-   print('currentdir', lfs.currentdir())
-   local swig_cmd =
-   "swig -lua -I. -D__STDC__=1 -D__STDC_VERSION__=199901L raylib.i"
-
-   print('swig_cmd', swig_cmd)
-   cmd_do(swig_cmd)
-
-   local c = compiler[dep.target] ..
-   " -fPIC -g3 -c raylib_wrap.c " ..
-   " -I../../lua -L../../lua -llua"
-   print(c)
-   cmd_do(c)
-   cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
-end
-
-local function build_box2c_common(dep)
-
-   find_and_remove_cmake_cache()
-
-   local t = {}
-   if dep.target == 'wasm' then
-      insert(t, '-DCMAKE_C_FLAGS="-pthread -matomics -mbulk-memory" ')
-      insert(t, '-DCMAKE_CXX_FLAGS="-pthread -matomics -mbulk-memory" ')
-      insert(t, '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ')
-   end
-
-
-
-
-   cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
-   '-DCMAKE_BUILD_TYPE=Debug ' ..
-
-   '-DBOX2D_BENCHMARKS=OFF ' ..
-   '-DBOX2D_BUILD_DOCS=OFF ' ..
-   '-DBOX2D_SAMPLES=OFF .')
-
-   cmd_do(make[dep.target])
-end
-
-
-
-
-local function build_sol(_)
-
-   cmd_do("python single/single.py")
-end
-
-
-
-
-
-
-
-
-local function utf8proc_after_build(_)
-   cmd_do("rm libutf8proc.so")
-end
-
-local function build_munit_common(dep)
-   local flags = ""
-   if dep.target == "wasm" then
-      flags = "-pthread"
-   end
-   cmd_do(compiler[dep.target] .. " -c munit.c " .. flags)
-   cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
-end
-
-
-local function update_box2c(dep)
-   ut.push_current_dir()
-   local ok
-   local path = path_abs_third_party[dep.target]
-   ok = chdir(path_abs_third_party[dep.target])
-   if not ok then
-      printc("%{red}update_box2c: could not chdir to " .. path .. "%{reset}")
-      return
-   end
-   ok = chdir(dep.dir)
-   if not ok then
-      printc(
-      "%{red}update_box2c: could not chdir to " .. dep.dir .. "%{reset}")
-
-      return
-   end
-
-   print("update_box2c", lfs.currentdir())
-
-   if ut.git_is_repo_clean(".", true) then
-      printc("%{green}repository in clean state%{reset}")
-      cmd_do("git config pull.rebase false")
-
-      cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
-      cmd_do("git pull erin main")
-   else
-      printc("%{red}repository is dirty%{reset}")
-   end
-
-   ut.pop_dir()
-end
 
 
 
@@ -1304,27 +517,8 @@ local _dependecy_init
 
 
 
-local function build_lua_common(dep)
-   if dep.target == 'wasm' then
-      cmd_do('emmake make ' ..
-      'CC=emcc ' ..
-      'AR="emar rcs" ' ..
-      'RANLIB=emranlib ' ..
-      'CFLAGS="-Wall -O2 -fno-stack-protector -fno-common ' ..
-      '-std=c99 ' ..
-      '-DLUA_USE_LINUX" ' ..
-      'MYLIBS="" ' ..
-      'MYLDFLAGS=""')
 
-   elseif dep.target == 'linux' then
-      cmd_do("make clean")
-      cmd_do("make -j")
-   else
-      printc(
-      "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}")
 
-   end
-end
 
 
 
@@ -1340,656 +534,11 @@ end
 
 
 
-local libtess2_premake5 = [[
-local action = _ACTION or ""
 
-workspace "libtess2"
-    location "Build"
-    configurations { "Debug", "Release" }
-    platforms { "x64", "x86" }
 
-    filter "configurations:Debug"
-        defines { "DEBUG" }
-        symbols "On"
-        warnings "Extra"
 
-    filter "configurations:Release"
-        defines { "NDEBUG" }
-        optimize "On"
-        warnings "Extra"
 
-project "tess2"
-    kind "StaticLib"
-    language "C"
-    targetdir "Build"
-    includedirs { "Include", "Source" }
-    files { "Source/**.c" }
 
-project "example"
-    kind "ConsoleApp"
-    language "C"
-    targetdir "Build"
-    includedirs { "Include", "Contrib" }
-    files { "Example/example.c", "Contrib/**.c" }
-    links { "tess2" }
-
-    filter "system:linux"
-        linkoptions { "`pkg-config --libs glfw3`" }
-        links { "GL", "GLU", "m", "GLEW" }
-        defines { "NANOVG_GLEW" }
-
-    filter "system:windows"
-        links { "glfw3", "gdi32", "winmm", "user32", "GLEW", "glu32", "opengl32" }
-        defines { "NANOVG_GLEW" }
-
-    filter "system:macosx"
-        links { "glfw3" }
-        linkoptions {
-            "-framework OpenGL",
-            "-framework Cocoa",
-            "-framework IOKit",
-            "-framework CoreVideo"
-        }
-
-]]
-
-local function libtess2_after_init(_)
-   printc('%{green}libtess2_after_init:%{green}')
-   printc(lfs.currentdir())
-
-   local f = io.open("premake5.lua", "w")
-   if not f then
-      printc('libtess2_after_init: could not create premake5.lua')
-      return
-   end
-
-   f:write(libtess2_premake5)
-   f:close()
-
-end
-
-local function build_libtess2_common(_)
-   cmd_do("premake5 gmake")
-   ut.push_current_dir()
-   chdir("Build")
-   cmd_do("make")
-   ut.pop_dir()
-end
-
-
-
-
-
-
-
-
-
-modules = {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      disabled = false,
-      copy_for_wasm = false,
-      description = "llm interface",
-      custom_defines = nil,
-      dir = "llama_cpp",
-      includes = {
-         "llama_cpp/include",
-         "llama_cpp/ggml/include",
-      },
-      libdirs = {
-         "llama_cpp/build/src",
-         "llama_cpp/build/ggml/src",
-         "llama_cpp/build/common",
-      },
-      links = {
-
-         "ggml",
-         "llama",
-      },
-      links_internal = {},
-      name = "llama_cpp",
-      url_action = "git",
-      build = build_llama,
-      url = "https://github.com/ggerganov/llama.cpp",
-
-   },
-
-
-
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      description = "hash function for tables",
-      custom_defines = nil,
-      dir = "xxhash",
-      includes = {
-         "xxhash",
-      },
-      libdirs = { "xxhash" },
-
-      links_internal = {},
-      name = "xxhash",
-      url_action = "git",
-      build = build_with_make_common,
-      url = "https://github.com/Cyan4973/xxHash.git",
-
-   },
-
-
-
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      description = "ttf fonts manipulation",
-      custom_defines = nil,
-      dir = "freetype",
-      includes = {
-         "freetype/include",
-      },
-      libdirs = { "freetype/build" },
-      links = { "freetype" },
-      links_internal = {},
-      name = "freetype",
-      url_action = "git",
-      build = build_freetype_common,
-      build_w = build_freetype_common,
-      build_win = build_freetype_common,
-      url = "https://github.com/freetype/freetype.git",
-
-   },
-
-
-
-   {
-      disabled = false,
-      description = "color worms moving on texture",
-      custom_defines = nil,
-
-      dir = "wormseffect",
-      includes = {
-         "wormseffect",
-      },
-      libdirs = { "wormseffect" },
-      links = { "worms_effect" },
-      links_internal = {},
-      name = "wormseffect",
-      url_action = "git",
-      build = build_with_make_common,
-      build_w = build_with_make_common,
-      url = "git@github.com:nagolove/raylib_colorwormseffect.git",
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      build = build_with_cmake_common,
-      build_w = build_with_cmake_common,
-      description = "svg parsing library",
-      dir = "nanosvg",
-      includes = {
-         "nanosvg/src",
-      },
-      libdirs = { "nanosvg" },
-      links = { "nanosvg" },
-      links_internal = {},
-      name = "nanosvg",
-      url_action = "git",
-      url = "https://github.com/memononen/nanosvg.git",
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      build = build_munit_common,
-      build_w = build_munit_common,
-      description = "munit testing framework",
-      dir = "munit",
-      includes = { "munit" },
-      libdirs = { "munit" },
-      links = { "munit" },
-      links_internal = {},
-      name = "munit",
-      url_action = "git",
-      url = "git@github.com:nagolove/munit.git",
-   },
-
-   {
-      disabled = false,
-      url_action = "git",
-      name = "uthash",
-      url = "https://github.com/troydhanson/uthash.git",
-      build = nil,
-      description = "C routines(hash containers etc)",
-      dir = "uthash",
-      includes = { "uthash/include" },
-      libdirs = {},
-      links = {},
-      links_internal = {},
-      copy_for_wasm = true,
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      build = build_with_cmake_common,
-      build_w = build_with_cmake_common,
-      description = "task sheduler, used by box2d",
-      dir = "enkits",
-      includes = { "enkits/src" },
-      libdirs = { "enkits" },
-      links = { "enkiTS" },
-      links_internal = { "libenkiTS.a" },
-      name = "enkits",
-      url_action = "git",
-      url = "https://github.com/dougbinks/enkiTS.git",
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      disabled = false,
-      build = build_pcre2,
-      build_w = build_pcre2_w,
-      description = "регулярные выражения",
-      dir = "pcre2",
-      includes = { "pcre2/src", "pcre2" },
-      libdirs = { "pcre2" },
-      links = { "pcre2-8" },
-      links_internal = { "libpcre2-8.a" },
-      name = "pcre2",
-      copy_for_wasm = true,
-      url_action = "git",
-      url = "https://github.com/PhilipHazel/pcre2.git",
-   },
-
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      name = "imgui",
-      dir = "imgui",
-      url_action = "git",
-      url = "https://github.com/ocornut/imgui.git",
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-
-      after_init = rlimgui_after_init,
-      description = "raylib обвязка над imgui",
-      dir = "rlImGui",
-      disabled = false,
-
-      name = "rlimgui",
-      url = "git@github.com:nagolove/rlImGui.git",
-
-      url_action = "git",
-      copy_for_wasm = true,
-   },
-
-   {
-      copy_for_wasm = true,
-      description = "библиотека для всякого",
-      includes = { "raylib/src" },
-      libdirs = { "raylib/src" },
-
-      links = function(dep)
-         if dep.target == 'linux' then
-            return {
-
-               "-Wl,--start-group",
-               "raylib",
-               "raylib_wrap",
-               "-Wl,--end-group",
-            }
-         elseif dep.target == 'wasm' then
-            return { "raylib", "raylib_wrap" }
-         else
-            printc(
-            "%{red}bad target in links" .. dep.target .. "%{reset}")
-
-         end
-      end,
-
-      links_internal = {
-         "raylib",
-
-      },
-      name = 'raylib',
-      dir = "raylib",
-      build_w = build_raylib_common,
-      build = build_raylib_common,
-      url_action = "git",
-      url = "https://github.com/raysan5/raylib.git",
-   },
-
-   {
-
-      after_init = cimgui_after_init,
-
-      after_build = cimgui_after_build,
-
-      build = build_cimgui_common,
-      build_w = build_cimgui_common,
-
-      description = "C биндинг для imgui",
-      dir = "cimgui",
-      includes = { "cimgui", "cimgui/generator/output" },
-      libdirs = { "cimgui" },
-      links = { "cimgui" },
-      links_internal = { "cimgui" },
-      name = 'cimgui',
-      url = 'https://github.com/cimgui/cimgui.git',
-      url_action = "git",
-      copy_for_wasm = true,
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      build = build_box2c_common,
-      build_w = build_box2c_common,
-      copy_for_wasm = true,
-      description = "box2c - плоский игровой физический движок",
-      dir = "box2c",
-
-      includes = {
-         "box2c/include",
-         "box2c/src",
-      },
-      update = update_box2c,
-      libdirs = { "box2c/src" },
-
-
-
-      links = { "box2dd" },
-      links_internal = { "box2dd" },
-      name = 'box2c',
-      url = "https://github.com/erincatto/box2d.git",
-      url_action = 'git',
-   },
-
-   {
-      disabled = false,
-      copy_for_wasm = true,
-      build = build_chipmunk,
-      dir = "Chipmunk2D",
-      description = "плоский игровой физический движок",
-      includes = { "Chipmunk2D/include" },
-      libdirs = { "Chipmunk2D/src" },
-      links = { "chipmunk" },
-      links_internal = { "chipmunk" },
-      name = 'chipmunk',
-      url_action = 'git',
-      url = "https://github.com/nagolove/Chipmunk2D.git",
-   },
-
-   {
-      build = build_lua_common,
-      build_w = build_lua_common,
-      copy_for_wasm = true,
-      description = "lua интерпритатор",
-      dir = "lua",
-      includes = { "lua" },
-      libdirs = { "lua" },
-      links = { "lua" },
-      links_internal = { "lua" },
-      name = 'lua',
-      url = "https://github.com/lua/lua.git",
-      git_tag = "v5.4.0",
-      url_action = "git",
-   },
-
-   {
-      copy_for_wasm = true,
-      disabled = false,
-      name = "sol2",
-      description = "C++ Lua bindins",
-      build = build_sol,
-      build_w = build_sol,
-      dir = "sol2",
-      url = "https://github.com/ThePhD/sol2.git",
-      url_action = "git",
-   },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   {
-      build = build_with_make_common,
-      build_w = build_with_make_common,
-      after_build = utf8proc_after_build,
-      copy_for_wasm = true,
-      description = "библиотека для работы с utf8 Юникодом",
-      dir = "utf8proc",
-      includes = { "utf8proc" },
-      libdirs = { "utf8proc" },
-      links = { "utf8proc" },
-      links_internal = { "utf8proc" },
-      name = 'utf8proc',
-      url = "https://github.com/JuliaLang/utf8proc.git",
-      url_action = "git",
-   },
-
-   {
-      copy_for_wasm = true,
-      description = "набор библиотека заголовочных файлов для разных нужд",
-      dir = "stb",
-      includes = { "stb" },
-      name = 'stb',
-      url = "https://github.com/nothings/stb.git",
-      url_action = "git",
-   },
-
-   {
-      dir = "wfc",
-      build = build_with_make_common,
-      build_w = build_with_make_common,
-      after_init = copy_headers_to_wfc,
-      copy_for_wasm = true,
-
-      description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
-      name = 'wfc',
-      url_action = "git",
-      url = "https://github.com/krychu/wfc.git",
-   },
-
-
-
-
-
-
-   {
-      dir = "libtess2",
-      after_init = libtess2_after_init,
-      build = build_libtess2_common,
-      build_w = build_libtess2_common,
-      copy_for_wasm = true,
-      includes = { "libtess2/Include" },
-      libdirs = { "libtess2/Build" },
-      links = { "tess2" },
-      links_internal = { "tess2" },
-      description = "разбиение контуров на треугольники",
-      name = 'libtess2',
-      url_action = "git",
-      url = "https://github.com/memononen/libtess2",
-   },
-
-
-}
 
 
 
@@ -2059,10 +608,10 @@ local function get_ready_deps(cfg)
 
    if cfg and cfg.dependencies then
       for _, depname in ipairs(cfg.dependencies) do
-         table.insert(ready_deps, get_deps_name_map()[depname])
+         table.insert(ready_deps, mods.get_deps_name_map()[depname])
       end
    else
-      ready_deps = ut.deepcopy(modules)
+      ready_deps = ut.deepcopy(mods.modules())
    end
 
    if cfg and cfg.not_dependencies then
@@ -2120,13 +669,14 @@ local function get_ready_links_linux_only(cfg)
    return links_linux_only
 end
 
+
 local function gather_libdirs_abs(deps)
    local libdirs_tbl = {}
    for _, dep in ipairs(deps) do
       if dep.libdirs then
 
          assert(dep.target)
-         local path = path_abs_third_party[dep.target] .. "/"
+         local path = e.path_abs_third_party[dep.target] .. "/"
          assert(path)
 
          for _, libdir in ipairs(dep.libdirs) do
@@ -2153,10 +703,10 @@ local function get_dir(dep)
    end
 end
 
-local function get_deps_map(deps)
-   assert(deps)
+local function get_map_dir2dep(modules)
    local res = {}
-   for _, dep in ipairs(deps) do
+
+   for dep in modules.iter() do
       assert(type(dep.url) == 'string')
       local url = dep.url
       if not string.match(url, "%.zip$") then
@@ -2179,7 +729,7 @@ local function after_init(dep)
    local ok, errmsg = pcall(function()
       print('after_init:', dep.name)
       chdir(dep.dir)
-      dep.after_init(dep)
+      dep.after_init(e, dep)
    end)
    if not ok then
       local msg = 'after_init() failed with ' .. errmsg
@@ -2604,14 +1154,6 @@ with -g option just call 'git status' for each entry
 }
 
 
-
-
-
-
-
-
-
-
 local actions = {}
 
 
@@ -2772,7 +1314,7 @@ end
 
 
 function actions.projects_make(_args)
-   local list = loadfile(path_caustic .. "/projects.lua")();
+   local list = loadfile(e.path_caustic .. "/projects.lua")();
 
    errexit_uv = false
    for k, v in ipairs(list) do
@@ -3157,7 +1699,7 @@ r
    f:write(gdbinit)
    f:close()
 
-   cmd_do(format("cp -r %s/assets .", path_caustic))
+   cmd_do(format("cp -r %s/assets .", e.path_caustic))
    cmd_do("koh compile_flags")
    cmd_do("koh make -c")
 
@@ -3306,7 +1848,7 @@ local function pre_init(_args)
    local deps = {}
 
    if _args.name then
-      local dependencies_name_map = get_deps_name_map(modules)
+      local dependencies_name_map = mods.get_deps_name_map()
       print('partial init for dependency', _args.name)
       if dependencies_name_map[_args.name] then
          table.insert(deps, dependencies_name_map[_args.name])
@@ -3316,7 +1858,7 @@ local function pre_init(_args)
       end
    else
 
-      for _, dep in ipairs(modules) do
+      for dep in mods.iter() do
          table.insert(deps, dep)
       end
    end
@@ -3332,7 +1874,7 @@ function actions.init(_args)
       return
    end
 
-   if not path_rel_third_party_t[_args.target] then
+   if not e.path_rel_third_party_t[_args.target] then
       printc("%{red}could not find target%{yellow}" .. _args.target ..
       "%{reset}")
       return
@@ -3344,12 +1886,12 @@ function actions.init(_args)
       dep.target = _args.target
    end
 
-   local path = path_rel_third_party_t[_args.target]
+   local path = e.path_rel_third_party_t[_args.target]
    print("actions.init: path", path)
 
    ut.push_current_dir()
 
-   chdir(path_caustic)
+   chdir(e.path_caustic)
 
    if not chdir(path) then
       if not mkdir(path) then
@@ -3459,7 +2001,7 @@ end
 
 function actions.selftest_lg(_args)
 
-   local selftest_fname = path_caustic .. "/selftest.lua"
+   local selftest_fname = e.path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(selftest_fname)()
 
@@ -3482,7 +2024,7 @@ end
 
 function actions.selftest_push(_args)
 
-   local selftest_fname = path_caustic .. "/selftest.lua"
+   local selftest_fname = e.path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(selftest_fname)()
 
@@ -3523,16 +2065,16 @@ local function git_status2(dirlist_fname, _args)
 end
 
 function actions.projects_status(_args)
-   git_status2(path_caustic .. "/projects.lua", _args)
+   git_status2(e.path_caustic .. "/projects.lua", _args)
 end
 
 function actions.selftest_status(_args)
-   git_status2(path_caustic .. "/selftest.lua", _args)
+   git_status2(e.path_caustic .. "/selftest.lua", _args)
 end
 
 function actions.selftest(_args)
 
-   local selftest_fname = path_caustic .. "/selftest.lua"
+   local selftest_fname = e.path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(selftest_fname)()
 
@@ -3986,7 +2528,7 @@ local function backup(dep)
 
    ut.push_current_dir()
 
-   local path = path_rel_third_party_t[dep.target]
+   local path = e.path_rel_third_party_t[dep.target]
    chdir(path)
 
    print('backup')
@@ -4027,14 +2569,14 @@ function actions.remove(_args)
       return
    end
 
-   local path = path_rel_third_party_t[_args.target]
+   local path = e.path_rel_third_party_t[_args.target]
    if not path then
       print("%{yellow}unknown target%{reset}")
       return
    end
 
    local dirnames = {}
-   local dependencies_name_map = get_deps_name_map(modules)
+   local dependencies_name_map = mods.get_deps_name_map()
    if _args.name and dependencies_name_map[_args.name] then
       table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
    else
@@ -4049,10 +2591,10 @@ function actions.remove(_args)
 
 
    ut.push_current_dir()
-   chdir(path_caustic)
+   chdir(e.path_caustic)
 
 
-   local deps_name_map = get_deps_name_map(modules)
+   local deps_name_map = mods.get_deps_name_map()
    local dep = deps_name_map[_args.name]
 
    if _args.name and dep then
@@ -4071,21 +2613,21 @@ local function get_ready_includes(cfg, target)
    local ready_deps = get_ready_deps(cfg)
 
 
-   local path = path_rel_third_party_t[target]
+   local path = e.path_rel_third_party_t[target]
 
    local _includedirs = prefix_add(
-   path_caustic .. "/",
+   e.path_caustic .. "/",
    gather_includedirs(ready_deps, path))
 
    if _includedirs then
-      table.insert(_includedirs, path_caustic .. "/src")
+      table.insert(_includedirs, e.path_caustic .. "/src")
    end
 
    return _includedirs
 end
 
 function actions.dependencies(_)
-   for _, dep in ipairs(modules) do
+   for dep in mods.iter() do
       print(tabular(dep));
    end
 end
@@ -4266,7 +2808,7 @@ local function _build(dep)
          assert(target_build_func_name)
 
          if dep[target_build_func_name] then
-            dep[target_build_func_name](dep)
+            dep[target_build_func_name](e, dep)
          else
             printc("%{red}_build: dep.name '" ..
             dep.name ..
@@ -4322,7 +2864,7 @@ local function _build(dep)
 
    if dep and dep.after_build then
       ok, errmsg = pcall(function()
-         dep.after_build(dep)
+         dep.after_build(e, dep)
       end)
       if not ok then
          print(inspect(dep), 'failed with', errmsg)
@@ -4337,16 +2879,16 @@ local function sub_build(_args, path_rel, target)
    local deps = {}
 
 
-   chdir(path_caustic)
+   chdir(e.path_caustic)
 
    chdir(path_rel)
 
    if _args.name then
       print(format("build '%s'", _args.name))
-      local dependencies_name_map = get_deps_name_map(modules)
+      local dependencies_name_map = mods.get_deps_name_map()
       if dependencies_name_map[_args.name] then
          local dir = get_dir(dependencies_name_map[_args.name])
-         local deps_map = get_deps_map(modules)
+         local deps_map = get_map_dir2dep(mods)
          local dep
          local ok, errmsg = pcall(function()
             dep = deps_map[dir]
@@ -4369,7 +2911,10 @@ local function sub_build(_args, path_rel, target)
       end
    else
 
-      deps = modules
+
+      for m in mods.iter() do
+         table.insert(deps, m)
+      end
    end
 
 
@@ -4397,15 +2942,15 @@ function actions.build(_args)
       target = 'linux'
    end
 
-   sub_build(_args, path_rel_third_party_t[target], target)
+   sub_build(_args, e.path_rel_third_party_t[target], target)
 end
 
 function actions.deps(_args)
    if _args.full then
-      print(tabular(modules))
+      print(tabular(mods.modules()))
    else
       local shorts = {}
-      for _, dep in ipairs(modules) do
+      for dep in mods.iter() do
          table.insert(shorts, dep.name)
       end
       print(tabular(shorts))
@@ -4555,7 +3100,7 @@ local function project_link(ctx, cfg, _args)
 
    if _args.target == 'wasm' then
 
-      local shell_path = path_caustic .. "/shell.html"
+      local shell_path = e.path_caustic .. "/shell.html"
 
 
       cmd = cmd ..
@@ -4673,11 +3218,11 @@ end
 
 local function _update(dep)
    ut.push_current_dir()
-   chdir(path_caustic)
+   chdir(e.path_caustic)
    if dep.update then
       backup(dep)
-      chdir(path_rel_third_party .. "/" .. dep.dir)
-      dep.update(dep)
+      chdir(e.path_rel_third_party .. "/" .. dep.dir)
+      dep.update(e, dep)
    end
    ut.pop_dir()
 end
@@ -4685,7 +3230,7 @@ end
 
 function actions.update(_args)
    if _args.name then
-      local dependencies_name_map = get_deps_name_map(modules)
+      local dependencies_name_map = mods.get_deps_name_map()
       print('update for', _args.name)
       if dependencies_name_map[_args.name] then
          local dep = dependencies_name_map[_args.name]
@@ -4907,7 +3452,7 @@ local function get_ready_deps_defines(cfg)
    local map_all_deps = {}
 
 
-   for _, dep in ipairs(ut.deepcopy(modules)) do
+   for _, dep in ipairs(ut.deepcopy(mods.modules())) do
       map_all_deps[dep.name] = dep
    end
 
@@ -4924,7 +3469,7 @@ local function get_ready_deps_defines(cfg)
       table.insert(flags, format("-DKOH_%s", dep.name:upper()))
       if dep.custom_defines then
 
-         local defines = dep.custom_defines(dep)
+         local defines = dep.custom_defines(e, dep)
          if defines then
             for define in ipairs(defines) do
                table.insert(flags, format("-D%s", define))
@@ -4961,11 +3506,13 @@ local function print_sorted_string(objfiles)
 end
 
 
-local function dependencies_set_target(target)
-   for _, dep in ipairs(modules) do
-      dep.target = target
-   end
-end
+
+
+
+
+
+
+
 
 
 
@@ -4983,7 +3530,8 @@ local function sub_make(
    assert(driver)
    _args.target = target
 
-   dependencies_set_target(target)
+
+   mods = M.modules_instance(e, target)
 
    if verbose then
       print(format(
@@ -5158,10 +3706,10 @@ local function sub_make(
 
    local _flags = table.concat(flags, " ")
 
-   local path = path_rel_third_party_t[target]
+   local path = e.path_rel_third_party_t[target]
    assert(path)
 
-   local libdirs = gather_libdirs_abs(modules)
+   local libdirs = gather_libdirs_abs(mods.modules())
 
 
    if target == 'linux' then
@@ -5180,7 +3728,7 @@ local function sub_make(
    end
 
    if cfg.artifact then
-      table.insert(libdirs, path_caustic)
+      table.insert(libdirs, e.path_caustic)
 
       local libcaustic = libcaustic_name[target]
       assert(libcaustic)
@@ -5301,7 +3849,7 @@ local function sub_make(
    if cfg.artifact then
 
       ut.push_current_dir()
-      chdir(path_caustic)
+      chdir(e.path_caustic)
       if verbose then
          print("sub_make: currentdir", lfs.currentdir())
       end
@@ -5664,11 +4212,12 @@ local function _fd_code_in_modules()
    local extensions = table.concat(extensions_t, "|")
    local cmd = format([[fd "%s"]], extensions)
 
-   for _, module in ipairs(modules) do
+
+   for module in mods.iter() do
       ut.push_current_dir()
 
       if module.dir then
-         local rel_dir = path_rel_third_party .. "/" .. module.dir
+         local rel_dir = e.path_rel_third_party .. "/" .. module.dir
          local ok, msg = chdir(rel_dir)
          if not ok then
             print("_fd_code_in_modules", msg)
@@ -5677,7 +4226,7 @@ local function _fd_code_in_modules()
          printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
 
          local pipe = io.popen(cmd)
-         local abs_path = path_caustic .. "/" .. rel_dir .. "/"
+         local abs_path = e.path_caustic .. "/" .. rel_dir .. "/"
          for line in pipe:lines() do
             local result_line = abs_path .. line
             table.insert(result, result_line)
@@ -5933,9 +4482,9 @@ function actions.chunks_open(_)
 
 
 
-   local M = 1500
+   local dim = 1500
    local ef = 50
-   local searcher = hnswlib.new(100000, M, ef)
+   local searcher = hnswlib.new(100000, dim, ef)
 
    local hash2chunk = {}
 
@@ -6590,7 +5139,7 @@ local function main()
       end
 
       if not _args.no_verbose_path then
-         print("CAUSTIC_PATH", path_caustic)
+         print("CAUSTIC_PATH", e.path_caustic)
       end
 
       for k, v in pairs(_args) do
