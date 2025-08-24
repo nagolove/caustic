@@ -1,4 +1,5 @@
-require "common"
+-- vim: fdm=marker
+require "global"
 local ut = require 'utils'
 
 local cmd_do = ut.cmd_do
@@ -10,13 +11,14 @@ local printc = ut.printc
 local insert = table.insert
 local format = string.format
 
-global modules: {Dependency}
+--global modules: {Dependency}
 
-local function update_box2c(dep: Dependency)
+-- XXX: Какую лучше использовать сигнатуру функции?
+local function update_box2c(e: Env, dep: Dependency)
     ut.push_current_dir()
     local ok: boolean
-    local path = path_abs_third_party[dep.target]
-    ok = chdir(path_abs_third_party[dep.target])
+    local path = e.path_abs_third_party[dep.target]
+    ok = chdir(e.path_abs_third_party[dep.target])
     if not ok then
         printc("%{red}update_box2c: could not chdir to " .. path .. "%{reset}")
         return
@@ -44,7 +46,7 @@ local function update_box2c(dep: Dependency)
     ut.pop_dir()
 end
 
-local function build_box2c_common(dep: Dependency)
+local function build_box2c_common(_: Env, dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     find_and_remove_cmake_cache()
 
@@ -69,7 +71,7 @@ local function build_box2c_common(dep: Dependency)
 end
 
 
-local function build_pcre2_w(dep: Dependency)
+local function build_pcre2_w(_: Env, dep: Dependency)
     ut.push_current_dir()
     print("build_pcre2_w: dep.dir", dep.dir)
     chdir(dep.dir)
@@ -81,7 +83,7 @@ local function build_pcre2_w(dep: Dependency)
     ut.pop_dir()
 end
 
-local function build_cimgui_common(dep: Dependency)
+local function build_cimgui_common(_: Env, dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
@@ -104,7 +106,7 @@ local function build_cimgui_common(dep: Dependency)
 end
 
 
-local function build_pcre2(dep: Dependency)
+local function build_pcre2(_: Env, dep: Dependency)
     ut.push_current_dir()
     print("pcre2_custom_build: dep.dir", dep.dir)
     chdir(dep.dir)
@@ -116,17 +118,17 @@ local function build_pcre2(dep: Dependency)
     ut.pop_dir()
 end
 
-local function rlimgui_after_init(_: Dependency)
+local function rlimgui_after_init(_: Env, _: Dependency)
     print("rlimgui_after_init:", lfs.currentdir())
 end
 
-local function cimgui_after_build(_: Dependency)
+local function cimgui_after_build(_: Env, _: Dependency)
     print("cimgui_after_build:", lfs.currentdir())
     cmd_do("mv cimgui.a libcimgui.a")
 end
 
 
-local function build_freetype_common(dep: Dependency)
+local function build_freetype_common(e: Env, dep: Dependency)
     print('build_freetype_common', dep.target)
     print('currentdir', lfs.currentdir())
     ut.push_current_dir()
@@ -135,14 +137,14 @@ local function build_freetype_common(dep: Dependency)
 
     local function toolchain(): string
         if dep.target == 'win' then
-            return cmake_toolchain_win_opt
+            return e.cmake_toolchain_win_opt
         end
         return " "
     end
 
     local cm = cmake[dep.target]
     print("build_freetype_common: cmake", cm)
-    local c1 = cm .. " -E make_directory build " .. cmake_toolchain_win_opt
+    local c1 = cm .. " -E make_directory build " .. e.cmake_toolchain_win_opt
     local c2 = cm .. " -E chdir build cmake "
         .. "-DFT_DISABLE_HARFBUZZ=ON "
         .. "-DFT_DISABLE_BROTLI=ON "
@@ -167,7 +169,7 @@ local function build_freetype_common(dep: Dependency)
 end
 
 
-local function build_with_make_common(dep: Dependency)
+local function build_with_make_common(_: Env, dep: Dependency)
     if dep.target == 'wasm' then
         cmd_do("make clean")
         cmd_do("emmake make")
@@ -177,7 +179,7 @@ local function build_with_make_common(dep: Dependency)
     end
 end
 
-local function build_with_cmake_common(dep: Dependency)
+local function build_with_cmake_common(_: Env, dep: Dependency)
     print('build_with_cmake: current dir', lfs.currentdir())
     print('build_with_cmake: dep', inspect(dep))
 
@@ -197,7 +199,7 @@ local function build_with_cmake_common(dep: Dependency)
     cmd_do(c2)
 end
 
-local function build_llama(_: Dependency)
+local function build_llama(_: Env, _: Dependency)
     ut.push_current_dir()
 
     ut.find_and_remove_cmake_cache()
@@ -214,7 +216,7 @@ local function build_llama(_: Dependency)
     ut.pop_dir()
 end
 
-local function build_munit_common(dep: Dependency)
+local function build_munit_common(_: Env, dep: Dependency)
     local flags = ""
     if dep.target == "wasm" then
         flags = "-pthread"
@@ -223,7 +225,7 @@ local function build_munit_common(dep: Dependency)
     cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
 end
 
-local function build_raylib_common(dep: Dependency)
+local function build_raylib_common(_: Env, dep: Dependency)
     find_and_remove_cmake_cache()
 
     --[[
@@ -349,7 +351,7 @@ extern int luaopen_raylib(lua_State *L);
     cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
 end
 
-local function cimgui_after_init(dep: Dependency)
+local function cimgui_after_init(e: Env, dep: Dependency, mods: Modules)
     print("cimgui_after_init:", lfs.currentdir())
 
     --[[
@@ -397,7 +399,7 @@ local function cimgui_after_init(dep: Dependency)
 
     assert(cmake[dep.target])
 
-    local path = path_abs_third_party[dep.target]
+    local path = e.path_abs_third_party[dep.target]
     assert(path)
     -- TODO: После обработки каждого модуля обновлять данные для включаемых 
     -- файлов
@@ -408,9 +410,9 @@ local function cimgui_after_init(dep: Dependency)
 
     -- TODO: перенести CXXFLAGS в CMAKE_CXX_FLAGS
     local cxx_flags = '-DCMAKE_CXX_FLAGS="'
-    local includes = ut.get_deps_name_map(modules)["raylib"].includes
+    local includes = mods.get_deps_name_map()["raylib"].includes
     for _, include in ipairs(includes) do
-        local s = "-I" .. path_abs_third_party[dep.target] .. "/" .. include
+        local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
         cxx_flags = cxx_flags .. s .. " "
     end
     cxx_flags = cxx_flags .. '"'
@@ -449,20 +451,20 @@ local function cimgui_after_init(dep: Dependency)
 
     local rlimgui_pattern = 
         "void%s*rlImGuiSetup(struct%s*igSetupOptions%s*%*opts);"
-    local dst_fname = path_abs_third_party[dep.target] .. "/cimgui/cimgui.h";
+    local dst_fname = e.path_abs_third_party[dep.target] .. "/cimgui/cimgui.h";
 
     -- Проверяю, записан ли в файл код rlImGui ?
     if not ut.match_in_file(dst_fname, rlimgui_pattern) then
 
         ut.paste_from_one_to_other(
-            path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
+            e.path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.h",
             dst_fname,
             coroutine.create(ut.header_guard)
         )
 
         ut.paste_from_one_to_other(
-            path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
-            path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp"
+            e.path_abs_third_party[dep.target] .. "/rlImGui/rlImGui.cpp",
+            e.path_abs_third_party[dep.target] .. "/cimgui/cimgui.cpp"
         )
     else
         printc(
@@ -477,7 +479,7 @@ local function cimgui_after_init(dep: Dependency)
     ut.pop_dir()
 end
 
-local function build_chipmunk(dep: Dependency)
+local function build_chipmunk(_: Env, dep: Dependency)
     print("chipmunk_custom_build:", lfs.currentdir())
     ut.push_current_dir()
     chdir(dep.dir)
@@ -500,7 +502,7 @@ local function build_chipmunk(dep: Dependency)
     ut.pop_dir()
 end
 
-local function build_lua_common(dep: Dependency)
+local function build_lua_common(_: Env, dep: Dependency)
     if dep.target == 'wasm' then
         cmd_do('emmake make ' ..
             'CC=emcc ' ..
@@ -525,16 +527,16 @@ end
 -- TODO: После каждого шага сборки в массиве dependencies обновлять 
 -- переменные путей libdirs, includes и т.д что-бы другие модули могли 
 -- воспользоваться включаемыми файлами и библиотеками для связывания
-local function build_sol(_: Dependency)
+local function build_sol(_: Env, _: Dependency)
     -- Сделать один включаемый файл
     cmd_do("python single/single.py")          
 end
 
-local function utf8proc_after_build(_: Dependency)
+local function utf8proc_after_build(_: Env, _: Dependency)
     cmd_do("rm libutf8proc.so")
 end
 
-local function copy_headers_to_wfc(_: Dependency)
+local function copy_headers_to_wfc(_: Env, _: Dependency)
     print('copy_headers_to_wfc:', lfs.currentdir())
     cmd_do("cp ../stb/stb_image.h .")
     cmd_do("cp ../stb/stb_image_write.h .")
@@ -594,7 +596,7 @@ project "example"
 
 ]] -- }}}
 
-local function libtess2_after_init(_: Dependency)
+local function libtess2_after_init(_: Env, _: Dependency)
     printc('%{green}libtess2_after_init:%{green}')
     printc(lfs.currentdir())
 
@@ -609,7 +611,7 @@ local function libtess2_after_init(_: Dependency)
 
 end
 
-local function build_libtess2_common(_: Dependency)
+local function build_libtess2_common(_: Env, _: Dependency)
     cmd_do("premake5 gmake")
     ut.push_current_dir()
     chdir("Build")
@@ -617,7 +619,7 @@ local function build_libtess2_common(_: Dependency)
     ut.pop_dir()
 end
 
-modules = {
+local _modules: {Dependency} = {
 
     --[[
     -- {{{
@@ -1184,25 +1186,46 @@ modules = {
 
 }
 
--- XXX: Что даст выделение модулей в класс?
--- XXX: Dependency переименовать в Module
-local record Modules
-    iter: function(): function(): Dependency
-end
-
-local function modules_instance(): Modules
+local function modules_instance(_: Env, target?: Target): Modules
     local self: Modules = {}
+    local modules = {}
+
+    for _, m in ipairs(_modules) do
+        local m_copy = ut.deepcopy(m)
+        if target then
+            m_copy.target = target
+        end
+        table.insert(modules, m_copy)
+    end
 
     self.iter = function(): function(): Dependency
         return coroutine.wrap(function()
-            assert(modules)
             for _, module in ipairs(modules) do
-                --print('module', module.name)
-                --coroutine.yield(module)
-                coroutine.yield(ut.deepcopy(module))
-                --coroutine.yield(ut.shallow_copy(module))
+                --coroutine.yield(ut.deepcopy(module))
+                coroutine.yield(ut.readonly(module))
             end
         end) as function(): Dependency
+    end
+
+    self.get_deps_name_map = function(): {string: Dependency}
+        local map = {}
+        -- XXX: Что будет если deps == nil
+        for _, dep in ipairs(modules) do
+            if map[dep.name] then
+                print("get_deps_name_map: name dublicated", dep.name)
+                os.exit(1)
+            end
+            map[dep.name] = dep
+        end
+        return map
+    end
+
+    self.modules = function(): {Dependency}
+        local m = {}
+        for _, mod in ipairs(modules) do
+            table.insert(m, mod)
+        end
+        return m
     end
 
     return self

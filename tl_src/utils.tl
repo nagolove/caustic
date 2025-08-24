@@ -1,6 +1,6 @@
 local lfs = require 'lfs'
 
-require "common"
+require "global"
 local format = string.format
 local dir_stack: {string} = {}
 
@@ -32,10 +32,12 @@ test_remove_first_backslash("/")
 test_remove_first_backslash("/fefe/efef/")
 --]]
 
+--[[
 local function remove_double_slashes(s: string): string
     local rs = string.gsub(s, "//", "/")
     return rs
 end
+--]]
 
 --[[
 local function test_remove_double_slashes(s: string)
@@ -67,7 +69,9 @@ local function deepcopy<X>(orig: X): X
     if type(orig) == 'table' then
         local copy: {X: X} = {}
         for orig_key, orig_value in pairs(orig as {X: X}) do
-            copy[deepcopy(orig_key)] = deepcopy(orig_value)
+            if orig_key then
+                copy[deepcopy(orig_key)] = deepcopy(orig_value)
+            end
         end
         local mt = deepcopy(getmetatable(orig) as X)
         setmetatable(copy as X, mt as metatable<X>)
@@ -171,6 +175,7 @@ local function merge_tables<X>(a: {X}, b: {X}): {X}
     return tmp
 end
 
+--[[
 local function caustic_path_substitute(s: {string}|string): {string}|string
     --print("caustic_path_substitute:", inspect(s))
 
@@ -191,6 +196,7 @@ local function caustic_path_substitute(s: {string}|string): {string}|string
         print(string.format("caustic_path_substitute: bad type %s for 's'", s))
     end
 end
+--]]
 
 local function template_dirs(dirs: {string}, pattern: string): {string}
     local tmp: {string} = {}
@@ -400,6 +406,7 @@ local function printc(text: string)
     print(ansicolors(text))
 end
 
+--[[
 local function get_deps_name_map(deps?: {Dependency}): {string: Dependency}
     assert(deps)
     local map = {}
@@ -413,6 +420,7 @@ local function get_deps_name_map(deps?: {Dependency}): {string: Dependency}
     end
     return map
 end
+--]]
 
 -- Сделать функцию для поиска строки в файле?
 local function match_in_file(fname: string, pattern: string): boolean
@@ -488,10 +496,120 @@ local function header_guard()
     coroutine.yield("#endif\n")
 end
 
+-- read-only proxy with recursive wrapping and cycle/identity preservation
+local function readonly<T>(root: T): T
+  if type(root) ~= "table" then return root end
+
+  -- weak-key cache: original table -> proxy
+  local cache = setmetatable({}, { __mode = "k" })
+
+  local function wrap(t: any): any
+    if type(t) ~= "table" then return t end
+    local hit = cache[t]
+    if hit then return hit end
+
+    local proxy: any -- forward-declare for closure
+
+    local mt = {
+      __index = function(_, k: any): any
+        local v = (t as {any:any})[k]
+        return (type(v) == "table") and wrap(v) or v
+      end,
+      __newindex = function()
+        error("modules are read-only; use API to modify", 2)
+      end,
+      __pairs = function(): any, any, any
+        local function iter(_, k: {any: any}): any, any
+          local nk, nv = next(t as {any:any}, k)
+          if nk == nil then return nil end
+          if type(nv) == "table" then nv = wrap(nv) end
+          return nk, nv
+        end
+        return iter, nil, nil
+      end,
+      __ipairs = function(): any, any, any
+        local function iter(_, i: integer): any, any
+          i = i + 1
+          local v = (t as {any: integer})[i]
+          if v == nil then return nil end
+          if type(v) == "table" then v = wrap(v) as integer end
+          return i, v
+        end
+        return iter, nil, 0
+      end,
+      __len = function(): integer return #(t as {any}) end,
+      __metatable = "readonly", -- прячет метатаблицу
+    }
+
+    proxy = setmetatable({}, mt)
+    cache[t] = proxy
+    return proxy
+  end
+
+  return wrap(root) as T
+end
+
+local function test_readonly()
+    local x = {
+        p = {
+            i = {
+            }
+        }
+    }
+
+    x.p.i[1] = 10
+    local v1 = x.p.i[1]
+
+    -- чтение и запись
+    local ok, errmsg = pcall(function()
+        local x_ro = readonly(x)
+        local v2 = x_ro.p.i[1]
+        assert(v1 == v2)
+        x_ro.p.i[2] = "hehehe"
+    end) as boolean, string
+
+    assert(ok == false)
+
+    if not ok then
+        --print("test_readonly: errmsg", inspect(errmsg))
+    end
+
+    -- только чтение
+    ok, errmsg = pcall(function()
+        local x_ro = readonly(x)
+        local v2 = x_ro.p.i[1]
+        assert(v1 == v2)
+        --x_ro.p.i[2] = "hehehe"
+    end) as boolean, string
+
+    assert(ok == true)
+
+
+    -- 1) попытка rawset
+    ok = pcall(function()
+        local ro = readonly{ a = 1 }
+        rawset(ro, "b", 2)   -- должно падать/НЕ менять источник
+    end)
+    assert(ok == true)
+    --print("rawset test:", ok)  -- с прокси это будет TRUE => уязвимость
+
+    ok = pcall(function()
+        -- 2) table.insert
+        local src = {1,2,3}
+        local ro = readonly(src)
+        table.insert(ro, 99)       -- изменит прокси-таблицу молча
+        assert(#src == 3)          -- источник не меняется (рассинхрон)
+    end)
+    assert(ok == false)
+end
+
+test_readonly()
+
 return {
+    readonly                    = readonly,
     header_guard                = header_guard,
     match_in_file               = match_in_file,
-    get_deps_name_map           = get_deps_name_map,
+    --get_deps_name_map           = get_deps_name_map,
     find_and_remove_cmake_cache = find_and_remove_cmake_cache,
     cmd_do                      = cmd_do,
     printc                      = printc,
@@ -499,7 +617,7 @@ return {
     filter                      = filter,
     git_is_repo_clean           = git_is_repo_clean,
     cat_file                    = cat_file,
-    caustic_path_substitute     = caustic_path_substitute,
+    --caustic_path_substitute     = caustic_path_substitute,
     filter_sources              = filter_sources,
     merge_tables                = merge_tables,
     pop_dir                     = pop_dir,

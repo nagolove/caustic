@@ -1,4 +1,4 @@
-require "common"
+require "global"
 local serpent = require 'serpent'
 local lfs     = require 'lfs'
 

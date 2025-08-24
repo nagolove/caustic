@@ -5,16 +5,9 @@ local getenv = os.getenv
 local home = getenv("HOME")
 assert(home)
 
-require "common"
+local glob = require "global"
 local ut         = require "utils"
 local remove_last_backslash = ut.remove_last_backslash
-
-if not path_caustic then
-    print("CAUSTIC_PATH is nil")
-    os.exit(1)
-else
-    path_caustic = ut.remove_last_backslash(path_caustic)
-end
 
 --[[
 -- каталог для библиотек x86_64 собранных в релизном режиме
@@ -30,18 +23,20 @@ local path_wasm_third_party_release = remove_last_backslash(
 
 --local lua_ver = "5.1"
 local lua_ver = "5.4"
+local e = glob.env_instance()
+assert(e.path_caustic)
 
 -- {{{ package.path, package.cpath
-package.path = package.path .. ";" .. path_caustic .. "/?.lua;"
-package.path = package.path .. ";" .. path_caustic .. "/tl_dst/?.lua;"
+package.path = package.path .. ";" .. e.path_caustic .. "/?.lua;"
+package.path = package.path .. ";" .. e.path_caustic .. "/tl_dst/?.lua;"
 package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                 home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" .. 
                -- TODO: Заменить данный путь на какой путь из path_caustic .. path_third_party
-               path_caustic .. "/" .. path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
+               e.path_caustic .. "/" .. e.path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
 
 package.cpath = 
         --path_caustic .. "/koh_src/libkoh.so;" ..
-        path_caustic .. "/koh_src/lib?.so;" ..
+        e.path_caustic .. "/koh_src/lib?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
@@ -53,10 +48,10 @@ package.cpath =
 require 'koh'
 
 -- {{{  global variables for module
-assert(path_caustic)
-assert(path_rel_third_party)
-assert(path_rel_wasm_third_party)
-assert(path_rel_win_third_party)
+assert(e.path_caustic)
+assert(e.path_rel_third_party)
+assert(e.path_rel_wasm_third_party)
+assert(e.path_rel_win_third_party)
 -- }}}
 
 -- requires and aliases {{{
@@ -141,7 +136,7 @@ local flags_sanitazer = {
     "-fsanitize-address-use-after-scope"
 }
 
-ut.assert_file(cmake_toolchain_win)
+ut.assert_file(e.cmake_toolchain_win)
 local libcaustic_name = {
     ["linux"] = "caustic_linux",
     ["wasm"] = "caustic_wasm",
@@ -169,22 +164,22 @@ end
 --local verbose = common.verbose
 
 local M = require 'modules'
-local mods = M.modules_instance()
+local mods = M.modules_instance(e)
 
-for x in mods.iter() do
-    print(inspect(x))
-end
+--for x in mods.iter() do
+--    print(inspect(x))
+--end
 
 --os.exit(1)
 --print("os.exit(1)")
 
 
 if verbose then
-    tabular(path_caustic)
-    tabular(path_rel_third_party)
-    tabular(path_abs_third_party)
-    tabular(path_rel_wasm_third_party)
-    tabular(path_rel_win_third_party)
+    tabular(e.path_caustic)
+    tabular(e.path_rel_third_party)
+    tabular(e.path_abs_third_party)
+    tabular(e.path_rel_wasm_third_party)
+    tabular(e.path_rel_win_third_party)
     --tabular(path_rel_third_party_release)
     --tabular(path_wasm_third_party_release)
 end
@@ -324,7 +319,7 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
     local has_stuff = 0
     local stuff = {}
 
-    if lfs.currentdir() ~= path_caustic then
+    if lfs.currentdir() ~= e.path_caustic then
         for _, cfg in ipairs(cfgs) do
             if cfg.artifact then
                 assert(type(cfg.artifact) == 'string')
@@ -613,10 +608,10 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
 
     if cfg and cfg.dependencies then
         for _, depname in ipairs(cfg.dependencies) do
-            table.insert(ready_deps, ut.get_deps_name_map()[depname])
+            table.insert(ready_deps, mods.get_deps_name_map()[depname])
         end
     else
-        ready_deps = ut.deepcopy(modules)
+        ready_deps = ut.deepcopy(mods.modules())
     end
 
     if cfg and cfg.not_dependencies then
@@ -674,13 +669,14 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
     return links_linux_only
 end
 
+-- Собирает все каталоги для библиотек из модулей
 local function gather_libdirs_abs(deps: {Dependency}): {string}
     local libdirs_tbl = {}
     for _, dep in ipairs(deps) do
         if dep.libdirs then
             --print("dep", inspect(dep))
             assert(dep.target)
-            local path = path_abs_third_party[dep.target] .. "/"
+            local path = e.path_abs_third_party[dep.target] .. "/"
             assert(path)
 
             for _, libdir in ipairs(dep.libdirs) do
@@ -707,10 +703,10 @@ local function get_dir(dep: Dependency): string
     end
 end
 
-local function get_deps_map(deps: {Dependency}): {string: Dependency}
-    assert(deps)
+local function get_map_dir2dep(modules: Modules): {string: Dependency}
     local res = {}
-    for _, dep in ipairs(deps) do
+    --for _, dep in ipairs(deps) do
+    for dep in modules.iter() do
         assert(type(dep.url) == 'string')
         local url = dep.url
         if not string.match(url, "%.zip$") then
@@ -733,7 +729,7 @@ local function after_init(dep: Dependency)
     local ok, errmsg: boolean, string = pcall(function()
         print('after_init:', dep.name)
         chdir(dep.dir)
-        dep.after_init(dep)
+        dep.after_init(e, dep)
     end)
     if not ok then
         local msg = 'after_init() failed with ' .. errmsg
@@ -1318,7 +1314,7 @@ end
 
 -- Собирает все проекты из path_caustic/projects.lua
 function actions.projects_make(_args: Args)
-    local list = loadfile(path_caustic .. "/projects.lua")() as {string};
+    local list = loadfile(e.path_caustic .. "/projects.lua")() as {string};
 
     errexit_uv = false
     for k, v in ipairs(list) do
@@ -1703,7 +1699,7 @@ r
     f:write(gdbinit)
     f:close()
 
-    cmd_do(format("cp -r %s/assets .", path_caustic))
+    cmd_do(format("cp -r %s/assets .", e.path_caustic))
     cmd_do("koh compile_flags")
     cmd_do("koh make -c")
 
@@ -1852,7 +1848,7 @@ local function pre_init(_args: Args): {Dependency}
     local deps = {}
     -- указано имя одного модуля
     if _args.name then
-        local dependencies_name_map = ut.get_deps_name_map(modules)
+        local dependencies_name_map = mods.get_deps_name_map()
         print('partial init for dependency', _args.name)
         if dependencies_name_map[_args.name] then
             table.insert(deps, dependencies_name_map[_args.name])
@@ -1862,7 +1858,7 @@ local function pre_init(_args: Args): {Dependency}
         end
     else
         -- или команда применяется ко всем модулям
-        for _, dep in ipairs(modules) do
+        for dep in mods.iter() do
             table.insert(deps, dep)
         end
     end
@@ -1878,7 +1874,7 @@ function actions.init(_args: Args)
         return
     end
 
-    if not path_rel_third_party_t[_args.target] then
+    if not e.path_rel_third_party_t[_args.target] then
         printc("%{red}could not find target%{yellow}" .. _args.target .. 
                "%{reset}")
        return
@@ -1890,12 +1886,12 @@ function actions.init(_args: Args)
         dep.target = _args.target
     end
 
-    local path = path_rel_third_party_t[_args.target]
+    local path = e.path_rel_third_party_t[_args.target]
     print("actions.init: path", path)
 
     ut.push_current_dir()
 
-    chdir(path_caustic)
+    chdir(e.path_caustic)
 
     if not chdir(path) then
         if not mkdir(path) then
@@ -2005,7 +2001,7 @@ end
 
 function actions.selftest_lg(_args: Args)
     --print('selftest')
-    local selftest_fname = path_caustic .. "/selftest.lua"
+    local selftest_fname = e.path_caustic .. "/selftest.lua"
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(selftest_fname)() as {string}
         --print('test_dirs', inspect(test_dirs))
@@ -2028,7 +2024,7 @@ end
 
 function actions.selftest_push(_args: Args)
     --print('selftest')
-    local selftest_fname = path_caustic .. "/selftest.lua"
+    local selftest_fname = e.path_caustic .. "/selftest.lua"
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(selftest_fname)() as {string}
         --print('test_dirs', inspect(test_dirs))
@@ -2069,16 +2065,16 @@ local function git_status2(dirlist_fname: string, _args: Args)
 end
 
 function actions.projects_status(_args: Args)
-    git_status2(path_caustic .. "/projects.lua", _args)
+    git_status2(e.path_caustic .. "/projects.lua", _args)
 end
 
 function actions.selftest_status(_args: Args)
-    git_status2(path_caustic .. "/selftest.lua", _args)
+    git_status2(e.path_caustic .. "/selftest.lua", _args)
 end
 
 function actions.selftest(_args: Args)
     --print('selftest')
-    local selftest_fname = path_caustic .. "/selftest.lua"
+    local selftest_fname = e.path_caustic .. "/selftest.lua"
     local ok, errmsg: boolean, string = pcall(function()
         local test_dirs = loadfile(selftest_fname)() as {string}
         --print('test_dirs', inspect(test_dirs))
@@ -2532,7 +2528,7 @@ local function backup(dep: Dependency)
 
     ut.push_current_dir()
 
-    local path = path_rel_third_party_t[dep.target]
+    local path = e.path_rel_third_party_t[dep.target]
     chdir(path)
 
     print('backup')
@@ -2573,14 +2569,14 @@ function actions.remove(_args: Args)
         return
     end
 
-    local path = path_rel_third_party_t[_args.target]
+    local path = e.path_rel_third_party_t[_args.target]
     if not path then
         print("%{yellow}unknown target%{reset}")
         return
     end
 
     local dirnames: {string} = {}
-    local dependencies_name_map = ut.get_deps_name_map(modules)
+    local dependencies_name_map = mods.get_deps_name_map()
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
@@ -2595,10 +2591,10 @@ function actions.remove(_args: Args)
     --]]
 
     ut.push_current_dir()
-    chdir(path_caustic)
+    chdir(e.path_caustic)
 
     -- TODO: Сделать многоступенчатый бэкап данных перед удалением
-    local deps_name_map = ut.get_deps_name_map(modules)
+    local deps_name_map = mods.get_deps_name_map()
     local dep = deps_name_map[_args.name]
 
     if _args.name and dep then
@@ -2617,21 +2613,21 @@ local function get_ready_includes(cfg: Cfg, target: Target): {string}
     local ready_deps = get_ready_deps(cfg)
     --print('get_ready_includes:', inspect(ready_deps))
 
-    local path = path_rel_third_party_t[target]
+    local path = e.path_rel_third_party_t[target]
 
     local _includedirs = prefix_add(
-        path_caustic .. "/",
+        e.path_caustic .. "/",
         gather_includedirs(ready_deps, path)
     )
     if _includedirs then
-        table.insert(_includedirs, path_caustic .. "/src")
+        table.insert(_includedirs, e.path_caustic .. "/src")
     end
 
     return _includedirs 
 end
 
 function actions.dependencies(_: Args)
-    for _, dep in ipairs(modules) do
+    for dep in mods.iter() do
         print(tabular(dep));
     end
 end
@@ -2812,7 +2808,7 @@ local function _build(dep: Dependency)
             assert(target_build_func_name)
 
             if dep[target_build_func_name] then
-                dep[target_build_func_name](dep)
+                dep[target_build_func_name](e, dep)
             else
                 printc("%{red}_build: dep.name '" 
                     .. dep.name 
@@ -2868,7 +2864,7 @@ local function _build(dep: Dependency)
 
     if dep and dep.after_build then
         ok, errmsg = pcall(function()
-            dep.after_build(dep)
+            dep.after_build(e, dep)
         end) as (boolean, string)
         if not ok then
             print(inspect(dep), 'failed with', errmsg)
@@ -2883,16 +2879,16 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
     local deps = {}
 
     -- Путь к развернутой системе
-    chdir(path_caustic)
+    chdir(e.path_caustic)
     -- Путь к библиотекам
     chdir(path_rel)
 
     if _args.name then
         print(format("build '%s'", _args.name))
-        local dependencies_name_map = ut.get_deps_name_map(modules)
+        local dependencies_name_map = mods.get_deps_name_map()
         if dependencies_name_map[_args.name] then
             local dir = get_dir(dependencies_name_map[_args.name])
-            local deps_map = get_deps_map(modules)
+            local deps_map = get_map_dir2dep(mods)
             local dep: Dependency
             local ok, errmsg: boolean, string = pcall(function()
                 dep = deps_map[dir]
@@ -2915,7 +2911,10 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
         end
     else
         -- обработка всех модулей
-        deps = modules
+        -- deps = modules
+        for m in mods.iter() do
+            table.insert(deps, m)
+        end
     end
 
     --print('sub_build:', target)
@@ -2943,15 +2942,15 @@ function actions.build(_args: Args)
         target = 'linux'
     end
     --print('actions.build: target', target)
-    sub_build(_args, path_rel_third_party_t[target], target)
+    sub_build(_args, e.path_rel_third_party_t[target], target)
 end
 
 function actions.deps(_args: Args)
     if _args.full then
-        print(tabular(modules))
+        print(tabular(mods.modules()))
     else
         local shorts = {}
-        for _, dep in ipairs(modules) do
+        for dep in mods.iter() do
             table.insert(shorts, dep.name)
         end
         print(tabular(shorts))
@@ -3101,7 +3100,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     -- Добавить какие-то wasm флаги
     if _args.target == 'wasm' then
 
-        local shell_path = path_caustic .. "/shell.html"
+        local shell_path = e.path_caustic .. "/shell.html"
         --print("project_link: shell_path", shell_path)
 
         cmd = cmd 
@@ -3219,11 +3218,11 @@ end
 
 local function _update(dep: Dependency)
     ut.push_current_dir()
-    chdir(path_caustic)
+    chdir(e.path_caustic)
     if dep.update then
         backup(dep)
-        chdir(path_rel_third_party .. "/" .. dep.dir)
-        dep.update(dep)
+        chdir(e.path_rel_third_party .. "/" .. dep.dir)
+        dep.update(e, dep)
     end
     ut.pop_dir()
 end
@@ -3231,7 +3230,7 @@ end
 -- XXX: Работает только из каталога ~/caustic
 function actions.update(_args: Args)
     if _args.name then
-        local dependencies_name_map = ut.get_deps_name_map(modules)
+        local dependencies_name_map = mods.get_deps_name_map()
         print('update for', _args.name)
         if dependencies_name_map[_args.name] then
             local dep = dependencies_name_map[_args.name]
@@ -3453,7 +3452,7 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
     local map_all_deps = {}
 
     -- Отображение: Имя -> Зависимость
-    for _, dep in ipairs(ut.deepcopy(modules)) do
+    for _, dep in ipairs(ut.deepcopy(mods.modules())) do
         map_all_deps[dep.name] = dep
     end
     -- Удаление зависимостей согласно конфигурационной структуре
@@ -3470,7 +3469,7 @@ local function get_ready_deps_defines(cfg: Cfg): {string}
         table.insert(flags, format("-DKOH_%s", dep.name:upper()))
         if dep.custom_defines then
             -- Функция может ничего не вернуть(вернуть nil)
-            local defines = dep.custom_defines(dep)
+            local defines = dep.custom_defines(e, dep)
             if defines then
                 for define in ipairs(defines) do
                     table.insert(flags, format("-D%s", define))
@@ -3507,11 +3506,13 @@ local function print_sorted_string(objfiles: {string})
 end
 
 -- XXX: Что делает эта функция? Зачем?
+--[[
 local function dependencies_set_target(target: Target)
     for _, dep in ipairs(modules) do
         dep.target = target
     end
 end
+--]]
 
 local type MakeDriver = function(queue: {Task})
 
@@ -3529,7 +3530,8 @@ local function sub_make(
     assert(driver)
     _args.target = target
 
-    dependencies_set_target(target)
+    --dependencies_set_target(target)
+    mods = M.modules_instance(e, target)
 
     if verbose then
         print(format(
@@ -3704,10 +3706,10 @@ local function sub_make(
 
     local _flags: string = table.concat(flags, " ")
 
-    local path = path_rel_third_party_t[target]
+    local path = e.path_rel_third_party_t[target]
     assert(path)
 
-    local libdirs = gather_libdirs_abs(modules)
+    local libdirs = gather_libdirs_abs(mods.modules())
     --printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
 
     if target == 'linux' then
@@ -3726,7 +3728,7 @@ local function sub_make(
     end
 
     if cfg.artifact then
-        table.insert(libdirs, path_caustic)
+        table.insert(libdirs, e.path_caustic)
 
         local libcaustic = libcaustic_name[target]
         assert(libcaustic)
@@ -3847,7 +3849,7 @@ local function sub_make(
     if cfg.artifact then
         -- Сборка проекта
         ut.push_current_dir()
-        chdir(path_caustic)
+        chdir(e.path_caustic)
         if verbose then
             print("sub_make: currentdir", lfs.currentdir())
         end
@@ -4210,11 +4212,12 @@ local function _fd_code_in_modules(): {string}
     local extensions = table.concat(extensions_t, "|")
     local cmd = format([[fd "%s"]], extensions)
 
-    for _, module in ipairs(modules) do
+    --for _, module in ipairs(modules) do
+    for module in mods.iter() do
         ut.push_current_dir()
 
         if module.dir then
-            local rel_dir = path_rel_third_party .. "/" .. module.dir
+            local rel_dir = e.path_rel_third_party .. "/" .. module.dir
             local ok, msg = chdir(rel_dir)
             if not ok then
                 print("_fd_code_in_modules", msg)
@@ -4223,7 +4226,7 @@ local function _fd_code_in_modules(): {string}
             printc("%{blue}" .. lfs.currentdir() .. "%{reset}") 
 
             local pipe = io.popen(cmd)
-            local abs_path = path_caustic .. "/" .. rel_dir .. "/"
+            local abs_path = e.path_caustic .. "/" .. rel_dir .. "/"
             for line in pipe:lines() do
                 local result_line = abs_path .. line
                 table.insert(result, result_line)
@@ -5136,7 +5139,7 @@ local function main()
         end
 
         if not _args.no_verbose_path then
-            print("CAUSTIC_PATH", path_caustic)
+            print("CAUSTIC_PATH", e.path_caustic)
         end
 
         for k, v in pairs(_args) do
