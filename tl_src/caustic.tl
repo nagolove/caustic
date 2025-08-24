@@ -1992,9 +1992,37 @@ modules = {
 
 }
 
+-- XXX: Что даст выделение модулей в класс?
+-- XXX: Dependency переименовать в Module
 local record Modules
-    t: function(): {Dependency}
+    iter: function(): function(): Dependency
 end
+
+local function modules_instance(): Modules
+    local self: Modules = {}
+
+    self.iter = function(): function(): Dependency
+        return coroutine.wrap(function()
+            for _, module in ipairs(modules) do
+                --print('module', module.name)
+                --coroutine.yield(module)
+                coroutine.yield(ut.deepcopy(module))
+                --coroutine.yield(ut.shallow_copy(module))
+            end
+        end) as function(): Dependency
+    end
+
+    return self
+end
+
+local M = modules_instance()
+
+for x in M.iter() do
+    print(inspect(x))
+end
+
+os.exit(1)
+print("os.exit(1)")
 
 -- {{{ functions
 
