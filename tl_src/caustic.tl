@@ -57,6 +57,7 @@ assert(e.path_rel_win_third_party)
 -- requires and aliases {{{
 local linenoise  = require 'linenoise'
 local json       = require "dkjson"
+--local git        = require 'git'
 local gsub       = string.gsub
 local insert     = table.insert
 local tabular    = require "tabular".show
@@ -96,7 +97,8 @@ end
 -- XXX: Сделать выбор и показ текущей модели в чате
 local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
-local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+--local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+local llm_embedding_model =  "oasis-code-embedding-1.5b"
 
 -- globals {{{
 
@@ -914,6 +916,8 @@ end
 local record Actions
     -- {{{
 
+    embeddings: function(Args)
+    snapshot: function(Args)
     xxhash: function(Args)
     --anim_convert: function(Args)
     --projects_status2: function(Args)
@@ -950,41 +954,12 @@ local record Actions
     -- }}}
 end
 
-local enum ActionsEnum
-    -- {{{
-
-    "xxhash"
-    "chunks_open"
-    "ai"
-    "build"
-    "compile_flags"
-    "compile_commands"
-    "deps"
-    "dist"
-    "files_koh"
-    "load_index"
-    "init"          
-    "make"
-    "project"
-    "projects_make"
-    "projects_status"
-    "publish"
-    "remove"
-    "run"
-    "selftest"
-    "selftest_lg"
-    "selftest_push"
-    "selftest_status"
-    "test"
-    "unit"
-    "update"
-    "verbose"
-
-    -- }}}
-end
-
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    embeddings = {
+        summary = [[make embeddings vectors for tags.json]]
+    },
 
     xxhash = {
         summary = [[testing xxhash32 and xxhash64 in lua]]
@@ -1150,6 +1125,9 @@ with -g option just call 'git status' for each entry
     },
     verbose = {
         summary = "print internal data with urls, paths etc.",
+    },
+    snapshot = {
+        summary = "make revisions and branches snapshot of target modules tree",
     },
 }
 -- }}}
@@ -2405,121 +2383,6 @@ function actions.publish(_args: Args)
     end
 end
 
-local function rec_remove_dir(dirname: string)
-    --print('rec_remove_dir', dirname)
-    local ok, errmsg: boolean, any
-
-    --[[
-    -- XXX Не работает проверка на незакрепленные изменения в гите.
-    -- Проверять только если каталог является гит хранилищем
-    ut.push_current_dir()
-    ok, errmsg = chdir(dirname)
-    if ok then
-        if not ut.git_is_repo_clean(dirname) then
-            local curdir = lfs.currentdir()
-            local msg = format(
-                "rec_remove_dir: git index is dirty '%s'", curdir
-            )
-            printc("%{red}" .. msg .. "%{reset}")
-            ut.pop_dir()
-            return
-        end
-        ut.pop_dir()
-    else
-        local msg = format(
-            "rec_remove_dir: could not change directory to '%s'", dirname
-        )
-        printc("%{red}" .. msg .. "%{reset}")
-        ut.pop_dir()
-        return
-    end
-    --]]
-
-    -- Попытка удалить пустой каталог
-    ok, errmsg = lfs.rmdir(dirname)
-    --print('rmdir', ok, errcode)
-    if ok then
-        print('rec_remove_dir', errmsg)
-        return
-    end
-
-    ok = pcall(function()
-        for k in lfs.dir(dirname) do
-            if k ~= '.' and k ~= '..' then
-                local path = dirname .. '/' .. k
-                local attrs = lfs.attributes(path)
-
-                -- XXX: Не для всех артефактов сборки получается прочитать 
-                -- аттрибуты
-                if attrs and attrs.mode == 'file' then
-                    print("remove:", path)
-                    os.remove(path)
-                end
-
-                -- XXX:
-                ok, errmsg = pcall(function()
-                    os.remove(path)
-                end) as (boolean, string)
-                if not ok then
-                    print(format(
-                        "rec_remove_dir: could not remove file '%s' with %s",
-                        path, errmsg
-                    ))
-                end
-            end
-        end
-    end)
-
-    if not ok then
-        print("rec_remove_dir:", errmsg)
-    end
-
-    ok, errmsg = pcall(function()
-        for k in lfs.dir(dirname) do
-            if k ~= '.' and k ~= '..' then
-                local path = dirname .. '/' .. k
-                local attrs = lfs.attributes(path)
-                if attrs then
-                    print(path)
-                    print(tabular(attrs))
-                end
-                if attrs and attrs.mode == 'directory' then
-                    rec_remove_dir(path)
-                end
-            end
-        end
-    end) as boolean, string
-
-    if not ok then
-        print("rec_remove_dir:", errmsg)
-    end
-
-    ok, errmsg = lfs.rmdir(dirname)
-end
-
-local function _remove(path: string, dirnames: {string})
-    ut.push_current_dir()
-    chdir(path)
-
-    if not string.match(lfs.currentdir(), path) then
-        print("Bad current directory")
-        return
-    end
-
-    local ok, errmsg: boolean, string = pcall(function()
-        for _, dirname in ipairs(dirnames) do
-            print("_remove", dirname)
-            rec_remove_dir(dirname)
-        end
-    end)
-
-    if not ok then
-        print("fail if rec_remove_dir", errmsg)
-    end
-
-    ut.pop_dir()
-end
-
 local function backup(dep: Dependency)
     if not dep.target then
         printc("%{red}could not do backup without target%{reset}")
@@ -2602,8 +2465,10 @@ function actions.remove(_args: Args)
         backup(dep)
     end
 
+    print('dirnames', inspect(dirnames))
+
     chdir(path)
-    _remove(path, dirnames)
+    ut._remove(path, dirnames)
 
     ut.pop_dir()
 end
@@ -2679,6 +2544,10 @@ function actions.compile_flags(_args: Args)
         put("-DPLATFORM_WEB")
         put "-D__wasm__"
         local EMSDK = getenv('EMSDK')
+        if not EMSDK then
+            print('actions.compile_flags: could not get env EMSDK')
+            return
+        end
         put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
     end
 
@@ -4066,8 +3935,9 @@ local record Chunk
     line_end: integer
     -- При хранении в файле пишется как zlib сжатая строка
     text: string
-    -- При хранении в файле пишется как zlib сжатая строка
-    embedding: {number} -- 4096 
+    -- При хранении в файле пишется как zlib сжатая строка 
+    -- сперва записанная через serpent
+    embedding: string|{number} -- 4096 
     --  Хеш от текста, считать его заранее
     hash: string -- xxHash32, строка длиной 4
 end
@@ -4452,6 +4322,214 @@ local function bin_to_hex(str: string): string
     end))
 end
 
+local record CTag 
+    enum Tag
+        'tag'
+        'ptag'
+    end
+
+  _type: Tag
+  _end: integer
+  file: boolean
+  kind: string
+  line: integer
+  name: string
+  path: string
+  pattern: string
+  scope: string
+  scopeKind: string
+  typeref: string
+end
+
+local function chunks_write_binary(fname: string, chunks: {Chunk})
+    assert(chunks)
+
+    for _, c in ipairs(chunks) do
+
+        if not c.id then
+            print("chunks_write_binary: have not 'id' field in chunk")
+            return
+        end
+
+        if not c.file then
+            print("chunks_write_binary: have not 'file' field in chunk")
+            return
+        end
+
+        if not c.line_start then
+            print("chunks_write_binary: have not 'line_start' field in chunk")
+            return
+        end
+
+        if not c.line_end then
+            print("chunks_write_binary: have not 'line_end' field in chunk")
+            return
+        end
+
+        if not c.text then
+            print("chunks_write_binary: have not 'text' field in chunk")
+            return
+        end
+
+        if not c.embedding then
+            print("chunks_write_binary: have not 'embedding' field in chunk")
+            return
+        end
+
+        if not c.hash then
+            print("chunks_write_binary: have not 'hash' field in chunk")
+            return
+        end
+
+    end
+
+    local f = io.open(fname, "w")
+    if not f then
+        print('chunks_write_binary: could not open file for writing', fname)
+        return
+    end
+
+    local magic = 'caustic_index'
+    f:write(magic)
+
+    --[[
+-- 'I8' = unsigned 8-byte integer
+f:write(string.pack("I8", u64))
+
+f:close()
+Это создаст бинарные 8 байт (EF CD AB 90 78 56 34 12 на little-endian машине).
+
+Ключевые моменты
+Формат "I8" — «unsigned 64-bit integer» (8 байт).
+
+"i8" — то же, но знаковый (int64_t).
+
+"I4", "I2", "I1" — для меньших беззнаковых.
+
+По умолчанию порядок байтов зависит от платформы (обычно little-endian).
+Если нужно явно задать порядок:
+
+"<I8" — little-endian 64-бит беззнаковое.
+
+">I8" — big-endian.
+
+Читать обратно можно через string.unpack("I8", data).
+
+    --]]
+end
+
+function actions.embeddings(_: Args)
+    local tags_fname = 'tags.json'
+    local attr = lfs.attributes(tags_fname)
+    print('attr', inspect(attr))
+
+    if not attr then
+        return
+    end
+
+    if attr.mode ~= 'file' then
+        return
+    end
+
+    local f = io.open(tags_fname)
+    if not f then
+        print('actions.embegginds: could not open', tags_fname)
+        return
+    end
+
+    local tags: {CTag} = {}
+    for line in f:lines() do
+        local t = json.decode(line)
+        --print(inspect(t))
+
+        local v = t['end']
+        t['_end'] = v
+
+        table.insert(tags, t as CTag)
+    end
+
+    local path2lines: {string:{string}} = {}
+
+    -- гружу в словарь файлы
+    for _, n in ipairs(tags) do
+
+        --[[
+        print(
+            "n.path", n.path,
+            "n._start", n._start,
+            "n._end", n._end
+        )
+        print(type(n._start), type(n._end))
+        --]]
+
+        if n.path and n.line and n._end then
+            --print('ready')
+            if path2lines[n.path] then
+                goto continue
+            end
+
+            local src = io.open(n.path, "r")
+            --print("file was opened")
+            if not src then
+                goto continue
+            end
+
+            local lines: {string} = {}
+            for line in src:lines() do
+                table.insert(lines, line)
+            end
+
+            path2lines[n.path] = lines
+        end
+
+        ::continue::
+    end
+
+    print(inspect(path2lines))
+    local chunks: {Chunk} = {}
+
+    -- теперь достаю куски текста исходных файлов как построчные записи
+    for _, n in ipairs(tags) do
+        if n.path and n.line and n._end then
+            local lines = path2lines[n.path]
+            assert(lines)
+
+            local chunks_lines = {}
+            for i = n.line, n._end, 1 do
+                print(lines[i])
+                table.insert(chunks_lines, lines[i])
+            end
+            local chunk_str = table.concat(chunks_lines, '\n')
+
+            local def = zlib.deflate(6, 8)
+            local text_compressed = def(chunk_str, "finish")
+
+            local vector = embedding(llm_embedding_model, chunk_str)[1]
+            assert(vector)
+            local dump = serpent.dump(vector)
+            local vector_compressed = def(dump, "finish")
+
+            local chunk: Chunk = {
+                id = n.path .. ":" .. n.line,
+                file = n.path,
+                line_start = n.line,
+                line_end = n._end,
+                text = text_compressed,
+                hash = hash32(chunk_str),
+                embedding = vector_compressed,
+            }
+            table.insert(chunks, chunk)
+
+            print()
+            print()
+            print()
+        end
+    end
+
+    chunks_write_binary("chunks.tags.json", chunks)
+
+end
+
 function actions.chunks_open(_: Args)
     local chunks_str = load_chunks2string("chunks_koh.zlib")
     local chunks_sz = #chunks_str
@@ -4502,7 +4580,8 @@ function actions.chunks_open(_: Args)
         --assert(ch.embedding)
         if ch.embedding then
             --print("#ch.embeddings", #ch.embedding)
-            searcher:add(ch.embedding, ch.hash)
+            assert(type(ch.embedding) == 'table')
+            searcher:add(ch.embedding as {number}, ch.hash)
         else
             print("no embedding vector for chunk", bin_to_hex(ch.hash))
             table.insert(chunks_without_embeddings, ch)
@@ -5025,6 +5104,16 @@ function actions.ai(_args: Args)
     w:write(serpent.dump(mkd))
 end
 
+function actions.snapshot(_: Args)
+    local f = io.open("snapshot.lua", "w")
+    if not f then return end
+
+    local dump = serpent.block(mods.modules())
+    print(dump)
+
+    f:write(dump)
+end
+
 function actions.ctags(_args: Args) 
     -- XXX: Добавить пути включаемых файлов
 
@@ -5144,8 +5233,9 @@ local function main()
 
         for k, v in pairs(_args) do
             local can_call = type(v) == 'boolean' and v == true 
-            if actions[k as ActionsEnum] and can_call then
-                actions[k as ActionsEnum](_args as Args)
+            local type A = {string:function}
+            if (actions as A)[k] and can_call then
+                (actions as A)[k](_args as Args)
             end
         end
     else
