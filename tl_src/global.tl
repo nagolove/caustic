@@ -71,6 +71,15 @@ end
 global type DepLinks = {string}|function(dep: Dependency): {string}
 
 global record Dependency
+    -- полный абсолютный путь до каталога модуля
+    path_abs: string
+
+    -- хеш коммита который будет скачиваться
+    revision: string
+
+    -- ветка которая будет скачиваться
+    branch: string
+
     -- заполняется сборочным скриптом, используется внутри функций сборки
     -- инициализации модулей
     target: Target
