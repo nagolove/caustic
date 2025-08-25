@@ -1,6 +1,8 @@
 local lfs = require 'lfs'
 
 require "global"
+local chdir      = lfs.chdir
+local tabular    = require "tabular".show
 local format = string.format
 local dir_stack: {string} = {}
 
@@ -271,7 +273,7 @@ test_git_is_repo_clean("3rd_party/genann/")
 test_git_is_repo_clean("3rd_party/Chipmunk2D/")
 --]]
 
-local type RIpairs = function(): any, any
+local type RIpairs = function(): integer, any
 
 -- Обратный ipairs() итератор
 local function ripairs(t: {any}): RIpairs
@@ -605,7 +607,118 @@ end
 
 test_readonly()
 
+local function rec_remove_dir(dirname: string)
+    --print('rec_remove_dir', dirname)
+    local ok, errmsg: boolean, any
+
+    --[[
+    -- XXX Не работает проверка на незакрепленные изменения в гите.
+    -- Проверять только если каталог является гит хранилищем
+    ut.push_current_dir()
+    ok, errmsg = chdir(dirname)
+    if ok then
+        if not ut.git_is_repo_clean(dirname) then
+            local curdir = lfs.currentdir()
+            local msg = format(
+                "rec_remove_dir: git index is dirty '%s'", curdir
+            )
+            printc("%{red}" .. msg .. "%{reset}")
+            ut.pop_dir()
+            return
+        end
+        ut.pop_dir()
+    else
+        local msg = format(
+            "rec_remove_dir: could not change directory to '%s'", dirname
+        )
+        printc("%{red}" .. msg .. "%{reset}")
+        ut.pop_dir()
+        return
+    end
+    --]]
+
+    -- Попытка удалить пустой каталог
+    ok, errmsg = lfs.rmdir(dirname)
+    --print('rmdir', ok, errcode)
+    if ok then
+        print('rec_remove_dir', errmsg)
+        return
+    end
+
+    ok = pcall(function()
+        for k in lfs.dir(dirname) do
+            if k ~= '.' and k ~= '..' then
+                local path = dirname .. '/' .. k
+
+                --local attrs = lfs.attributes(path)
+                --if attrs and attrs.mode == 'file' then
+
+                -- XXX:
+                ok, errmsg = pcall(function()
+                    os.remove(path)
+                end) as (boolean, string)
+                if not ok then
+                    print(format(
+                        "rec_remove_dir: could not remove file '%s' with %s",
+                        path, errmsg
+                    ))
+                end
+            end
+        end
+    end)
+
+    if not ok then
+        print("rec_remove_dir:", errmsg)
+    end
+
+    ok, errmsg = pcall(function()
+        for k in lfs.dir(dirname) do
+            if k ~= '.' and k ~= '..' then
+                local path = dirname .. '/' .. k
+                local attrs = lfs.attributes(path)
+                if attrs then
+                    print(path)
+                    print(tabular(attrs))
+                end
+                if attrs and attrs.mode == 'directory' then
+                    rec_remove_dir(path)
+                end
+            end
+        end
+    end) as boolean, string
+
+    if not ok then
+        print("rec_remove_dir:", errmsg)
+    end
+
+    ok, errmsg = lfs.rmdir(dirname)
+end
+
+local function _remove(path: string, dirnames: {string})
+    push_current_dir()
+    chdir(path)
+
+    if not string.match(lfs.currentdir(), path) then
+        print("Bad current directory")
+        return
+    end
+
+    local ok, errmsg: boolean, string = pcall(function()
+        for _, dirname in ipairs(dirnames) do
+            print("_remove", dirname)
+            rec_remove_dir(dirname)
+        end
+    end)
+
+    if not ok then
+        print("fail if rec_remove_dir", errmsg)
+    end
+
+    pop_dir()
+end
+
 return {
+    _remove                     = _remove,
     readonly                    = readonly,
     header_guard                = header_guard,
     match_in_file               = match_in_file,
