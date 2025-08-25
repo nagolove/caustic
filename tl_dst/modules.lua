@@ -1,7 +1,8 @@
 
 require("global")
-local ut = require('utils')
 
+local ut = require('utils')
+local git = require('git')
 local cmd_do = ut.cmd_do
 local find_and_remove_cmake_cache = ut.find_and_remove_cmake_cache
 local inspect = require('inspect')
@@ -40,7 +41,7 @@ local function update_box2c(e, dep)
       cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
       cmd_do("git pull erin main")
    else
-      printc("%{red}repository is dirty%{reset}")
+      printc("%{red}repository is dirty, nothing to do%{reset}")
    end
 
    ut.pop_dir()
@@ -254,6 +255,10 @@ local function build_raylib_common(_, dep)
       chdir('src')
    elseif dep.target == 'wasm' then
       local EMSDK = os.getenv('EMSDK')
+      if not EMSDK then
+         print("build_raylib_common: could not get EMSDK env variable")
+         return
+      end
 
       chdir("src")
       cmd_do("make clean")
@@ -1186,17 +1191,33 @@ local _modules = {
 
 }
 
-local function modules_instance(_, target)
+local function modules_instance(e, target)
+   assert(e)
    local self = {}
    local modules = {}
 
+   if not target then
+      target = 'linux'
+   end
+
+   local path_base = e.path_abs_third_party[target]
+   assert(path_base)
+
+
    for _, m in ipairs(_modules) do
       local m_copy = ut.deepcopy(m)
-      if target then
-         m_copy.target = target
+      m_copy.target = target
+      if m_copy.dir then
+         m_copy.path_abs = path_base .. "/" .. m_copy.dir
+
+         m_copy.branch = git.current_branch(m_copy.path_abs)
+         m_copy.revision = git.current_revision(m_copy.path_abs)
+      else
+         m_copy.path_abs = nil
       end
       table.insert(modules, m_copy)
    end
+
 
    self.iter = function()
       return coroutine.wrap(function()

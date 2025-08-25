@@ -57,6 +57,7 @@ assert(e.path_rel_win_third_party)
 
 local linenoise = require('linenoise')
 local json = require("dkjson")
+
 local gsub = string.gsub
 local insert = table.insert
 local tabular = require("tabular").show
@@ -96,7 +97,8 @@ end
 
 local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
-local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+
+local llm_embedding_model = "oasis-code-embedding-1.5b"
 
 
 
@@ -952,39 +954,12 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local parser_setup = {
 
+
+   embeddings = {
+      summary = [[make embeddings vectors for tags.json]],
+   },
 
    xxhash = {
       summary = [[testing xxhash32 and xxhash64 in lua]],
@@ -1150,6 +1125,9 @@ with -g option just call 'git status' for each entry
    },
    verbose = {
       summary = "print internal data with urls, paths etc.",
+   },
+   snapshot = {
+      summary = "make revisions and branches snapshot of target modules tree",
    },
 }
 
@@ -2405,121 +2383,6 @@ function actions.publish(_args)
    end
 end
 
-local function rec_remove_dir(dirname)
-
-   local ok, errmsg
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   ok, errmsg = lfs.rmdir(dirname)
-
-   if ok then
-      print('rec_remove_dir', errmsg)
-      return
-   end
-
-   ok = pcall(function()
-      for k in lfs.dir(dirname) do
-         if k ~= '.' and k ~= '..' then
-            local path = dirname .. '/' .. k
-            local attrs = lfs.attributes(path)
-
-
-
-            if attrs and attrs.mode == 'file' then
-               print("remove:", path)
-               os.remove(path)
-            end
-
-
-            ok, errmsg = pcall(function()
-               os.remove(path)
-            end)
-            if not ok then
-               print(format(
-               "rec_remove_dir: could not remove file '%s' with %s",
-               path, errmsg))
-
-            end
-         end
-      end
-   end)
-
-   if not ok then
-      print("rec_remove_dir:", errmsg)
-   end
-
-   ok, errmsg = pcall(function()
-      for k in lfs.dir(dirname) do
-         if k ~= '.' and k ~= '..' then
-            local path = dirname .. '/' .. k
-            local attrs = lfs.attributes(path)
-            if attrs then
-               print(path)
-               print(tabular(attrs))
-            end
-            if attrs and attrs.mode == 'directory' then
-               rec_remove_dir(path)
-            end
-         end
-      end
-   end), string
-
-   if not ok then
-      print("rec_remove_dir:", errmsg)
-   end
-
-   ok, errmsg = lfs.rmdir(dirname)
-end
-
-local function _remove(path, dirnames)
-   ut.push_current_dir()
-   chdir(path)
-
-   if not string.match(lfs.currentdir(), path) then
-      print("Bad current directory")
-      return
-   end
-
-   local ok, errmsg = pcall(function()
-      for _, dirname in ipairs(dirnames) do
-         print("_remove", dirname)
-         rec_remove_dir(dirname)
-      end
-   end)
-
-   if not ok then
-      print("fail if rec_remove_dir", errmsg)
-   end
-
-   ut.pop_dir()
-end
-
 local function backup(dep)
    if not dep.target then
       printc("%{red}could not do backup without target%{reset}")
@@ -2602,8 +2465,10 @@ function actions.remove(_args)
       backup(dep)
    end
 
+   print('dirnames', inspect(dirnames))
+
    chdir(path)
-   _remove(path, dirnames)
+   ut._remove(path, dirnames)
 
    ut.pop_dir()
 end
@@ -2679,6 +2544,10 @@ function actions.compile_flags(_args)
       put("-DPLATFORM_WEB")
       put("-D__wasm__")
       local EMSDK = getenv('EMSDK')
+      if not EMSDK then
+         print('actions.compile_flags: could not get env EMSDK')
+         return
+      end
       put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
    end
 
@@ -4072,6 +3941,7 @@ end
 
 
 
+
 local chunk_lines_num = 40
 local chunk_lines_overlap = 5
 
@@ -4452,6 +4322,214 @@ local function bin_to_hex(str)
    end))
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function chunks_write_binary(fname, chunks)
+   assert(chunks)
+
+   for _, c in ipairs(chunks) do
+
+      if not c.id then
+         print("chunks_write_binary: have not 'id' field in chunk")
+         return
+      end
+
+      if not c.file then
+         print("chunks_write_binary: have not 'file' field in chunk")
+         return
+      end
+
+      if not c.line_start then
+         print("chunks_write_binary: have not 'line_start' field in chunk")
+         return
+      end
+
+      if not c.line_end then
+         print("chunks_write_binary: have not 'line_end' field in chunk")
+         return
+      end
+
+      if not c.text then
+         print("chunks_write_binary: have not 'text' field in chunk")
+         return
+      end
+
+      if not c.embedding then
+         print("chunks_write_binary: have not 'embedding' field in chunk")
+         return
+      end
+
+      if not c.hash then
+         print("chunks_write_binary: have not 'hash' field in chunk")
+         return
+      end
+
+   end
+
+   local f = io.open(fname, "w")
+   if not f then
+      print('chunks_write_binary: could not open file for writing', fname)
+      return
+   end
+
+   local magic = 'caustic_index'
+   f:write(magic)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+end
+
+function actions.embeddings(_)
+   local tags_fname = 'tags.json'
+   local attr = lfs.attributes(tags_fname)
+   print('attr', inspect(attr))
+
+   if not attr then
+      return
+   end
+
+   if attr.mode ~= 'file' then
+      return
+   end
+
+   local f = io.open(tags_fname)
+   if not f then
+      print('actions.embegginds: could not open', tags_fname)
+      return
+   end
+
+   local tags = {}
+   for line in f:lines() do
+      local t = json.decode(line)
+
+
+      local v = t['end']
+      t['_end'] = v
+
+      table.insert(tags, t)
+   end
+
+   local path2lines = {}
+
+
+   for _, n in ipairs(tags) do
+
+
+
+
+
+
+
+
+
+
+      if n.path and n.line and n._end then
+
+         if path2lines[n.path] then
+            goto continue
+         end
+
+         local src = io.open(n.path, "r")
+
+         if not src then
+            goto continue
+         end
+
+         local lines = {}
+         for line in src:lines() do
+            table.insert(lines, line)
+         end
+
+         path2lines[n.path] = lines
+      end
+
+      ::continue::
+   end
+
+   print(inspect(path2lines))
+   local chunks = {}
+
+
+   for _, n in ipairs(tags) do
+      if n.path and n.line and n._end then
+         local lines = path2lines[n.path]
+         assert(lines)
+
+         local chunks_lines = {}
+         for i = n.line, n._end, 1 do
+            print(lines[i])
+            table.insert(chunks_lines, lines[i])
+         end
+         local chunk_str = table.concat(chunks_lines, '\n')
+
+         local def = zlib.deflate(6, 8)
+         local text_compressed = def(chunk_str, "finish")
+
+         local vector = embedding(llm_embedding_model, chunk_str)[1]
+         assert(vector)
+         local dump = serpent.dump(vector)
+         local vector_compressed = def(dump, "finish")
+
+         local chunk = {
+            id = n.path .. ":" .. n.line,
+            file = n.path,
+            line_start = n.line,
+            line_end = n._end,
+            text = text_compressed,
+            hash = hash32(chunk_str),
+            embedding = vector_compressed,
+         }
+         table.insert(chunks, chunk)
+
+         print()
+         print()
+         print()
+      end
+   end
+
+   chunks_write_binary("chunks.tags.json", chunks)
+
+end
+
 function actions.chunks_open(_)
    local chunks_str = load_chunks2string("chunks_koh.zlib")
    local chunks_sz = #chunks_str
@@ -4502,6 +4580,7 @@ function actions.chunks_open(_)
 
       if ch.embedding then
 
+         assert(type(ch.embedding) == 'table')
          searcher:add(ch.embedding, ch.hash)
       else
          print("no embedding vector for chunk", bin_to_hex(ch.hash))
@@ -5025,6 +5104,16 @@ function actions.ai(_args)
    w:write(serpent.dump(mkd))
 end
 
+function actions.snapshot(_)
+   local f = io.open("snapshot.lua", "w")
+   if not f then return end
+
+   local dump = serpent.block(mods.modules())
+   print(dump)
+
+   f:write(dump)
+end
+
 function actions.ctags(_args)
 
 
@@ -5144,8 +5233,9 @@ local function main()
 
       for k, v in pairs(_args) do
          local can_call = type(v) == 'boolean' and v == true
-         if actions[k] and can_call then
-            actions[k](_args)
+
+         if (actions)[k] and can_call then
+            (actions)[k](_args)
          end
       end
    else

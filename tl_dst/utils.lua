@@ -1,6 +1,8 @@
 local lfs = require('lfs')
 
 require("global")
+local chdir = lfs.chdir
+local tabular = require("tabular").show
 local format = string.format
 local dir_stack = {}
 
@@ -605,7 +607,118 @@ end
 
 test_readonly()
 
+local function rec_remove_dir(dirname)
+
+   local ok, errmsg
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ok, errmsg = lfs.rmdir(dirname)
+
+   if ok then
+      print('rec_remove_dir', errmsg)
+      return
+   end
+
+   ok = pcall(function()
+      for k in lfs.dir(dirname) do
+         if k ~= '.' and k ~= '..' then
+            local path = dirname .. '/' .. k
+
+
+
+
+
+            ok, errmsg = pcall(function()
+               os.remove(path)
+            end)
+            if not ok then
+               print(format(
+               "rec_remove_dir: could not remove file '%s' with %s",
+               path, errmsg))
+
+            end
+         end
+      end
+   end)
+
+   if not ok then
+      print("rec_remove_dir:", errmsg)
+   end
+
+   ok, errmsg = pcall(function()
+      for k in lfs.dir(dirname) do
+         if k ~= '.' and k ~= '..' then
+            local path = dirname .. '/' .. k
+            local attrs = lfs.attributes(path)
+            if attrs then
+               print(path)
+               print(tabular(attrs))
+            end
+            if attrs and attrs.mode == 'directory' then
+               rec_remove_dir(path)
+            end
+         end
+      end
+   end), string
+
+   if not ok then
+      print("rec_remove_dir:", errmsg)
+   end
+
+   ok, errmsg = lfs.rmdir(dirname)
+end
+
+local function _remove(path, dirnames)
+   push_current_dir()
+   chdir(path)
+
+   if not string.match(lfs.currentdir(), path) then
+      print("Bad current directory")
+      return
+   end
+
+   local ok, errmsg = pcall(function()
+      for _, dirname in ipairs(dirnames) do
+         print("_remove", dirname)
+         rec_remove_dir(dirname)
+      end
+   end)
+
+   if not ok then
+      print("fail if rec_remove_dir", errmsg)
+   end
+
+   pop_dir()
+end
+
 return {
+   _remove = _remove,
    readonly = readonly,
    header_guard = header_guard,
    match_in_file = match_in_file,
