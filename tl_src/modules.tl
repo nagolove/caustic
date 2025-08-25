@@ -255,6 +255,10 @@ local function build_raylib_common(_: Env, dep: Dependency)
         chdir('src')
     elseif dep.target == 'wasm' then
         local EMSDK = os.getenv('EMSDK')
+        if not EMSDK then
+            print("build_raylib_common: could not get EMSDK env variable")
+            return
+        end
 
         chdir("src")
         cmd_do("make clean")
