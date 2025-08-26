@@ -15,6 +15,7 @@ http.TIMEOUT = 235  -- Время в секундах
 local ltn12 = require("ltn12")
 local json = require("dkjson")  -- либо cjson, если у тебя другой JSON-модуль
 local inspect = require "inspect"
+local printc = require 'utils'.printc
 
 local Assist = {}
 Assist.__index = Assist
@@ -102,10 +103,6 @@ print(a:send("Какая инфомация тебе доступна?"))
 local cURL = require("cURL")
 local json = require("dkjson")  -- или другой модуль JSON
 local ansicolors = require 'ansicolors'
-
-local function printc(...)
-    print(ansicolors(table.unpack(...)))
-end
 
 function send2llm(payload_table, on_get_data_chunk)
     local json_payload = json.encode(payload_table)
@@ -213,10 +210,16 @@ function embedding(modelname, text)
     easy:close()
 
     local full_response = table.concat(result)
+    --print('full_response', inspect(full_response))
     local response = json.decode(full_response)
 
     assert(response)
-    assert(response.data)
+    if not response.data then
+        printc("%{red}" .. full_response .. "%{reset}")
+        --printc('full_response:' .. full_response)
+        assert(response.data)
+        --print("HI")
+    end
 
     --print('response', inspect(response))
 

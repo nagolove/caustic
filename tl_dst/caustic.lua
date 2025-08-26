@@ -57,7 +57,6 @@ assert(e.path_rel_win_third_party)
 
 local linenoise = require('linenoise')
 local json = require("dkjson")
-
 local gsub = string.gsub
 local insert = table.insert
 local tabular = require("tabular").show
@@ -72,10 +71,8 @@ local printc = ut.printc
 local cmd_do = ut.cmd_do
 local Cache = require("cache")
 local uv = require("luv")
-
 local rl = require("readline")
 local readline = rl.readline
-
 local format = string.format
 local match = string.match
 local ceil = math.ceil
@@ -84,7 +81,6 @@ local hash32 = require('xxhash').hash32
 local hash64 = require('xxhash').hash64
 local serpent = require('serpent')
 local assist = require("assist")
-local embedding = assist.embedding
 
 
 
@@ -97,8 +93,12 @@ end
 
 local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
+local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 
-local llm_embedding_model = "oasis-code-embedding-1.5b"
+
+
+
+local llm_embedding_dim = 4096
 
 
 
@@ -144,8 +144,6 @@ local libcaustic_name = {
    ["wasm"] = "caustic_wasm",
    ["win"] = "caustic_win",
 }
-
-
 
 
 
@@ -954,8 +952,13 @@ end
 
 
 
+
 local parser_setup = {
 
+
+   sha256 = {
+      summary = [[testing sha2.lua]],
+   },
 
    embeddings = {
       summary = [[make embeddings vectors for tags.json]],
@@ -4258,7 +4261,7 @@ local function process_chunks_embedding(chunks)
 
 
 
-      local vectors = embedding(llm_embedding_model, embeddings_t)
+      local vectors = assist.embedding(llm_embedding_model, embeddings_t)
 
       assert(
       #vectors == #ids,
@@ -4341,8 +4344,46 @@ end
 
 
 
+
+
+local sha2 = require('sha2')
+
+
+function actions.sha256(_)
+
+
+
+
+   local f = io.open("chunks.zlib")
+   assert(f)
+   local buf_sz = 1024 * 1024 * 4
+
+   local buf = ""
+   local eof = false
+
+   local append = sha2.blake3()
+
+   while not eof do
+      buf = f:read(buf_sz)
+      append = append(buf)
+      if #buf < buf_sz then
+         eof = true
+      end
+      print(#buf)
+   end
+
+   local hash_val = append()
+
+   local hash_ref_blake3 = "bfb4b90586d7a67f6b433dbd6f1b4106fe3cd4b4440e7b68f5472cd1b3b97cbe"
+
+   assert(hash_val == hash_ref_blake3)
+
+   print("hash_val", hash_val)
+end
+
 local function chunks_write_binary(fname, chunks)
    assert(chunks)
+   assert(fname)
 
    for _, c in ipairs(chunks) do
 
@@ -4383,101 +4424,183 @@ local function chunks_write_binary(fname, chunks)
 
    end
 
-   local f = io.open(fname, "w")
+   local f = io.open(fname .. ".tmp", "wb")
    if not f then
       print('chunks_write_binary: could not open file for writing', fname)
       return
    end
 
-   local magic = 'caustic_index'
-   f:write(magic)
+   local pack = string.pack
+
+   local function w_u64(data)
+      f:write(pack("<I8", data))
+   end
+
+   local function w_str_fixed(fd, s, n)
+      assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
+      fd:write(s)
+      if #s < n then
+         fd:write(string.rep("\0", n - #s))
+      end
+   end
+
+   local function w_header(fd)
+      local written = 0
+
+      local magic = 'caustic_index'
+      fd:write(magic)
+      written = written + #magic
+
+      local endian_mode = "l"
+      fd:write(endian_mode)
+      written = written + #endian_mode
+
+      local format_version = 1
+      fd:write(pack("<I1", format_version))
+      written = written + 1
+
+      local zlib_window = 15
+      fd:write(pack("<I1", zlib_window))
+      written = written + 1
+
+      local sha_mode = "blake3"
+
+      local str_size_hash = 8
+      w_str_fixed(fd, sha_mode, str_size_hash)
+      written = written + str_size_hash
+
+      local embedding_dim = llm_embedding_dim
+      w_u64(embedding_dim)
+      written = written + 8
+
+      local str_size_llm = 64
+      local llm = llm_embedding_model
+      assert(llm and #llm <= 64, "invalid llm_embedding_model")
+      w_str_fixed(fd, llm, str_size_llm)
+      written = written + str_size_llm
 
 
+      local data_offset = fd:seek("cur") + 8
+      w_u64(data_offset)
+      written = written + 8
+
+      return written, data_offset
+   end
+
+   local _, _ = w_header(f)
+
+   local append = sha2.blake3()
 
 
+   for _, c in ipairs(chunks) do
+      local ser = serpent.dump(c, {
+         sortkeys = true,
+         comment = false,
+      })
+      append = append(pack("<I8", #ser))
+      append = append(ser)
+      w_u64(#ser)
+      f:write(ser)
+   end
 
+   local hash = append()
+   f:write(hash)
 
+   f:flush()
+   f:close()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   assert(os.rename(fname .. ".tmp", fname))
 end
 
-function actions.embeddings(_)
-   local tags_fname = 'tags.json'
-   local attr = lfs.attributes(tags_fname)
-   print('attr', inspect(attr))
+
+
+
+
+
+local function ctag_to_str(n, lines)
+   local chunks_lines = {}
+
+   local order = 1 <= n.line and
+   n.line <= n._end and
+   n._end <= #lines
+
+   if not order then
+      printc(
+      "ctag_to_str: bad order in n.line and n.end",
+      inspect(n))
+
+      return ""
+   end
+
+   for i = n.line, n._end, 1 do
+
+      table.insert(chunks_lines, lines[i])
+   end
+   return table.concat(chunks_lines, '\n')
+end
+
+local function _embeddings(o)
+   assert(o)
+   assert(o.tags_fname)
+   assert(o.zlib_window > 8)
+   assert(o.zlib_window <= 15)
+
+   local attr = lfs.attributes(o.tags_fname)
 
    if not attr then
-      return
+      return {}
    end
 
    if attr.mode ~= 'file' then
-      return
+      return {}
    end
 
-   local f = io.open(tags_fname)
-   if not f then
-      print('actions.embegginds: could not open', tags_fname)
-      return
+   local f_tags = io.open(o.tags_fname, "r")
+   if not f_tags then
+      print('actions.embeddings: could not open', o.tags_fname)
+      return {}
    end
 
    local tags = {}
-   for line in f:lines() do
-      local t = json.decode(line)
+   for line in f_tags:lines() do
+      local t, pos, err = json.decode(line)
+      if not t then
+         printc(
+         "%{red}_embeddings: json parse error at pos",
+         tostring(pos),
+         err)
 
-
-      local v = t['end']
-      t['_end'] = v
-
+         return {}
+      end
+      t['_end'] = t['end']
       table.insert(tags, t)
    end
 
+   f_tags:close()
+
    local path2lines = {}
+
+   print("json loaded")
 
 
    for _, n in ipairs(tags) do
-
-
-
-
-
-
-
-
-
-
       if n.path and n.line and n._end then
 
          if path2lines[n.path] then
             goto continue
          end
 
-         local src = io.open(n.path, "r")
+         local f_src = io.open(n.path, "r")
 
-         if not src then
+         if not f_src then
             goto continue
          end
 
          local lines = {}
-         for line in src:lines() do
+         for line in f_src:lines() do
             table.insert(lines, line)
          end
+         f_src:close()
 
          path2lines[n.path] = lines
       end
@@ -4485,29 +4608,57 @@ function actions.embeddings(_)
       ::continue::
    end
 
-   print(inspect(path2lines))
+   print("sources were loaded")
+
+
    local chunks = {}
 
+   local sig_break = false
 
-   for _, n in ipairs(tags) do
+   local function handle_sigint(_)
+      sig_break = true
+   end
+
+   local signal = require("posix.signal")
+   signal.signal(signal.SIGINT, handle_sigint)
+
+   local tags_num = #tags
+
+   for i, n in ipairs(tags) do
+
+      if sig_break then
+         break
+      end
+
       if n.path and n.line and n._end then
          local lines = path2lines[n.path]
          assert(lines)
 
-         local chunks_lines = {}
-         for i = n.line, n._end, 1 do
-            print(lines[i])
-            table.insert(chunks_lines, lines[i])
+         local chunk_str = ctag_to_str(n, lines)
+         if #chunk_str == 0 then
+            goto continue
          end
-         local chunk_str = table.concat(chunks_lines, '\n')
 
-         local def = zlib.deflate(6, 8)
-         local text_compressed = def(chunk_str, "finish")
 
-         local vector = embedding(llm_embedding_model, chunk_str)[1]
+         local compressor_chunk = zlib.deflate(6, o.zlib_window)
+         local text_compressed = compressor_chunk(chunk_str, "finish")
+
+
+         printc(
+         "%{green}" .. chunk_str:sub(1, 100) .. "%{reset}")
+
+
+         local vector = assist.embedding(llm_embedding_model, chunk_str)[1]
+
+         if sig_break then
+            break
+         end
+
          assert(vector)
          local dump = serpent.dump(vector)
-         local vector_compressed = def(dump, "finish")
+
+         local compressor_vector = zlib.deflate(6, o.zlib_window)
+         local vector_compressed = compressor_vector(dump, "finish")
 
          local chunk = {
             id = n.path .. ":" .. n.line,
@@ -4520,11 +4671,27 @@ function actions.embeddings(_)
          }
          table.insert(chunks, chunk)
 
-         print()
-         print()
-         print()
+
+
+
       end
+
+      ::continue::
+      print(format("%d/%d", i, tags_num))
    end
+
+   return chunks
+end
+
+function actions.embeddings(_)
+   local o = {
+      zlib_window = 15,
+      tags_fname = 'tags.json',
+   }
+
+   local chunks = _embeddings(o)
+
+
 
    chunks_write_binary("chunks.tags.json", chunks)
 
@@ -4709,7 +4876,7 @@ function actions.load_index(_)
 
    local inp = readline(ansicolors("%{green}query: %{reset}"))
 
-   local emb = embedding(llm_embedding_model, inp)
+   local emb = assist.embedding(llm_embedding_model, inp)
 
 
 
@@ -4718,7 +4885,7 @@ function actions.load_index(_)
    print()
 
    assert(emb[1])
-   assert(#emb[1] == 4096)
+   assert(#emb[1] == llm_embedding_dim)
    local nearest = searcher:search_str(emb[1], 10)
    for _, hash in ipairs(nearest) do
       print(bin_to_hex(hash))
@@ -4797,10 +4964,10 @@ local function index_open(index_fname)
 
    return {
       query = function(q)
-         local emb = embedding(llm_embedding_model, q)
+         local emb = assist.embedding(llm_embedding_model, q)
 
          assert(emb[1])
-         assert(#emb[1] == 4096)
+         assert(#emb[1] == llm_embedding_dim)
          local nearest = searcher:search_str(emb[1], 10)
 
 

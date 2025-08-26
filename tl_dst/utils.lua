@@ -404,8 +404,8 @@ local function find_and_remove_cmake_cache()
    cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
 end
 
-local function printc(text)
-   print(ansicolors(text))
+local function printc(...)
+   print(ansicolors(table.concat({ ... })))
 end
 
 
