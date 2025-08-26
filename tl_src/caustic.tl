@@ -57,7 +57,6 @@ assert(e.path_rel_win_third_party)
 -- requires and aliases {{{
 local linenoise  = require 'linenoise'
 local json       = require "dkjson"
---local git        = require 'git'
 local gsub       = string.gsub
 local insert     = table.insert
 local tabular    = require "tabular".show
@@ -72,10 +71,8 @@ local printc     = ut.printc
 local cmd_do     = ut.cmd_do
 local Cache      = require "cache"
 local uv         = require "luv"
---local lanes      = require "lanes".configure()
 local rl         = require "readline"
 local readline   = rl.readline
---local sleep      = require "socket".sleep
 local format     = string.format
 local match      = string.match
 local ceil       = math.ceil
@@ -84,7 +81,6 @@ local hash32     = require 'xxhash'.hash32
 local hash64     = require 'xxhash'.hash64
 local serpent    = require 'serpent'
 local assist     = require "assist"
-local embedding  = assist.embedding
 --- }}}
 
 -- XXX: Зачем этот код? Что он делает?
@@ -97,8 +93,12 @@ end
 -- XXX: Сделать выбор и показ текущей модели в чате
 local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
 
---local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-local llm_embedding_model =  "oasis-code-embedding-1.5b"
+local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
+--local llm_embedding_model = "oasis-code-embedding-1.5b"
+--local llm_embedding_model = "oasis-code-embedding-1.5b"
+--local                         "oasis-code-embedding-1.5b"
+
+local llm_embedding_dim = 4096
 
 -- globals {{{
 
@@ -147,8 +147,6 @@ local libcaustic_name = {
 
 -- }}}
 
--- XXX: Почему-бы не передавать в виде таблиц, а не строк с агрументами, 
--- разделенными пробелами?
 local record LinkContext
     objfiles: {string}
     libsdirs: {string}
@@ -916,6 +914,7 @@ end
 local record Actions
     -- {{{
 
+    sha256: function(Args)
     embeddings: function(Args)
     snapshot: function(Args)
     xxhash: function(Args)
@@ -956,6 +955,10 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    sha256 = {
+        summary = [[testing sha2.lua]],
+    },
 
     embeddings = {
         summary = [[make embeddings vectors for tags.json]]
@@ -3937,7 +3940,7 @@ local record Chunk
     text: string
     -- При хранении в файле пишется как zlib сжатая строка 
     -- сперва записанная через serpent
-    embedding: string|{number} -- 4096 
+    embedding: string|{number} -- llm_embedding_dim 
     --  Хеш от текста, считать его заранее
     hash: string -- xxHash32, строка длиной 4
 end
@@ -4258,7 +4261,7 @@ H > ~4.8 и ratio > 0.8 → вероятно, насыщенный уникал�
 
         -- XXX: Добавлять в виде комментария имя файла чанк исходного кода 
         -- и начальную строку 
-        local vectors = embedding(llm_embedding_model, embeddings_t)
+        local vectors = assist.embedding(llm_embedding_model, embeddings_t)
 
         assert(
             #vectors == #ids,
@@ -4323,29 +4326,73 @@ local function bin_to_hex(str: string): string
 end
 
 local record CTag 
+    -- {{{
     enum Tag
         'tag'
         'ptag'
     end
 
-  _type: Tag
-  _end: integer
-  file: boolean
-  kind: string
-  line: integer
-  name: string
-  path: string
-  pattern: string
-  scope: string
-  scopeKind: string
-  typeref: string
+    _type: Tag
+    _end: integer
+    file: boolean
+    kind: string
+    line: integer
+    name: string
+    path: string
+    pattern: string
+    scope: string
+    scopeKind: string
+    typeref: string
+    -- }}}
 end
 
-local function chunks_write_binary(fname: string, chunks: {Chunk})
+local sha2 = require 'sha2'
+--local sha256 = sha2.sha256
+
+function actions.sha256(_: Args)
+--[[
+➜  caustic git:(master) ✗ sha256sum chunks.zlib
+8a8bc95c8bf0fe6486057439ad02fceb51167c474327c63fa3016b34c583d2e7  chunks.zlib
+--]]
+    local f = io.open("chunks.zlib")
+    assert(f)
+    local buf_sz = 1024 * 1024 * 4
+
+    local buf = ""
+    local eof = false
+
+    local append = sha2.blake3() as sha2.partial
+
+    while not eof do
+        buf = f:read(buf_sz)
+        append = append(buf)
+        if #buf < buf_sz then
+            eof = true
+        end
+        print(#buf)
+    end
+
+    local hash_val = append() as string
+
+    local hash_ref_blake3 = "bfb4b90586d7a67f6b433dbd6f1b4106fe3cd4b4440e7b68f5472cd1b3b97cbe"
+    --local hash_ref_sha256 = "8a8bc95c8bf0fe6486057439ad02fceb51167c474327c63fa3016b34c583d2e7"
+    assert(hash_val == hash_ref_blake3)
+
+    print("hash_val", hash_val)
+end
+
+local record EmbeddingIndexOpts
+    zlib_window: integer
+    tags_fname: string
+end
+
+local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
     assert(chunks)
+    assert(o)
+    assert(o.tags_fname)
 
     for _, c in ipairs(chunks) do
-
+        -- {{{
         if not c.id then
             print("chunks_write_binary: have not 'id' field in chunk")
             return
@@ -4380,104 +4427,185 @@ local function chunks_write_binary(fname: string, chunks: {Chunk})
             print("chunks_write_binary: have not 'hash' field in chunk")
             return
         end
-
+        -- }}}
     end
 
-    local f = io.open(fname, "w")
+    local f = io.open(o.tags_fname .. ".tmp", "wb")
     if not f then
-        print('chunks_write_binary: could not open file for writing', fname)
+        printc(
+            '%{red}chunks_write_binary: could not open file for writing',
+            o.tags_fname,
+            "%{reset}"
+        )
         return
     end
 
-    local magic = 'caustic_index'
-    f:write(magic)
+    local pack = string.pack
 
-    --[[
--- 'I8' = unsigned 8-byte integer
-f:write(string.pack("I8", u64))
+    local function w_u64(data: any)
+        f:write(pack("<I8", data))
+    end
 
-f:close()
-Это создаст бинарные 8 байт (EF CD AB 90 78 56 34 12 на little-endian машине).
+    local function w_str_fixed(fd: FILE, s: string, n: integer)
+        assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
+        fd:write(s)
+        if #s < n then
+            fd:write(string.rep("\0", n - #s)) -- паддинг нулями
+        end
+    end
 
-Ключевые моменты
-Формат "I8" — «unsigned 64-bit integer» (8 байт).
+    local function w_header(fd: FILE): integer, integer
+        local written = 0
 
-"i8" — то же, но знаковый (int64_t).
+        local magic = 'caustic_index'
+        fd:write(magic)
+        written = written + #magic
 
-"I4", "I2", "I1" — для меньших беззнаковых.
+        local endian_mode = "l"
+        fd:write(endian_mode)
+        written = written + #endian_mode
 
-По умолчанию порядок байтов зависит от платформы (обычно little-endian).
-Если нужно явно задать порядок:
+        local format_version = 1
+        fd:write(pack("<I1", format_version))
+        written = written + 1
 
-"<I8" — little-endian 64-бит беззнаковое.
+        local zlib_window = 15
+        fd:write(pack("<I1", zlib_window))
+        written = written + 1
 
-">I8" — big-endian.
+        local sha_mode = "blake3"
+        --local sha_mode = "sha256"
+        local str_size_hash = 8
+        w_str_fixed(fd, sha_mode, str_size_hash)
+        written = written + str_size_hash
 
-Читать обратно можно через string.unpack("I8", data).
+        local embedding_dim = llm_embedding_dim
+        w_u64(embedding_dim)
+        written = written + 8
 
-    --]]
+        local str_size_llm = 64
+        local llm = llm_embedding_model
+        assert(llm and #llm <= 64, "invalid llm_embedding_model")
+        w_str_fixed(fd, llm, str_size_llm)
+        written = written + str_size_llm
+
+        -- смещение где находятся данные
+        local data_offset = fd:seek("cur") + 8
+        w_u64(data_offset)
+        written = written + 8
+
+        return written, data_offset
+    end
+
+    local _, _ = w_header(f)
+
+    local append = sha2.blake3() as sha2.partial
+
+    -- u64 длина данных, затем данные - lua строка для load()
+    for _, c in ipairs(chunks) do
+        local ser = serpent.dump(c, {
+            sortkeys = true,
+            comment = false,
+        })
+        append = append(pack("<I8", #ser))
+        append = append(ser)
+        w_u64(#ser)
+        f:write(ser)
+    end
+
+    local hash = append() as string
+    f:write(hash)
+
+    f:flush()
+    f:close()
+
+    assert(os.rename(o.tags_fname .. ".tmp", o.tags_fname))
 end
 
-function actions.embeddings(_: Args)
-    local tags_fname = 'tags.json'
-    local attr = lfs.attributes(tags_fname)
-    print('attr', inspect(attr))
+local function ctag_to_str(n: CTag, lines: {string}): string
+    local chunks_lines = {}
+
+    local order = 1 <= n.line and 
+                  n.line <= n._end and 
+                  n._end <= #lines
+
+    if not order then
+        printc(
+            "ctag_to_str: bad order in n.line and n.end", 
+            inspect(n)
+        )
+        return ""
+    end
+
+    for i = n.line, n._end, 1 do
+        --print(lines[i])
+        table.insert(chunks_lines, lines[i])
+    end
+    return table.concat(chunks_lines, '\n')
+end
+
+local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
+    assert(o)
+    assert(o.tags_fname)
+    assert(o.zlib_window > 8)
+    assert(o.zlib_window <= 15)
+
+    local attr = lfs.attributes(o.tags_fname)
 
     if not attr then
-        return
+        return {}
     end
 
     if attr.mode ~= 'file' then
-        return
+        return {}
     end
 
-    local f = io.open(tags_fname)
-    if not f then
-        print('actions.embegginds: could not open', tags_fname)
-        return
+    local f_tags = io.open(o.tags_fname, "r")
+    if not f_tags then
+        print('actions.embeddings: could not open', o.tags_fname)
+        return {}
     end
 
     local tags: {CTag} = {}
-    for line in f:lines() do
-        local t = json.decode(line)
-        --print(inspect(t))
-
-        local v = t['end']
-        t['_end'] = v
-
+    for line in f_tags:lines() do
+        local t, pos, err = json.decode(line)
+        if not t then
+            printc(
+                "%{red}_embeddings: json parse error at pos",
+                tostring(pos),
+                err
+            )
+            return {}
+        end
+        t['_end'] = t['end']
         table.insert(tags, t as CTag)
     end
 
+    f_tags:close()
+
     local path2lines: {string:{string}} = {}
+
+    print("json loaded")
 
     -- гружу в словарь файлы
     for _, n in ipairs(tags) do
-
-        --[[
-        print(
-            "n.path", n.path,
-            "n._start", n._start,
-            "n._end", n._end
-        )
-        print(type(n._start), type(n._end))
-        --]]
-
         if n.path and n.line and n._end then
             --print('ready')
             if path2lines[n.path] then
                 goto continue
             end
 
-            local src = io.open(n.path, "r")
+            local f_src = io.open(n.path, "r")
             --print("file was opened")
-            if not src then
+            if not f_src then
                 goto continue
             end
 
             local lines: {string} = {}
-            for line in src:lines() do
+            for line in f_src:lines() do
                 table.insert(lines, line)
             end
+            f_src:close()
 
             path2lines[n.path] = lines
         end
@@ -4485,29 +4613,58 @@ function actions.embeddings(_: Args)
         ::continue::
     end
 
-    print(inspect(path2lines))
+    print("sources were loaded")
+
+    --print(inspect(path2lines))
     local chunks: {Chunk} = {}
 
+    local sig_break = false
+
+    local function handle_sigint(_: any)
+        sig_break = true
+    end
+
+    local signal = require("posix.signal")
+    signal.signal(signal.SIGINT, handle_sigint)
+
+    local tags_num = #tags
     -- теперь достаю куски текста исходных файлов как построчные записи
-    for _, n in ipairs(tags) do
+    for i, n in ipairs(tags) do
+
+        if sig_break then
+            break
+        end
+
         if n.path and n.line and n._end then
             local lines = path2lines[n.path]
             assert(lines)
 
-            local chunks_lines = {}
-            for i = n.line, n._end, 1 do
-                print(lines[i])
-                table.insert(chunks_lines, lines[i])
+            local chunk_str = ctag_to_str(n, lines)
+            if #chunk_str == 0 then
+                goto continue
             end
-            local chunk_str = table.concat(chunks_lines, '\n')
 
-            local def = zlib.deflate(6, 8)
-            local text_compressed = def(chunk_str, "finish")
+            -- XXX: параметры deflate писать в файл
+            local compressor_chunk = zlib.deflate(6, o.zlib_window)
+            local text_compressed = compressor_chunk(chunk_str, "finish")
 
-            local vector = embedding(llm_embedding_model, chunk_str)[1]
+            -- XXX: писать в файл название модели и длину вектора
+            printc(
+                "%{green}" .. chunk_str:sub(1, 100) .. "%{reset}"
+            )
+            print()
+
+            local vector = assist.embedding(llm_embedding_model, chunk_str)[1]
+
+            if sig_break then
+                break
+            end
+
             assert(vector)
             local dump = serpent.dump(vector)
-            local vector_compressed = def(dump, "finish")
+
+            local compressor_vector = zlib.deflate(6, o.zlib_window)
+            local vector_compressed = compressor_vector(dump, "finish")
 
             local chunk: Chunk = {
                 id = n.path .. ":" .. n.line,
@@ -4520,13 +4677,29 @@ function actions.embeddings(_: Args)
             }
             table.insert(chunks, chunk)
 
-            print()
-            print()
-            print()
+            --print()
+            --print()
+            --print()
         end
+
+        ::continue::
+        print(format("%d/%d", i, tags_num))
     end
 
-    chunks_write_binary("chunks.tags.json", chunks)
+    return chunks
+end
+
+function actions.embeddings(_: Args)
+    local o: EmbeddingIndexOpts = {
+        zlib_window = 15,
+        tags_fname = 'tags.json',
+    }
+
+    local chunks = _embeddings(o)
+
+    -- XXX: Если sig_break установлен, то может быть записан не весь фай
+    -- XXX: Если sig_break установлен, то может быть записан не весь файл
+    chunks_write_binary(o, chunks)
 
 end
 
@@ -4709,7 +4882,7 @@ function actions.load_index(_: Args)
 
     local inp = readline(ansicolors("%{green}query: %{reset}"))
 
-    local emb = embedding(llm_embedding_model, inp)
+    local emb = assist.embedding(llm_embedding_model, inp)
 
     --print('emb', inspect(emb))
 
@@ -4718,7 +4891,7 @@ function actions.load_index(_: Args)
     print()
 
     assert(emb[1])
-    assert(#emb[1] == 4096)
+    assert(#emb[1] == llm_embedding_dim)
     local nearest = searcher:search_str(emb[1], 10)
     for _, hash in ipairs(nearest) do
         print(bin_to_hex(hash))
@@ -4797,10 +4970,10 @@ local function index_open(index_fname: string): Searcher
 
     return {
         query = function(q: string): {string}
-            local emb = embedding(llm_embedding_model, q)
+            local emb = assist.embedding(llm_embedding_model, q)
 
             assert(emb[1])
-            assert(#emb[1] == 4096)
+            assert(#emb[1] == llm_embedding_dim)
             local nearest = searcher:search_str(emb[1], 10)
 
             --for _, hash in ipairs(nearest) do

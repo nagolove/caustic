@@ -4,31 +4,40 @@
 ]]
 
 local record dkjson
-   record JsonState
-      indent: boolean
-      keyorder: {string}
-      level: number
-      buffer: {string}
-      bufferlen: number
-      tables: {table:boolean}
-      exception: function(string, string, string, string): boolean|string, string
-   end
-   encode: function({string:any}, ?JsonState): string
+    record JsonState
+        indent: boolean
+        keyorder: {string}
+        level: number
+        buffer: {string}
+        bufferlen: number
+        tables: {table:boolean}
+        exception: function(string, string, string, string): boolean|string, string
+    end
+    encode: function({string:any}, ?JsonState): string
 
-   --decode: function(string, number, any, table): {string:any}
-   decode: function(string): {string:any}
+    --decode: function(string, number, any, table): {string:any}
 
-   null: table
+    -- Возврат:
+    -- 1) value: any         -- разобранное Lua-значение (таблица/строка/число/булево/`nullval`)
+    -- 2) pos: integer       -- позиция в строке, где парсинг завершился
+    -- 3) err: string?       -- сообщение об ошибке, если парсинг не удался
+    -- Если парсинг удачен: возвращаются (value, pos)
+    -- Если ошибка: возвращается (nil, pos, err)
 
-   version: string
+    decode: function(str: string): {string:any}, integer, string
+    --decode: function(string): {string:any}
 
-   quotestring: function(string): string
+    null: table
 
-   addnewline: function(JsonState)
+    version: string
 
-   encodeexception: function(string, any, JsonState, string): string
+    quotestring: function(string): string
 
-   use_lpeg: function(): dkjson
+    addnewline: function(JsonState)
+
+    encodeexception: function(string, any, JsonState, string): string
+
+    use_lpeg: function(): dkjson
 end
 
 return dkjson
