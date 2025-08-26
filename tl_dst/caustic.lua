@@ -4381,9 +4381,29 @@ function actions.sha256(_)
    print("hash_val", hash_val)
 end
 
-local function chunks_write_binary(fname, chunks)
+
+
+
+
+
+
+local function check_zlib_args(o)
+   assert(o)
+   local ok = o.zlib_window > 8 and
+   o.zlib_window <= 15 and
+   o.zlib_level >= 1 and
+   o.zlib_level <= 9
+   return ok
+end
+
+local function chunks_write_binary(o, chunks)
    assert(chunks)
-   assert(fname)
+   assert(o)
+   assert(o.tags_fname)
+
+   if not check_zlib_args(o) then
+      return
+   end
 
    for _, c in ipairs(chunks) do
 
@@ -4424,9 +4444,13 @@ local function chunks_write_binary(fname, chunks)
 
    end
 
-   local f = io.open(fname .. ".tmp", "wb")
+   local f = io.open(o.tags_fname .. ".tmp", "wb")
    if not f then
-      print('chunks_write_binary: could not open file for writing', fname)
+      printc(
+      '%{red}chunks_write_binary: could not open file for writing',
+      o.tags_fname,
+      "%{reset}")
+
       return
    end
 
@@ -4459,7 +4483,7 @@ local function chunks_write_binary(fname, chunks)
       fd:write(pack("<I1", format_version))
       written = written + 1
 
-      local zlib_window = 15
+      local zlib_window = o.zlib_window
       fd:write(pack("<I1", zlib_window))
       written = written + 1
 
@@ -4509,17 +4533,11 @@ local function chunks_write_binary(fname, chunks)
    f:flush()
    f:close()
 
-   assert(os.rename(fname .. ".tmp", fname))
+   assert(os.rename(o.tags_fname .. ".tmp", o.tags_fname))
 end
-
-
-
-
-
 
 local function ctag_to_str(n, lines)
    local chunks_lines = {}
-
    local order = 1 <= n.line and
    n.line <= n._end and
    n._end <= #lines
@@ -4533,7 +4551,6 @@ local function ctag_to_str(n, lines)
    end
 
    for i = n.line, n._end, 1 do
-
       table.insert(chunks_lines, lines[i])
    end
    return table.concat(chunks_lines, '\n')
@@ -4542,8 +4559,10 @@ end
 local function _embeddings(o)
    assert(o)
    assert(o.tags_fname)
-   assert(o.zlib_window > 8)
-   assert(o.zlib_window <= 15)
+
+   if not check_zlib_args(o) then
+      return {}
+   end
 
    local attr = lfs.attributes(o.tags_fname)
 
@@ -4570,10 +4589,11 @@ local function _embeddings(o)
          tostring(pos),
          err)
 
-         return {}
+         goto continue
       end
       t['_end'] = t['end']
       table.insert(tags, t)
+      ::continue::
    end
 
    f_tags:close()
@@ -4610,7 +4630,6 @@ local function _embeddings(o)
 
    print("sources were loaded")
 
-
    local chunks = {}
 
    local sig_break = false
@@ -4622,6 +4641,7 @@ local function _embeddings(o)
    local signal = require("posix.signal")
    signal.signal(signal.SIGINT, handle_sigint)
 
+   local zdeflate = zlib.deflate
    local tags_num = #tags
 
    for i, n in ipairs(tags) do
@@ -4639,14 +4659,13 @@ local function _embeddings(o)
             goto continue
          end
 
-
-         local compressor_chunk = zlib.deflate(6, o.zlib_window)
+         local compressor_chunk = zdeflate(o.zlib_level, o.zlib_window)
          local text_compressed = compressor_chunk(chunk_str, "finish")
-
 
          printc(
          "%{green}" .. chunk_str:sub(1, 100) .. "%{reset}")
 
+         print()
 
          local vector = assist.embedding(llm_embedding_model, chunk_str)[1]
 
@@ -4657,7 +4676,7 @@ local function _embeddings(o)
          assert(vector)
          local dump = serpent.dump(vector)
 
-         local compressor_vector = zlib.deflate(6, o.zlib_window)
+         local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
          local vector_compressed = compressor_vector(dump, "finish")
 
          local chunk = {
@@ -4686,15 +4705,12 @@ end
 function actions.embeddings(_)
    local o = {
       zlib_window = 15,
+      zlib_level = 6,
       tags_fname = 'tags.json',
    }
 
    local chunks = _embeddings(o)
-
-
-
-   chunks_write_binary("chunks.tags.json", chunks)
-
+   chunks_write_binary(o, chunks)
 end
 
 function actions.chunks_open(_)
