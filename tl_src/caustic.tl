@@ -4383,13 +4383,27 @@ end
 
 local record EmbeddingIndexOpts
     zlib_window: integer
+    zlib_level: integer
     tags_fname: string
+end
+
+local function check_zlib_args(o: EmbeddingIndexOpts): boolean
+    assert(o)
+    local ok = o.zlib_window > 8 and
+               o.zlib_window <= 15 and
+               o.zlib_level >= 1 and
+               o.zlib_level <= 9
+   return ok
 end
 
 local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
     assert(chunks)
     assert(o)
     assert(o.tags_fname)
+
+    if not check_zlib_args(o) then
+        return
+    end
 
     for _, c in ipairs(chunks) do
         -- {{{
@@ -4469,7 +4483,7 @@ local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
         fd:write(pack("<I1", format_version))
         written = written + 1
 
-        local zlib_window = 15
+        local zlib_window = o.zlib_window
         fd:write(pack("<I1", zlib_window))
         written = written + 1
 
@@ -4524,7 +4538,6 @@ end
 
 local function ctag_to_str(n: CTag, lines: {string}): string
     local chunks_lines = {}
-
     local order = 1 <= n.line and 
                   n.line <= n._end and 
                   n._end <= #lines
@@ -4538,7 +4551,6 @@ local function ctag_to_str(n: CTag, lines: {string}): string
     end
 
     for i = n.line, n._end, 1 do
-        --print(lines[i])
         table.insert(chunks_lines, lines[i])
     end
     return table.concat(chunks_lines, '\n')
@@ -4547,8 +4559,10 @@ end
 local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
     assert(o)
     assert(o.tags_fname)
-    assert(o.zlib_window > 8)
-    assert(o.zlib_window <= 15)
+
+    if not check_zlib_args(o) then
+        return {}
+    end
 
     local attr = lfs.attributes(o.tags_fname)
 
@@ -4575,10 +4589,11 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
                 tostring(pos),
                 err
             )
-            return {}
+            goto continue
         end
         t['_end'] = t['end']
         table.insert(tags, t as CTag)
+        ::continue::
     end
 
     f_tags:close()
@@ -4615,7 +4630,6 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
 
     print("sources were loaded")
 
-    --print(inspect(path2lines))
     local chunks: {Chunk} = {}
 
     local sig_break = false
@@ -4627,6 +4641,7 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
     local signal = require("posix.signal")
     signal.signal(signal.SIGINT, handle_sigint)
 
+    local zdeflate = zlib.deflate
     local tags_num = #tags
     -- теперь достаю куски текста исходных файлов как построчные записи
     for i, n in ipairs(tags) do
@@ -4644,11 +4659,9 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
                 goto continue
             end
 
-            -- XXX: параметры deflate писать в файл
-            local compressor_chunk = zlib.deflate(6, o.zlib_window)
+            local compressor_chunk = zdeflate(o.zlib_level, o.zlib_window)
             local text_compressed = compressor_chunk(chunk_str, "finish")
 
-            -- XXX: писать в файл название модели и длину вектора
             printc(
                 "%{green}" .. chunk_str:sub(1, 100) .. "%{reset}"
             )
@@ -4663,7 +4676,7 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
             assert(vector)
             local dump = serpent.dump(vector)
 
-            local compressor_vector = zlib.deflate(6, o.zlib_window)
+            local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
             local vector_compressed = compressor_vector(dump, "finish")
 
             local chunk: Chunk = {
@@ -4692,15 +4705,12 @@ end
 function actions.embeddings(_: Args)
     local o: EmbeddingIndexOpts = {
         zlib_window = 15,
+        zlib_level = 6,
         tags_fname = 'tags.json',
     }
 
     local chunks = _embeddings(o)
-
-    -- XXX: Если sig_break установлен, то может быть записан не весь фай
-    -- XXX: Если sig_break установлен, то может быть записан не весь файл
     chunks_write_binary(o, chunks)
-
 end
 
 function actions.chunks_open(_: Args)
