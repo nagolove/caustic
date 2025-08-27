@@ -5,6 +5,10 @@ extern "C" {
 #include "lauxlib.h"
 }
 
+extern "C" {
+#include "index.h"
+}
+
 #define XXH_STATIC_LINKING_ONLY /* access advanced declarations */
 #define XXH_IMPLEMENTATION 
 
@@ -26,7 +30,9 @@ extern "C" {
 #define MAX_ARGS    128
 
 constexpr int hnsw_dim = 4096;
-#define HNSW_HANDLE "hnswlinb_handle"
+
+#define HNSW_HANDLE "hnswlib_handle"
+
 using hnsw_float = float;
 
 typedef struct Task {
@@ -380,7 +386,7 @@ static std::vector<hnsw_float> get_vector(lua_State* L, int index) {
 }
 
 // hnswlinb.new
-static int l_new(lua_State* L) {
+static int l_hnswlib_new(lua_State* L) {
     int max_elements = luaL_checkinteger(L, 1);
     int M = luaL_checkinteger(L, 2);
     int ef = luaL_checkinteger(L, 3);
@@ -486,7 +492,7 @@ static int l_search_str(lua_State* L) {
 
 
 // handle methods
-static const luaL_Reg handle_methods[] = {
+static const luaL_Reg handle_methods_hnswlib[] = {
     {"add", l_add},
     {"search", l_search},
     {"search_str", l_search_str},
@@ -497,8 +503,8 @@ static const luaL_Reg handle_methods[] = {
 };
 
 // module functions
-static const luaL_Reg module_funcs[] = {
-    {"new", l_new},
+static const luaL_Reg module_funcs_hnsw[] = {
+    {"new", l_hnswlib_new},
     {"load", l_load},
     {NULL, NULL}
 };
@@ -513,13 +519,13 @@ extern "C" int luaopen_hnswlib(lua_State* L) {
     lua_setfield(L, -2, "__tostring");
 
     lua_newtable(L);
-    luaL_setfuncs(L, handle_methods, 0);
+    luaL_setfuncs(L, handle_methods_hnswlib, 0);
     lua_setfield(L, -2, "__index");
 
     lua_pop(L, 1); // metatable
 
     lua_newtable(L);
-    luaL_setfuncs(L, module_funcs, 0);
+    luaL_setfuncs(L, module_funcs_hnsw, 0);
     return 1;
 }
 
@@ -568,7 +574,7 @@ static int l_linenoise_readline(lua_State* L) {
     std::string welcome = ">> ";
     if (lua_isstring(L, 1)) 
         welcome = lua_tostring(L, 1);
-    auto line = linenoise::Readline(welcome);
+    auto line = linenoise::Readline(welcome.c_str());
     lua_pushstring(L, line.c_str());
     return 1;
 }
@@ -582,6 +588,148 @@ int luaopen_linenoise(lua_State* L) {
     lua_setfield(L, -2, "set_multiline");
     return 1;
 }
+
+#include <lua.h>
+#include <lauxlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <inttypes.h>
+
+extern "C" {
+// Ваши заголовки:
+#include "index.h"  // содержит определения Index, IndexHeader и функций index_new/index_free/...
+}
+
+// Имя метатаблицы
+#define CAUSTIC_INDEX_MT "caustic.index"
+
+// ------------ вспомогательные ------------
+
+typedef struct {
+    Index *ptr;
+} lua_index_ud;
+
+static lua_index_ud *check_index(lua_State *L, int idx) {
+    void *ud = luaL_checkudata(L, idx, CAUSTIC_INDEX_MT);
+    luaL_argcheck(L, ud != NULL, idx, "expected caustic.index");
+    return (lua_index_ud *)ud;
+}
+
+static int l_index_tostring(lua_State *L) {
+    lua_index_ud *ud = check_index(L, 1);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Index<%p>", (void*)ud->ptr);
+    lua_pushstring(L, buf);
+    return 1;
+}
+
+// ------------ методы userdata ------------
+
+static int l_index_gc(lua_State *L) {
+    lua_index_ud *ud = check_index(L, 1);
+    if (ud->ptr) {
+        index_free(ud->ptr);
+        ud->ptr = NULL;
+    }
+    return 0;
+}
+
+static int l_chunks_num(lua_State *L) {
+    lua_index_ud *ud = check_index(L, 1);
+    luaL_argcheck(L, ud->ptr != NULL, 1, "invalid Index");
+    // Возвращаем как целое Lua (Lua 5.4 использует 64-бит на большинстве платформ)
+    lua_pushinteger(L, (lua_Integer)index_chunks_num(ud->ptr));
+    return 1;
+}
+
+static int l_chunks_raw(lua_State *L) {
+    lua_index_ud *ud = check_index(L, 1);
+    luaL_argcheck(L, ud->ptr != NULL, 1, "invalid Index");
+
+    // Индексы в Lua — 1-based
+    lua_Integer i = luaL_checkinteger(L, 2);
+    if (i < 1) {
+        return luaL_error(L, "chunk index must be >= 1");
+    }
+
+    u64 total = index_chunks_num(ud->ptr);
+    if ((u64)(i - 1) >= total) {
+        return luaL_error(L, "chunk index out of range (got %" LUA_INTEGER_FMT
+                               ", available 1..%" PRIu64 ")", i, total);
+    }
+
+    const char *p = index_chunk_raw(ud->ptr, (u64)(i - 1));
+    if (!p) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    // ⚠️ ВАЖНО: длины нет, возвращаем lightuserdata (указатель).
+    // Если чанк нуль-терминирован: замените на lua_pushstring(p);
+    lua_pushlightuserdata(L, (void*)p);
+    return 1;
+}
+
+// ------------ модульные функции ------------
+
+static int l_new(lua_State *L) {
+    const char *path = luaL_checkstring(L, 1);
+
+    Index *idx = index_new(path);
+    if (!idx) {
+        return luaL_error(L, "index_new failed for '%s'", path);
+    }
+
+    lua_index_ud *ud = (lua_index_ud*)lua_newuserdatauv(L, sizeof(lua_index_ud), 0);
+    ud->ptr = idx;
+
+    // установить метатаблицу
+    luaL_getmetatable(L, CAUSTIC_INDEX_MT);
+    lua_setmetatable(L, -2);
+
+    return 1; // userdata
+}
+
+// ------------ регистрация ------------
+
+static const luaL_Reg handle_methods_index[] = {
+    {"chunks_num", l_chunks_num},
+    {"chunks_raw", l_chunks_raw},
+    {"__gc",       l_index_gc},
+    {"__tostring", l_index_tostring},
+    {NULL, NULL}
+};
+
+static const luaL_Reg module_funcs_index[] = {
+    {"new", l_new},
+    {NULL, NULL}
+};
+
+extern "C" int luaopen_caustic_index(lua_State *L) {
+    // metatable
+    luaL_newmetatable(L, CAUSTIC_INDEX_MT);
+
+    // __gc
+    lua_pushcfunction(L, l_gc);
+    lua_setfield(L, -2, "__gc");
+
+    // __tostring
+    lua_pushcfunction(L, l_tostring);
+    lua_setfield(L, -2, "__tostring");
+
+    // __index = methods
+    lua_newtable(L);
+    luaL_setfuncs(L, handle_methods_index, 0);
+    lua_setfield(L, -2, "__index");
+
+    lua_pop(L, 1); // метатаблицу со стека снимаем
+
+    // сам модуль
+    lua_newtable(L);
+    luaL_setfuncs(L, module_funcs_index, 0);
+    return 1;
+}
+
 
 extern "C" int luaopen_koh(lua_State *L){
     printf("luaopen_koh:\n");
@@ -598,6 +746,8 @@ extern "C" int luaopen_koh(lua_State *L){
     lua_pushcfunction(L, luaopen_linenoise);
     lua_setfield(L,-2, "linenoise");
 
+    lua_pushcfunction(L, luaopen_caustic_index);
+    lua_setfield(L, -2, "index");
 
     lua_pop(L,2);
     lua_newtable(L);                    // вернуть пустую таблицу — модуль-заглушка
