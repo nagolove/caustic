@@ -75,7 +75,7 @@ local rl         = require "readline"
 local readline   = rl.readline
 local format     = string.format
 local match      = string.match
-local ceil       = math.ceil
+--local ceil       = math.ceil
 local zlib       = require 'zlib'
 local hash32     = require 'xxhash'.hash32
 local hash64     = require 'xxhash'.hash64
@@ -929,7 +929,7 @@ local record Actions
     dependencies: function(Args)
     deps: function(Args)
     dist: function(Args)
-    files_koh: function(Args)
+    --files_koh: function(Args)
     load_index: function(Args)
     init: function(Args)
     make: function(Args)
@@ -3936,29 +3936,42 @@ function actions.make(_args: Args)
     end
 end
 
+local type XXHash = string
+local zlib_min_len = 128
+
+-- XXX: Стоит делать класс на метатаблице?
 local record Chunk
     id: string          -- file:line_start
+    id_hash: XXHash
     file: string        -- abs file name
     line_start: integer
     line_end: integer
-    -- При хранении в файле пишется как zlib сжатая строка
+
+    -- Кусок кода. Может конфликтовать с другими текстами 
+    -- на простых typedef объявлениях в ctags к примеру
     text: string
+    -- Если строка > zlib_min_len
+    text_zlib: string
+
     -- При хранении в файле пишется как zlib сжатая строка 
     -- сперва записанная через serpent
     embedding: string|{number} -- llm_embedding_dim 
     --  Хеш от текста, считать его заранее
     -- xxHash32, строка длиной 4, в hnswlib интерпритирую как 
-    hash: string 
+    hash: XXHash 
 end
 
-local chunk_lines_num = 40
-local chunk_lines_overlap = 5
+--local chunk_lines_num = 40
+--local chunk_lines_overlap = 5
 
+--[[
 local record Chunker
     step: function(line: string)
     stop: function(): {Chunk}
 end
+--]]
 
+--[[
 -- id           строка для вывода в отладку, идентификатор объекта
 -- chunk_size   размер чанка в строках
 -- start_from   номер строки, с которой начинается сбор
@@ -4029,7 +4042,10 @@ local function make_chunker(
         end,
     }
 end
+--]]
 
+
+--[[
 local function split2chunks(
     fname: string, chunk_size: integer, overlap: integer
 ): {Chunk}
@@ -4056,7 +4072,10 @@ local function split2chunks(
     end
     return final_chunks
 end
+--]]
 
+-- Возвращает список путей к файла на основе поиска fd
+-- На входе - таблица регулярок которые комбинируются с |
 local function _fd_code_in_cwd(extensions_t: {string}): {string}
     local result: {string} = {}
     local extensions = table.concat(extensions_t, "|")
@@ -4120,6 +4139,7 @@ local function _fd_code_in_modules(): {string}
     return result
 end
 
+--[[
 local function format_size(bytes: integer): string
     if bytes < 1024 * 1024 then
         return string.format("%.2f KB", bytes / 1024)
@@ -4127,6 +4147,7 @@ local function format_size(bytes: integer): string
         return string.format("%.2f MB", bytes / (1024 * 1024))
     end
 end
+--]]
 
 local function shannon_entropy(str: string): number
     local freq: {string: number} = {}
@@ -4237,28 +4258,6 @@ local function process_chunks_embedding(chunks: {Chunk})
                 else
                     printc("medium chunk")
                 end
-
-                --[[
-Как интерпретировать для фильтрации
-H < ~4.2 и ratio < 0.5 → явный boilerplate, можно безопасно относить к «простым» чанкам.
-
-H > ~4.8 и ratio > 0.8 → вероятно, насыщенный уникальный код, не стоит в батче перегружать.
-
-Если показатели расходятся (H низкая, ratio высокая или наоборот) — лучше дополнительно проверить токенную энтропию или длину чанка.
-                --]]
-
-                --[[
-Как можно проверить, обрабатываются ли батчи параллельно в LM Studio
-Сделать батч с:
-
-одним длинным чанком
-
-10-ю одинаковыми короткими чанками
-
-Если время обработки (и GPU-нагрузка) в случае (2) приблизительно такое же, как в случае (1) — значит, выполняется параллельно.
-
-Если в случае (2) время ≈ 10× больше, чем в случае (1) — значит, идёт последовательная обработка внутри батча.
-                --]]
             end
         end
 
@@ -4297,6 +4296,7 @@ function actions.xxhash(_: Args)
     print("xxhash64", hash64(str))
 end
 
+--[[
 local function load_chunks2string(fname: string): string
     local window_bits = 15 -- должен соответствовать тому, что использовался при deflate(3, 15)
     local stream = zlib.inflate(window_bits)
@@ -4322,14 +4322,17 @@ local function load_chunks2string(fname: string): string
     infile:close()
     return table.concat(decompressed)
 end
+--]]
 
 local hnswlib = require 'hnswlib'
 
+--[[
 local function bin_to_hex(str: string): string
     return (str:gsub('.', function(byte: string): string
         return string.format('%02X', string.byte(byte))
     end))
 end
+--]]
 
 local record CTag 
     -- {{{
@@ -4407,6 +4410,155 @@ local function check_zlib_args(o: EmbeddingIndexOpts): boolean
    return ok
 end
 
+local function check_chunks(chunks: {Chunk}): boolean
+    assert(chunks)
+    for _, c in ipairs(chunks) do
+        -- {{{
+        if not c.id then
+            print("check_chunks: have not 'id' field in chunk")
+            return false
+        end
+
+        if not c.file then
+            print("check_chunks: have not 'file' field in chunk")
+            return false
+        end
+
+        if not c.line_start then
+            print("check_chunks: have not 'line_start' field in chunk")
+            return false
+        end
+
+        if not c.line_end then
+            print("check_chunks: have not 'line_end' field in chunk")
+            return false
+        end
+
+        if not c.text then
+            print("check_chunks: have not 'text' field in chunk")
+            return false
+        end
+
+        if not c.embedding then
+            print("check_chunks: have not 'embedding' field in chunk")
+            return false
+        end
+
+        if not c.hash then
+            print("check_chunks: have not 'hash' field in chunk")
+            return false
+        end
+        -- }}}
+    end
+
+    return true
+end
+
+local function w_u64(fd: FILE, data: any)
+    fd:write(string.pack("<I8", data))
+end
+
+local function w_str_fixed(fd: FILE, s: string, n: integer)
+    assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
+    fd:write(s)
+    if #s < n then
+        fd:write(string.rep("\0", n - #s)) -- паддинг нулями
+    end
+end
+
+local pack = string.pack
+
+local function w_header_v2(fd: FILE, o: EmbeddingIndexOpts): integer, integer
+    local written = 0
+
+    -- TODO: добавить \0 в конце
+    local magic = 'caustic_index\0'
+    fd:write(magic)
+    written = written + #magic
+
+    local endian_mode = "l"
+    fd:write(endian_mode)
+    written = written + #endian_mode
+
+    local format_version = 2
+    fd:write(pack("<I1", format_version))
+    written = written + 1
+
+    local zlib_window = o.zlib_window
+    fd:write(pack("<I1", zlib_window))
+    written = written + 1
+
+    local sha_mode = "blake3\0"
+    --local sha_mode = "sha256"
+    local str_size_hash = 8
+    w_str_fixed(fd, sha_mode, str_size_hash)
+    written = written + str_size_hash
+
+    local embedding_dim = llm_embedding_dim
+    w_u64(fd, embedding_dim)
+    written = written + 8
+
+    local str_size_llm = 64
+    local llm = llm_embedding_model .. "\0"
+    assert(llm and #llm <= 64, "invalid llm_embedding_model")
+    w_str_fixed(fd, llm, str_size_llm)
+    written = written + str_size_llm
+
+    -- смещение где находятся данные
+    local data_offset = fd:seek("cur") + 8
+    w_u64(fd, data_offset)
+    written = written + 8
+
+    return written, data_offset
+end
+
+--[[
+local function w_header_v1(fd: FILE, o: EmbeddingIndexOpts): integer, integer
+    local written = 0
+
+    -- TODO: добавить \0 в конце
+    local magic = 'caustic_index'
+    fd:write(magic)
+    written = written + #magic
+
+    local endian_mode = "l"
+    fd:write(endian_mode)
+    written = written + #endian_mode
+
+    local format_version = 1
+    fd:write(pack("<I1", format_version))
+    written = written + 1
+
+    local zlib_window = o.zlib_window
+    fd:write(pack("<I1", zlib_window))
+    written = written + 1
+
+    local sha_mode = "blake3"
+    --local sha_mode = "sha256"
+    local str_size_hash = 8
+    w_str_fixed(fd, sha_mode, str_size_hash)
+    written = written + str_size_hash
+
+    local embedding_dim = llm_embedding_dim
+    w_u64(fd, embedding_dim)
+    written = written + 8
+
+    local str_size_llm = 64
+    local llm = llm_embedding_model
+    assert(llm and #llm <= 64, "invalid llm_embedding_model")
+    w_str_fixed(fd, llm, str_size_llm)
+    written = written + str_size_llm
+
+    -- смещение где находятся данные
+    local data_offset = fd:seek("cur") + 8
+    w_u64(fd, data_offset)
+    written = written + 8
+
+    return written, data_offset
+end
+--]]
+
+
 local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
     assert(chunks)
     assert(o)
@@ -4416,43 +4568,8 @@ local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
         return
     end
 
-    for _, c in ipairs(chunks) do
-        -- {{{
-        if not c.id then
-            print("chunks_write_binary: have not 'id' field in chunk")
-            return
-        end
-
-        if not c.file then
-            print("chunks_write_binary: have not 'file' field in chunk")
-            return
-        end
-
-        if not c.line_start then
-            print("chunks_write_binary: have not 'line_start' field in chunk")
-            return
-        end
-
-        if not c.line_end then
-            print("chunks_write_binary: have not 'line_end' field in chunk")
-            return
-        end
-
-        if not c.text then
-            print("chunks_write_binary: have not 'text' field in chunk")
-            return
-        end
-
-        if not c.embedding then
-            print("chunks_write_binary: have not 'embedding' field in chunk")
-            return
-        end
-
-        if not c.hash then
-            print("chunks_write_binary: have not 'hash' field in chunk")
-            return
-        end
-        -- }}}
+    if not check_chunks(chunks) then
+        return
     end
 
     local f = io.open(o.tags_fname .. ".tmp", "wb")
@@ -4465,65 +4582,9 @@ local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
         return
     end
 
-    local pack = string.pack
-
-    local function w_u64(data: any)
-        f:write(pack("<I8", data))
-    end
-
-    local function w_str_fixed(fd: FILE, s: string, n: integer)
-        assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
-        fd:write(s)
-        if #s < n then
-            fd:write(string.rep("\0", n - #s)) -- паддинг нулями
-        end
-    end
-
-    local function w_header(fd: FILE): integer, integer
-        local written = 0
-
-        -- TODO: добавить \0 в конце
-        local magic = 'caustic_index'
-        fd:write(magic)
-        written = written + #magic
-
-        local endian_mode = "l"
-        fd:write(endian_mode)
-        written = written + #endian_mode
-
-        local format_version = 1
-        fd:write(pack("<I1", format_version))
-        written = written + 1
-
-        local zlib_window = o.zlib_window
-        fd:write(pack("<I1", zlib_window))
-        written = written + 1
-
-        local sha_mode = "blake3"
-        --local sha_mode = "sha256"
-        local str_size_hash = 8
-        w_str_fixed(fd, sha_mode, str_size_hash)
-        written = written + str_size_hash
-
-        local embedding_dim = llm_embedding_dim
-        w_u64(embedding_dim)
-        written = written + 8
-
-        local str_size_llm = 64
-        local llm = llm_embedding_model
-        assert(llm and #llm <= 64, "invalid llm_embedding_model")
-        w_str_fixed(fd, llm, str_size_llm)
-        written = written + str_size_llm
-
-        -- смещение где находятся данные
-        local data_offset = fd:seek("cur") + 8
-        w_u64(data_offset)
-        written = written + 8
-
-        return written, data_offset
-    end
-
-    local _, _ = w_header(f)
+    --local _, _ = w_header_v1(f, o)
+    -- XXX: Добавить запись нулей в строки, это то, что отличает v1 от v2
+    local _, _ = w_header_v2(f, o)
 
     local append = sha2.blake3() as sha2.partial
 
@@ -4534,10 +4595,10 @@ local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
         local ser = serpent.dump(c, {
             sortkeys = true,
             comment = false,
-        })
+        }) .. "\0"
         append = append(pack("<I8", #ser))
         append = append(ser)
-        w_u64(#ser)
+        w_u64(f, #ser)
         f:write(ser)
     end
 
@@ -4599,7 +4660,7 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
         local t, pos, err = json.decode(line)
         if not t then
             printc(
-                "%{red}_embeddings: json parse error at pos",
+                "%{red}_embeddings: json parse error at pos ",
                 tostring(pos),
                 err
             )
@@ -4619,13 +4680,11 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
     -- гружу в словарь файлы
     for _, n in ipairs(tags) do
         if n.path and n.line and n._end then
-            --print('ready')
             if path2lines[n.path] then
                 goto continue
             end
 
             local f_src = io.open(n.path, "r")
-            --print("file was opened")
             if not f_src then
                 goto continue
             end
@@ -4648,6 +4707,7 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
 
     local sig_break = false
 
+    -- TODO: спросить - сохранить то, что есть в файл или сбросить?
     local function handle_sigint(_: any)
         sig_break = true
     end
@@ -4655,9 +4715,11 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
     local signal = require("posix.signal")
     signal.signal(signal.SIGINT, handle_sigint)
 
-    local hash32_uniq_test = {}
+    local hash2chunk: {XXHash: Chunk} = {}
+
     local zdeflate = zlib.deflate
     local tags_num = #tags
+
     -- теперь достаю куски текста исходных файлов как построчные записи
     for i, n in ipairs(tags) do
 
@@ -4669,58 +4731,85 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
             local lines = path2lines[n.path]
             assert(lines)
 
-            local chunk_str = ctag_to_str(n, lines)
-            if #chunk_str == 0 then
+            local chunk_text = ctag_to_str(n, lines)
+            if #chunk_text == 0 then
                 goto continue
             end
 
-            local compressor_chunk = zdeflate(o.zlib_level, o.zlib_window)
-            local text_compressed = compressor_chunk(chunk_str, "finish")
-
-            printc(
-                "%{green}" .. chunk_str:sub(1, 100) .. "%{reset}"
-            )
+            local preview = chunk_text:sub(1, 100)
+            printc("%{green}" .. preview .. "%{reset}")
             print()
-
-            local vector = assist.embedding(llm_embedding_model, chunk_str)[1]
 
             if sig_break then
                 break
             end
 
-            assert(vector)
-            local dump = serpent.dump(vector)
-
-            local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
-            local vector_compressed = compressor_vector(dump, "finish")
-            
-            local hash = hash32(chunk_str)
-            if hash32_uniq_test[hash] then
+            local hash = hash32(chunk_text)
+            -- XXX: сперва создать chunks, потом только считать вектора
+            local collision_chunk = hash2chunk[hash] 
+            if collision_chunk and collision_chunk.text ~= chunk_text then
                 printc(
-                    "%{red}_embeddings: xxhash32 collision, breaing%{reset}"
+                    "%{red}_embeddings: xxhash32 collision on " .. 
+                    "different texts, breaking%{reset}"
                 )
+                printc("%{blue}" .. chunk_text .. "%{reset}")
+                printc("%{yellow}" .. collision_chunk.text .. "%{reset}")
                 return {}
             end
-            hash32_uniq_test[hash] = true
+
+            local id = n.path .. ":" .. n.line
+            local id_hash = hash32(id)
+            -- TODO: добавить id_hash
             local chunk: Chunk = {
-                id = n.path .. ":" .. n.line,
+                id_hash = id_hash,
+                id = id,
                 file = n.path,
                 line_start = n.line,
                 line_end = n._end,
-                text = text_compressed,
+                --text = chunk_text,
                 hash = hash,
-                embedding = vector_compressed,
+                --embedding = vector_compressed,
             }
-            table.insert(chunks, chunk)
 
-            --print()
-            --print()
-            --print()
+            if #chunk_text > zlib_min_len then
+                local compressor_chunk = zdeflate(o.zlib_level, o.zlib_window)
+                local text_compressed = compressor_chunk(chunk_text, "finish")
+                chunk.text_zlib = text_compressed
+            else
+                chunk.text = chunk_text
+            end
+
+            table.insert(chunks, chunk)
+            hash2chunk[hash] = chunk
         end
 
         ::continue::
         print(format("%d/%d", i, tags_num))
     end
+
+    local pre_save = io.open(o.tags_fname .. ".pre_save.lua", "w")
+    pre_save:write(serpent.dump(chunks))
+    pre_save:close()
+
+    -- только расчет векторов
+    for i, ch in ipairs(chunks) do
+        local vector = assist.embedding(llm_embedding_model, ch.text)[1]
+
+        if sig_break then
+            break
+        end
+
+        assert(vector)
+        local dump = serpent.dump(vector)
+        local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
+        local vector_compressed = compressor_vector(dump, "finish")
+        ch.embedding = vector_compressed
+        printc("%{cyan}" ..  format("%d/%d", i, tags_num) .. "%{reset}")
+    end
+
+    pre_save = io.open(o.tags_fname .. ".pre_save.emb.lua", "w")
+    pre_save:write(serpent.dump(chunks))
+    pre_save:close()
 
     return chunks
 end
@@ -4736,14 +4825,12 @@ function actions.embeddings(_: Args)
     chunks_write_binary(o, chunks)
 end
 
+--[[
 function actions.chunks_open(_: Args)
     local chunks_str = load_chunks2string("chunks_koh.zlib")
     local chunks_sz = #chunks_str
     printc("%{blue}" .. format_size(chunks_sz) .. "%{reset}")
 
-    --print(chunks_str)
-
-    --local ok, chunks = serpent.load(chunks_str) as {Chunk}
     local fn, errmsg = load(chunks_str)
     if not fn then
         print('errmsg', errmsg)
@@ -4751,19 +4838,6 @@ function actions.chunks_open(_: Args)
     end
 
     local chunks = fn() as {Chunk}
-
-    --if not chunks then
-    --    print(
-    --end
-
-    --print('chunks', inspect(chunks))
-
-    --print(inspect(chunks[1]))
-    --print('type(chunks)', type(chunks))
-    --print(chunks_str:sub(1, 100))
-
-    --chunks[1].embedding = nil
-    --print(inspect(chunks[1]))
 
     -- число связей в графе (чем выше, тем точнее, но медленнее и больше памяти)
     local dim = 1500 
@@ -4783,9 +4857,7 @@ function actions.chunks_open(_: Args)
     local chunks_without_embeddings: {Chunk} = {}
 
     for _, ch in ipairs(chunks) do
-        --assert(ch.embedding)
         if ch.embedding then
-            --print("#ch.embeddings", #ch.embedding)
             assert(type(ch.embedding) == 'table')
             searcher:add(ch.embedding as {number}, ch.hash)
         else
@@ -4802,14 +4874,18 @@ function actions.chunks_open(_: Args)
     print("embedding were loaded")
     searcher:save("chunks.index")
 end
+--]]
 
+--[[
 local record IndexSetup
     files: {string}         -- абсолютные имена файлов
     zlib_level: integer     -- уровень сжатия
     zlib_window: integer    -- размер окна
     index_fname: string      -- имя файла индекса
 end
+--]]
 
+--[[
 local function index_create(index_setup: IndexSetup)
     assert(index_setup)
 
@@ -4866,7 +4942,6 @@ local function index_create(index_setup: IndexSetup)
         ::_continue::
 
     end
-    --]]
 
     process_chunks_embedding(chunks)
 
@@ -4883,7 +4958,9 @@ local function index_create(index_setup: IndexSetup)
     f:write(final)
 
 end
+--]]
 
+--[[
 function actions.load_index(_: Args)
     local chunks_str = load_chunks2string("chunks_koh.zlib")
 
@@ -4930,7 +5007,9 @@ function actions.load_index(_: Args)
         end
     end
 end
+--]]
 
+--[[
 function actions.files_koh(_args: Args)
     cmd_do("lms server start")
 
@@ -4961,6 +5040,7 @@ function actions.files_koh(_args: Args)
     })
 
 end
+--]]
 
 local record Searcher
     query: function(q: string): {string}
@@ -4975,14 +5055,20 @@ local function index_open(index_fname: string): Searcher
         os.exit(1)
     end
 
+    --[[
     local chunks_str = load_chunks2string(index_fname)
     local fn, errmsg = load(chunks_str)
     if not fn then
         print('errmsg', errmsg)
         return
     end
+    --]]
 
-    local chunks = fn() as {Chunk}
+    --local chunks = fn() as {Chunk}
+    local chunks: {Chunk} = {}
+    chunks = nil
+    assert(chunks)
+
     local hash2chunk: {string: Chunk} = {}
 
     for _, ch in ipairs(chunks) do
@@ -5371,14 +5457,17 @@ function actions.ctags(_args: Args)
     local pipe = io.popen(cmd, "r")
     assert(pipe)
     --local content = pipe:read("*a")
+    local tags_f = io.open("tags.json", "w")
 
     local content = {}
     for line in pipe:lines() do
         local j = json.decode(line)
         print("j", inspect(j))
         table.insert(content, j)
+        tags_f:write(line .. "\n")
     end
 
+    tags_f:close()
     -- XXX: как декодировать из строки в данные?
     --local lua = json.decode(content)
 
