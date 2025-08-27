@@ -914,6 +914,7 @@ end
 local record Actions
     -- {{{
 
+    mmap: function(Args)
     sha256: function(Args)
     embeddings: function(Args)
     snapshot: function(Args)
@@ -955,6 +956,10 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    mmap = {
+        summary = [[testing mmap library for chunks.index.copy]]
+    },
 
     sha256 = {
         summary = [[testing sha2.lua]],
@@ -3942,7 +3947,8 @@ local record Chunk
     -- сперва записанная через serpent
     embedding: string|{number} -- llm_embedding_dim 
     --  Хеш от текста, считать его заранее
-    hash: string -- xxHash32, строка длиной 4
+    -- xxHash32, строка длиной 4, в hnswlib интерпритирую как 
+    hash: string 
 end
 
 local chunk_lines_num = 40
@@ -4349,6 +4355,11 @@ end
 local sha2 = require 'sha2'
 --local sha256 = sha2.sha256
 
+function actions.mmap(_: Args)
+    local Index = require "index"
+    local index = Index.new("./chunks.tags.json")
+end
+
 function actions.sha256(_: Args)
 --[[
 ➜  caustic git:(master) ✗ sha256sum chunks.zlib
@@ -4471,6 +4482,7 @@ local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
     local function w_header(fd: FILE): integer, integer
         local written = 0
 
+        -- TODO: добавить \0 в конце
         local magic = 'caustic_index'
         fd:write(magic)
         written = written + #magic
@@ -4517,6 +4529,8 @@ local function chunks_write_binary(o: EmbeddingIndexOpts, chunks: {Chunk})
 
     -- u64 длина данных, затем данные - lua строка для load()
     for _, c in ipairs(chunks) do
+        -- XXX: Если записывать в файл раздельно text и embedding, то получится
+        -- быстрее загружать индексы?
         local ser = serpent.dump(c, {
             sortkeys = true,
             comment = false,
@@ -4641,6 +4655,7 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
     local signal = require("posix.signal")
     signal.signal(signal.SIGINT, handle_sigint)
 
+    local hash32_uniq_test = {}
     local zdeflate = zlib.deflate
     local tags_num = #tags
     -- теперь достаю куски текста исходных файлов как построчные записи
@@ -4678,14 +4693,22 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
 
             local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
             local vector_compressed = compressor_vector(dump, "finish")
-
+            
+            local hash = hash32(chunk_str)
+            if hash32_uniq_test[hash] then
+                printc(
+                    "%{red}_embeddings: xxhash32 collision, breaing%{reset}"
+                )
+                return {}
+            end
+            hash32_uniq_test[hash] = true
             local chunk: Chunk = {
                 id = n.path .. ":" .. n.line,
                 file = n.path,
                 line_start = n.line,
                 line_end = n._end,
                 text = text_compressed,
-                hash = hash32(chunk_str),
+                hash = hash,
                 embedding = vector_compressed,
             }
             table.insert(chunks, chunk)
@@ -4862,13 +4885,6 @@ local function index_create(index_setup: IndexSetup)
 end
 
 function actions.load_index(_: Args)
-    -- XXX: Сделать загрузку быстрой. Как?
-    -- Бинарный формат файла?
-    -- Файл отображать в память. mmap()
-    --[[
-    --]]
-    -- u64: количество блоков записей | блок на 1024 записи 1 | блок на 1024 записи 2 | .. | запись 1 | запись 2 |
-    -- блок - | u64 - смещение от начала файла, 64, ... |
     local chunks_str = load_chunks2string("chunks_koh.zlib")
 
     local fn, errmsg = load(chunks_str)
