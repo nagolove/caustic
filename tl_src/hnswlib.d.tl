@@ -1,5 +1,5 @@
 
-local record hnswlinb
+local record hnswlib
 
     -- это будет userdata с установленной метатаблицей
     record Handle
@@ -14,4 +14,4 @@ local record hnswlinb
     load: function(fname: string): Handle
 end
 
-return hnswlinb
+return hnswlib
