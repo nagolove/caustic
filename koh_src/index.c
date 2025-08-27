@@ -10,7 +10,27 @@
 #include <assert.h>
 #include <string.h>
 
-//                         1234567890123
+typedef struct  __attribute__((packed)) IndexHeader_v1 {
+    char magic[13];
+    char endian_mode;
+    u8   format_version;
+    u8   zlib_window;
+    char sha_mode[8];
+    u64  embedding_dim;
+    char llm_embedding_model[64];
+    u64  data_offset;
+} IndexHeader_v1;
+
+typedef struct Index {
+    int            fd;
+    u8             *data;
+    u64            filesize,
+                   chunks_num,
+                   data_offset;
+    IndexHeader_v1 header;
+} Index;
+
+//                                1234567890123
 static const char *index_magic = "caustic_index";
 
 static void index_unmap(Index *index) {
@@ -25,7 +45,7 @@ static void index_unmap(Index *index) {
     }
 }
 
-static void header_print(const IndexHeader *h) {
+static void header_print_v1(const IndexHeader_v1 *h) {
     assert(h);
 
     char magic[14] = {0};
@@ -47,34 +67,6 @@ static void header_print(const IndexHeader *h) {
     printf("%-20s %" PRIu64 "\n", "data_offset:", (uint64_t)h->data_offset);
 }
 
-/*
-static void header_print(IndexHeader *h) {
-    assert(h);
-
-    char magic[14] = {};
-    memcpy(magic, h->magic, sizeof(h->magic));
-    printf("magic '%s'\n", magic);
-
-    printf("endian_mode: '%c'\n", h->endian_mode);
-    printf("format_version: %d\n", h->format_version);
-    printf("zlib_window: %d\n", h->zlib_window);
-
-    char sha_mode[32] = {};
-    memcpy(sha_mode, h->sha_mode, sizeof(h->sha_mode));
-    printf("sha_mode: '%s'\n", sha_mode);
-
-    printf("embedding_dim: %ld\n", h->embedding_dim);
-
-    char llm_embedding_model[128] = {};
-    size_t sz = sizeof(h->llm_embedding_model);
-    memcpy(llm_embedding_model, h->llm_embedding_model, sz);
-    printf("llm_embedding_model: '%s'\n", llm_embedding_model);
-
-    printf("data_offset: %ld\n", h->data_offset);
-}
-*/
-
-
 Index *index_new(const char *fname) {
     assert(fname);
 
@@ -93,7 +85,7 @@ Index *index_new(const char *fname) {
     }
     size_t filesize = st.st_size;
 
-    if (filesize < sizeof(IndexHeader)) {
+    if (filesize < sizeof(IndexHeader_v1)) {
         fprintf(stderr, "index_new: file '%s' too small\n", fname);
         close(fd);
         return NULL;
@@ -113,8 +105,7 @@ Index *index_new(const char *fname) {
     index.data = map;
     index.filesize = filesize;
 
-    //u8 *data = map;
-    IndexHeader *header = (IndexHeader*)map;
+    IndexHeader_v1 *header = (IndexHeader_v1*)map;
     index.header = *header;
     index.data_offset = header->data_offset;
 
@@ -130,13 +121,26 @@ Index *index_new(const char *fname) {
         return NULL;
     }
 
-    if (index.data_offset < sizeof(IndexHeader)) {
+    if (index.data_offset < sizeof(IndexHeader_v1)) {
         fprintf(stderr, "index_new: data_offset less than header size\n");
         index_unmap(&index);
         return NULL;
     }
 
-    header_print(&index.header);
+    if (header->format_version == 1)
+        header_print_v1(&index.header);
+
+    // проверить хеш blake3
+    u64 offsets_num = 1024;
+    u64 *offsets = calloc(offsets_num, sizeof(*offsets));
+    
+    u8 *cur = index.data + index.data_offset,
+       *end = index.data + index.filesize;
+
+    while (cur < end) {
+    }
+
+    free(offsets);
 
     Index *index_a = calloc(1, sizeof(*index_a));
     assert(index_a);

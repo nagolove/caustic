@@ -13,26 +13,7 @@ typedef uint8_t     u8;
 typedef float       f32;
 typedef double      f64;
 
-typedef struct  __attribute__((packed)) IndexHeader {
-    char magic[13];
-    char endian_mode;
-    u8   format_version;
-    u8   zlib_window;
-    char sha_mode[8];
-    u64  embedding_dim;
-    char llm_embedding_model[64];
-    u64  data_offset;
-} IndexHeader;
-
-typedef struct Index {
-    int         fd;
-    u8          *data;
-    u64         filesize,
-                chunks_num,
-                data_offset;
-    IndexHeader header;
-} Index;
-
+typedef struct Index Index;
 Index *index_new(const char *fname);
 void index_free(Index *index);
 
