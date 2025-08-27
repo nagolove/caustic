@@ -43,9 +43,8 @@ typedef int16_t     i16;
 typedef uint16_t    u16;
 typedef int8_t      i8;
 typedef uint8_t     u8;
-
 typedef float       f32;
-typedef double      f63;
+typedef double      f64;
 
 typedef struct { 
     f32 x, y; 
