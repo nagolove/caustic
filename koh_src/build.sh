@@ -48,36 +48,18 @@ cd lua
 make MYCFLAGS="-fPIC" 
 popd
 
+pushd .
+cd ./blake3_c
+cmake . && make
+popd
 
-g++ lua.cpp \
+gcc -c ./index.c \
     -g3 -Wall -fPIC \
-    -I. -I./hnswlib \
-    -o koh.exe \
-    -I./lua \
-    -L./lua \
+    -I. -I./blake3_c \
     -lm \
-    -llua \
-
-gcc ./lua_xxhash64.c \
-    -g3 -Wall -fPIC \
-    -I. \
-    -shared \
-    -o libxxhash.so \
-    -lm \
-    -llua \
-
-
-g++ ./micro_hnswlib.cpp \
-    -g3 -Wall -fPIC \
-    -I. -I./hnswlib \
-    -shared \
-    -o libmicro_hnswlib.so \
-    -lm \
-    -llua \
-
-
 
 g++ ./koh.cpp \
+    index.o \
     -g3 -Wall -fPIC \
     -I. -I./hnswlib \
     -shared \
