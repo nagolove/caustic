@@ -14,6 +14,7 @@ local http = require("socket.http")
 local ltn12 = require("ltn12")
 local json = require("dkjson")  -- либо cjson, если у тебя другой JSON-модуль
 local inspect = require "inspect"
+local printc = require 'utils'.printc
 
 local Assist = {}
 Assist.__index = Assist
