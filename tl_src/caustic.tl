@@ -71,8 +71,8 @@ local printc     = ut.printc
 local cmd_do     = ut.cmd_do
 local Cache      = require "cache"
 local uv         = require "luv"
-local rl         = require "readline"
-local readline   = rl.readline
+--local rl         = require "readline"
+local readline   = linenoise.readline
 local format     = string.format
 local match      = string.match
 --local ceil       = math.ceil
@@ -3940,7 +3940,10 @@ local type XXHash = string
 local zlib_min_len = 128
 
 -- XXX: Стоит делать класс на метатаблице?
+-- XXX: Делать запись в файл сериализованной таблицы, без бинарных записей, 
+-- добавить их потом
 local record Chunk
+    -- XXX: Проверять на уникальность
     id: string          -- file:line_start
     id_hash: XXHash
     file: string        -- abs file name
@@ -3953,12 +3956,13 @@ local record Chunk
     -- Если строка > zlib_min_len
     text_zlib: string
 
+    --  Хеш от текста, считать его заранее
+    -- xxHash32, строка длиной 4, в hnswlib интерпритирую как 
+    text_hash: XXHash 
+
     -- При хранении в файле пишется как zlib сжатая строка 
     -- сперва записанная через serpent
     embedding: string|{number} -- llm_embedding_dim 
-    --  Хеш от текста, считать его заранее
-    -- xxHash32, строка длиной 4, в hnswlib интерпритирую как 
-    hash: XXHash 
 end
 
 --local chunk_lines_num = 40
@@ -4444,7 +4448,7 @@ local function check_chunks(chunks: {Chunk}): boolean
             return false
         end
 
-        if not c.hash then
+        if not c.text_hash then
             print("check_chunks: have not 'hash' field in chunk")
             return false
         end
@@ -4471,9 +4475,9 @@ local pack = string.pack
 local function w_header_v2(fd: FILE, o: EmbeddingIndexOpts): integer, integer
     local written = 0
 
-    -- TODO: добавить \0 в конце
-    local magic = 'caustic_index\0'
-    fd:write(magic)
+    local magic = 'caustic_index'
+    local str_size_magic = #magic
+    w_str_fixed(fd, magic, str_size_magic)
     written = written + #magic
 
     local endian_mode = "l"
@@ -4631,27 +4635,11 @@ local function ctag_to_str(n: CTag, lines: {string}): string
     return table.concat(chunks_lines, '\n')
 end
 
-local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
-    assert(o)
-    assert(o.tags_fname)
-
-    if not check_zlib_args(o) then
-        return {}
-    end
-
-    local attr = lfs.attributes(o.tags_fname)
-
-    if not attr then
-        return {}
-    end
-
-    if attr.mode ~= 'file' then
-        return {}
-    end
-
-    local f_tags = io.open(o.tags_fname, "r")
+local function load_ctags(tags_fname: string): {CTag}
+    assert(tags_fname)
+    local f_tags = io.open(tags_fname, "r")
     if not f_tags then
-        print('actions.embeddings: could not open', o.tags_fname)
+        print('actions.embeddings: could not open', tags_fname)
         return {}
     end
 
@@ -4672,11 +4660,12 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
     end
 
     f_tags:close()
+    return tags
+end
 
+local function load_lines(tags: {CTag}): {string: {string}}
+    assert(tags)
     local path2lines: {string:{string}} = {}
-
-    print("json loaded")
-
     -- гружу в словарь файлы
     for _, n in ipairs(tags) do
         if n.path and n.line and n._end then
@@ -4700,6 +4689,34 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
 
         ::continue::
     end
+    return path2lines
+end
+
+local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
+    assert(o)
+    assert(o.tags_fname)
+
+    if not check_zlib_args(o) then
+        return {}
+    end
+
+    local attr = lfs.attributes(o.tags_fname)
+
+    if not attr then
+        return {}
+    end
+
+    if attr.mode ~= 'file' then
+        return {}
+    end
+
+    local tags = load_ctags(o.tags_fname)
+    if #tags == 0 then
+        return {}
+    end
+
+    print("json loaded")
+    local path2lines: {string:{string}} = load_lines(tags)
 
     print("sources were loaded")
 
@@ -4707,8 +4724,14 @@ local function _embeddings(o: EmbeddingIndexOpts): {Chunk}
 
     local sig_break = false
 
-    -- TODO: спросить - сохранить то, что есть в файл или сбросить?
     local function handle_sigint(_: any)
+        local input = readline(
+            "Should I save current state in file" .. 
+            "(it helps continue from this point later(Y/n)"
+        )
+        if input == "Y" or input == "y" then
+            -- XXX: Напиши сюда завтра код
+        end
         sig_break = true
     end
 
@@ -4821,7 +4844,7 @@ function actions.embeddings(_: Args)
         tags_fname = 'tags.json',
     }
 
-    local chunks = _embeddings(o)
+    local chunks: {Chunk} = _embeddings(o)
     chunks_write_binary(o, chunks)
 end
 
