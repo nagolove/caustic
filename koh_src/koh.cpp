@@ -559,6 +559,42 @@ int luaopen_xxhash(lua_State* L) {
     return 1;
 }
 
+
+static int l_linenoise_save_history(lua_State* L) {
+    if (!lua_isstring(L, 1)) {
+        luaL_error(L, "l_linenoise_save_history: expected string\n");
+        return 0;
+    }
+    const char *path = lua_tostring(L, 1);
+    printf("l_linenoise_save_history: path '%s'\n", path);
+    bool ok = linenoise::SaveHistory(path);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
+static int l_linenoise_load_history(lua_State* L) {
+    if (!lua_isstring(L, 1)) {
+        luaL_error(L, "l_linenoise_load_history: expected string\n");
+        return 0;
+    }
+    const char *path = lua_tostring(L, 1);
+    printf("l_linenoise_load_history: path '%s'\n", path);
+    bool ok = linenoise::SaveHistory(path);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
+static int l_linenoise_add_history(lua_State* L) {
+    if (!lua_isstring(L, 1)) {
+        luaL_error(L, "l_linenoise_add_history: expected string\n");
+        return 0;
+    }
+    const char *hist_entry = lua_tostring(L, 1);
+    printf("l_linenoise_add_history: hist_entry '%s'\n", hist_entry);
+    linenoise::AddHistory(hist_entry);
+    return 0;
+}
+
 static int l_linenoise_set_multiline(lua_State* L) {
     if (!lua_isboolean(L, 1)) {
         luaL_error(L, "l_linenoise_set_multiline: expected boolean\n");
@@ -586,6 +622,16 @@ int luaopen_linenoise(lua_State* L) {
 
     lua_pushcfunction(L, l_linenoise_set_multiline);
     lua_setfield(L, -2, "set_multiline");
+
+    lua_pushcfunction(L, l_linenoise_add_history);
+    lua_setfield(L, -2, "add_history");
+
+    lua_pushcfunction(L, l_linenoise_save_history);
+    lua_setfield(L, -2, "save_history");
+
+    lua_pushcfunction(L, l_linenoise_load_history);
+    lua_setfield(L, -2, "load_history");
+
     return 1;
 }
 
@@ -642,7 +688,7 @@ static int l_chunks_num(lua_State *L) {
     return 1;
 }
 
-static int l_chunks_raw(lua_State *L) {
+static int l_chunk_raw(lua_State *L) {
     lua_index_ud *ud = check_index(L, 1);
     luaL_argcheck(L, ud->ptr != NULL, 1, "invalid Index");
 
@@ -664,9 +710,7 @@ static int l_chunks_raw(lua_State *L) {
         return 1;
     }
 
-    // ⚠️ ВАЖНО: длины нет, возвращаем lightuserdata (указатель).
-    // Если чанк нуль-терминирован: замените на lua_pushstring(p);
-    lua_pushlightuserdata(L, (void*)p);
+    lua_pushstring(L, p);
     return 1;
 }
 
@@ -694,7 +738,7 @@ static int l_new(lua_State *L) {
 
 static const luaL_Reg handle_methods_index[] = {
     {"chunks_num", l_chunks_num},
-    {"chunks_raw", l_chunks_raw},
+    {"chunk_raw", l_chunk_raw},
     {"__gc",       l_index_gc},
     {"__tostring", l_index_tostring},
     {NULL, NULL}
