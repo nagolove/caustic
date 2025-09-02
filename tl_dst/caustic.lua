@@ -71,8 +71,8 @@ local printc = ut.printc
 local cmd_do = ut.cmd_do
 local Cache = require("cache")
 local uv = require("luv")
-local rl = require("readline")
-local readline = rl.readline
+
+local readline = linenoise.readline
 local format = string.format
 local match = string.match
 
@@ -4076,6 +4076,11 @@ local zlib_min_len = 128
 
 
 
+
+
+
+
+
 local function _fd_code_in_cwd(extensions_t)
    local result = {}
    local extensions = table.concat(extensions_t, "|")
@@ -4176,45 +4181,90 @@ end
 
 
 
+
 local function lms_instanse()
-
-   return {
-      is_up = function()
-         local code = os.execute('lms ps')
-         return code
-      end,
-
-      is_loaded = function(modelname)
-         local f = io.popen('lms ps --json')
-         local json_data = f:read("*a")
-         local models = json.decode(json_data)
-
-         for _, info in ipairs(models) do
+   local self = {}
 
 
-            assert(type(info) == 'string' or type(info) == 'table')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   self.is_up = function()
+      local code = os.execute('lms ps')
+      return code
+   end
+
+   self.is_loaded = function(modelname)
+      local f = io.popen('lms ps --json')
+      local json_data = f:read("*a")
+      local models = json.decode(json_data)
+
+      for _, info in ipairs(models) do
+
+
+         assert(type(info) == 'string' or type(info) == 'table')
+      end
+
+      print("json_data", inspect(models))
+      f:close()
+      for _, target in ipairs(models) do
+         print('target', inspect(target))
+         if modelname == target then
+            return true
          end
+      end
+      return false
+   end
 
-         print("json_data", inspect(models))
-         f:close()
-         for _, target in ipairs(models) do
-            print('target', inspect(target))
-            if modelname == target then
-               return true
+   self.load = function(modelname)
+      cmd_do('lms load ' .. modelname)
+   end
+
+   self.up = function()
+      if not self.is_up() then
+
+
+         local cmd = "setsid sh -c " ..
+         "'exec lmstudio </dev/null >/dev/null 2>&1' &"
+         os.execute(cmd)
+
+         local i = 0
+         while not self.is_up() do
+            os.execute("sleep 0.2")
+            i = i + 1
+            if i > 20 then
+               print("Could not start lmstudio")
+               return false
             end
          end
-         return false
-      end,
+      end
+      return true
+   end
 
-      load = function(modelname)
-         cmd_do('lms load ' .. modelname)
-      end,
-   }
+   return self
 end
 
 local lms = lms_instanse()
 
-local function process_chunks_embedding(chunks)
+local function chunks_calculate_vectors(chunks)
    local chunks_per_request = 17
    assert(chunks)
 
@@ -4230,9 +4280,6 @@ local function process_chunks_embedding(chunks)
    end
 
    while #chunks_copy ~= 0 do
-
-
-
       local embeddings_t = {}
       local ids = {}
 
@@ -4243,9 +4290,21 @@ local function process_chunks_embedding(chunks)
             break
          else
             table.insert(ids, chunk.id)
-            table.insert(embeddings_t, chunk.text)
-            local sh = shannon_entropy(chunk.text)
-            local ratio = compression_ratio(chunk.text)
+            local text = chunk.text
+            assert(text)
+
+            local text_t = table.concat({
+               "// ",
+               chunk.file,
+               ":",
+               chunk.line_start,
+               "\n",
+               text,
+            })
+
+            table.insert(embeddings_t, text_t)
+            local sh = shannon_entropy(text)
+            local ratio = compression_ratio(text)
 
             io.write(
             'shannon_entropy: ', sh, ' compression_ratio: ', ratio, " ")
@@ -4255,8 +4314,9 @@ local function process_chunks_embedding(chunks)
                printc("%{green}simple chunk%{reset}")
             elseif sh > 4.8 and ratio > 0.8 then
                printc("%{red}complex chunk%{reset}")
+               print("\n" .. inspect(chunk) .. "\n")
             else
-               printc("medium chunk")
+               printc("%{yellow}medium chunk%{reset}")
             end
          end
       end
@@ -4357,10 +4417,31 @@ local hnswlib = require('hnswlib')
 
 local sha2 = require('sha2')
 
-
 function actions.mmap(_)
    local Index = require("index")
-   local index = Index.new("./chunks.tags.json")
+   local index = Index.new("./chunks.bin")
+   for i = 1, index:chunks_num() do
+
+
+
+
+
+
+
+
+      local ok, errmsg = pcall(function()
+         local s = index:chunk_raw(i)
+         local chunk = load(s)()
+         chunk.embedding = nil
+         print(inspect(chunk))
+      end), string
+      if not ok then
+         print('errmsg', inspect(errmsg))
+      end
+
+
+
+   end
 end
 
 function actions.sha256(_)
@@ -4414,8 +4495,14 @@ local function check_chunks(chunks)
    assert(chunks)
    for _, c in ipairs(chunks) do
 
+
       if not c.id then
          print("check_chunks: have not 'id' field in chunk")
+         return false
+      end
+
+      if not c.id_hash then
+         print("check_chunks: have not 'id_hash' field in chunk")
          return false
       end
 
@@ -4444,10 +4531,13 @@ local function check_chunks(chunks)
          return false
       end
 
-      if not c.hash then
-         print("check_chunks: have not 'hash' field in chunk")
-         return false
-      end
+
+
+
+
+
+
+
 
    end
 
@@ -4455,10 +4545,12 @@ local function check_chunks(chunks)
 end
 
 local function w_u64(fd, data)
+   assert(fd)
    fd:write(string.pack("<I8", data))
 end
 
 local function w_str_fixed(fd, s, n)
+   assert(fd)
    assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
    fd:write(s)
    if #s < n then
@@ -4466,14 +4558,23 @@ local function w_str_fixed(fd, s, n)
    end
 end
 
+
+local function w_str(fd, s)
+   assert(fd)
+   assert(s)
+   w_u64(fd, #s)
+   fd:write(s)
+   fd:write("\0")
+end
+
 local pack = string.pack
 
 local function w_header_v2(fd, o)
    local written = 0
 
-
    local magic = 'caustic_index\0'
-   fd:write(magic)
+   local str_size_magic = #magic
+   w_str_fixed(fd, magic, str_size_magic)
    written = written + #magic
 
    local endian_mode = "l"
@@ -4559,38 +4660,49 @@ end
 
 
 
-local function chunks_write_binary(o, chunks)
+local function chunks_write_binary(
+   chunks_fname, o, chunks)
+
+
+   assert(chunks_fname)
    assert(chunks)
    assert(o)
    assert(o.tags_fname)
 
    if not check_zlib_args(o) then
-      return
+      return false
    end
 
    if not check_chunks(chunks) then
-      return
+      return false
    end
 
-   local f = io.open(o.tags_fname .. ".tmp", "wb")
+   local f = io.open(chunks_fname .. ".tmp", "wb")
    if not f then
       printc(
       '%{red}chunks_write_binary: could not open file for writing',
       o.tags_fname,
       "%{reset}")
 
-      return
+      return false
    end
 
 
 
    local _, _ = w_header_v2(f, o)
 
+   print("chunks_write_binary: header written\n");
+
    local append = sha2.blake3()
 
+   print("chunks_write_binary: #chunks", #chunks)
 
    for _, c in ipairs(chunks) do
 
+
+      if c.text_zlib then
+         c.text = nil
+      end
 
       local ser = serpent.dump(c, {
          sortkeys = true,
@@ -4599,6 +4711,8 @@ local function chunks_write_binary(o, chunks)
       append = append(pack("<I8", #ser))
       append = append(ser)
       w_u64(f, #ser)
+
+
       f:write(ser)
    end
 
@@ -4608,8 +4722,10 @@ local function chunks_write_binary(o, chunks)
    f:flush()
    f:close()
 
-   assert(os.rename(o.tags_fname .. ".tmp", o.tags_fname))
+   assert(os.rename(chunks_fname .. ".tmp", chunks_fname))
+   return true
 end
+
 
 local function ctag_to_str(n, lines)
    local chunks_lines = {}
@@ -4631,27 +4747,11 @@ local function ctag_to_str(n, lines)
    return table.concat(chunks_lines, '\n')
 end
 
-local function _embeddings(o)
-   assert(o)
-   assert(o.tags_fname)
-
-   if not check_zlib_args(o) then
-      return {}
-   end
-
-   local attr = lfs.attributes(o.tags_fname)
-
-   if not attr then
-      return {}
-   end
-
-   if attr.mode ~= 'file' then
-      return {}
-   end
-
-   local f_tags = io.open(o.tags_fname, "r")
+local function ctags_load(tags_fname)
+   assert(tags_fname)
+   local f_tags = io.open(tags_fname, "r")
    if not f_tags then
-      print('actions.embeddings: could not open', o.tags_fname)
+      print('ctags_load: could not open', tags_fname)
       return {}
    end
 
@@ -4660,7 +4760,7 @@ local function _embeddings(o)
       local t, pos, err = json.decode(line)
       if not t then
          printc(
-         "%{red}_embeddings: json parse error at pos ",
+         "%{red}ctags_load: json parse error at pos ",
          tostring(pos),
          err)
 
@@ -4672,11 +4772,12 @@ local function _embeddings(o)
    end
 
    f_tags:close()
+   return tags
+end
 
+local function load_lines(tags)
+   assert(tags)
    local path2lines = {}
-
-   print("json loaded")
-
 
    for _, n in ipairs(tags) do
       if n.path and n.line and n._end then
@@ -4700,20 +4801,64 @@ local function _embeddings(o)
 
       ::continue::
    end
+   return path2lines
+end
 
+
+local function tags2chunks(o)
+   assert(o)
+   assert(o.tags_fname)
+
+   if not check_zlib_args(o) then
+      return {}
+   end
+
+   local attr = lfs.attributes(o.tags_fname)
+
+   if not attr then
+      return {}
+   end
+
+   if attr.mode ~= 'file' then
+      return {}
+   end
+
+   local tags = ctags_load(o.tags_fname)
+   if #tags == 0 then
+      return {}
+   end
+   print("jsonl loaded")
+
+   local path2lines = load_lines(tags)
    print("sources were loaded")
 
-   local chunks = {}
-
    local sig_break = false
-
-
    local function handle_sigint(_)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       sig_break = true
    end
 
    local signal = require("posix.signal")
    signal.signal(signal.SIGINT, handle_sigint)
+
+   local chunks = {}
 
    local hash2chunk = {}
 
@@ -4744,20 +4889,7 @@ local function _embeddings(o)
             break
          end
 
-         local hash = hash32(chunk_text)
-
-         local collision_chunk = hash2chunk[hash]
-         if collision_chunk and collision_chunk.text ~= chunk_text then
-            printc(
-            "%{red}_embeddings: xxhash32 collision on " ..
-            "different texts, breaking%{reset}")
-
-            printc("%{blue}" .. chunk_text .. "%{reset}")
-            printc("%{yellow}" .. collision_chunk.text .. "%{reset}")
-            return {}
-         end
-
-         local id = n.path .. ":" .. n.line
+         local id = n.path .. ":" .. n.line .. ":" .. n.name
          local id_hash = hash32(id)
 
          local chunk = {
@@ -4766,21 +4898,32 @@ local function _embeddings(o)
             file = n.path,
             line_start = n.line,
             line_end = n._end,
-
-            hash = hash,
-
          }
+
+
+         local collision_chunk = hash2chunk[id_hash]
+
+         if collision_chunk then
+            printc(
+            "%{red}tags2chunks: xxhash32 collision on " ..
+            "different id_hash, breaking%{reset}")
+
+            printc("%{blue}" .. inspect(chunk_text) .. "%{reset}")
+            printc("%{yellow}" .. inspect(collision_chunk) .. "%{reset}")
+            printc("%{black}%{yellowbg}" .. inspect(chunk) .. "%{reset}")
+         end
 
          if #chunk_text > zlib_min_len then
             local compressor_chunk = zdeflate(o.zlib_level, o.zlib_window)
             local text_compressed = compressor_chunk(chunk_text, "finish")
             chunk.text_zlib = text_compressed
-         else
-            chunk.text = chunk_text
          end
 
+
+         chunk.text = chunk_text
+
          table.insert(chunks, chunk)
-         hash2chunk[hash] = chunk
+         hash2chunk[id_hash] = chunk
       end
 
       ::continue::
@@ -4792,26 +4935,34 @@ local function _embeddings(o)
    pre_save:close()
 
 
-   for i, ch in ipairs(chunks) do
-      local vector = assist.embedding(llm_embedding_model, ch.text)[1]
 
-      if sig_break then
-         break
-      end
 
-      assert(vector)
-      local dump = serpent.dump(vector)
-      local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
-      local vector_compressed = compressor_vector(dump, "finish")
-      ch.embedding = vector_compressed
-      printc("%{cyan}" .. format("%d/%d", i, tags_num) .. "%{reset}")
-   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   chunks_calculate_vectors(chunks)
 
    pre_save = io.open(o.tags_fname .. ".pre_save.emb.lua", "w")
    pre_save:write(serpent.dump(chunks))
    pre_save:close()
 
    return chunks
+
+
 end
 
 function actions.embeddings(_)
@@ -4821,8 +4972,10 @@ function actions.embeddings(_)
       tags_fname = 'tags.json',
    }
 
-   local chunks = _embeddings(o)
-   chunks_write_binary(o, chunks)
+   local chunks = tags2chunks(o)
+   if chunks_write_binary("chunks.bin", o, chunks) then
+      print("chunks were written succesfully")
+   end
 end
 
 
@@ -5046,38 +5199,54 @@ end
 
 
 
-local function index_open(index_fname)
+local function index_instance(index_fname)
    local attr_index = lfs.attributes(index_fname)
    if not attr_index then
       print(format(
-      "index_open: could not open file '%s', aborting", index_fname))
+      "index_instance: could not open file '%s', aborting", index_fname))
 
       os.exit(1)
    end
-
-
-
-
-
-
-
-
-
 
 
    local chunks = {}
    chunks = nil
    assert(chunks)
 
+
    local hash2chunk = {}
 
    for _, ch in ipairs(chunks) do
-      ch.hash = hash32(ch.text)
-      assert(hash2chunk[ch.hash] == nil)
-      hash2chunk[ch.hash] = ch
+      ch.id_hash = hash32(ch.text)
+      assert(hash2chunk[ch.id_hash] == nil)
+      hash2chunk[ch.id_hash] = ch
    end
 
-   local searcher = hnswlib.load("chunks.index")
+
+   local dim = 1500
+   local ef = 50
+   local searcher = hnswlib.new(100000, dim, ef)
+
+   local Index = require("index")
+   local index = Index.new(index_fname)
+   for i = 1, index:chunks_num() do
+      local ok, errmsg = pcall(function()
+         local s = index:chunk_raw(i)
+         local chunk = load(s)()
+
+
+
+
+
+         searcher:add(chunk.embedding, chunk.id_hash)
+      end), string
+      if not ok then
+         print('errmsg', inspect(errmsg))
+      end
+   end
+
+
+
 
 
    return {
@@ -5125,49 +5294,59 @@ end
 
 
 local function markdown_instance()
+   linenoise.save_history("history.txt")
    local in_code = false
-   local fence_char = ""
-   local fence_len = 0
+
+
+   local markdown_f = io.open("markdown.txt", "a")
+   assert(markdown_f)
+
+
+   local tok_buf = {}
+   local tok_buf_size = 5
+   for i = 1, tok_buf_size do
+      tok_buf[i] = ""
+   end
+   local tok_i = 1
 
    return {
-      feed = function(inp)
+      feed = function(_inp)
+         tok_i = (tok_i + 1) % tok_buf_size
+         tok_buf[tok_i] = _inp
 
-         if not in_code then
+         local inp = table.concat(tok_buf)
 
+         markdown_f:write("inp:", inp .. "\n")
 
-            local c, _ = string.match(inp, "^%s*([`~])%1%1(%S*)%s*$")
-            if c then
-               in_code = true
-               fence_char = c
-
-               local f = string.match(inp, "^%s*(" .. c .. "+)")
-               fence_len = #f
-            end
-         else
-
-
-            local c = string.match(inp, "^%s*([`~])%1%1+%s*$")
-            if c and c == fence_char then
-
-               local f = string.match(inp, "^%s*(" .. fence_char .. "+)")
-               if #f >= fence_len then
-                  in_code = false
-                  fence_char = nil
-                  fence_len = 0
-               end
-            end
-         end
-
-
-         local out = inp
-
-         print('\n feef: in_code', in_code, "\n")
+         local out = ""
 
          if in_code then
-
-            out = "\27[7m" .. inp .. "\27[0m"
+            out = "\27[7m" .. _inp .. "\27[0m"
+         else
+            out = _inp
          end
 
+         if not in_code then
+            local c, _ = string.match(inp, "```")
+            if c then
+               in_code = true
+
+               if in_code then
+
+                  local C = ansicolors
+                  out = C("%{greenbg}") .. _inp .. C("%{reset}")
+               else
+                  out = _inp
+               end
+            end
+         else
+            local c = string.match(inp, "```")
+            if c then
+               in_code = false
+            end
+         end
+
+         markdown_f:flush()
          return out
       end,
    }
@@ -5179,44 +5358,9 @@ local mkd = {}
 function actions.ai(_args)
    print("actions.ai")
 
-   if not lms.is_up() then
-
-
-      local cmd = "setsid sh -c " ..
-      "'exec lmstudio </dev/null >/dev/null 2>&1' &"
-      os.execute(cmd)
-
-      local i = 0
-      while not lms.is_up() do
-         os.execute("sleep 0.2")
-         i = i + 1
-         if i > 20 then
-            print("Could not start lmstudio")
-            return
-         end
-      end
+   if not lms.up() then
+      return
    end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -5235,6 +5379,7 @@ function actions.ai(_args)
 
          return_to_main = true
       else
+         linenoise.save_history("history.txt")
          print("\n%{red}return to os%{reset}\n")
          os.exit(1)
       end
@@ -5325,11 +5470,16 @@ function actions.ai(_args)
    end
 
    linenoise.set_multiline(true)
-   local searcher = index_open("chunks_koh.zlib")
+   local searcher = index_instance("./chunks.bin")
    local markdown = markdown_instance()
+
+
+   linenoise.load_history("history.txt")
 
    while running do
       inp = linenoise.readline(welcome_str_escape)
+
+      linenoise.add_history(inp)
 
       if eval_commands(inp) then
          goto continue
@@ -5385,6 +5535,8 @@ function actions.ai(_args)
       ::continue::
    end
 
+   linenoise.save_history("history.txt")
+
    local w = io.open("mkd_chunks.lua", "w")
    w:write(serpent.dump(mkd))
 end
@@ -5399,8 +5551,26 @@ function actions.snapshot(_)
    f:write(dump)
 end
 
-function actions.ctags(_args)
+local function ctags_write(tags_fname, target)
+   assert(target)
 
+
+   local attrib = lfs.attributes(tags_fname)
+   if attrib and attrib.mode == 'file' then
+      local msg = format(
+      "file %q exists, load(Y,L) it or update(N,U)?", tags_fname)
+
+      local inp = string.lower(linenoise.readline(msg))
+      if inp == "y" or inp == "l" then
+         print("using current tag file")
+
+      elseif inp == "n" or inp == "u" then
+         print("scanning tags")
+      else
+         print(format("command %q is unknown"))
+         return
+      end
+   end
 
    local tasks = {}
 
@@ -5411,9 +5581,10 @@ function actions.ctags(_args)
    end
 
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
-   local target = _args.t or "linux"
    for _, cfg in ipairs(cfgs) do
-      sub_make(_args, cfg, target, on_tasks, push_num)
+
+
+      sub_make({}, cfg, target, on_tasks, push_num)
    end
 
    local sources = {}
@@ -5439,51 +5610,56 @@ function actions.ctags(_args)
 
 
 
-
    local cmd = "ctags -R " ..
    "--output-format=json " ..
    "--fields=+neK " ..
+   "--c-kinds=+fpvsumed " ..
    "--extras=+q 2>&1 " ..
    table.concat(sources, " ")
-
-
-
-
-
-
-
-
 
    local pipe = io.popen(cmd, "r")
    assert(pipe)
 
-   local tags_f = io.open("tags.json", "w")
+   local tags_f = io.open(tags_fname .. '.tmp', "w")
 
    local content = {}
    for line in pipe:lines() do
       local j = json.decode(line)
-      print("j", inspect(j))
+
       table.insert(content, j)
       tags_f:write(line .. "\n")
    end
 
    tags_f:close()
-
-
-
-
-
+   os.rename(tags_fname .. ".tmp", tags_fname)
    assert(content)
 
 
 
 
-
-
-   local f = io.open("tags.lua", "w")
-   f:write(serpent.dump(content))
-
    printc("%{blue}ctags%{reset}")
+end
+
+function actions.ctags(_args)
+   local o = {
+      zlib_window = 15,
+      zlib_level = 6,
+      tags_fname = 'tags.jsonl',
+   }
+
+   local target = _args.t or "linux"
+   ctags_write(o.tags_fname, target)
+
+   local chunks = tags2chunks(o)
+
+   local f = io.open("chunks.lua", "w")
+   assert(f)
+   f:write(serpent.dump(chunks))
+   f:close()
+
+   if chunks_write_binary("chunks.bin", o, chunks) then
+      print("chunks were written succesfully")
+   end
 end
 
 local function main()
