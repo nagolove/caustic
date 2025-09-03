@@ -1,3 +1,4 @@
+// vim: fdm=marker
 #include "index.h"
 
 #include <inttypes.h>
@@ -32,18 +33,6 @@ typedef struct __attribute__((packed)) IndexHeaderBase {
     u8   format_version;
 } IndexHeaderBase;
 
-/*
-typedef struct  __attribute__((packed)) IndexHeader_v1 {
-    IndexHeaderBase     base;
-    u8                  zlib_window;
-    char                sha_mode[8];
-    u64                 embedding_dim;
-    char                llm_embedding_model[64];
-    u64                 data_offset;
-    // сюда можно добавлять другие поля
-} IndexHeader_v1;
-*/
-
 typedef struct __attribute__((packed)) IndexHeader_v2 {
     IndexHeaderBase     base;                // magic[13], endian_mode, format_version=2
     u8                  zlib_window;         // окно zlib
@@ -54,6 +43,16 @@ typedef struct __attribute__((packed)) IndexHeader_v2 {
     // сюда можно добавлять новые поля в будущем
 } IndexHeader_v2;
 
+typedef struct __attribute__((packed)) IndexHeader_v3 {
+    IndexHeaderBase     base;                // magic[13], endian_mode, format_version=2
+    u8                  zlib_window;         // окно zlib
+    char                sha_mode[8];         // "blake3\0", "sha256\0" и т.п.
+    u64                 embedding_dim;       // размерность векторов
+    char                llm_embedding_model[64]; // имя модели (null-terminated, <=63 символов)
+    u64                 data_offset;         // смещение начала данных
+    // сюда можно добавлять новые поля в будущем
+} IndexHeader_v3;
+
 typedef struct Index {
     int            fd;
     // mmap() файла с чанками
@@ -63,7 +62,8 @@ typedef struct Index {
     u64            filesize,
                    chunks_num,
                    data_offset;
-    IndexHeader_v2 header;
+    //IndexHeader_v2 header;
+    IndexHeader_v3 header;
 } Index;
 
 //                                1234567890123
@@ -79,6 +79,31 @@ static void index_unmap(Index *index) {
         close(index->fd);
         index->fd = -1;
     }
+}
+
+static void header_print_v3(const IndexHeader_v3 *h) {
+    assert(h);
+
+    printf("header_print_v3:\n");
+
+    char magic[14] = {0};
+    memcpy(magic, h->base.magic, sizeof(h->base.magic));
+
+    char sha_mode[32] = {0};
+    memcpy(sha_mode, h->sha_mode, sizeof(h->sha_mode));
+
+    char llm_embedding_model[128] = {0};
+    size_t sz = sizeof(h->llm_embedding_model);
+    memcpy(llm_embedding_model, h->llm_embedding_model, sz);
+
+    printf("%-20s '%s'\n", "magic:", magic);
+    printf("%-20s '%c'\n", "endian_mode:", h->base.endian_mode);
+    printf("%-20s %u\n", "format_version:", (unsigned)h->base.format_version);
+    printf("%-20s %u\n", "zlib_window:", (unsigned)h->zlib_window);
+    printf("%-20s %s\n", "sha_mode:", sha_mode);
+    printf("%-20s %" PRIu64 "\n", "embedding_dim:", h->embedding_dim);
+    printf("%-20s %s\n", "llm_embedding_model:", llm_embedding_model);
+    printf("%-20s %" PRIu64 "\n", "data_offset:", h->data_offset);
 }
 
 static void header_print_v2(const IndexHeader_v2 *h) {
@@ -153,18 +178,6 @@ char *str_slice_beg_alloc(const char *s, int n) {
     return buf_2;
 }
 
-char *bytes_to_hex_alloc(const uint8_t *bytes, size_t len) {
-    // каждый байт = 2 символа hex + финальный '\0'
-    char *hex = malloc(len * 2 + 1);
-    if (!hex) return NULL;
-
-    for (size_t i = 0; i < len; i++) {
-        sprintf(hex + i * 2, "%02x", bytes[i]); // нижний регистр
-    }
-    hex[len * 2] = '\0';
-    return hex;
-}
-
 Index *index_new(const char *fname) {
     assert(fname);
 
@@ -189,7 +202,7 @@ Index *index_new(const char *fname) {
         return NULL;
     }
 
-    // отображаем файл в память
+    // отображаем файл в память только на чтение
     void *map = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
     if (map == MAP_FAILED) {
         perror("mmap");
@@ -197,13 +210,13 @@ Index *index_new(const char *fname) {
         return NULL;
     }
 
-    Index index = {};
+    Index index = {
+        .fd = fd,
+        .data = map,
+        .filesize = filesize,
+    };
 
-    index.fd = fd;
-    index.data = map;
-    index.filesize = filesize;
-
-    IndexHeader_v2 *header = (IndexHeader_v2*)map;
+    IndexHeader_v3 *header = (IndexHeader_v3*)map;
     index.header = *header;
     index.data_offset = header->data_offset;
 
@@ -215,10 +228,8 @@ Index *index_new(const char *fname) {
         return NULL;
     }
 
-    //header_print_v2(&index.header);
-
     switch (header->base.format_version) {
-        case 2: header_print_v2(&index.header); break;
+        case 2: header_print_v3(&index.header); break;
         default: 
                 fprintf(
                     stderr, "index_new: '%d' is unsupported format version\n",
@@ -368,5 +379,37 @@ const char *index_chunk_raw(Index *index, u64 i) {
         );
     }
     return index->strings[i];
+}
+
+const char *index_chunk_id(Index *index, u64 i) {
+    return NULL;
+}
+
+const char *index_chunk_id_hash(Index *index, u64 i) {
+    return NULL;
+}
+
+const char *index_chunk_id_file(Index *index, u64 i) {
+    return NULL;
+}
+
+int index_chunk_id_line_start(Index *index, u64 i) {
+    return -1;
+}
+
+int index_chunk_id_line_end(Index *index, u64 i) {
+    return -1;
+}
+
+const char *index_chunk_id_text(Index *index, u64 i) {
+    return NULL;
+}
+
+const char *index_chunk_id_text_zlib(Index *index, u64 i) {
+    return NULL;
+}
+
+const char *index_chunk_id_embedding(Index *index, u64 i) {
+    return NULL;
 }
 
