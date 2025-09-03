@@ -1,7 +1,7 @@
 local record sha2
-    type partial = function(message?: string): partial
-    sha256: function(message?: string): partial|string
-    blake3: function(message?: string): partial|string
+    type Partial = function(message?: string): Partial
+    sha256: function(message?: string): Partial|string
+    blake3: function(message?: string): Partial|string
 end
 
 return sha2
