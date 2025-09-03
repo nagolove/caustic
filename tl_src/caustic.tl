@@ -4456,7 +4456,7 @@ function actions.sha256(_: Args)
     local buf = ""
     local eof = false
 
-    local append = sha2.blake3() as sha2.partial
+    local append = sha2.blake3() as sha2.Partial
 
     while not eof do
         buf = f:read(buf_sz)
@@ -4544,32 +4544,76 @@ local function check_chunks(chunks: {Chunk}): boolean
     return true
 end
 
-local function w_u64(fd: FILE, data: any)
+local type Hasher = sha2.Partial
+local pack = string.pack
+
+local function w_u64(fd: FILE, data: any, hasher?: Hasher): Hasher
     assert(fd)
-    fd:write(string.pack("<I8", data))
+    assert(data)
+    assert(type(data) ~= 'table')
+
+    local packed = string.pack("<I8", data)
+    fd:write(packed)
+    if hasher then
+        return hasher(packed)
+    end
+
+    return hasher
 end
 
-local function w_str_fixed(fd: FILE, s: string, n: integer)
+local function w_str_fixed(
+    fd: FILE, s: string, n: integer, hasher?: Hasher
+): Hasher
+
     assert(fd)
+    assert(s)
+    assert(n)
     assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
+
     fd:write(s)
-    if #s < n then
-        fd:write(string.rep("\0", n - #s)) -- паддинг нулями
+    if hasher then
+        hasher = hasher(s)
     end
+
+    if #s < n then
+        local zeros = string.rep("\0", n - #s)
+        fd:write(zeros) -- паддинг нулями
+        if hasher then
+            hasher = hasher(zeros)
+        end
+    end
+
+    return hasher
 end
 
 -- Запись произвольной строки. Сперва пишется длина u64, потом данные, потом \0
-local function w_str(fd: FILE, s: string)
+local function w_str(fd: FILE, s: string, hasher?: Hasher): Hasher
     assert(fd)
     assert(s)
+
     w_u64(fd, #s)
-    fd:write(s)
-    fd:write("\0")
+    if hasher then
+        hasher = hasher(pack("<I8", #s))
+    end
+
+    if #s ~= 0 then
+        fd:write(s)
+        if hasher then
+            hasher = hasher(s)
+        end
+    end
+
+    local terminator = '\0'
+    fd:write(terminator)
+    if hasher then
+        hasher = hasher(terminator)
+    end
+
+    return hasher
 end
 
-local pack = string.pack
-
-local function w_header_v2(fd: FILE, o: EmbeddingIndexOpts): integer, integer
+-- TODO: Добавить хеширование для заголовка?
+local function w_header_v3(fd: FILE, o: EmbeddingIndexOpts): integer, integer
     local written = 0
 
     local magic = 'caustic_index\0'
@@ -4613,20 +4657,21 @@ local function w_header_v2(fd: FILE, o: EmbeddingIndexOpts): integer, integer
     return written, data_offset
 end
 
---[[
-local function w_header_v1(fd: FILE, o: EmbeddingIndexOpts): integer, integer
+--[[ 
+local function w_header_v2(fd: FILE, o: EmbeddingIndexOpts): integer, integer
+-- {{{
     local written = 0
 
-    -- TODO: добавить \0 в конце
-    local magic = 'caustic_index'
-    fd:write(magic)
+    local magic = 'caustic_index\0'
+    local str_size_magic = #magic
+    w_str_fixed(fd, magic, str_size_magic)
     written = written + #magic
 
     local endian_mode = "l"
     fd:write(endian_mode)
     written = written + #endian_mode
 
-    local format_version = 1
+    local format_version = 2
     fd:write(pack("<I1", format_version))
     written = written + 1
 
@@ -4634,7 +4679,7 @@ local function w_header_v1(fd: FILE, o: EmbeddingIndexOpts): integer, integer
     fd:write(pack("<I1", zlib_window))
     written = written + 1
 
-    local sha_mode = "blake3"
+    local sha_mode = "blake3\0"
     --local sha_mode = "sha256"
     local str_size_hash = 8
     w_str_fixed(fd, sha_mode, str_size_hash)
@@ -4645,7 +4690,7 @@ local function w_header_v1(fd: FILE, o: EmbeddingIndexOpts): integer, integer
     written = written + 8
 
     local str_size_llm = 64
-    local llm = llm_embedding_model
+    local llm = llm_embedding_model .. "\0"
     assert(llm and #llm <= 64, "invalid llm_embedding_model")
     w_str_fixed(fd, llm, str_size_llm)
     written = written + str_size_llm
@@ -4657,8 +4702,7 @@ local function w_header_v1(fd: FILE, o: EmbeddingIndexOpts): integer, integer
 
     return written, data_offset
 end
---]]
-
+--]] -- }}}
 
 local function chunks_write_binary(
     chunks_fname: string, o: EmbeddingIndexOpts, chunks: {Chunk}
@@ -4689,11 +4733,14 @@ local function chunks_write_binary(
 
     --local _, _ = w_header_v1(f, o)
     -- XXX: Добавить запись нулей в строки, это то, что отличает v1 от v2
-    local _, _ = w_header_v2(f, o)
+    --local _, _ = w_header_v2(f, o)
+    -- XXX: v3 заголовок не отличается от v2, но в v3 данные строк лежат 
+    -- как [длина][данные]
+    local _, _ = w_header_v3(f, o)
 
     print("chunks_write_binary: header written\n");
 
-    local append = sha2.blake3() as sha2.partial
+    local hasher = sha2.blake3() as sha2.Partial
 
     print("chunks_write_binary: #chunks", #chunks)
     -- u64 длина данных, затем данные - lua строка для load()
@@ -4704,6 +4751,23 @@ local function chunks_write_binary(
             c.text = nil
         end
 
+        -- XXX: Стоит-ли записывать serpent.dump()?
+        -- XXX: От чего тогда считать хеш?
+        hasher = w_str(f, c.id, hasher)
+        hasher = w_str(f, c.id_hash, hasher)
+        hasher = w_str(f, c.file, hasher)
+        hasher = w_u64(f, c.line_start, hasher)
+        hasher = w_u64(f, c.line_end, hasher)
+        hasher = w_str(f, c.text, hasher)
+        hasher = w_str(f, c.text_zlib, hasher)
+
+        assert(type(c.embedding) == 'table')
+        -- XXX: Как лучше записывать embedding что-бы не было 
+        -- расжатия из строки и создания таблицы?
+        local embedding = serpent.dump(c.embedding)
+        hasher = w_str(f, embedding, hasher)
+
+        --[[
         local ser = serpent.dump(c, {
             sortkeys = true,
             comment = false,
@@ -4714,16 +4778,21 @@ local function chunks_write_binary(
 
         -- XXX: Использовать для записи строк w_str()
         f:write(ser)
+        --]]
     end
 
-    local hash = append() as string
+    local hash = hasher() as string
     f:write(hash)
 
     f:flush()
     f:close()
 
-    assert(os.rename(chunks_fname .. ".tmp", chunks_fname))
-    return true
+    local ok, errmsg = os.rename(chunks_fname .. ".tmp", chunks_fname)
+    if not ok then
+        print("chunks_write_binary: failed to rename file with", errmsg)
+    end
+    -- Привожу к каноническому true|false
+    return not not ok
 end
 
 -- Возвращает текст по данному тегу склеенный из строк файла
@@ -5199,11 +5268,11 @@ local record Searcher
     query: function(q: string): {string}
 end
 
-local function index_instance(index_fname: string): Searcher
+local function searcher_instance(index_fname: string): Searcher
     local attr_index = lfs.attributes(index_fname)
     if not attr_index then
         print(format(
-            "index_instance: could not open file '%s', aborting", index_fname
+            "searcher_instance: could not open file '%s', aborting", index_fname
         ))
         os.exit(1)
     end
@@ -5218,6 +5287,9 @@ local function index_instance(index_fname: string): Searcher
 
     local Index = require "index"
     local index = Index.new(index_fname)
+
+    local t_start = os.clock()
+
     for i = 1, index:chunks_num() do
         local ok, errmsg = pcall(function()
             local s: string = index:chunk_raw(i)
@@ -5236,6 +5308,8 @@ local function index_instance(index_fname: string): Searcher
     end
         --]]
 
+    local t_finish = os.clock()
+    print("searcher_instance: searcher loaded for", t_finish - t_start, "sec")
 
     --searcher:save("chunks.index.copy")
 
@@ -5397,6 +5471,8 @@ function actions.ai(_args: Args)
         },
     }
 
+    local searcher = searcher_instance("./chunks.bin")
+
     -- Команды начинаются с префикса ::
     local commands = {
         quit = function()
@@ -5433,25 +5509,31 @@ function actions.ai(_args: Args)
                 'help       - смотреть этот текст',
                 'ctx_reset  - очистить историю, сбросить контекст',
                 'ctx_view   - посмотреть содержимое истории',
+                'query      - векторный поиск по коду',
             }
 
             for _, line in ipairs(h) do
                 print(line)
             end
-        end
+        end,
+        query = function(carg: string)
+            local texts = table.concat(searcher.query(carg), "\n")
+            printc("%{blue}" .. texts .. "%{reset}")
+        end,
     }
 
     local function eval_commands(s: string): boolean
-        local cmd, arg = string.match(s, "^::(%S+)%s*(.+)")
+        --local cmd, carg = string.match(s, "^::(%S+)%s*(.+)")
+        local cmd, carg = string.match(s, "^::(%S+)(.+)")
         if not cmd then
             return
         end
         --print('eval_commands: cmd', cmd)
 
-        for k, v in pairs(commands as {string:function()})  do
+        for k, func in pairs(commands as {string:function(carg?: string)})  do
             --print('eval_commands: ', k, v)
             if cmd == k then
-                v()
+                func(carg)
                 return true
             end
         end
@@ -5459,11 +5541,12 @@ function actions.ai(_args: Args)
     end
 
     linenoise.set_multiline(true)
-    local searcher = index_instance("./chunks.bin")
     local markdown = markdown_instance()
 
     -- XXX: Как получить доступ к истории во время редактирования?
     linenoise.load_history("history.txt")
+
+    print("actions.ai: mainloop enter")
 
     while running do
         inp = linenoise.readline(welcome_str_escape)
@@ -5630,24 +5713,71 @@ local function ctags_write(tags_fname: string, target: Target)
 end
 
 function actions.ctags(_args: Args) 
+    local chunks_lua = "chunks.lua"
+
+    local enum Mode
+        'load'
+        'rescan'
+    end
+
+    local mode: Mode = 'rescan'
+
+    local attrib = lfs.attributes(chunks_lua)
+    if attrib and attrib.mode == 'file' then
+        local msg = format(
+            "Found file %q. Load it or rescan tags and embeddings?(y/n)",
+            chunks_lua
+        )
+        local inp = string.lower(linenoise.readline(msg))
+        if not inp then
+            print("actions.ctags: inp == nil")
+            return
+        end
+        if inp == 'y' then
+            mode = 'load'
+        elseif inp == 'n' then
+            mode = 'rescan'
+        end
+    end
+
+    local chunks: {Chunk} = {}
     local o: EmbeddingIndexOpts = {
         zlib_window = 15,
-        zlib_level = 6,
+        zlib_level = 8,
         tags_fname = 'tags.jsonl',
     }
 
-    local target = _args.t or "linux"
-    ctags_write(o.tags_fname, target)
+    if mode == 'rescan' then
+        local target = _args.t or "linux"
+        ctags_write(o.tags_fname, target)
 
-    local chunks: {Chunk} = tags2chunks(o)
+        chunks = tags2chunks(o)
 
-    local f = io.open("chunks.lua", "w")
-    assert(f)
-    f:write(serpent.dump(chunks))
-    f:close()
+        local f = io.open(chunks_lua, "w")
+        assert(f)
+        f:write(serpent.dump(chunks))
+        f:close()
+    elseif mode == 'load' then
+        local f = io.open(chunks_lua, "r")
+        assert(f)
+        local str = f:read("*a")
+        local ok, errmsg = pcall(function()
+            local env = {}
+            local bin_or_text = "t"
+            chunks = load(str, "chunks", bin_or_text, env)() as {Chunk}
+        end) as boolean, string
+        if not ok then
+            local msg = format(
+                "actions.ctags: could not load() content of %q with %s",
+                chunks_lua, errmsg
+            )
+            print(msg)
+            return
+        end
+    end
 
     if chunks_write_binary("chunks.bin", o, chunks) then
-        print("chunks were written succesfully")
+        print("chunks were written successfully")
     end
 end
 
