@@ -4587,14 +4587,12 @@ local function w_str_fixed(
 end
 
 -- Запись произвольной строки. Сперва пишется длина u64, потом данные, потом \0
-local function w_str(fd: FILE, s: string, hasher?: Hasher): Hasher
+local function w_str(fd: FILE, _s: string, hasher?: Hasher): Hasher
     assert(fd)
-    assert(s)
+    --assert(s)
+    local s = _s or ""
 
-    w_u64(fd, #s)
-    if hasher then
-        hasher = hasher(pack("<I8", #s))
-    end
+    hasher = w_u64(fd, #s, hasher)
 
     if #s ~= 0 then
         fd:write(s)
@@ -5471,7 +5469,7 @@ function actions.ai(_args: Args)
         },
     }
 
-    local searcher = searcher_instance("./chunks.bin")
+    --local searcher = searcher_instance("./chunks.bin")
 
     -- Команды начинаются с префикса ::
     local commands = {
@@ -5517,14 +5515,22 @@ function actions.ai(_args: Args)
             end
         end,
         query = function(carg: string)
-            local texts = table.concat(searcher.query(carg), "\n")
-            printc("%{blue}" .. texts .. "%{reset}")
+            print("::query", carg)
+            --local texts = table.concat(searcher.query(carg), "\n")
+            --printc("%{blue}" .. texts .. "%{reset}")
         end,
+        -- TODO: Найти парные файлы заголовков и исходников из текущего 
+        -- каталога src. Дать выбор загрузить с дополнением имён
+        load = function()
+
+        end
     }
+    --]]
 
     local function eval_commands(s: string): boolean
         --local cmd, carg = string.match(s, "^::(%S+)%s*(.+)")
-        local cmd, carg = string.match(s, "^::(%S+)(.+)")
+        --local cmd, carg = string.match(s, "^::(%S+)(.*)")
+        local cmd, carg = string.match(s, "^::(%S+)(.*)")
         if not cmd then
             return
         end
@@ -5623,9 +5629,11 @@ function actions.snapshot(_: Args)
     f:write(dump)
 end
 
-local function ctags_write(tags_fname: string, target: Target)
+local function ctags_write(tags_fname: string, target: Target, _args?: Args)
     assert(target)
     -- XXX: Добавить пути включаемых файлов. Что имеется в виду?
+
+    print("ctags_write: _args", inspect(_args))
 
     local attrib = lfs.attributes(tags_fname)
     if attrib and attrib.mode == 'file' then
@@ -5654,9 +5662,9 @@ local function ctags_write(tags_fname: string, target: Target)
 
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     for _, cfg in ipairs(cfgs) do
-        --sub_make(_args, cfg, target, on_tasks, push_num)
-        -- XXX: Нужны ли какие-то параметры для sub_make()?
-        sub_make({}, cfg, target, on_tasks, push_num)
+        sub_make(_args, cfg, target, on_tasks, push_num)
+        -- XXX: _args = {} не работает
+        --sub_make({}, cfg, target, on_tasks, push_num)
     end
 
     local sources = {}
@@ -5671,21 +5679,25 @@ local function ctags_write(tags_fname: string, target: Target)
     end
 
     --[[ {{{ Типы полей ctags
+    d — #define (макросы)
+    e — перечислители (enum values)
     f — функции
+    g — перечисления (enum types)
     p — прототипы
-    v — переменные
     s — структуры
+    t — typedef
     u — union
-    m — члены
-    e — enum
-    d — define
+    v — переменные
+    m — члены структур/union
+    i — include (директивы #include) ✅
     -- }}}
     --]] 
 
     local cmd = "ctags -R " 
                 .. "--output-format=json " 
                 .. "--fields=+neK " 
-                .. "--c-kinds=+fpvsumed "
+                --.. "--c-kinds=+fpvsumedi "
+                .. "--c-kinds=+defgpstuvmi "
                 .. "--extras=+q 2>&1 " 
                 .. table.concat(sources, " ") 
 
@@ -5740,7 +5752,7 @@ function actions.ctags(_args: Args)
         end
     end
 
-    local chunks: {Chunk} = {}
+    local chunks: {Chunk} = nil
     local o: EmbeddingIndexOpts = {
         zlib_window = 15,
         zlib_level = 8,
@@ -5749,7 +5761,7 @@ function actions.ctags(_args: Args)
 
     if mode == 'rescan' then
         local target = _args.t or "linux"
-        ctags_write(o.tags_fname, target)
+        ctags_write(o.tags_fname, target, _args)
 
         chunks = tags2chunks(o)
 
