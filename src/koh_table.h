@@ -4,9 +4,9 @@
 
 #include "koh_common.h"
 #include "koh_hashers.h"
+#include "munit.h"
 #include <stdbool.h>
 #include <stdio.h>
-#include <munit.h>
 
 typedef enum HTableAction {
     HTABLE_ACTION_NEXT,
