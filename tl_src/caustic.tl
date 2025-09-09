@@ -192,11 +192,13 @@ local record Cfg
     artifact: string
     flags: {string}
     main: string
+    kind: Kind
     -- Выполняется перед компиляцией
     codegen: {Codegen}
     -- Дефайны препроцессора, применяемые только к релизной сборке
     -- Пары -Dключ=значение будут поданы компилятору
     -- Позволяет отключить DEBUG режим
+    common_define: {string: string}
     release_define: {string: string}
     -- Дефайны препроцессора, применяемые только к отладочной сборке
     debug_define: {string: string}
@@ -365,6 +367,12 @@ local enum TargetBuildFunc
     "build"
     "build_w"
     "build_win"
+end
+
+local enum Kind
+    "app"
+    "shared"
+    "static"
 end
 
 --local modules: {Dependency}
@@ -914,6 +922,7 @@ end
 local record Actions
     -- {{{
 
+    bld_lua: function(Args)
     mmap: function(Args)
     sha256: function(Args)
     embeddings: function(Args)
@@ -959,6 +968,10 @@ local parser_setup: {string:ParserSetup} = {
 
     mmap = {
         summary = [[testing mmap library for chunks.index.copy]]
+    },
+
+    bld_lua = {
+        summary = [[write example of bld.lua file in current directory]]
     },
 
     sha256 = {
@@ -2930,9 +2943,38 @@ local function koh_link(objfiles: {string}, _args: Args)
     cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
 end
 
+local wasm_flags = ''
+    -- для отладки
+    .. "-g "
+    .. "-gsource-map "
+    .. "-sDEMANGLE_SUPPORT=1 "
+    .. " -sERROR_ON_UNDEFINED_SYMBOLS=0 "
+
+    .. "-s USE_PTHREADS=1 "
+    .. "-pthread "
+    .. "-matomics " 
+    .. "-mbulk-memory "
+
+    .. "-s PTHREAD_POOL_SIZE=4 "
+
+    .. " -DPLATFORM_WEB " 
+    .. "-s USE_GLFW=3 " 
+    .. "-s ASSERTIONS "
+    .. "--preload-file ../assets " 
+    .. "-flto "
+    .. "-s ALLOW_MEMORY_GROWTH=1 " 
+    .. "-Os "
+
+local function make_L(ctx: LinkContext): {string}
+    local libsdirs = {}
+    for _, libdir in ipairs(ctx.libsdirs) do
+        insert(libsdirs, "-L" .. libdir)
+    end
+    return libsdirs
+end
+
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
-    --print('project_link', inspect(ctx))
-    --print('project_link', inspect(_args))
+    print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
 
     local flags: string = ""
     if not _args.noasan and _args.target ~= 'wasm' then
@@ -2944,6 +2986,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     end
 
     -- XXX: Нужно ли убирать флаги при релизной сборке?
+    -- Зависит от значений флагов
     if _args.make_type == 'release' then
         flags = ""
     end
@@ -2952,19 +2995,8 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local cc = compiler[_args.target]
     assert(cc)
 
-
     local libs = make_l(ctx.libs)
-
-    --[[
-    for _, lib in ipairs(ctx.libs) do
-        insert(libs, "-l" .. lib)
-    end
-    --]]
-
-    local libsdirs = {}
-    for _, libdir in ipairs(ctx.libsdirs) do
-        insert(libsdirs, "-L" .. libdir)
-    end
+    local libsdirs = make_L(ctx)
 
     if _args.target == 'wasm' then
         artifact = artifact .. ".html"
@@ -2972,40 +3004,22 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
 
     printc("%{blue}switched to g++%{reset}")
     cc = "g++ "
-    local cmd = cc .. " -o \"" .. artifact .. "\" "
+    local is_shared = ""
+    if cfg.kind == "shared" then
+        is_shared = " -shared "
+    elseif cfg.kind == 'app' then
+    elseif cfg.kind == 'static' then
+    end
+    print("project_link: cfg.kind", inspect(cfg.kind))
+    local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
 
     -- Добавить какие-то wasm флаги
     if _args.target == 'wasm' then
-
         local shell_path = e.path_caustic .. "/shell.html"
-        --print("project_link: shell_path", shell_path)
-
-        cmd = cmd 
-
-        -- для отладки
-        .. "-g "
-        .. "-gsource-map "
-        .. "-sDEMANGLE_SUPPORT=1 "
-        .. " -sERROR_ON_UNDEFINED_SYMBOLS=0 "
-
-        .. "-s USE_PTHREADS=1 "
-        .. "-pthread "
-        .. "-matomics " 
-        .. "-mbulk-memory "
-
-        .. "-s PTHREAD_POOL_SIZE=4 "
-
-        .. " -DPLATFORM_WEB " 
-        .. "-s USE_GLFW=3 " 
-        .. "-s ASSERTIONS "
-        .. "--preload-file ../assets " 
-        .. "-flto "
-        .. "-s ALLOW_MEMORY_GROWTH=1 " 
-        .. "-Os "
-
         -- Этот флаг создает слишком много кода, js машина не справляется
         --.. "-s ASYNCIFY "
 
+        cmd = wasm_flags 
         -- TODO: Проверять наличие файла shell.html в каталоге проект.
         -- Если файл есть, то использовать его как шаблон. Если файла нет, то
         -- использовать оболочку по умолчанию.
@@ -3285,7 +3299,6 @@ local function codegen(cg: Cfg.Codegen)
         end
     end
 
-
     local write_lines = {}
 
     local index = 1
@@ -3506,7 +3519,6 @@ local function sub_make(
         -- }}}
     }
 
-    --[[
     if _args.link then
         if verbose then
             print("using flto")
@@ -4444,6 +4456,110 @@ function actions.mmap(_: Args)
     end
 end
 
+-- Пишет в текущий каталог файл bld.lua 
+-- если такой файл есть, то делает бекап, а потом перезаписывает
+function actions.bld_lua(_args: Args)
+    local bld_lua = 'bld.lua'
+
+    _args.target = 'linux'
+
+    local attr = lfs.attributes(bld_lua)
+    if attr and attr.mode == 'file' then
+        assert(_args.target == 'linux')
+        cmd_do(format("cp %s %s", bld_lua, bld_lua .. ".bak"))
+    end
+
+    local f_lua = io.open(bld_lua .. ".tmp", "w")
+    assert(f_lua)
+
+    local bld_lua_full = [[
+-- vim: set colorcolumn=85
+-- vim: fdm=marker
+
+return {
+
+   -- еденица трансляции
+   {
+      -- список отклченных для данной сборки зависимостей
+      not_dependencies = {
+$modules_list$
+      },
+      -- результат компиляции и линковки
+      artifact = "e.exe",
+      kind = 'app',
+      --kind = "app",
+      --kind = "shared",
+      --kind = "static",
+      -- файл с функцикй main()
+      main = "main.c",
+      -- каталог с исходными текстами
+      src = "src",
+      -- исключать следующие имена файлов, можно использовать Lua шаблоны
+      exclude = {
+            --"t80_stage_empty.c",
+      },
+      -- список дефайнов которые применяются всегда
+      common_define = {
+      },
+      -- список дефайнов для отладочной сборки
+      debug_define = {
+         ["BOX2C_SENSOR_SLEEP"] = "1",
+        DEBUG = 0,
+      },
+      -- список дефайнов для релизной сборки
+      release_define = {
+         ["T80_NO_ERROR_HANDLING"] = "1",
+      },
+      -- куда подставляются флаги?
+      flags = {
+         --"-fopenmp",
+      },
+      codegen = {
+         {
+            -- нет входного или выходного файла - нет кодогенерации
+            --file_in = "t80_defaults.c.in",
+            --file_out = "t80_defaults.c",
+            on_read = function(line)
+            end,
+            on_write = function(capture)
+                return {
+                    "line1",
+                    "line2",
+                }
+            end,
+            on_finish = function()
+            end,
+         },
+      },
+   },
+   -- конец еденицы трансляции
+
+}
+]]
+
+    local modules_list = {}
+    for m in mods.iter() do
+        insert(modules_list, format("       %q,", m.name))
+    end
+    local modules_str = table.concat(modules_list, "\n")
+    print("actions.bld_lua: modules_str", modules_str)
+
+    bld_lua_full = gsub(
+        bld_lua_full,
+        "%$modules_list%$",
+        modules_str
+    )
+
+    local func, errmsg = load(bld_lua_full)
+    if not func then
+        print('actions.bld_lua: error in generate file', errmsg)
+    end
+
+    f_lua:write(bld_lua_full)
+
+    f_lua:close()
+end
+
 function actions.sha256(_: Args)
 --[[
 ➜  caustic git:(master) ✗ sha256sum chunks.zlib
@@ -4623,7 +4739,7 @@ local function w_header_v3(fd: FILE, o: EmbeddingIndexOpts): integer, integer
     fd:write(endian_mode)
     written = written + #endian_mode
 
-    local format_version = 2
+    local format_version = 3
     fd:write(pack("<I1", format_version))
     written = written + 1
 
