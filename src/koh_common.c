@@ -1,10 +1,14 @@
+#include "koh_common.h"
 // vim: set colorcolumn=85
 // vim: fdm=marker
 
 #define PCRE2_CODE_UNIT_WIDTH   8
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "cimgui.h"
+#include "cimgui_impl.h"
+
 // {{{ include
-#include "koh_common.h"
 #include "koh_logger.h"
 #include "koh_rand.h"
 #include "koh_routine.h"
@@ -2487,8 +2491,10 @@ int get_hardware_concurrency() {
 #endif
 
 const char *uint64_to_str_bin(uint64_t value) {
-    static char buf[128] = {};
-    memset(buf, 0, sizeof(buf));
+    static char slots[5][128] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
     
     for (int i = 0; i < 64; i++) {
         buf[i] = (value & (1ULL << (uint64_t)i)) ? '1' : '0';
