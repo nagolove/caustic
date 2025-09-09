@@ -1,10 +1,6 @@
 // vim: fdm=marker
 #pragma once
 
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-
-#include "cimgui.h"
-#include "cimgui_impl.h"
 #include "koh_metaloader.h"
 #include "koh_rand.h"
 #include "koh_timerman.h"
@@ -51,16 +47,9 @@ typedef struct {
 } v2;
 
 struct Common {
-    bool quit;
-
-    int *font_chars;
-    int font_chars_num, font_chars_cap;
-
-    /* Ссылка на Луа таблицу вида
-        registered_functions = {
-            "func_name" = "description",
-        }
-    */
+    bool    quit;
+    int     *font_chars;
+    int     font_chars_num, font_chars_cap;
 };
 
 struct Common *koh_cmn();
