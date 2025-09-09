@@ -60,6 +60,7 @@ static int total_tasks = 0;
 void run_tasks_serial(Task* tasks, int task_count);
 void run_tasks_parallel(Task* tasks, int task_count);
 
+/*
 static int l_run_tasks(lua_State *L) {
     luaL_checktype(L, 1, LUA_TTABLE);
 
@@ -156,6 +157,7 @@ static int l_run_tasks(lua_State *L) {
     lua_pushboolean(L, 1);
     return 1;
 }
+*/
 
 int run_task(void* arg) {
     ThreadData* td = (ThreadData*)arg;
@@ -252,10 +254,12 @@ void run_tasks_parallel_no_spin(Task* tasks, int task_count) {
 void run_tasks_serial(Task* tasks, int task_count) {
 }
 
+/*
 static int preload_mymod(lua_State *L) {
     //luaL_loadbuffer(L, (const char*)mymod_lua, mymod_lua_len, "mymod.lua");
     return 1;
 }
+*/
 
 /*
 void register_embedded(lua_State *L) {
@@ -464,7 +468,8 @@ static int l_gc(lua_State* L) {
 
 // __tostring
 static int l_tostring(lua_State* L) {
-    auto* h = check_handle(L);
+    //auto* h = check_handle(L);
+    check_handle(L);
     std::stringstream ss;
     ss << "HNSWHandle<dim=" << hnsw_dim << ">";
     lua_pushstring(L, ss.str().c_str());
