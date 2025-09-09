@@ -56,18 +56,38 @@ cd ./blake3_c
 cmake . && make
 popd
 
+#-fsanitize=address \
 gcc -c ./index.c \
     -g3 -Wall -fPIC \
     -I. -I./blake3_c \
+    -I../src \
+    -I../modules_linux/cimgui/ \
+    -I../modules_linux/munit/ \
+    -L. \
     -lm \
+    #-lcaustic \
 
+# не получается слинковаться с cimgui
+# 
+#
+#
+
+pwd
 g++ ./koh.cpp \
     index.o \
     -g3 -Wall -fPIC \
     -I. -I./hnswlib \
     -L./blake3_c \
+    -L/home/nagolove/caustic/modules_linux/cimgui/ \
+    -L.. \
     -shared \
     -o libkoh.so \
     -lm \
     -lblake3 \
     -llua \
+    #-lcaustic_linux 
+    #-lcimgui \
+    #-lraylib \
+
+    #-lcimgui \
+    #-fsanitize=address \
