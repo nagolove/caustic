@@ -18,15 +18,15 @@ const char *index_chunk_raw(Index *index, u64 i);
 const char *index_chunk_id(Index *index, u64 i);
 // Возвращает строку длиной 4 символа - u32 число
 const char *index_chunk_id_hash(Index *index, u64 i);
-const char *index_chunk_id_file(Index *index, u64 i);
+const char *index_chunk_file(Index *index, u64 i);
 
 // Возвращает -1 при отсутствии поля
-int index_chunk_id_line_start(Index *index, u64 i);
+u64 index_chunk_line_start(Index *index, u64 i);
 // Возвращает -1 при отсутствии поля
-int index_chunk_id_line_end(Index *index, u64 i);
+u64 index_chunk_line_end(Index *index, u64 i);
 
-const char *index_chunk_id_text(Index *index, u64 i);
-const char *index_chunk_id_text_zlib(Index *index, u64 i);
-const char *index_chunk_id_embedding(Index *index, u64 i);
+const char *index_chunk_text(Index *index, u64 i);
+const char *index_chunk_text_zlib(Index *index, u64 i);
+const char *index_chunk_embedding(Index *index, u64 i);
 // API 3.0 }}}
 

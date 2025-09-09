@@ -16,6 +16,9 @@
 #include "lua.h"
 #include "lauxlib.h"
 
+//#include "koh_strbuf.h"
+//#include "koh_table.h"
+
 typedef int64_t     i64;
 typedef uint64_t    u64;
 typedef int32_t     i32;
@@ -68,6 +71,7 @@ typedef struct Index {
                    **embeddings;    // 6
     u64            *line_starts,    // 7
                    *line_ends;      // 8
+    // Для удобного realloc() в цикле. Содержимое дублирует ids, id_hashes, ...
     void           **pointers[8];
     int            pointers_sz[8];
 
@@ -76,6 +80,8 @@ typedef struct Index {
                    data_offset;
     //IndexHeader_v2 header;
     IndexHeader_v3 header;
+
+    //HTable         *id_hash2str;
 } Index;
 
 //                                1234567890123
@@ -103,6 +109,13 @@ static void index_unmap(Index *index) {
         close(index->fd);
         index->fd = -1;
     }
+}
+
+void on_remove_str(
+    const void *key, int key_len, void *value, int value_len, void *userdata
+) {
+    assert(value);
+    free(value);
 }
 
 static void header_print_v3(const IndexHeader_v3 *h) {
@@ -414,50 +427,57 @@ Index *index_new(const char *fname) {
         return NULL;
     }
 
-    Index index = {
+    Index *index = calloc(1, sizeof(*index));
+    assert(index);
+    *index = (Index){
         .fd = fd,
         .data = map,
         .filesize = filesize,
     };
 
     IndexHeader_v3 *header = (IndexHeader_v3*)map;
-    index.header = *header;
-    index.data_offset = header->data_offset;
+    index->header = *header;
+    index->data_offset = header->data_offset;
 
     //printf("index_new: base.magic '%s'\n", header->base.magic);
 
     if (memcmp(index_magic, header->base.magic, strlen(index_magic)) != 0) {
         fprintf(stderr, "index_new: magic string is not match\n");
-        index_unmap(&index);
+        index_unmap(index);
+        free(index);
         return NULL;
     }
 
     switch (header->base.format_version) {
-        case 3: header_print_v3(&index.header); break;
+        case 3: header_print_v3(&index->header); break;
         default: 
             fprintf(
                 stderr, "index_new: '%d' is unsupported format version\n",
                 header->base.format_version
             );
-            index_unmap(&index);
+            index_unmap(index);
+            free(index);
             return NULL;
     }
 
-    if (index.data_offset > filesize) {
+    if (index->data_offset > filesize) {
         fprintf(stderr, "index_new: data_offset more than filesize\n");
-        index_unmap(&index);
+        index_unmap(index);
+        free(index);
         return NULL;
     }
 
-    if (index.data_offset < sizeof(IndexHeader_v2)) {
+    if (index->data_offset < sizeof(IndexHeader_v3)) {
         fprintf(stderr, "index_new: data_offset less than header size\n");
-        index_unmap(&index);
+        index_unmap(index);
+        free(index);
         return NULL;
     }
 
     if (tolower(header->base.endian_mode) != 'l') {
         fprintf(stderr, "index_new: only little endian supported\n");
-        index_unmap(&index);
+        index_unmap(index);
+        free(index);
         return NULL;
     }
 
@@ -467,8 +487,8 @@ Index *index_new(const char *fname) {
    
     int blake3_sz = 64;
 
-    u8 *cur = index.data + index.data_offset,
-       *end = index.data + index.filesize - blake3_sz;
+    u8 *cur = index->data + index->data_offset,
+       *end = index->data + index->filesize - blake3_sz;
 
     // HASHING {{{
     blake3_hasher b3h = {};
@@ -489,30 +509,30 @@ Index *index_new(const char *fname) {
     // }}}
 
     // pointers {{{
-    index.pointers[0] = (void*)&index.ids;
-    index.pointers_sz[0] = sizeof(index.ids[0]);
-    index.pointers[1] = (void*)&index.id_hashes;
-    index.pointers_sz[1] = sizeof(index.id_hashes[0]);
-    index.pointers[2] = (void*)&index.files;
-    index.pointers_sz[2] = sizeof(index.files[0]);
-    index.pointers[3] = (void*)&index.texts;
-    index.pointers_sz[3] = sizeof(index.texts[0]);
-    index.pointers[4] = (void*)&index.texts_zlib;
-    index.pointers_sz[4] = sizeof(index.texts_zlib[0]);
-    index.pointers[5] = (void*)&index.embeddings;
-    index.pointers_sz[5] = sizeof(index.embeddings[0]);
-    index.pointers[6] = (void*)&index.line_starts;
-    index.pointers_sz[6] = sizeof(index.line_starts[0]);
-    index.pointers[7] = (void*)&index.line_ends;
-    index.pointers_sz[7] = sizeof(index.line_ends[0]);
+    index->pointers[0] = (void*)&index->ids;
+    index->pointers_sz[0] = sizeof(index->ids[0]);
+    index->pointers[1] = (void*)&index->id_hashes;
+    index->pointers_sz[1] = sizeof(index->id_hashes[0]);
+    index->pointers[2] = (void*)&index->files;
+    index->pointers_sz[2] = sizeof(index->files[0]);
+    index->pointers[3] = (void*)&index->texts;
+    index->pointers_sz[3] = sizeof(index->texts[0]);
+    index->pointers[4] = (void*)&index->texts_zlib;
+    index->pointers_sz[4] = sizeof(index->texts_zlib[0]);
+    index->pointers[5] = (void*)&index->embeddings;
+    index->pointers_sz[5] = sizeof(index->embeddings[0]);
+    index->pointers[6] = (void*)&index->line_starts;
+    index->pointers_sz[6] = sizeof(index->line_starts[0]);
+    index->pointers[7] = (void*)&index->line_ends;
+    index->pointers_sz[7] = sizeof(index->line_ends[0]);
     // }}}
     
-    int pointers_num = sizeof(index.pointers) / sizeof(index.pointers[0]);
+    int pointers_num = sizeof(index->pointers) / sizeof(index->pointers[0]);
 
     for (int i = 0; i < pointers_num; i++) {
-        void *p = calloc(capacity, index.pointers_sz[i]);
+        void *p = calloc(capacity, index->pointers_sz[i]);
         assert(p);
-        *index.pointers[i] = p;
+        *index->pointers[i] = p;
     }
 
     int i = 0;
@@ -522,25 +542,25 @@ Index *index_new(const char *fname) {
             capacity *= 1.5;
 
             for (int i = 0; i < pointers_num; i++) {
-                size_t sz = capacity * index.pointers_sz[i];
+                size_t sz = capacity * index->pointers_sz[i];
                 printf(
                     "index_new: realloc array numbe %d for %zu bytes\n",
                     i, sz
                 );
 
-                void *p = realloc(*index.pointers[i], sz);
+                void *p = realloc(*index->pointers[i], sz);
                 if (!p) {
                     fprintf(
                         stderr,
                         "index_new: could not realloc "
                         "memory for offsets array\n"
                     );
-                    index_unmap(&index);
-                    index_pointers_free(&index);
+                    index_unmap(index);
+                    index_pointers_free(index);
                     return NULL;
                 }
 
-                *index.pointers[i] = p;
+                *index->pointers[i] = p;
             }
         }
         
@@ -568,42 +588,42 @@ Index *index_new(const char *fname) {
 
         len = *(u64*)cur;
         cur += sizeof(len);
-        index.ids[num] = (char*)cur;
+        index->ids[num] = (char*)cur;
         cur += len + 1;
 
         len = *(u64*)cur;
         cur += sizeof(len);
-        index.id_hashes[num] = (char*)cur;
+        index->id_hashes[num] = (char*)cur;
         cur += len + 1;
 
         len = *(u64*)cur;
         cur += sizeof(len);
-        index.files[num] = (char*)cur;
+        index->files[num] = (char*)cur;
         cur += len + 1;
 
-        index.line_starts[num] = *(u64*)cur;
+        index->line_starts[num] = *(u64*)cur;
         cur += sizeof(u64);
 
-        index.line_ends[num] = *(u64*)cur;
+        index->line_ends[num] = *(u64*)cur;
         cur += sizeof(u64);
 
         len = *(u64*)cur;
         cur += sizeof(len);
-        index.texts[num] = (char*)cur;
+        index->texts[num] = (char*)cur;
         cur += len + 1;
 
         len = *(u64*)cur;
         cur += sizeof(len);
-        index.texts_zlib[num] = (char*)cur;
+        index->texts_zlib[num] = (char*)cur;
         cur += len + 1;
 
         len = *(u64*)cur;
         cur += sizeof(len);
-        index.embeddings[num] = (char*)cur;
+        index->embeddings[num] = (char*)cur;
         cur += len + 1;
 
         num++;
-        index.chunks_num++;
+        //index.chunks_num++;
 
         //printf("index_new: size %lu\n", size);
 
@@ -624,8 +644,6 @@ Index *index_new(const char *fname) {
             */
 
         }
-
-        //cur += size;
     }
 
     memcpy(hash_readed_hex, cur, BLAKE3_OUT_LEN * 2);
@@ -640,20 +658,25 @@ Index *index_new(const char *fname) {
         fprintf(
             stderr, "index_new: computed hash not is different to readed\n"
         );
-        index_unmap(&index);
-        index_pointers_free(&index);
+        index_unmap(index);
+        index_pointers_free(index);
         return NULL;
     }
 
     printf("index_new: reading done\n");
-    printf("index_new: chunks_num %lu\n", index.chunks_num);
+    printf("index_new: chunks_num %lu\n", index->chunks_num);
 
-    Index *index_a = calloc(1, sizeof(*index_a));
-    assert(index_a);
-    *index_a = index;
     //index_a->strings = strings;
-    index_a->chunks_num = num;
-    return index_a;
+    index->chunks_num = num;
+
+    /*
+    index->id_hash2str = htable_new(&(HTableSetup) {
+        .cap = 3000,
+        .f_on_remove = on_remove_str,
+    });
+    */
+
+    return index;
 }
 
 void index_free(Index *index) {
@@ -661,54 +684,7 @@ void index_free(Index *index) {
     index_unmap(index);
     index_pointers_free(index);
 
-    /*
-    if (index->strings) {
-        free(index->strings);
-        index->strings = NULL;
-    }
-
-    // {{{
-    if (index->ids) {
-        free(index->ids);
-        index->ids = NULL;
-    }
-
-    if (index->id_hashes) {
-        free(index->id_hashes);
-        index->id_hashes = NULL;
-    }
-
-    if (index->files) {
-        free(index->files);
-        index->files = NULL;
-    }
-
-    if (index->texts) {
-        free(index->texts);
-        index->texts = NULL;
-    }
-
-    if (index->texts_zlib) {
-        free(index->texts_zlib);
-        index->texts_zlib = NULL;
-    }
-
-    if (index->embeddings) {
-        free(index->embeddings);
-        index->embeddings = NULL;
-    }
-
-    if (index->line_starts) {
-        free(index->line_starts);
-        index->line_starts = NULL;
-    }
-
-    if (index->line_ends) {
-        free(index->line_ends);
-        index->line_ends = NULL;
-    }
-    // }}}
-    */ 
+    //htable_free(index->id_hash2str);
 
     free(index);
 }
@@ -727,10 +703,36 @@ const char *index_chunk_raw(Index *index, u64 i) {
             i, index->chunks_num
         );
     }
+
     /*
     return index->strings[i];
     */
+
     fprintf(stderr, "index_chunk_raw: this function is deprecated\n");
+
+    /*
+    StrBuf b = strbuf_init(NULL);
+
+    strbuf_addf(&b, "%s", index_chunk_id_hash(index, i));
+    strbuf_addf(&b, "%s", index_chunk_file(index, i));
+    strbuf_addf(&b, "%lu", index_chunk_line_start(index, i));
+    strbuf_addf(&b, "%lu", index_chunk_line_end(index, i));
+    strbuf_addf(&b, "%s", index_chunk_text(index, i));
+    strbuf_addf(&b, "%s", index_chunk_text_zlib(index, i));
+    strbuf_addf(&b, "%s", index_chunk_embedding(index, i));
+
+    assert(index->id_hash2str);
+
+    char *s = strbuf_concat_alloc(&b, "\n");
+    htable_add_s(
+        index->id_hash2str,
+        index_chunk_id_hash(index, i),
+        s, sizeof(s)
+    );
+
+    strbuf_shutdown(&b);
+    */
+
     return NULL;
 }
 
@@ -756,7 +758,7 @@ const char *index_chunk_id_hash(Index *index, u64 i) {
     return index->id_hashes[i];
 }
 
-const char *index_chunk_id_file(Index *index, u64 i) {
+const char *index_chunk_file(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
@@ -767,7 +769,7 @@ const char *index_chunk_id_file(Index *index, u64 i) {
     return index->files[i];
 }
 
-int index_chunk_id_line_start(Index *index, u64 i) {
+u64 index_chunk_line_start(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
@@ -779,7 +781,7 @@ int index_chunk_id_line_start(Index *index, u64 i) {
     return index->line_starts[i];
 }
 
-int index_chunk_id_line_end(Index *index, u64 i) {
+u64 index_chunk_line_end(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
@@ -791,7 +793,7 @@ int index_chunk_id_line_end(Index *index, u64 i) {
     return index->line_ends[i];
 }
 
-const char *index_chunk_id_text(Index *index, u64 i) {
+const char *index_chunk_text(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
@@ -802,7 +804,7 @@ const char *index_chunk_id_text(Index *index, u64 i) {
     return index->texts[i];
 }
 
-const char *index_chunk_id_text_zlib(Index *index, u64 i) {
+const char *index_chunk_text_zlib(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
@@ -814,7 +816,7 @@ const char *index_chunk_id_text_zlib(Index *index, u64 i) {
     return index->texts_zlib[i];
 }
 
-const char *index_chunk_id_embedding(Index *index, u64 i) {
+const char *index_chunk_embedding(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
