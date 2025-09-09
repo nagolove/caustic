@@ -218,6 +218,8 @@ end
 
 
 
+
+
 local function _write_file_bak(fname, data, bak_cnt)
    local b = io.open(fname, "r")
 
@@ -353,6 +355,12 @@ local function search_and_load_cfgs_up(fname)
 
    return cfgs, push_num
 end
+
+
+
+
+
+
 
 
 
@@ -954,11 +962,16 @@ end
 
 
 
+
 local parser_setup = {
 
 
    mmap = {
       summary = [[testing mmap library for chunks.index.copy]],
+   },
+
+   bld_lua = {
+      summary = [[write example of bld.lua file in current directory]],
    },
 
    sha256 = {
@@ -2930,9 +2943,38 @@ local function koh_link(objfiles, _args)
    cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
 end
 
+local wasm_flags = '' ..
+
+"-g " ..
+"-gsource-map " ..
+"-sDEMANGLE_SUPPORT=1 " ..
+" -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
+
+"-s USE_PTHREADS=1 " ..
+"-pthread " ..
+"-matomics " ..
+"-mbulk-memory " ..
+
+"-s PTHREAD_POOL_SIZE=4 " ..
+
+" -DPLATFORM_WEB " ..
+"-s USE_GLFW=3 " ..
+"-s ASSERTIONS " ..
+"--preload-file ../assets " ..
+"-flto " ..
+"-s ALLOW_MEMORY_GROWTH=1 " ..
+"-Os "
+
+local function make_L(ctx)
+   local libsdirs = {}
+   for _, libdir in ipairs(ctx.libsdirs) do
+      insert(libsdirs, "-L" .. libdir)
+   end
+   return libsdirs
+end
+
 local function project_link(ctx, cfg, _args)
-
-
+   print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
 
    local flags = ""
    if not _args.noasan and _args.target ~= 'wasm' then
@@ -2944,6 +2986,7 @@ local function project_link(ctx, cfg, _args)
    end
 
 
+
    if _args.make_type == 'release' then
       flags = ""
    end
@@ -2952,19 +2995,8 @@ local function project_link(ctx, cfg, _args)
    local cc = compiler[_args.target]
    assert(cc)
 
-
    local libs = make_l(ctx.libs)
-
-
-
-
-
-
-
-   local libsdirs = {}
-   for _, libdir in ipairs(ctx.libsdirs) do
-      insert(libsdirs, "-L" .. libdir)
-   end
+   local libsdirs = make_L(ctx)
 
    if _args.target == 'wasm' then
       artifact = artifact .. ".html"
@@ -2972,40 +3004,22 @@ local function project_link(ctx, cfg, _args)
 
    printc("%{blue}switched to g++%{reset}")
    cc = "g++ "
-   local cmd = cc .. " -o \"" .. artifact .. "\" "
+   local is_shared = ""
+   if cfg.kind == "shared" then
+      is_shared = " -shared "
+   elseif cfg.kind == 'app' then
+   elseif cfg.kind == 'static' then
+   end
+   print("project_link: cfg.kind", inspect(cfg.kind))
+   local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
 
 
    if _args.target == 'wasm' then
-
       local shell_path = e.path_caustic .. "/shell.html"
 
 
-      cmd = cmd ..
 
-
-      "-g " ..
-      "-gsource-map " ..
-      "-sDEMANGLE_SUPPORT=1 " ..
-      " -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
-
-      "-s USE_PTHREADS=1 " ..
-      "-pthread " ..
-      "-matomics " ..
-      "-mbulk-memory " ..
-
-      "-s PTHREAD_POOL_SIZE=4 " ..
-
-      " -DPLATFORM_WEB " ..
-      "-s USE_GLFW=3 " ..
-      "-s ASSERTIONS " ..
-      "--preload-file ../assets " ..
-      "-flto " ..
-      "-s ALLOW_MEMORY_GROWTH=1 " ..
-      "-Os " ..
-
-
-
-
+      cmd = wasm_flags ..
 
 
 
@@ -3285,7 +3299,6 @@ local function codegen(cg)
       end
    end
 
-
    local write_lines = {}
 
    local index = 1
@@ -3506,13 +3519,12 @@ local function sub_make(
 
 
 
-
-
-
-
-
-
-
+   if _args.link then
+      if verbose then
+         print("using flto")
+      end
+      table.insert(flags, "-flto=4")
+   end
 
 
    local debugs = {}
@@ -4444,6 +4456,110 @@ function actions.mmap(_)
    end
 end
 
+
+
+function actions.bld_lua(_args)
+   local bld_lua = 'bld.lua'
+
+   _args.target = 'linux'
+
+   local attr = lfs.attributes(bld_lua)
+   if attr and attr.mode == 'file' then
+      assert(_args.target == 'linux')
+      cmd_do(format("cp %s %s", bld_lua, bld_lua .. ".bak"))
+   end
+
+   local f_lua = io.open(bld_lua .. ".tmp", "w")
+   assert(f_lua)
+
+   local bld_lua_full = [[
+-- vim: set colorcolumn=85
+-- vim: fdm=marker
+
+return {
+
+   -- еденица трансляции
+   {
+      -- список отклченных для данной сборки зависимостей
+      not_dependencies = {
+$modules_list$
+      },
+      -- результат компиляции и линковки
+      artifact = "e.exe",
+      kind = 'app',
+      --kind = "app",
+      --kind = "shared",
+      --kind = "static",
+      -- файл с функцикй main()
+      main = "main.c",
+      -- каталог с исходными текстами
+      src = "src",
+      -- исключать следующие имена файлов, можно использовать Lua шаблоны
+      exclude = {
+            --"t80_stage_empty.c",
+      },
+      -- список дефайнов которые применяются всегда
+      common_define = {
+      },
+      -- список дефайнов для отладочной сборки
+      debug_define = {
+         ["BOX2C_SENSOR_SLEEP"] = "1",
+        DEBUG = 0,
+      },
+      -- список дефайнов для релизной сборки
+      release_define = {
+         ["T80_NO_ERROR_HANDLING"] = "1",
+      },
+      -- куда подставляются флаги?
+      flags = {
+         --"-fopenmp",
+      },
+      codegen = {
+         {
+            -- нет входного или выходного файла - нет кодогенерации
+            --file_in = "t80_defaults.c.in",
+            --file_out = "t80_defaults.c",
+            on_read = function(line)
+            end,
+            on_write = function(capture)
+                return {
+                    "line1",
+                    "line2",
+                }
+            end,
+            on_finish = function()
+            end,
+         },
+      },
+   },
+   -- конец еденицы трансляции
+
+}
+]]
+
+   local modules_list = {}
+   for m in mods.iter() do
+      insert(modules_list, format("       %q,", m.name))
+   end
+   local modules_str = table.concat(modules_list, "\n")
+   print("actions.bld_lua: modules_str", modules_str)
+
+   bld_lua_full = gsub(
+   bld_lua_full,
+   "%$modules_list%$",
+   modules_str)
+
+
+   local func, errmsg = load(bld_lua_full)
+   if not func then
+      print('actions.bld_lua: error in generate file', errmsg)
+   end
+
+   f_lua:write(bld_lua_full)
+
+   f_lua:close()
+end
+
 function actions.sha256(_)
 
 
@@ -4592,10 +4708,7 @@ local function w_str(fd, _s, hasher)
 
    local s = _s or ""
 
-   w_u64(fd, #s)
-   if hasher then
-      hasher = hasher(pack("<I8", #s))
-   end
+   hasher = w_u64(fd, #s, hasher)
 
    if #s ~= 0 then
       fd:write(s)
@@ -4626,7 +4739,7 @@ local function w_header_v3(fd, o)
    fd:write(endian_mode)
    written = written + #endian_mode
 
-   local format_version = 2
+   local format_version = 3
    fd:write(pack("<I1", format_version))
    written = written + 1
 
@@ -5522,7 +5635,13 @@ function actions.ai(_args)
 
 
       end,
+
+
+      load = function()
+
+      end,
    }
+
 
    local function eval_commands(s)
 
@@ -5687,10 +5806,14 @@ local function ctags_write(tags_fname, target, _args)
 
 
 
+
+
+
    local cmd = "ctags -R " ..
    "--output-format=json " ..
    "--fields=+neK " ..
-   "--c-kinds=+fpvsumed " ..
+
+   "--c-kinds=+defgpstuvmi " ..
    "--extras=+q 2>&1 " ..
    table.concat(sources, " ")
 
