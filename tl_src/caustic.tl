@@ -540,18 +540,6 @@ end
 -- }}}
 
 
-
--- XXX:  Любые сборки которые попадают в сеть должны быть без отладочной 
--- информации, с максимальной оптимизацией. В целях безопасности
--- TODO: Определить действие для Lua библиотек, которые должны быть 
--- скопированы в каталог приложения, уровнем глубже чем assets
--- Но повторное копирование не требуется. Добавлять путь для LUA_PATH
--- TODO: Добавить возможность добавления библиотекой дефайнов для 
--- компилятора, в частности для разрешения пути.
--- TODO: Вынести в отдельный файл?
-
--- TODO: Проверка на дубликаты путей:
---      как проверка будет функционировать? какой-то флаг?
 local function gather_includedirs(
     deps: {Dependency}, path_prefix: string
 ): {string}
@@ -678,11 +666,18 @@ local function get_ready_links_linux_only(cfg: Cfg): {string}
 end
 
 -- Собирает все каталоги для библиотек из модулей
-local function gather_libdirs_abs(deps: {Dependency}): {string}
+local function gather_libdirs_abs(cfg: Cfg, deps: {Dependency}): {string}
+    assert(cfg)
+    assert(deps)
+
+    local no_deps: {string: boolean} = {}
+    for _, depname in ipairs(cfg.not_dependencies) do
+        no_deps[depname] = true
+    end
+
     local libdirs_tbl = {}
     for _, dep in ipairs(deps) do
-        if dep.libdirs then
-            --print("dep", inspect(dep))
+        if not no_deps[dep.name] and dep.libdirs then
             assert(dep.target)
             local path = e.path_abs_third_party[dep.target] .. "/"
             assert(path)
@@ -957,7 +952,6 @@ local record Actions
     test: function(Args)
     unit: function(Args)
     update: function(Args)
-    verbose: function(Args)
     chunks_open: function(Args)
 
     -- }}}
@@ -1971,7 +1965,7 @@ local function sub_test(_args: Args, cfg: Cfg)
     local src_dir = cfg.src or "src"
     ut.push_current_dir()
     if not chdir(src_dir) then
-        print(format("sub_test: could not chdir to '%s'", src_dir))
+        print(format("sub_test: could not chdir to %q", src_dir))
         os.exit(1)
     end
 
@@ -2518,22 +2512,6 @@ function actions.dependencies(_: Args)
     end
 end
 
-function actions.verbose(_: Args)
-    --[[
-    XXX: uncomment please!
-    print(tabular({
-        urls = get_urls(dependencies),
-        dependencies = dependencies,
-        dirnames = get_dirs(dependencies),
-        includedirs = get_ready_includes(), 
-        compiler = "emcc"
-        --links = links,
-        libdirs = libdirs,
-        links_internal = get_ready_links_internal(),
-    }))
-    --]]
-end
-
 -- XXX: Работает только с одной, первой сборочной целью. 
 -- Что же делать с остальными?
 -- TODO: Сделать генерацию для wasm сборки
@@ -2765,6 +2743,7 @@ local function _build(dep: Dependency)
 end
 
 local function sub_build(_args: Args, path_rel: string, target: Target)
+    mods = M.modules_instance(e, target)
     ut.push_current_dir()
     local deps = {}
 
@@ -2773,6 +2752,7 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
     -- Путь к библиотекам
     chdir(path_rel)
 
+    -- Обработка не всего списка, а одного модуля, по имени
     if _args.name then
         print(format("build '%s'", _args.name))
         local dependencies_name_map = mods.get_deps_name_map()
@@ -2813,7 +2793,7 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
 
     local ok, errmsg: boolean, string = pcall(function()
         for _, dep in ipairs(deps) do
-            dep.target = target
+            --dep.target = target
             _build(dep)
         end
     end)
@@ -2909,7 +2889,7 @@ local function run_parallel_uv(queue: {Task})
     end
 end
 
-local function cache_remove(_args: Args)
+local function prepare_make(_args: Args)
     if _args.c then
         ut.push_current_dir()
         chdir('src')
@@ -2919,6 +2899,8 @@ local function cache_remove(_args: Args)
         end
         ut.pop_dir()
     end
+    mkdir("obj_linux")
+    mkdir("obj_wasm")
 end
 
 local function koh_link(objfiles: {string}, _args: Args)
@@ -2995,8 +2977,6 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local cc = compiler[_args.target]
     assert(cc)
 
-    local libs = make_l(ctx.libs)
-    local libsdirs = make_L(ctx)
 
     if _args.target == 'wasm' then
         artifact = artifact .. ".html"
@@ -3007,6 +2987,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local is_shared = ""
     if cfg.kind == "shared" then
         is_shared = " -shared "
+        flags = flags .. " -fPIC "
     elseif cfg.kind == 'app' then
     elseif cfg.kind == 'static' then
     end
@@ -3032,8 +3013,10 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
 
     print("cmd:", cmd)
 
+    local libsdirs = make_L(ctx)
+    local libs = make_l(ctx.libs)
     cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
-                 table.concat(libsdirs, " ") .. " " ..
+                 table.concat( libsdirs, " ") .. " " ..
                  flags .. " " .. table.concat(libs, " ") 
                 --.. " -error-limit=0"
 
@@ -3235,6 +3218,12 @@ end
 --]]
 
 local function codegen(cg: Cfg.Codegen)
+    print("codegen", inspect(cg))
+    if not cg.file_in or not cg.file_out then
+        print("codegen: no file_in or file_out, returning")
+        return
+    end
+
     if verbose then
         print('codegen', inspect(cg))
     end
@@ -3252,6 +3241,7 @@ local function codegen(cg: Cfg.Codegen)
     end
 
     local lines = {}
+    assert(cg.file_in)
     local file = io.open(cg.file_in, "r")
     if not file then
         print('codegen: could not open', cg.file_in)
@@ -3375,11 +3365,17 @@ local function defines_apply(flags: {string}, defines: {string: string})
     if not defines then
         return
     end
-    --print("defines_apply:")
+
+    print("defines_apply: flags", inspect(flags), "defines", inspect(defines))
+
     for define, value in pairs(defines) do
         assert(type(define) == 'string');
-        assert(type(value) == 'string');
-        local s = format("-D%s=%s", upper(define), upper(value));
+        local value_str = value
+        if type(value) == 'number' then
+            value_str = tostring(value)
+        end
+        assert(type(value_str) == 'string');
+        local s = format("-D%s=%s", upper(define), upper(value_str));
         table.insert(flags, s)
     end
 end
@@ -3436,14 +3432,7 @@ local function sub_make(
     -- Где я должен находиться?
     --print('sub_make: currentdir', lfs.currentdir())
 
-    mkdir("obj_linux")
-    mkdir("obj_wasm")
-
     -- {{{ подготовка
-
-    -- удалить кеш
-    -- TODO: удалять
-    cache_remove(_args)
 
     local curdir = ut.push_current_dir()
     if verbose then
@@ -3451,13 +3440,18 @@ local function sub_make(
         print('sub_make: cfg', inspect(cfg))
     end
 
-    local src_dir = cfg.src or "src"
-    local ok, errmsg =  chdir(src_dir) 
-    if not ok then
-        print(format(
-            "sub_make: could not chdir to '%s' with %s", src_dir, errmsg
-        ))
-        os.exit(1)
+    local src_dir = cfg.src or ""
+    print(format('src_dir %q', src_dir))
+
+    if src_dir ~= '' then
+        local ok, errmsg =  chdir(src_dir) 
+        if not ok then
+            print(format(
+                "sub_make: could not chdir to %q with %q", src_dir, errmsg
+            ))
+            print(debug.traceback())
+            os.exit(1)
+        end
     end
 
     -- TODO: кэширование генерируемых файлов. Значит нужно проверять время?
@@ -3598,125 +3592,123 @@ local function sub_make(
     local path = e.path_rel_third_party_t[target]
     assert(path)
 
-    local libdirs = gather_libdirs_abs(mods.modules())
-    --printc("%{cyan}" .. tabular(libdirs) .. "%{reset}")
+    local libsdirs = gather_libdirs_abs(cfg, mods.modules())
 
     if target == 'linux' then
-        table.insert(libdirs, "/usr/lib")
+        table.insert(libsdirs, "/usr/lib")
     end
 
-    --local _libspath: string = table.concat(_libdirs, " ")
     local libs = ut.merge_tables(
         get_ready_links(cfg, target),
         get_ready_links_linux_only(cfg)
     )
 
-    if verbose then
-        --print("_links")
-        --print(tabular(libs))
-    end
-
     if cfg.artifact then
-        table.insert(libdirs, e.path_caustic)
+        table.insert(libsdirs, e.path_caustic)
 
         local libcaustic = libcaustic_name[target]
         assert(libcaustic)
         table.insert(libs, 1, libcaustic)
     end
-    --local _libs: string = table.concat(make_l(_links), " ")
-    --local _libs: {string} = _links
-
-    --printc("%{blue}" .. tabular(_libs) .. "%{reset}")
 
     -- массив с командами
-    local tasks: {Task} = {}
     local cwd = lfs.currentdir() .. "/"
 
-    -- }}}
+    local output_dir: string
 
-    local output_dir = "."
+    -- XXX: Надо класть объектники в output_dir
+
+    local pre = "../"
+    if src_dir == "" then
+        pre = "./"
+    end
+
     -- В данный момент скрипт находится в каталоге src
     if target == 'linux' then
-        output_dir = "../obj_linux"
+        output_dir = pre .. "obj_linux"
     elseif target == 'wasm' then
-        output_dir = "../obj_wasm"
+        output_dir = pre .. "obj_wasm"
     end
-    --print("output_dir", output_dir)
 
     local files_processed =  ut.filter_sources(".", exclude)
 
-    -- Добавляю только *.c файлы
-    local matched = {}
-    for _, file in ipairs(files_processed) do
-        if string.match(file, ".*%.c$") then
-            insert(matched, file)
-        end
-    end
+    -- TODO: Добавить проход по *.c, *.cpp файлам
 
-    local cc = compiler[target]
-    --print("_args", inspect(_args))
-    --print("compiler", inspect(compiler))
-    assert(cc)
-
-    for _, file in ipairs(matched) do
-        local _output = output_dir .. "/" .. gsub(file, "(.*%.)c$", "%1o")
-        --print(format("_output '%s'", _output))
-        local _input = cwd .. file
-
-        -- TODO: Проверять отсутствие объектного файла. 
-        -- Каким образом проверять?
-        -- Через lfs.attributes()?
-
-        local args = {}
-
-        --table.insert(args, "-lm ")
-
-        for _, define in ipairs(defines) do
-           table.insert(args, define)
-        end
-
-        for _, include in ipairs(includes) do
-            table.insert(args, include)
-        end
-
-        if target ~= 'wasm' then
-            for _, libdir in ipairs(libdirs) do
-                table.insert(args, "-L" .. libdir)
+    local function gather_tasks(ext: string): {Task}
+        local matched = {}
+        for _, file in ipairs(files_processed) do
+            if string.match(file, ".*%." .. ext .. "$") then
+                insert(matched, file)
             end
         end
 
-        for _, flag in ipairs(flags) do
-            table.insert(args, flag)
-        end
+        local cc = compiler[target]
+        assert(cc)
 
-        table.insert(args, "-o")
-        table.insert(args, _output)
-        table.insert(args, "-c")
-        table.insert(args, _input)
+        local tasks: {Task} = {}
 
-        if target ~= 'wasm' then
-            for _, lib in ipairs(make_l(libs)) do
-                table.insert(args, lib)
+        for _, file in ipairs(matched) do
+            local _output = output_dir 
+                .. "/" 
+                .. gsub(file, "(.*%.)" 
+                .. ext 
+                .. "$", "%1o")
+            local _input = cwd .. file
+
+            local args = {}
+
+            for _, define in ipairs(defines) do
+               table.insert(args, define)
             end
+
+            for _, include in ipairs(includes) do
+                table.insert(args, include)
+            end
+
+            if target ~= 'wasm' then
+                for _, libdir in ipairs(libsdirs) do
+                    table.insert(args, "-L" .. libdir)
+                end
+            end
+
+            for _, flag in ipairs(flags) do
+                table.insert(args, flag)
+            end
+
+            table.insert(args, "-o")
+            table.insert(args, _output)
+            table.insert(args, "-c")
+            table.insert(args, _input)
+
+            if target ~= 'wasm' then
+                for _, lib in ipairs(make_l(libs)) do
+                    table.insert(args, lib)
+                end
+            end
+               
+            local task = { 
+                cmd = cc,
+                args = args, 
+            }
+            table.insert(tasks, task)
+
+            -- XXX: Кэширование работает вообще?
+            --if cache:should_recompile(file, task) then
+                --table.insert(repr_queu, file)
+            --end
+
+            table.insert(objfiles, _output)
         end
-           
-        local task = { cmd = cc, args = args, }
-        table.insert(tasks, task)
 
-        -- XXX: Кэширование работает вообще?
-        --if cache:should_recompile(file, task) then
-            --table.insert(repr_queu, file)
-        --end
-
-        table.insert(objfiles, _output)
+        return tasks
     end
 
-    --print(tabular(tasks))
+    local tasks: {Task} = {}
 
-    if verbose then
-        --print(tabular(repr_queu))
-    end
+    tasks = gather_tasks("c")
+    driver(tasks)
 
+    tasks = gather_tasks("cpp")
     driver(tasks)
 
     cache:save()
@@ -3726,12 +3718,6 @@ local function sub_make(
         print('objfiles')
         print_sorted_string(objfiles)
     end
-
-    --[[
-    local objfiles_str = table.concat(objfiles, " ")
-    print("objfiles")
-    print(tabular(objfiles))
-    --]]
 
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
     -- скрипте.
@@ -3760,6 +3746,7 @@ local function sub_make(
             local_cfg.debug_define = cfg.debug_define
             --print(tabular(local_cfg))
 
+            prepare_make(_args)
             sub_make(args, local_cfg, target, run_parallel_uv)
         end
 
@@ -3769,9 +3756,12 @@ local function sub_make(
             print("before project link", lfs.currentdir())
         end
 
+        --[[
+        TODO: koh_link() заменить на project_link()
+        --]]
         project_link({
             objfiles = objfiles,
-            libsdirs = libdirs,
+            libsdirs = libsdirs,
             libs = libs,
         }, cfg, _args)
     else
@@ -3944,6 +3934,7 @@ function actions.make(_args: Args)
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
     for _, cfg in ipairs(cfgs) do
+        prepare_make(_args)
         sub_make(_args, cfg, target, run_parallel_uv, push_num)
     end
 end
@@ -4472,7 +4463,11 @@ function actions.bld_lua(_args: Args)
     local f_lua = io.open(bld_lua .. ".tmp", "w")
     assert(f_lua)
 
-    local bld_lua_full = [[
+
+    -- TODO: Добавить поддержку явного указания каталогов включемых файлов
+    local bld_lua_full = 
+    -- {{{
+[[
 -- vim: set colorcolumn=85
 -- vim: fdm=marker
 
@@ -4514,6 +4509,14 @@ $modules_list$
       flags = {
          --"-fopenmp",
       },
+
+      includes = {
+      },
+      libs = {
+      },
+      libsdirs = {
+      },
+
       codegen = {
          {
             -- нет входного или выходного файла - нет кодогенерации
@@ -4536,13 +4539,14 @@ $modules_list$
 
 }
 ]]
+-- }}}
 
     local modules_list = {}
     for m in mods.iter() do
         insert(modules_list, format("       %q,", m.name))
     end
     local modules_str = table.concat(modules_list, "\n")
-    print("actions.bld_lua: modules_str", modules_str)
+    --print("actions.bld_lua: modules_str", modules_str)
 
     bld_lua_full = gsub(
         bld_lua_full,
@@ -4556,8 +4560,9 @@ $modules_list$
     end
 
     f_lua:write(bld_lua_full)
-
     f_lua:close()
+
+    cmd_do(format("cp %s %s", bld_lua .. ".tmp", bld_lua))
 end
 
 function actions.sha256(_: Args)
