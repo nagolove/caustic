@@ -16,8 +16,12 @@
 #include "lua.h"
 #include "lauxlib.h"
 
-//#include "koh_strbuf.h"
-//#include "koh_table.h"
+//#define KOH
+
+#ifdef KOH
+#include "koh_strbuf.h"
+#include "koh_table.h"
+#endif
 
 typedef int64_t     i64;
 typedef uint64_t    u64;
@@ -35,16 +39,6 @@ typedef struct __attribute__((packed)) IndexHeaderBase {
     char endian_mode;
     u8   format_version;
 } IndexHeaderBase;
-
-typedef struct __attribute__((packed)) IndexHeader_v2 {
-    IndexHeaderBase     base;                // magic[13], endian_mode, format_version=2
-    u8                  zlib_window;         // окно zlib
-    char                sha_mode[8];         // "blake3\0", "sha256\0" и т.п.
-    u64                 embedding_dim;       // размерность векторов
-    char                llm_embedding_model[64]; // имя модели (null-terminated, <=63 символов)
-    u64                 data_offset;         // смещение начала данных
-    // сюда можно добавлять новые поля в будущем
-} IndexHeader_v2;
 
 typedef struct __attribute__((packed)) IndexHeader_v3 {
     IndexHeaderBase     base;                // magic[13], endian_mode, format_version=2
@@ -81,7 +75,9 @@ typedef struct Index {
     //IndexHeader_v2 header;
     IndexHeader_v3 header;
 
-    //HTable         *id_hash2str;
+#ifdef KOH
+    HTable         *id_hash2str;
+#endif
 } Index;
 
 //                                1234567890123
@@ -669,12 +665,12 @@ Index *index_new(const char *fname) {
     //index_a->strings = strings;
     index->chunks_num = num;
 
-    /*
+#ifdef KOH
     index->id_hash2str = htable_new(&(HTableSetup) {
         .cap = 3000,
         .f_on_remove = on_remove_str,
     });
-    */
+#endif
 
     return index;
 }
@@ -684,7 +680,9 @@ void index_free(Index *index) {
     index_unmap(index);
     index_pointers_free(index);
 
-    //htable_free(index->id_hash2str);
+#ifdef KOH
+    htable_free(index->id_hash2str);
+#endif
 
     free(index);
 }
@@ -704,36 +702,41 @@ const char *index_chunk_raw(Index *index, u64 i) {
         );
     }
 
-    /*
-    return index->strings[i];
-    */
+#ifdef KOH
+    const char *key = index_chunk_id_hash(index, i);
+    char *s = htable_get_s(index->id_hash2str, key, NULL);
 
+    if (!s) {
+        StrBuf b = strbuf_init(NULL);
+
+        strbuf_addf(&b, "%s", index_chunk_id_hash(index, i));
+        strbuf_addf(&b, "%s", index_chunk_file(index, i));
+        strbuf_addf(&b, "%lu", index_chunk_line_start(index, i));
+        strbuf_addf(&b, "%lu", index_chunk_line_end(index, i));
+        strbuf_addf(&b, "%s", index_chunk_text(index, i));
+        strbuf_addf(&b, "%s", index_chunk_text_zlib(index, i));
+        strbuf_addf(&b, "%s", index_chunk_embedding(index, i));
+
+        assert(index->id_hash2str);
+
+        s = strbuf_concat_alloc(&b, "\n");
+        htable_add_s(
+            index->id_hash2str,
+            index_chunk_id_hash(index, i),
+            s, sizeof(s)
+        );
+
+        strbuf_shutdown(&b);
+        // */
+    }
+
+    printf("index_chunk_raw: s '%s'\n", s);
+
+    return s;
+#else
     fprintf(stderr, "index_chunk_raw: this function is deprecated\n");
-
-    /*
-    StrBuf b = strbuf_init(NULL);
-
-    strbuf_addf(&b, "%s", index_chunk_id_hash(index, i));
-    strbuf_addf(&b, "%s", index_chunk_file(index, i));
-    strbuf_addf(&b, "%lu", index_chunk_line_start(index, i));
-    strbuf_addf(&b, "%lu", index_chunk_line_end(index, i));
-    strbuf_addf(&b, "%s", index_chunk_text(index, i));
-    strbuf_addf(&b, "%s", index_chunk_text_zlib(index, i));
-    strbuf_addf(&b, "%s", index_chunk_embedding(index, i));
-
-    assert(index->id_hash2str);
-
-    char *s = strbuf_concat_alloc(&b, "\n");
-    htable_add_s(
-        index->id_hash2str,
-        index_chunk_id_hash(index, i),
-        s, sizeof(s)
-    );
-
-    strbuf_shutdown(&b);
-    */
-
-    return NULL;
+    return "HUI";
+#endif
 }
 
 const char *index_chunk_id(Index *index, u64 i) {
