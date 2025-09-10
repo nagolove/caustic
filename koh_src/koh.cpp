@@ -711,7 +711,9 @@ static int l_chunk_raw(lua_State *L) {
 
     const char *p = index_chunk_raw(ud->ptr, (u64)(i - 1));
     if (!p) {
-        lua_pushnil(L);
+        //lua_pushnil(L);
+        x
+        lua_pushstring(L, "HELLO");
         return 1;
     }
 
