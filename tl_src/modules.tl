@@ -218,11 +218,15 @@ local function build_llama(_: Env, _: Dependency)
 end
 
 local function build_munit_common(_: Env, dep: Dependency)
-    local flags = ""
+    local flags = " -std=c11 -fPIC "
     if dep.target == "wasm" then
-        flags = "-pthread"
+        flags = flags .. " -pthread "
     end
-    cmd_do(compiler[dep.target] .. " -c munit.c " .. flags)
+    local cmd = compiler[dep.target] .. " -c munit.c " .. flags
+
+    --print(format("build_munit_common: %q", cmd))
+    --print('currentdir', lfs.currentdir())
+    cmd_do(cmd)
     cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
 end
 
