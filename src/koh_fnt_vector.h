@@ -9,7 +9,7 @@ typedef struct FntVectorOpts {
     float line_thick;
 } FntVectorOpts;
 
-FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts);
+FntVector *fnt_vector_new(const char *ttf_file, const FntVectorOpts *opts);
 void fnt_vector_free(FntVector *fv);
 
 void fnt_vector_draw(FntVector *fv, const char *text, Vector2 pos);

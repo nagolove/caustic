@@ -78,7 +78,7 @@ size_t easings_names_num = sizeof(easings_names) / sizeof(easings_names[0]);
 
 int ease_func2index(EaseFunc func) {
     for (int i = 0; easings[i].func; i++) {
-        if (easings[i].func) {
+        if (easings[i].func == func) {
             return i;
         }
     }

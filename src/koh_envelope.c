@@ -90,6 +90,7 @@ static int cmp_points(const void *a, const void *b, void *ud) {
 }
 
 void env_point_add(Envelope_t e, Vector2 pos) {
+    assert(e);
     if (e->points_num + 1 == e->poins_cap) {
 
         trace("points_add: not enough memory, skipping\n");
@@ -107,6 +108,7 @@ void env_point_add(Envelope_t e, Vector2 pos) {
 
     // XXX: Проверить сортировку
     size_t sz = sizeof(e->points[0]);
+    assert(e->points);
     koh_qsort(e->points, e->points_num, sz, cmp_points, NULL);
 
     //e->baked = false;
@@ -415,14 +417,14 @@ static void env_draw(Envelope_t e) {
     // Рисовать кружки ручек
     if (e->points) {
         for (int i = 0; i < e->points_num; i++) {
-            Color color = color_handle;
+            Color circle_color = color_handle;
 
             if (e->leftest == &e->points[i] || e->rightest == &e->points[i])
-                color = color_handle_supreme;
+                circle_color = color_handle_supreme;
 
             Vector2 p = e->points[i];
             p.y = e->rt_main.texture.height - p.y;
-            DrawCircleV(p, e->opts.handle_size, color);
+            DrawCircleV(p, e->opts.handle_size, circle_color);
         }
     }
 
@@ -620,26 +622,39 @@ void env_draw_imgui_env(Envelope_t e) {
 }
 
 static void env_point_add_default(Envelope_t e) {
+    assert(e);
     env_point_add(e, (Vector2) { 0., 0});
     Texture t = e->rt_main.texture;
     env_point_add(e, (Vector2) {  t.width, t.height});
 }
 
 static void env_new_points(Envelope_t e, size_t cap) {
+    assert(e);
     env_free_points(e);
     e->poins_cap = cap;
+
     e->points = realloc(e->points, cap * sizeof(e->points[0]));
+    if (!e->points) goto _fatal;
     e->lengths = realloc(e->lengths, cap * sizeof(e->lengths[0]));
+    if (!e->lengths) goto _fatal;
     e->angles = realloc(e->angles, cap * sizeof(e->angles[0]));
-    /*
-    e->lengths_sorted = realloc(
-        e->lengths_sorted, cap * sizeof(e->lengths_sorted[0])
-    );
-    */
+    if (!e->angles) goto _fatal;
+
+    return;
+
+_fatal:
+    printf("env_new_points: bad allocation with %zu capacity\n", cap);
+    koh_fatal();
 }
 
 Envelope_t env_new(EnvelopeOpts opts) {
     Envelope_t e = calloc(1, sizeof(*e));
+
+    if (!e) {
+        printf("env_new: bad allocation\n");
+        koh_fatal();
+    }
+
     e->snap2grid = false;
     e->draw_ruler = false;
     e->baked = false;
@@ -686,13 +701,8 @@ Envelope_t env_new(EnvelopeOpts opts) {
 }
 
 static void env_free_points(Envelope_t e) {
-
-    /*
-    if (e->lengths_sorted) {
-        free(e->lengths_sorted);
-        e->lengths_sorted = NULL;
-    }
-    */
+    if (!e)
+        return;
 
     if (e->angles) {
         free(e->angles);
@@ -740,12 +750,14 @@ static int cmp(const void *a, const void *b, void *ud) {
 }
 */
 
-static float len(Vector2 a, Vector2 b) {
+static float vec_len(Vector2 a, Vector2 b) {
     trace("len: a %s, b %s\n", Vector2_tostr(a), Vector2_tostr(b));
     return Vector2Length(Vector2Subtract(b, a));
 }
 
 void env_bake(Envelope_t e) {
+    assert(e);
+
     // Расчитать длину каждого сегмента
     const int lengths_num = e->points_num - 1;
 
@@ -759,7 +771,9 @@ void env_bake(Envelope_t e) {
 
     e->length_full = 0.f;
     for (int i = 0; i < lengths_num; i++) {
-        e->length_full += e->lengths[i] = len(e->points[i + 1], e->points[i]);
+        e->length_full += e->lengths[i] = vec_len(
+            e->points[i + 1], e->points[i]
+        );
     }
 
     /*
@@ -873,7 +887,7 @@ char *env_export_alloc(Envelope_t e) {
     assert(buf);
 
     pbuf += sprintf(pbuf, "return { \n");
-    char *comma = ",";
+    const char *comma = ",";
     for (int i = 0; i < e->points_num; i++) {
         if (i + 1 == e->points_num)
             comma = "";

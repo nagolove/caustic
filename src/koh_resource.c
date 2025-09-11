@@ -21,18 +21,31 @@ Resource *res_add(
 
     Resource *new = calloc(1, sizeof(Resource));
 
-    new->data = malloc(data_size);
-    memmove(new->data, data, data_size);
+    if (!new) {
+        printf("res_add: could not allocate memory\n");
+        koh_fatal();
+    } else {
+        new->data = malloc(data_size);
 
-    if (source_data && source_size > 0) {
-        new->source_data = malloc(source_size);
-        memmove(new->source_data, source_data, source_size);
+        if (!new->data) {
+            printf("res_add: could not allocate memory\n");
+            koh_fatal();
+        } else {
+            assert(new->data);
+            memmove(new->data, data, data_size);
+
+            if (source_data && source_size > 0) {
+                new->source_data = malloc(source_size);
+                memmove(new->source_data, source_data, source_size);
+            }
+
+            new->next = res_list->next;
+            res_list->next = new;
+            new->type = type;
+            new->loaded = true;
+        }
     }
 
-    new->next = res_list->next;
-    res_list->next = new;
-    new->type = type;
-    new->loaded = true;
     return new;
 }
 // */
@@ -46,10 +59,6 @@ Texture2D res_tex_load(Resource *res_list, const char *fname) {
     );
     return tex;
 }
-
-struct RtSize {
-    int w, h;
-};
 
 RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h) {
     RenderTexture2D tex_rt = LoadRenderTexture(w, h);
@@ -262,8 +271,13 @@ struct ResList {
 
 ResList *reslist_new() {
     ResList *l = calloc(1, sizeof(*l));
-    l->arr_cap = 16;
-    l->arr = calloc(l->arr_cap, sizeof(l->arr[0]));
+    if (!l) {
+        printf("reslist_new: allocation failed\n");
+        koh_fatal();
+    } else {
+        l->arr_cap = 16;
+        l->arr = calloc(l->arr_cap, sizeof(l->arr[0]));
+    }
     return l;
 }
 

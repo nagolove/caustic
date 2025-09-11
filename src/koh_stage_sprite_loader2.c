@@ -1126,7 +1126,7 @@ static void paste_stuff2lua(
                 );
                 */
 
-                memset(object_name, 0, sizeof(object_name) - 1);
+                memset(object_name, 0, strlen(object_name) - 1);
             }
             break;
         }
@@ -1915,6 +1915,10 @@ static void stage_sprite_loader_gui_window(struct Stage *s) {
 
 Stage *stage_sprite_loader_new2(HotkeyStorage *hk_store) {
     Stage_SpriteLoader *st = calloc(1, sizeof(Stage_SpriteLoader));
+    if (!st) {
+        printf("stage_sprite_loader_new2: bad allocation\n");
+        koh_fatal();
+    }
     st->parent.data = hk_store;
     st->parent.init = (Stage_callback)stage_sprite_loader_init;
     st->parent.update = (Stage_callback)stage_sprite_loader_update;

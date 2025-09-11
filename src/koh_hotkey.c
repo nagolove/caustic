@@ -271,7 +271,7 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
 
     int maxgroupnum = 0;
     for(int i = 0; i < storage->keysnum; i++) {
-        Hotkey *hk = &storage->keys[i];
+        const Hotkey *hk = &storage->keys[i];
         if (hk->groups > maxgroupnum) {
             maxgroupnum = hk->groups;
         }

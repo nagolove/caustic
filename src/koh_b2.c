@@ -1,4 +1,4 @@
-/* vim: fdm=marker */
+// vim: fdm=marker 
 
 #include "koh_b2.h"
 
@@ -605,7 +605,7 @@ const char *b2ShapeType_to_str(b2ShapeType st) {
 }
 
 #define STR_NUM 9
-char **b2BodyId_to_str(b2BodyId body_id) {
+char **b2BodyId_to_str(b2BodyId bid) {
     static char (buf[STR_NUM])[128];
     memset(buf, 0, sizeof(buf));
     static char *lines[STR_NUM];
@@ -614,22 +614,22 @@ char **b2BodyId_to_str(b2BodyId body_id) {
     }
     int i = 0;
 
-    if (!b2Body_IsValid(body_id)) {
+    if (!b2Body_IsValid(bid)) {
         sprintf(lines[i++], "{ 'bad body id', }");
     }
 
-    const char *linear_vel = b2Vec2_to_str(b2Body_GetLinearVelocity(body_id));
-    float w = b2Body_GetAngularVelocity(body_id);
-    const char *body_type = b2BodyType_to_str(b2Body_GetType(body_id));
-    const char *position = b2Vec2_to_str(b2Body_GetPosition(body_id));
+    const char *linear_vel = b2Vec2_to_str(b2Body_GetLinearVelocity(bid));
+    float w = b2Body_GetAngularVelocity(bid);
+    const char *body_type = b2BodyType_to_str(b2Body_GetType(bid));
+    const char *position = b2Vec2_to_str(b2Body_GetPosition(bid));
 
     sprintf(lines[i++], "{");
-    sprintf(lines[i++], "\tmass = %f,", b2Body_GetMass(body_id));
+    sprintf(lines[i++], "\tmass = %f,", b2Body_GetMass(bid));
     sprintf(lines[i++], "\tlinear_velocity = %s,", linear_vel);
     sprintf(lines[i++], "\tangular_velovity = %f,", w);
     sprintf(lines[i++], "\tbody_type = '%s',", body_type);
     sprintf(lines[i++], "\tposition = %s,", position);
-    b2Rot rot = b2Body_GetRotation(body_id);
+    b2Rot rot = b2Body_GetRotation(bid);
     sprintf(lines[i++], "\tangle = %f,", b2Rot_GetAngle(rot));
     sprintf(lines[i++], "}");
 

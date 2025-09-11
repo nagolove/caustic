@@ -181,7 +181,7 @@ static Vector2 kb_size(int btn_width) {
 
     for (int i = 0; i < sizeof(btn_rows) / sizeof(btn_rows[0]); i++) {
         for (int j = 0; btn_rows[i].btns[j].lbl; j++) {
-            struct Btn *btn = &btn_rows[i].btns[j];
+            const struct Btn *btn = &btn_rows[i].btns[j];
 
             x += (btn_width + gap) * (btn->dx + 1);
             int w = btn_width + btn_width * btn->sx;

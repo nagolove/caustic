@@ -548,10 +548,6 @@ static void stage_sprite_loader_enter(Stage_SpriteLoader *st) {
     st->parent.enter = NULL;
 }
 
-static void stage_sprite_loader_leave(struct Stage *s) {
-    trace("stage_sprite_loader_leave:\n");
-}
-
 static void meta_search_files(Stage_SpriteLoader *st) {
     assert(st);
     koh_search_files_shutdown(&st->fsr_meta);
@@ -970,7 +966,7 @@ static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
             case MLT_RECTANGLE_ORIENTED:
                 break;
             case MLT_POLYLINE: {
-                struct MetaLoaderPolyline *obj_pl;
+                const struct MetaLoaderPolyline *obj_pl;
                 obj_pl = (struct MetaLoaderPolyline*)objects.objs[j];
                 str_repr = points2table_alloc(obj_pl->points, obj_pl->num);
                 str_repr_allocated = true;
@@ -1075,7 +1071,7 @@ static void paste_stuff2lua(
                 metaloader_set(
                     st->metaloader, new_rect, fname_noext, object_name
                 );
-                memset(object_name, 0, sizeof(object_name) - 1);
+                memset(object_name, 0, strlen(object_name) - 1);
             }
             break;
         }
@@ -1841,14 +1837,18 @@ void stage_sprite_loader_gui_window(struct Stage *s) {
 
 Stage *stage_sprite_loader_new(HotkeyStorage *hk_store) {
     Stage_SpriteLoader *st = calloc(1, sizeof(Stage_SpriteLoader));
-    st->parent.data = hk_store;
-    st->parent.init = (Stage_callback)stage_sprite_loader_init;
-    st->parent.update = (Stage_callback)stage_sprite_loader_update;
-    st->parent.draw = (Stage_callback)stage_sprite_loader_draw;
-    st->parent.shutdown = (Stage_callback)stage_sprite_loader_shutdown;
-    st->parent.enter = (Stage_callback)stage_sprite_loader_enter;
-    st->parent.leave = (Stage_callback)stage_sprite_loader_leave;
-    st->parent.gui = stage_sprite_loader_gui_window;
+    if (!st) {
+        printf("stage_sprite_loader_new: could not allocate memory\n");
+        koh_fatal();
+    } else {
+        st->parent.data = hk_store;
+        st->parent.init = (Stage_callback)stage_sprite_loader_init;
+        st->parent.update = (Stage_callback)stage_sprite_loader_update;
+        st->parent.draw = (Stage_callback)stage_sprite_loader_draw;
+        st->parent.shutdown = (Stage_callback)stage_sprite_loader_shutdown;
+        st->parent.enter = (Stage_callback)stage_sprite_loader_enter;
+        st->parent.gui = stage_sprite_loader_gui_window;
+    }
     return (Stage*)st;
 }
 

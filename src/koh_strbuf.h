@@ -17,7 +17,7 @@ typedef struct StrBuf {
         cap;
 } StrBuf;
 
-StrBuf strbuf_init(StrBufOpts *opts);
+StrBuf strbuf_init(const StrBufOpts *opts);
 void strbuf_shutdown(StrBuf *s);
 
 // Копировать строку в буфер
@@ -36,4 +36,4 @@ __attribute__((__format__ (__printf__, 2, 3)))
 void strbuf_addf(StrBuf *s, const char *fmt, ...);
 
 // Возвращает склейку всех строк буфера. Память нужно освобождать.
-char *strbuf_concat_alloc(StrBuf *s, const char *sep);
+char *strbuf_concat_alloc(const StrBuf *s, const char *sep);

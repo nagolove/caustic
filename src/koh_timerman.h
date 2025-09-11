@@ -128,7 +128,7 @@ void timerman_each(
     enum TimerManAction (*iter)(Timer *tmr, void*),
     void *udata
 );
-bool timerman_valid(TimerMan *mv, timer_id_t id);
+bool timerman_valid(const TimerMan *mv, timer_id_t id);
 
 const char *timer2str(TimerDef t);
 TimerDef timer_def(TimerDef td, const char *fmt, ...);

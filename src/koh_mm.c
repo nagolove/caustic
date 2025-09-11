@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "koh_common.h"
+
 struct MMArenaOpts mm_arena_opts_default = {
     .block_sz = 0,
     .capacity1 = 1000,
@@ -29,8 +31,13 @@ void mm_arena_init(MMArena *mm, struct MMArenaOpts opts) {
     memset(mm, 0, sizeof(*mm));
     mm->opts = opts;
 
-    struct MMArenaOpts *o = &mm->opts;
+    const struct MMArenaOpts *o = &mm->opts;
     mm->arena = calloc(o->block_sz, o->capacity1);
+
+    if (!mm->arena) {
+        printf("mm_arena_init: bad arena allocation\n");
+        koh_fatal();
+    }
 
     mm->blocks_allocated = calloc(
         sizeof(mm->blocks_allocated[0]),

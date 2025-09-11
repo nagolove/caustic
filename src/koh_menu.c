@@ -155,7 +155,7 @@ void menu_free(Menu *mnu) {
     free(mnu);
 }
 
-static bool has_scroll(Menu *mnu) {
+static bool has_scroll(const Menu *mnu) {
     return mnu->i + mnu->visible_num < mnu->items_num;
 }
 
@@ -187,7 +187,7 @@ void draw_arrows_up(Menu *mnu) {
 }
 
 void item_draw_active(Menu *mnu, Vector2 pos, int item_index) {
-    char *caption = mnu->items[item_index].caption;
+    const char *caption = mnu->items[item_index].caption;
     char buf[MAX_CAPTION + 32] = {0, };
     snprintf(
         buf, sizeof(buf), "%s%s%s", 
@@ -336,7 +336,7 @@ void menu_build(Menu *mnu) {
     mnu->scroll_rect.y = mnu->pos.y;
     mnu->is_builded = true;
 
-    char *longest_caption = mnu->items[maxwidth_index].caption;
+    const char *longest_caption = mnu->items[maxwidth_index].caption;
     char full_longest_caption[MAX_CAPTION + 64] = {0, };
     snprintf(
         full_longest_caption, sizeof(full_longest_caption), "%s%s%s", 

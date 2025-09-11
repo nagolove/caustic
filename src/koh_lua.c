@@ -937,6 +937,12 @@ void sc_register_function(lua_CFunction f, const char *fname, const char *desc) 
         return;
 
     ScriptFunc *sfunc = calloc(1, sizeof(*sfunc));
+
+    if (!sfunc) {
+        printf("sc_register_function: bad allocation\n");
+        koh_fatal();
+    }
+
     strncpy(sfunc->desc, desc, sizeof(sfunc->desc) - 1);
     strncpy(sfunc->fname, fname, sizeof(sfunc->fname) - 1);
     sfunc->next = script_funcs;
@@ -960,6 +966,11 @@ void sc_register_function(lua_CFunction f, const char *fname, const char *desc) 
 void print_avaible_functions(lua_State *lua) {
     int cap = 30, len = 0;
     struct Pair *pairs = calloc(cap, sizeof(pairs[0]));
+
+    if (!pairs) {
+        printf("print_avaible_functions: bad allocation\n");
+        koh_fatal();
+    }
 
     printf("print_avaible_functions: Следущие функции доступны из консоли:\n");
 
@@ -1356,6 +1367,10 @@ int l_script(lua_State *lua) {
     if (lua_isstring(lua, 1)) {
         const char *fname = lua_tostring(lua, 1);
         Script *scr = calloc(1, sizeof(Script));
+        if (!scr) {
+            printf("l_script: bad allocation\n");
+            koh_fatal();
+        }
         strcpy(scr->fname, fname);
         scr->next = scripts;
         scripts = scr;
@@ -1712,16 +1727,16 @@ const char *sc_stack_dump() {
 }
 
 int make_ret_table(int num, void**arr, size_t offset) {
-    lua_State *lua = sc_get_state();
     if (!arr) 
         return 0;
 
-    lua_createtable(lua, num, 0);
+    lua_State *l = sc_get_state();
+    lua_createtable(l, num, 0);
     for (int i = 0; i < num; i++) {
-        lua_pushnumber(lua, i + 1);
+        lua_pushnumber(l, i + 1);
         int ref = *(int*)((char*)arr[i] + offset);
-        lua_rawgeti(lua, LUA_REGISTRYINDEX, ref);
-        lua_settable(lua, -3);
+        lua_rawgeti(l, LUA_REGISTRYINDEX, ref);
+        lua_settable(l, -3);
     }
     return 1;
 }

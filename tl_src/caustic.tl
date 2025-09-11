@@ -917,6 +917,7 @@ end
 local record Actions
     -- {{{
 
+    cppcheck: function(Args)
     bld_lua: function(Args)
     mmap: function(Args)
     sha256: function(Args)
@@ -959,6 +960,10 @@ end
 
 local parser_setup: {string:ParserSetup} = {
     -- {{{
+
+    cppcheck = {
+        summary = [[run cppcheck on current project directory]],
+    },
 
     mmap = {
         summary = [[testing mmap library for chunks.index.copy]]
@@ -4445,6 +4450,55 @@ function actions.mmap(_: Args)
         --]]
 
     end
+end
+
+function actions.cppcheck(_args: Args)
+    local cmd = "cppcheck -j6 --template=gcc --platform=unix64 "
+        .. " --enable=warning,style,performance,portability,information "
+        .. " --enable=warning,style,performance,portability "
+        .. " --library=posix,windows,sdl,opengl,emscripten,lua,opengl,pcre,sdl,windows "
+        .. " --inconclusive --std=c11 --language=c --quiet "
+        --.. " --addon=threadsafety.py "
+
+
+--cppcheck-build-dir=<dir> — кэш/билд-каталог cppcheck. Дает инкрементальный
+--анализ и включает межмодульные проверки (например, unusedFunction) даже с
+--многопоточностью. Очень полезно в больших игровых кодовых базах. 
+
+
+    --[[
+--]]
+
+    --[[
+
+--suppress=<id>:<file>:<line> и --suppressions-list=<file> — основной способ.
+--Поддерживаются маски */?/**. 
+
+--inline-suppr + комментарии // cppcheck-suppress id или блоки //
+--cppcheck-suppress-begin [id1,id2] … -end — когда нужно приглушить конкретный
+--участок. Добавляйте комментарии-обоснования (есть поддержка REMARK). 
+
+--suppress-xml=FILE — если удобно хранить подавления в XML с дополнительными
+    --]]
+
+--max-ctu-depth=4
+
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    local target: Target = 'linux'
+    local files: {string} = {}
+    sub_make(_args, cfgs[1], target, function(q: {Task})
+        for _, task in ipairs(q) do
+                --directory = lfs.currentdir(),
+                --file = task_get_source(task),
+                --output = task_get_output(task),
+
+                insert(files, task_get_source(task))
+        end
+    end)
+
+    print('files', inspect(files))
+    cmd = cmd .. table.concat(files, " ")
+    cmd_do(cmd)
 end
 
 -- Пишет в текущий каталог файл bld.lua 

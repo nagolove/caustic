@@ -69,9 +69,14 @@ void stage_paragraph_update(Stage_paragraph *st) {
 
 Stage *stage_paragraph_new(void) {
     Stage_paragraph *st = calloc(1, sizeof(Stage_paragraph));
-    st->parent.init = (Stage_callback)stage_paragraph_init;
-    st->parent.update = (Stage_callback)stage_paragraph_update;
-    st->parent.shutdown = (Stage_callback)stage_paragraph_shutdown;
+    if (!st) {
+        printf("stage_paragraph_new: could not allocate stage\n");
+        koh_fatal();
+    } else {
+        st->parent.init = (Stage_callback)stage_paragraph_init;
+        st->parent.update = (Stage_callback)stage_paragraph_update;
+        st->parent.shutdown = (Stage_callback)stage_paragraph_shutdown;
+    }
     return (Stage*)st;
 }
 

@@ -6,7 +6,7 @@
 #include "koh_logger.h"
 #include "koh_common.h"
 
-StrBuf strbuf_init(StrBufOpts *opts) {
+StrBuf strbuf_init(const StrBufOpts *opts) {
     StrBuf s = {
         .num = 0,
         .cap = 0,
@@ -28,8 +28,7 @@ void strbuf_shutdown(StrBuf *s) {
 
     if (s->s) {
         for (char **line = s->s; *line; line++)
-            if (*line)
-                free(*line);
+            free(*line);
         free(s->s);
         s->s = NULL;
         s->num = 0;
@@ -108,7 +107,7 @@ void strbuf_addf(StrBuf *s, const char *fmt, ...) {
     s->num++;
 }
 
-char *strbuf_concat_alloc(StrBuf *s, const char *sep) {
+char *strbuf_concat_alloc(const StrBuf *s, const char *sep) {
     size_t required_len = 0, 
            sep_len = sep ? strlen(sep) : 0;
 

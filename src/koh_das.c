@@ -24,6 +24,7 @@ TODO Добавить параметры генерации:
 
 #include <raylib.h>
 
+#include "koh_common.h"
 #include "koh_das_interface.h"
 #include "koh_rand.h"
 // }}}
@@ -46,6 +47,12 @@ static void print_map(DAS_Context *ctx, int filenum) {
     sprintf(fname, "map.c.%d.txt", filenum);
 
     FILE *file = fopen(fname, "w+");
+
+    if (!file) {
+        printf("print_map: could not open file '%s'\n", fname);
+        koh_fatal();
+    }
+
     //for(int i = 0; i < ctx->chunkSize; i++) {
         //for(int j = 0; j < ctx->chunkSize; j++) {
     for(int i = 0; i < ctx->mapSize; i++) {
@@ -209,7 +216,7 @@ inline static double max_value(double a, double b) {
 void normalize_implace(DAS_Context *ctx) {
     for(int i = 0; i < ctx->mapSize - 1; ++i) {
         for(int j = 0; j < ctx->mapSize - 1; ++j) {
-            double *v = value(ctx, i, j);
+            const double *v = value(ctx, i, j);
             if (v) {
                 if (*v > 1.) {
                     map_set(ctx, i, j, 1.);
@@ -232,7 +239,7 @@ void square_value(DAS_Context *ctx, int i, int j, double *min, double *max) {
     // TODO Стоит вынести массив corners из функции и передавать как аргумент?
     struct {
         int i, j;
-    } corners[4] = {
+    } const corners[4] = {
         { .i = i, .j = j},
         { .i = i + ctx->chunkSize, .j = j },
         { .i = i, .j = j + ctx->chunkSize },
@@ -240,7 +247,9 @@ void square_value(DAS_Context *ctx, int i, int j, double *min, double *max) {
     };
 
     for(int corner_idx = 0; corner_idx < 4; ++corner_idx) {
-        double *v = value(ctx, corners[corner_idx].i, corners[corner_idx].j);
+        const double *v = value(
+            ctx, corners[corner_idx].i, corners[corner_idx].j
+        );
         if (v) {
             *min = min_value(*min, *v);
             *max = max_value(*max, *v);
@@ -261,7 +270,7 @@ void diamond_value(
 
     struct {
         int i, j;
-    } corners[4] = {
+    } const corners[4] = {
         {.i = i, .j = j - half}, 
         {.i = i  +  half, .j = j}, 
         {.i = i, .j = j  +  half}, 
@@ -269,7 +278,9 @@ void diamond_value(
     };
 
     for(int corner_idx = 0; corner_idx < 4; ++corner_idx) {
-        double *v = value(ctx, corners[corner_idx].i, corners[corner_idx].j);
+        const double *v = value(
+            ctx, corners[corner_idx].i, corners[corner_idx].j
+        );
         if (v) {
             *min = min_value(*min, *v);
             *max = max_value(*max, *v);
@@ -427,7 +438,7 @@ int das_get_mapsize(DAS_Context *ctx) {
 char *das_get_state(DAS_Context *ctx) {
     assert(ctx);
     static char buff[200] = {0};
-    sprintf(buff, "%d, %d", ctx->mapn, ctx->rnd.a);
+    sprintf(buff, "%d, %u", ctx->mapn, ctx->rnd.a);
     return buff;
 }
 

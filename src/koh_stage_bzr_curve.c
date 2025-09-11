@@ -32,11 +32,15 @@ void stage_bzr_curve_shutdown(Stage_BzrCurve *st);
 
 Stage *stage_bzr_curve_new(HotkeyStorage *hk_store) {
     Stage_BzrCurve *st = calloc(1, sizeof(Stage_BzrCurve));
-    st->hk_store = hk_store;
-    st->parent.init = (Stage_callback)stage_bzr_curve_init;
-    st->parent.update = (Stage_callback)stage_bzr_curve_update;
-    st->parent.shutdown = (Stage_callback)stage_bzr_curve_shutdown;
-    /*st->parent.enter = (Stage_data_callback)stage_bzr_curve_enter;*/
+    if (!st) {
+        printf("stage_bzr_curve_new: bad calloc()\n");
+        koh_fatal();
+    } else {
+        st->hk_store = hk_store;
+        st->parent.init = (Stage_callback)stage_bzr_curve_init;
+        st->parent.update = (Stage_callback)stage_bzr_curve_update;
+        st->parent.shutdown = (Stage_callback)stage_bzr_curve_shutdown;
+    }
     return (Stage*)st;
 }
 
@@ -129,9 +133,4 @@ void stage_bzr_curve_shutdown(Stage_BzrCurve *st) {
     }
     UnloadFont(st->fnt);
 }
-
-void stage_bzr_curve_enter(Stage_BzrCurve *st, void *data) {
-    printf("stage_bzr_curve_enter\n");
-}
-
 

@@ -269,6 +269,10 @@ void particles_draw() {
 
 Stage *stage_ecs_new(void) {
     Stage_ECS *st = calloc(1, sizeof(Stage_ECS));
+    if (!st) {
+        printf("stage_ecs_new: could not allocate memory\n");
+        koh_fatal();
+    }
     st->parent.init = (Stage_callback)stage_ecs_init;
     st->parent.update = (Stage_callback)stage_ecs_update;
     st->parent.shutdown = (Stage_callback)stage_ecs_shutdown;

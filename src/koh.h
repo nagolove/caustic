@@ -48,5 +48,4 @@ do {                                                            \
 #include "koh_table.h"
 #include "koh_team.h"
 #include "koh_visual_tools.h"
-#include "koh_wfc.h"
 //#include "koh_height_color.h"

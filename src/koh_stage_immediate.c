@@ -32,7 +32,7 @@ struct UI {
     Vector2   last_pos;
     Rectangle bound;
     Color     color_back, color_font, color_selected;
-    enum UI_LAYOUT  layout;
+    //enum UI_LAYOUT  layout;
 };
 
 static struct UI ui = {0};
@@ -43,7 +43,7 @@ void ui_begin(struct UI *ui, enum UI_LAYOUT layout, Rectangle bound) {
     ui->bound = bound;
 }
 
-void ui_end(struct UI *ui) {
+void ui_end(const struct UI *ui) {
 }
 
 bool ui_button(struct UI *ui, const char *caption) {
@@ -91,9 +91,14 @@ static void stage_immediate_enter(Stage_immediate *st) {
 
 Stage *stage_immediate_new(void) {
     Stage_immediate *st = calloc(1, sizeof(Stage_immediate));
-    st->parent.init = (Stage_callback)stage_immediate_init;
-    st->parent.update = (Stage_callback)stage_immediate_update;
-    st->parent.shutdown = (Stage_callback)stage_immediate_shutdown;
+    if (!st) {
+        printf("stage_immediate_new: allocation failed\n");
+        koh_fatal();
+    } else {
+        st->parent.init = (Stage_callback)stage_immediate_init;
+        st->parent.update = (Stage_callback)stage_immediate_update;
+        st->parent.shutdown = (Stage_callback)stage_immediate_shutdown;
+    }
     return (Stage*)st;
 }
 

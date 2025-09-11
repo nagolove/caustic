@@ -23,7 +23,7 @@ struct HashFunctionDef koh_hashers[] = {
     { .f = NULL, .fname = NULL },
 };
 
-const char *koh_hashers_name_by_funcptr(void *func_ptr) {
+const char *koh_hashers_name_by_funcptr(const void *func_ptr) {
     for (int i = 0; koh_hashers[i].f; i++) {
         if (koh_hashers[i].f == func_ptr)
             return koh_hashers[i].fname;

@@ -287,8 +287,8 @@ int trace(const char * format, ...) {
 
 int l_filter(lua_State *lua) {
     luaL_checktype(lua, 1, LUA_TSTRING);
-    const char *pattern = lua_tostring(lua, 1);
-    trace_filter_add(pattern);
+    const char *filter_pattern = lua_tostring(lua, 1);
+    trace_filter_add(filter_pattern);
     return 0;
 }
 

@@ -302,6 +302,7 @@ void btn_update(Button *btn) {
     }
 
     int index = -1;
+    assert(btn->ctrl.container);
     for (int i = 0; i < btn->ctrl.container->ctrlsnum; i++) {
         if (btn->ctrl.container->ctrls[i] == (Control*)btn) {
             index = i;

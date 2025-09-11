@@ -152,7 +152,7 @@ static inline Rectangle rect_extend(Rectangle rect, float delta) {
     };
 }
 
-static inline Color color_from_vec4(float c[4]) {
+static inline Color color_from_vec4(const float c[4]) {
     return (Color) {
         .r = c[0] * 255.,
         .g = c[1] * 255.,

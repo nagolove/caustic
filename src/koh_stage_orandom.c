@@ -21,10 +21,13 @@ void stage_orandom_shutdown(Stage_OuterRandom *st);
 
 Stage *stage_orandom_new(void) {
     Stage_OuterRandom *st = calloc(1, sizeof(Stage_OuterRandom));
+    if (!st) {
+        printf("stage_orandom_new: bad allocation\n");
+        koh_fatal();
+    }
     st->parent.init = (Stage_callback)stage_orandom_init;
     st->parent.update = (Stage_callback)stage_orandom_update;
     st->parent.shutdown = (Stage_callback)stage_orandom_shutdown;
-    /*st->parent.enter = (Stage_data_callback)stage_orandom_enter;*/
     return (Stage*)st;
 }
 

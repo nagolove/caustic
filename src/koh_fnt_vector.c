@@ -83,7 +83,7 @@ void fnt_vector_free(FntVector *fv) {
     free(fv);
 }
 
-FntVector *fnt_vector_new(const char *ttf_file, FntVectorOpts *opts) {
+FntVector *fnt_vector_new(const char *ttf_file, const FntVectorOpts *opts) {
     FntVector *fv = calloc(1, sizeof(*fv));
     assert(fv);
 

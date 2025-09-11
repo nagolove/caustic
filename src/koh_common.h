@@ -12,11 +12,36 @@
 #include <stdint.h>
 #include <stdio.h>
 
-
+//////////////////// NORETURN
+// кросс-языковая обёртка
+#if __STDC_VERSION__ >= 201112L
+#define NORETURN _Noreturn
+#elif defined(__cplusplus) && __cplusplus >= 201103L
+#define NORETURN [[noreturn]]
+#elif defined(__GNUC__) || defined(__clang__)
+#define NORETURN __attribute__((noreturn))
+#elif defined(_MSC_VER)
+#define NORETURN __declspec(noreturn)
+#else
+#define NORETURN
+#endif
 #if defined(PLATFORM_WEB)
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #endif
+/////////////////////
+
+/////////////////// THREAD_LOCAL
+#if __STDC_VERSION__ >= 201112L
+#define THREAD_LOCAL _Thread_local
+#elif defined(_MSC_VER)
+#define THREAD_LOCAL __declspec(thread)
+#elif defined(__GNUC__) || defined(__clang__)
+#define THREAD_LOCAL __thread
+#else
+#define THREAD_LOCAL /* no TLS */
+#endif
+///////////////////
 
 #ifndef M_PI
 # define M_PI		3.14159265358979323846	/* pi */
@@ -60,8 +85,8 @@ void koh_common_shutdown(void);
 //Color interp_color(Color a, Color b, float t);
 //Color height_color(float value);
 
-const char *color2str(Color color);
-const char *Color_to_str(Color color);
+const char *color2str(Color c);
+const char *Color_to_str(Color c);
 Font load_font_unicode(const char *fname, int size);
 
 // -1..1 -> 0..1
@@ -410,7 +435,7 @@ const char *koh_uniq_fname_str(const char *prefix, const char *suffix);
 // Луа таблицу. Возвращает указатель на статическую память.
 // Если строка не умещается в буфер предназначенный для возврата, то функция
 // возвращает NULL
-const char *float_arr_tostr(float *arr, size_t num);
+const char *float_arr_tostr(const float *arr, size_t num);
 
 // Работает аналогично float_arr_tostr().
 // Возвращает таблицу с таблицами { {0.f, 0.f}, {1.f, 1.f} } и так далле, что 
@@ -451,3 +476,5 @@ static inline u64 lfsr64_next(u64 lfsr) {
 
 bool bit_calculator_gui(const char *caption, u64 *value);
 const char *uint64_to_str_bin(uint64_t value);
+
+NORETURN void koh_fatal();

@@ -61,10 +61,18 @@ static const de_cp_type component_lifetime = {
 
 PartsEngine *parts_new() {
     struct PartsEngine *pe = calloc(1, sizeof(*pe));
+    if (!pe) {
+        printf("parts_new: bad calloc()\n");
+        koh_fatal();
+    }
     pe->ecs = de_ecs_new();
     pe->requests_num = 0;
     pe->requests_cap = 256;
     pe->requests = calloc(pe->requests_cap, sizeof(pe->requests[0]));
+    if (!pe->requests) {
+        printf("parts_new: bad calloc() on requests\n");
+        koh_fatal();
+    }
     return pe;
 }
 

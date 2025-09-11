@@ -33,9 +33,9 @@ void path_render(Path *p);
 
 // Возвращает истину если путь пройден
 bool path_process(Path *p);
-Vector2 path_get(Path *p);
-Vector2 path_get_dir(Path *p);
-float path_get_angle_rad(Path *p);
+Vector2 path_get(const Path *p);
+Vector2 path_get_dir(const Path *p);
+float path_get_angle_rad(const Path *p);
 
 void paths_init(void);
 void paths_shutdown(void);

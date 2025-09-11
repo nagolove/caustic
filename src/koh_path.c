@@ -117,7 +117,8 @@ bool path_process(Path *p) {
     return false;
 }
 
-Vector2 path_get(Path *p) {
+Vector2 path_get(const Path *p) {
+    assert(p);
     return p->point;
 }
 
@@ -134,11 +135,11 @@ void paths_shutdown(void) {
     }
 }
 
-Vector2 path_get_dir(Path *p) {
+Vector2 path_get_dir(const Path *p) {
     return p->dir;
 }
 
-float path_get_angle_rad(Path *p) {
+float path_get_angle_rad(const Path *p) {
     assert(p);
     return atan2(p->point.y, p->point.x);
 }

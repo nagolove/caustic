@@ -20,7 +20,7 @@ extern struct HashFunctionDef koh_hashers[];
 
 // Инициализация ГПСЧ для koh_hasher_mum()
 void koh_hashers_init();
-const char *koh_hashers_name_by_funcptr(void *func_ptr);
+const char *koh_hashers_name_by_funcptr(const void *func_ptr);
 
 // XXX: mum лучше не использовать
 Hash_t koh_hasher_mum(const void *data, size_t len);

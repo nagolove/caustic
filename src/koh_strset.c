@@ -155,7 +155,7 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
     if (strset_verbose) {
         printf(
             "rec_shift: index %llu, hashi %llu\n",
-            (long long)index, (long long)hashi
+            (unsigned long long)index, (unsigned long long)hashi
         );
     }
 
@@ -164,7 +164,7 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
         if (strset_verbose) {
             printf(
                 "rec_shift: index %llu, taken %s, key '%s'\n",
-                (long long)index, 
+                (unsigned long long)index, 
                 set->arr[index].taken ? "true" : "false",
                 set->arr[index].key
             );
@@ -189,7 +189,7 @@ static void rec_shift(StrSet *set, Hash_t index, Hash_t hashi) {
 
 void _strset_remove(StrSet *set, Hash_t remove_index) {
     assert(set);
-    assert(remove_index >= 0 && remove_index < set->cap);
+    assert(remove_index < set->cap);
 
     Hash_t hashi = set->arr[remove_index].hash % set->cap;
     if (set->arr[remove_index].key) {

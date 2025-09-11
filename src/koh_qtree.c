@@ -166,6 +166,7 @@ void qtree_shutdown(struct QTree *qt) {
 }
 
 void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
+    assert(qt);
     trace("qtree_fill:\n");
 
     if (!qt->root) {
@@ -207,6 +208,11 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
         struct QTreeNode *old_root = qt->root;
 
         qt->root = calloc(1, sizeof(*qt->root));
+        if (!qt->root) {
+            printf("qtree_fill: bad root allocation\n");
+            koh_fatal();
+        }
+        assert(qt->root->nodes);
         qt->root->nodes[quadrant] = old_root;
 
         qt->r.x += sx;

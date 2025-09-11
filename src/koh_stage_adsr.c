@@ -25,11 +25,15 @@ static Font fnt;
 
 Stage *stage_adsr_new(HotkeyStorage *hk_store) {
     Stage_ADSR *st = calloc(1, sizeof(Stage_ADSR));
-    st->hk_store = hk_store;
-    st->parent.init = (Stage_callback)stage_adsr_init;
-    st->parent.update = (Stage_callback)stage_adsr_update;
-    st->parent.shutdown = (Stage_callback)stage_adsr_shutdown;
-    /*st->parent.enter = (Stage_data_callback)stage_adsr_enter;*/
+    if (!st) {
+        printf("stage_adsr_new: allocation failed\n");
+        koh_fatal();
+    } else {
+        st->hk_store = hk_store;
+        st->parent.init = (Stage_callback)stage_adsr_init;
+        st->parent.update = (Stage_callback)stage_adsr_update;
+        st->parent.shutdown = (Stage_callback)stage_adsr_shutdown;
+    }
     return (Stage*)st;
 }
 
@@ -127,7 +131,7 @@ static void view_draw(struct ADSR_view *view, struct ADSR *env) {
     DrawRectangleLinesEx(rect, thick, BLACK);
 }
 
-static void adsr_draw_params(struct ADSR *adsr, Vector2 pos) {
+static void adsr_draw_params(const ADSR *adsr, Vector2 pos) {
     char buf[256] = {0};
     sprintf(buf, "atack amplitude %f", adsr->amp_attack);
     DrawTextEx(fnt, buf, pos, fnt.baseSize, 0, BLACK);
@@ -316,9 +320,4 @@ void stage_adsr_shutdown(Stage_ADSR *st) {
         view_shutdown(&st->views[q]);
     }
 }
-
-void stage_adsr_enter(Stage_ADSR *st, void *data) {
-    printf("stage_adsr_enter\n");
-}
-
 

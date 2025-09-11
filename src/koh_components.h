@@ -132,7 +132,7 @@ typedef struct Vec2Range {
 VelRot make_random_velrot(WorldCtx *wctx);
 VelRot make_random_velrot2(WorldCtx *wctx, FloatRange w, FloatRange vel);
 
-de_entity spawn_poly(WorldCtx *ctx, struct PolySetup setup);
+de_entity spawn_poly(WorldCtx *wctx, struct PolySetup setup);
 // Если _e == NULL, то создается новаю сущность. Иначе используется переданная.
 e_id spawn_poly2(WorldCtx *wctx, struct PolySetup2 setup, e_id *_e);
 
@@ -150,11 +150,11 @@ void spawn_triangles(
     WorldCtx *wctx, TriangleSetup setup, int num, de_entity *ret
 );
 
-de_entity spawn_segment(WorldCtx *ctx, SegmentSetup *setup);
-e_id spawn_segment2(WorldCtx *ctx, SegmentSetup2 *setup);
+de_entity spawn_segment(WorldCtx *wctx, SegmentSetup *setup);
+e_id spawn_segment2(WorldCtx *wctx, SegmentSetup2 *setup);
 
 
-de_entity spawn_triangle(WorldCtx *ctx, struct TriangleSetup setup);
+de_entity spawn_triangle(WorldCtx *wctx, struct TriangleSetup setup);
 b2BodyId body_create(WorldCtx *wctx, b2BodyDef *def);
 
 void spawn_borders(WorldCtx *wctx, de_ecs *r, de_entity entts[4], int gap);
@@ -300,7 +300,7 @@ inline static void world_shape_render_circle2(
 ) {
     struct ShapeRenderOpts *r_opts = render_opts_get2(shape_id, r);
 
-    b2Circle circle = b2Shape_GetCircle(shape_id);
+    b2Circle sh_circle = b2Shape_GetCircle(shape_id);
     b2BodyId body_id = b2Shape_GetBody(shape_id);
 
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
@@ -311,7 +311,7 @@ inline static void world_shape_render_circle2(
 
     // Преобразования координаты из локальных в глобальные
     Vector2 center = b2Vec2_to_Vector2(
-        b2Body_GetWorldPoint(body_id, circle.center)
+        b2Body_GetWorldPoint(body_id, sh_circle.center)
     );
 
     Color color = r_opts->color;
@@ -381,9 +381,9 @@ inline static void world_shape_render_circle2(
 
         /*DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);*/
     } else 
-        DrawCircleV(center, circle.radius, color);
+        DrawCircleV(center, sh_circle.radius, color);
 
-    DrawCircleV(center, circle.radius, GRAY);
+    DrawCircleV(center, sh_circle.radius, GRAY);
 }
 
 inline static void world_shape_render_circle(
@@ -391,7 +391,7 @@ inline static void world_shape_render_circle(
 ) {
     struct ShapeRenderOpts *r_opts = render_opts_get(shape_id, r);
 
-    b2Circle circle = b2Shape_GetCircle(shape_id);
+    b2Circle sh_circle = b2Shape_GetCircle(shape_id);
     b2BodyId body_id = b2Shape_GetBody(shape_id);
 
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
@@ -403,7 +403,7 @@ inline static void world_shape_render_circle(
 
     // Преобразования координаты из локальных в глобальные
     Vector2 center = b2Vec2_to_Vector2(
-        b2Body_GetWorldPoint(body_id, circle.center)
+        b2Body_GetWorldPoint(body_id, sh_circle.center)
     );
 
     Color color = r_opts->color;
@@ -473,9 +473,9 @@ inline static void world_shape_render_circle(
 
         /*DrawTexturePro(*r_opts->tex, src, dst, origin, rot, color);*/
     } else 
-        DrawCircleV(center, circle.radius, color);
+        DrawCircleV(center, sh_circle.radius, color);
 
-    DrawCircleV(center, circle.radius, GRAY);
+    DrawCircleV(center, sh_circle.radius, GRAY);
 }
 
 inline static void world_shape_render_poly2(

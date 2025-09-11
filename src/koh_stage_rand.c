@@ -21,6 +21,10 @@ const int size = 4096 * 3;
 
 Stage *stage_rand_new(void) {
     Stage_rand *st = calloc(1, sizeof(*st));
+    if (!st) {
+        printf("stage_rand_new: bad allocation\n");
+        koh_fatal();
+    }
     st->parent.init = (Stage_callback)stage_rand_init;
     st->parent.update = (Stage_callback)stage_rand_update;
     st->parent.shutdown = (Stage_callback)stage_rand_shutdown;

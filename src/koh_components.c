@@ -1642,6 +1642,8 @@ void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx) {
     //trace("sensors_step: sizeof(shape_visitor) %zu\n", sizeof(events.beginEvents[0].visitorShapeId));
 
     b2ShapeId to_remove[events.beginCount + 1];
+    memset(to_remove, 0, sizeof(to_remove));
+
     size_t to_remove_num = 0;
 
     for (int i = 0; i < events.beginCount; i++)

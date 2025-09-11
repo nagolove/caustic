@@ -54,12 +54,12 @@ static int l_dev_draw_trace_set_capacity(lua_State *lua) {
     }
 
     const char *key = lua_tostring(lua, 1);
-    int cap = floor(lua_tonumber(lua, 2));
+    int capacity = floor(lua_tonumber(lua, 2));
 
-    if (cap < 0)
+    if (capacity < 0)
         return 0;
 
-    dev_draw_trace_set_capacity(key, cap);
+    dev_draw_trace_set_capacity(key, capacity);
     return 0;
 }
 
@@ -107,9 +107,9 @@ static int l_dev_draw_reset(lua_State *l) {
 }
 
 void dev_draw_trace_set_capacity(const char *key, int cap) {
-    struct Trace *trace = htable_get(traces, key, strlen(key) + 1, NULL);
-    if (trace && cap != trace->cap) {
-        trace_shutdown(trace);
+    struct Trace *tr = htable_get(traces, key, strlen(key) + 1, NULL);
+    if (tr && cap != tr->cap) {
+        trace_shutdown(tr);
         struct Trace tmp_trace = trace_init(cap);
         htable_add(
             traces, key, strlen(key) + 1, 
@@ -120,7 +120,7 @@ void dev_draw_trace_set_capacity(const char *key, int cap) {
 
 static struct Trace trace_init(int cap) {
     assert(cap > 0);
-    struct Trace trace = {
+    struct Trace tr = {
         .cap = cap,
         .i = 0,
         .j = 0,
@@ -129,7 +129,7 @@ static struct Trace trace_init(int cap) {
         .drawers = calloc(cap, sizeof(TraceFunc)),
         .datas = calloc(cap, sizeof(void*)),
     };
-    return trace;
+    return tr;
 }
 
 static void trace_shutdown(struct Trace *trace) {
@@ -229,7 +229,9 @@ void dev_draw_shutdown(void) {
     }
 }
 
-static void trace_push_func(struct Trace *tr, TraceFunc drawer, void *data, int size) {
+static void trace_push_func(
+    struct Trace *tr, TraceFunc drawer, void *data, int size
+) {
     trace("trace_push_func:\n");
     /*
     if (data) {
@@ -277,8 +279,8 @@ void dev_draw_push_trace(TraceFunc func, void *data, int size, const char *key) 
         trace_push_func(exist_trace, func, data, size);
     else {
         trace("dev_draw_push_trace: new trace '%s' allocated\n", key);
-        struct Trace trace = trace_init(DEFAULT_TRACE_CAP);
-        trace_push_func(&trace, func, data, size);
+        struct Trace tr = trace_init(DEFAULT_TRACE_CAP);
+        trace_push_func(&tr, func, data, size);
         htable_add(traces, key, strlen(key) + 1, &trace, sizeof(trace));
     }
 
@@ -299,6 +301,10 @@ void dev_draw_push(void (*func), void *data, int size) {
     assert(size >= 0);
     if (data) {
         void *data_copy = calloc(1, size);
+        if (!data_copy) {
+            printf("dev_draw_push: bad allocation\n");
+            koh_fatal();
+        }
         memcpy(data_copy, data, size);
         dev.datas[dev.num] = data_copy;
     } else 
@@ -317,22 +323,22 @@ static HTableAction iter_traces_draw(
     const void *key, int key_len, void *value, int value_len, void *data
 ) {
 
-    struct Trace *trace = value;
+    struct Trace *tr = value;
     assert(trace);
 
-    if (!trace->enabled)
+    if (!tr->enabled)
         return HTABLE_ACTION_NEXT;
 
     //return HTABLE_ACTION_NEXT;
 
-    //printf("i, cap %d, %d\n", trace->i, trace->cap);
-    for(int k = trace->i; k < trace->cap; k++) {
-        if (trace->drawers[k])
-            trace->drawers[k](trace->datas[k]);
+    //printf("i, cap %d, %d\n", tr->i, tr->cap);
+    for(int k = tr->i; k < tr->cap; k++) {
+        if (tr->drawers[k])
+            tr->drawers[k](tr->datas[k]);
     }
-    for(int k = trace->j; k < trace->i; k++) {
-        if (trace->drawers[k])
-            trace->drawers[k](trace->datas[k]);
+    for(int k = tr->j; k < tr->i; k++) {
+        if (tr->drawers[k])
+            tr->drawers[k](tr->datas[k]);
     }
 
     return HTABLE_ACTION_NEXT;
@@ -362,7 +368,7 @@ void dev_draw_enable(bool state) {
 struct Label {
     Font    fnt;
     Vector2 text_size;
-    char    *msg;
+    //char    *msg;
     Color   color;
     Vector2 pos;
 };
@@ -470,10 +476,10 @@ void dev_label_group_pop() {
 void dev_draw_trace_enable(const char *key, bool state) {
     if (!key) return;
 
-    struct Trace *trace = htable_get(traces, key, strlen(key) + 1, NULL);
+    struct Trace *tr = htable_get(traces, key, strlen(key) + 1, NULL);
 
-    if (trace)
-        trace->enabled = state;
+    if (tr)
+        tr->enabled = state;
 }
 
 int dev_draw_traces_get_num() {
@@ -514,8 +520,16 @@ struct DevDraw {
 
 DevDraw *dd_new() {
     DevDraw *dd = calloc(1, sizeof(*dd));
+    if (!dd) {
+        printf("dd_new: bad allocation\n");
+        koh_fatal();
+    }
     dd->cap = 2048;
     dd->traces = calloc(dd->cap, sizeof(dd->traces[0]));
+    if (!dd->traces) {
+        printf("dd_new: traces allocation failed\n");
+        koh_fatal();
+    }
     return dd;
 }
 

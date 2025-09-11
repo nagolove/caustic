@@ -42,6 +42,10 @@ static void reload_shader(const char *fname, void *data) {
 
 koh_Outline *koh_outline_new(struct koh_OutlineDef def) {
     struct koh_Outline *new = calloc(1, sizeof(koh_Outline));
+    if (!new) {
+        printf("koh_outline_new: bad calloc()\n");
+        koh_fatal();
+    }
     vec4_from_color(new->color, def.color);
     new->size = def.size;
     reload_shader(frag_path_outline, new);

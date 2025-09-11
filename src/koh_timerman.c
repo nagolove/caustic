@@ -275,7 +275,7 @@ void timerman_window_gui(struct TimerMan *tm) {
 
         for (int row = 0; row < tm->timers_num; ++row) {
             char line[64] = {0};
-            struct Timer * tmr = &tm->timers[row];
+            const struct Timer * tmr = &tm->timers[row];
 
             igTableNextRow(0, 0);
 
@@ -433,7 +433,7 @@ TimerDef timer_def(TimerDef td, const char *fmt, ...) {
     return tmp;
 }
 
-bool timerman_valid(TimerMan *mv, timer_id_t id) {
+bool timerman_valid(const TimerMan *mv, timer_id_t id) {
     return false;
 }
 

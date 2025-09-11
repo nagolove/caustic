@@ -171,7 +171,7 @@ void metaloader_set_fmt(
     MetaLoader *ml,
     Rectangle rect,
     const char *fname_noext, 
-    const char *objname, ...
+    const char *objname_fmt, ...
 );
 __attribute__((__format__ (__printf__, 3, 4)))
 void metaloader_remove_fmt(
@@ -210,7 +210,7 @@ struct MetaLoaderObjects {
 struct MetaLoaderObjects metaloader_objects_get(
     struct MetaLoader *ml, const char *fname_noext
 );
-void metaloader_objects_shutdown(struct MetaLoaderObjects *object);
+void metaloader_objects_shutdown(struct MetaLoaderObjects *objects);
 
 struct MetaLoaderObjects2 {
     int                     num;
@@ -222,7 +222,7 @@ struct MetaLoaderObjects2 {
 struct MetaLoaderObjects2 metaloader_objects_get2(
     struct MetaLoader *ml, const char *fname_noext
 );
-void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *object);
+void metaloader_objects_shutdown2(struct MetaLoaderObjects2 *objects);
 
 struct MetaLoaderObject2Str {
     char  *s;

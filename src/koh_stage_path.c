@@ -21,10 +21,14 @@ void stage_path_shutdown(Stage_Path *st);
 
 Stage *stage_path_new(void) {
     Stage_Path *st = calloc(1, sizeof(Stage_Path));
-    st->parent.init = (Stage_callback)stage_path_init;
-    st->parent.update = (Stage_callback)stage_path_update;
-    st->parent.shutdown = (Stage_callback)stage_path_shutdown;
-    /*st->parent.enter = (Stage_data_callback)stage_path_enter;*/
+    if (!st) {
+        printf("stage_path_new: calloc() failed\n");
+        koh_fatal();
+    } else {
+        st->parent.init = (Stage_callback)stage_path_init;
+        st->parent.update = (Stage_callback)stage_path_update;
+        st->parent.shutdown = (Stage_callback)stage_path_shutdown;
+    }
     return (Stage*)st;
 }
 
@@ -48,9 +52,4 @@ void stage_path_shutdown(Stage_Path *st) {
     printf("stage_path_shutdown\n");
     path_shutdown(&st->path);
 }
-
-void stage_path_enter(Stage_Path *st, void *data) {
-    printf("stage_path_enter\n");
-}
-
 

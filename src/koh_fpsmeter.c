@@ -172,7 +172,7 @@ static inline void draw_segment(
     Vector2 *pos, Color *color, int *prev_fps, float linethick, 
     const int *k, float scale
 ) {
-    struct Meter *meter = &ctx.meters[*k];
+    const struct Meter *meter = &ctx.meters[*k];
     int cur_fps = meter->fps;
     float newx = pos->x + dx;
 

@@ -222,7 +222,7 @@ static void square_value(DAS_Context_mt *ctx, int i, int j, double *min, double 
 
     struct {
         int i, j;
-    } corners[4] = {
+    } const corners[4] = {
         { 
             .i = i,
             .j = j
@@ -263,7 +263,7 @@ static void diamond_value(
 
     struct {
         int i, j;
-    } corners[4] = {
+    } const corners[4] = {
         {
             .i = i, 
             .j = j - half
@@ -448,7 +448,7 @@ static bool dasmt_eval(DAS_Context_mt *ctx, double flat) {
     }
 
     for (int i = 0; i < ctx->threadsnum; ++i) {
-        Thread_Context *tx = &ctx->threads[i];
+        const Thread_Context *tx = &ctx->threads[i];
         thrd_join(tx->thrd, NULL);
     }
 
@@ -502,7 +502,7 @@ int dasmt_get_mapsize(DAS_Context_mt *ctx) {
 char *dasmt_get_state(DAS_Context_mt *ctx) {
     assert(ctx);
     static char buff[200] = {0};
-    sprintf(buff, "%d, %d", ctx->mapn, ctx->rnd.a);
+    sprintf(buff, "%d, %u", ctx->mapn, ctx->rnd.a);
     return buff;
 }
 

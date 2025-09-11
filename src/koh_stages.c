@@ -308,6 +308,7 @@ _exit:
 }
 
 const char *stage_active_name_get(StagesStore *ss) {
+    assert(ss);
     if (ss->cur) {
         static char ret_buf[MAX_STAGE_NAME] = {0};
         strcpy(ret_buf, ss->cur->name);

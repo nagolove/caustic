@@ -48,7 +48,7 @@ enum RegexEngine {
 struct FilesSearchResultInternal {
     enum RegexEngine regex_engine;
     union {
-        struct small_regex  *small;
+        //struct small_regex  *small;
         struct {
             pcre2_code          *r;
             pcre2_match_data    *match_data;
@@ -77,7 +77,7 @@ void custom_log(int msgType, const char *text, va_list args)
 {
     char timeStr[64] = { 0 };
     time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
+    const struct tm *tm_info = localtime(&now);
 
     strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
     printf("[%s] ", timeStr);
@@ -681,7 +681,7 @@ const char * remove_suffix(const char *str) {
 const char *get_basename(char *path) {
     static char buf[512] = {0};
     memset(buf, 0, sizeof(buf));
-    char* ret = basename((char*)path);
+    const char* ret = basename((char*)path);
     if (ret)
         strncpy(buf, ret, sizeof(buf) - 1);
     return buf;
@@ -767,7 +767,7 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
     bool modpressed =   cps->modifier_key_down ? 
                         IsKeyDown(cps->modifier_key_down) : true;
     bool wheel_in_eps = mouse_wheel > EPSILON || mouse_wheel < -EPSILON;
-    float dscale_value = cps->dscale_value;
+    float dscale_value_loc = cps->dscale_value;
 
     if (!isfinite(cam->zoom)) {
         cam->zoom = zoom_min;
@@ -775,14 +775,14 @@ bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) {
 
     if (IsKeyDown(cps->boost_modifier_key_down)) {
         //trace("koh_camera_process_mouse_scale_wheel: boosted\n");
-        dscale_value *= dscale_value_boost;
+        dscale_value_loc *= dscale_value_boost;
     }
     if (cam && modpressed && wheel_in_eps) {
         /*trace(*/
             /*"koh_camera_process_mouse_scale_wheel: mouse_wheel %f\n",*/
             /*mouse_wheel*/
         /*);*/
-        const float d = copysignf(dscale_value, mouse_wheel);
+        const float d = copysignf(dscale_value_loc, mouse_wheel);
         /*trace("koh_camera_process_mouse_scale_wheel: d %f\n", d);*/
 
 
@@ -1607,9 +1607,9 @@ void koh_backtrace_print() {
 #include <execinfo.h>
 void koh_backtrace_print() {
     int num = 100;
-    void *trace[num];
-    int size = backtrace(trace, num);
-    backtrace_symbols_fd(trace, size, STDOUT_FILENO);
+    void *traces[num];
+    int size = backtrace(traces, num);
+    backtrace_symbols_fd(traces, size, STDOUT_FILENO);
 }
 
 /*
@@ -1901,7 +1901,7 @@ static const char *extensions[] = {
 
 bool koh_is_fname_image_ext(const char *fname) {
     for (const char **ext = extensions; *ext; ext++) {
-        char *pos = strstr(fname, *ext);
+        const char *pos = strstr(fname, *ext);
         if (pos && strlen(*ext) == strlen(pos) && strcmp(*ext, pos) == 0) {
             return true;
         }
@@ -2091,9 +2091,9 @@ void koh_qsort(
         if (i >= j) break;
 
         char tmp[size];
-        memcpy(tmp, arr + i * size, size);
-        memcpy(arr + i * size, arr + j * size, size);
-        memcpy(arr + j * size, tmp, size);
+        memcpy(tmp, (char*)arr + i * size, size);
+        memcpy((char*)arr + i * size, arr + j * size, size);
+        memcpy((char*)arr + j * size, tmp, size);
     }
 
     koh_qsort(_arr, i, size, cmp, ud);
@@ -2368,7 +2368,7 @@ void local_storage_save(const char *key, const char *value) {
 
 const char *koh_uniq_fname_str(const char *prefix, const char *suffix) {
     time_t rawtime;
-    struct tm *timeinfo;
+    const struct tm *timeinfo;
     static char buf_datetime[128] = {};
     memset(buf_datetime, 0, sizeof(buf_datetime));
 
@@ -2412,7 +2412,7 @@ bool koh_search_files_concat(FilesSearchResult *out, FilesSearchResult add) {
     return true;
 }
 
-const char *float_arr_tostr(float *arr, size_t num) {
+const char *float_arr_tostr(const float *arr, size_t num) {
     static char slots[5][256] = {};
     static int index = 0;
     index = (index + 1) % 5;
@@ -2612,4 +2612,10 @@ bool bit_calculator_gui(const char *caption, u64 *value) {
     }
 
     return false;
+}
+
+NORETURN void koh_fatal() {
+    // TODO: Разные варинаты - для win, android
+    // Вызов abort() в отладочном режиме
+    exit(EXIT_FAILURE);
 }

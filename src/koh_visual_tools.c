@@ -821,7 +821,6 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
     assert(internal);
     Vector2 mp = mouse_with_cam(cam);
     internal->selected_point_index = -1;
-    bool removed = false;
 
     bool has_drag = internal->drag_index != -1;
     Vector2 *points = internal->points;
@@ -844,6 +843,7 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
         }
     } else {
 
+        bool removed = false;
         internal->drag_index = -1;
         // TODO: Не проверять для каждой точки, использовать какую-то 
         // продвинутую структуру данных

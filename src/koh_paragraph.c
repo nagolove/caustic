@@ -107,8 +107,8 @@ void paragraph_build(Paragraph *prgh, Font fnt) {
         char spaces[256 * 2] = {0};
         //int spacesnum = longest - strlen(prgh->lines[i]);
         int spacesnum = longest - u8_codeptlen(prgh->lines[i]);
-        for(int j = 0; j < spacesnum; j++) {
-            spaces[j] = ' ';
+        for(int _j = 0; j < spacesnum; j++) {
+            spaces[_j] = ' ';
         }
         snprintf(
             prgh->transformed_lines[j],

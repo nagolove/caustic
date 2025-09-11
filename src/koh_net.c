@@ -160,7 +160,7 @@ int server_worker(Net *n) {
     server->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     struct sockaddr_in serv_addr = {0};
 
-    printf("serving on %s:%d\n", def->addr, def->port);
+    printf("serving on %s:%u\n", def->addr, def->port);
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(def->addr);
@@ -298,7 +298,7 @@ int client_worker(Net *n) {
     Client_def *def = n->def;
     Client *client = (Client*)n->payload;
 
-    printf("connection to %s:%d\n", def->addr, def->port);
+    printf("connection to %s:%u\n", def->addr, def->port);
 
     bool shutdown = false;
     

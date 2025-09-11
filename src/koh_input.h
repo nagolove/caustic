@@ -34,6 +34,6 @@ typedef struct InputGamepadDrawerSetup {
 } InputGamepadDrawerSetup;
 
 InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup);
-void input_gp_free(InputGamepadDrawer *kb);
-void input_gp_update(InputGamepadDrawer *kb);
+void input_gp_free(InputGamepadDrawer *gp);
+void input_gp_update(InputGamepadDrawer *gp);
 /*void input_gp_gui_update(InputGamepadDrawer *kb);*/

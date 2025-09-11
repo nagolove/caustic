@@ -91,7 +91,7 @@ char **b2WorldDef_to_str(b2WorldDef wdef, bool lua);
 char ** b2Counters_to_str(b2WorldId world, bool lua);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
 char **b2BodyDef_to_str(b2BodyDef bd);
-char **b2BodyId_to_str(b2BodyId id);
+char **b2BodyId_to_str(b2BodyId bid);
 const char *b2BodyId_id_to_str(b2BodyId id);
 __attribute_deprecated__
 const char *b2ShapeId_id_to_str(b2ShapeId id);
@@ -207,7 +207,7 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     if (zoom <= 0.01f)
         zoom = 0.1;
 
-    float zoom_inv = 1. / cam->zoom;
+    float zoom_inv = 1. / zoom;
     float w = GetScreenWidth(), h = GetScreenHeight();
     Vector2 offset = cam->offset;
     struct b2AABB aabb;
@@ -295,7 +295,7 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
 ]]
 */
 char *b2QueryFilter_2str_alloc(b2QueryFilter filter);
-b2QueryFilter b2QueryFilter_from_str(const char *str, bool *is_ok);
+b2QueryFilter b2QueryFilter_from_str(const char *tbl_str, bool *is_ok);
 
 typedef struct WorldCtxSetup {
     xorshift32_state *xrng;

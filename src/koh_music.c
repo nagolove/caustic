@@ -26,10 +26,12 @@
 
 //#define MUSIC_RAY
 
+#ifdef MUSIC_RAY
 struct Playlist {
     Music   *tracks;
     int     tracks_num, current;
 };
+#endif
 
 static bool is_inited = false;
 #ifdef MUSIC_SUNVOX
