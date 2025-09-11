@@ -4453,33 +4453,20 @@ function actions.mmap(_)
 end
 
 function actions.cppcheck(_args)
-   local cmd = "cppcheck -j6 --template=gcc --platform=unix64 " ..
+   mkdir("cppcheck-cache")
+
+   local cmd = "cppcheck -j6 " ..
+   " --template=gcc " ..
+   " --platform=unix64 " ..
    " --enable=warning,style,performance,portability,information " ..
-   " --enable=warning,style,performance,portability " ..
-   " --library=posix,windows,sdl,opengl,emscripten,lua,opengl,pcre,sdl,windows " ..
-   " --inconclusive --std=c11 --language=c --quiet "
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   " --library=posix,emscripten,lua,opengl,pcre,sdl,windows " ..
+   " --suppress=constParameterPointer " ..
+   " --suppress=constParameterCallback " ..
+   " --suppress=checkersReport " ..
+   " --std=c11 --language=c --quiet " ..
+   " --check-level=exhaustive " ..
+   " --cppcheck-build-dir=cppcheck-cache " ..
+   " --max-ctu-depth=4 "
 
 
 
