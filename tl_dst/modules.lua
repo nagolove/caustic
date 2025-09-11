@@ -218,11 +218,15 @@ local function build_llama(_, _)
 end
 
 local function build_munit_common(_, dep)
-   local flags = ""
+   local flags = " -std=c11 -fPIC "
    if dep.target == "wasm" then
-      flags = "-pthread"
+      flags = flags .. " -pthread "
    end
-   cmd_do(compiler[dep.target] .. " -c munit.c " .. flags)
+   local cmd = compiler[dep.target] .. " -c munit.c " .. flags
+
+
+
+   cmd_do(cmd)
    cmd_do(ar[dep.target] .. " rcs libmunit.a munit.o")
 end
 
