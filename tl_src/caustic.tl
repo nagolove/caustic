@@ -4453,35 +4453,22 @@ function actions.mmap(_: Args)
 end
 
 function actions.cppcheck(_args: Args)
-    local cmd = "cppcheck -j6 --template=gcc --platform=unix64 "
+    mkdir("cppcheck-cache")
+
+    local cmd = "cppcheck -j6 "
+        .. " --template=gcc "
+        .. " --platform=unix64 "
         .. " --enable=warning,style,performance,portability,information "
-        .. " --enable=warning,style,performance,portability "
-        .. " --library=posix,windows,sdl,opengl,emscripten,lua,opengl,pcre,sdl,windows "
-        .. " --inconclusive --std=c11 --language=c --quiet "
+        .. " --library=posix,emscripten,lua,opengl,pcre,sdl,windows "
+        .. " --suppress=constParameterPointer "
+        .. " --suppress=constParameterCallback "
+        .. " --suppress=checkersReport " -- упрямая строчка в конце отчета
+        .. " --std=c11 --language=c --quiet "
+        .. " --check-level=exhaustive "
+        .. " --cppcheck-build-dir=cppcheck-cache "
+        .. " --max-ctu-depth=4 "
+        --.. " --inconclusive " -- выводить неуверенные замечания
         --.. " --addon=threadsafety.py "
-
-
---cppcheck-build-dir=<dir> — кэш/билд-каталог cppcheck. Дает инкрементальный
---анализ и включает межмодульные проверки (например, unusedFunction) даже с
---многопоточностью. Очень полезно в больших игровых кодовых базах. 
-
-
-    --[[
---]]
-
-    --[[
-
---suppress=<id>:<file>:<line> и --suppressions-list=<file> — основной способ.
---Поддерживаются маски */?/**. 
-
---inline-suppr + комментарии // cppcheck-suppress id или блоки //
---cppcheck-suppress-begin [id1,id2] … -end — когда нужно приглушить конкретный
---участок. Добавляйте комментарии-обоснования (есть поддержка REMARK). 
-
---suppress-xml=FILE — если удобно хранить подавления в XML с дополнительными
-    --]]
-
---max-ctu-depth=4
 
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target: Target = 'linux'
