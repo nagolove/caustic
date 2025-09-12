@@ -12,6 +12,7 @@ extern "C" {
 #define XXH_STATIC_LINKING_ONLY /* access advanced declarations */
 #define XXH_IMPLEMENTATION 
 
+#include "xxhash.h"  
 #include "hnswlib/hnswlib.h"  // Подключаем библиотеку hnswlib (поиск ближайших соседей)
 #include <atomic>
 #include <cmath>
@@ -23,8 +24,8 @@ extern "C" {
 #include <string>
 #include <threads.h>
 #include <unistd.h>
-#include <xxhash.h>  // Убедись, что путь правильный
 #include "linenoise.hpp"
+
 
 #define MAX_TASKS   256
 #define MAX_ARGS    128
@@ -712,7 +713,6 @@ static int l_chunk_raw(lua_State *L) {
     const char *p = index_chunk_raw(ud->ptr, (u64)(i - 1));
     if (!p) {
         //lua_pushnil(L);
-        x
         lua_pushstring(L, "HELLO");
         return 1;
     }

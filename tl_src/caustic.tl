@@ -35,8 +35,8 @@ package.path =	home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
                e.path_caustic .. "/" .. e.path_rel_third_party .. "/json.lua/?.lua;" ..  package.path
 
 package.cpath = 
-        --path_caustic .. "/koh_src/libkoh.so;" ..
         e.path_caustic .. "/koh_src/lib?.so;" ..
+        e.path_caustic .. "/lib?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
@@ -59,6 +59,7 @@ local linenoise  = require 'linenoise'
 local json       = require "dkjson"
 local gsub       = string.gsub
 local insert     = table.insert
+local concat     = table.concat
 local tabular    = require "tabular".show
 local upper      = string.upper
 local lfs        = require 'lfs'
@@ -166,14 +167,6 @@ end
 local M = require 'modules'
 local mods = M.modules_instance(e)
 
---for x in mods.iter() do
---    print(inspect(x))
---end
-
---os.exit(1)
---print("os.exit(1)")
-
-
 if verbose then
     tabular(e.path_caustic)
     tabular(e.path_rel_third_party)
@@ -186,24 +179,44 @@ end
 
 local record Cfg
     -- {{{
+
     dependencies: {string}
     not_dependencies: {string}
+
+    -- путь к каталогу исходников, может отсутствовать, тогда ищется в .
     src: string
+
+    -- артефакт сборки
     artifact: string
+
     flags: {string}
+
     main: string
+
+    -- тип цели
     kind: Kind
-    -- Выполняется перед компиляцией
+
+    -- Выполняется перед компиляцией, может отсутствовать
     codegen: {Codegen}
-    -- Дефайны препроцессора, применяемые только к релизной сборке
+
     -- Пары -Dключ=значение будут поданы компилятору
-    -- Позволяет отключить DEBUG режим
+    -- Дефайны препроцессора, применяемые всегда
     common_define: {string: string}
+    -- Дефайны препроцессора, применяемые только к релизной сборке
     release_define: {string: string}
     -- Дефайны препроцессора, применяемые только к отладочной сборке
     debug_define: {string: string}
+
     -- шаблоны файлов, которые исключаются из процесса сборки
-    exclude: {string}
+    exclude_files: {string}
+
+    -- каталоги включаемых файлов
+    includes: {string}
+    -- каталоги с библиотеками статическими
+    libsdirs: {string}
+    -- список -lбиблиотек для связывания
+    libs: {string}
+
     record Codegen
         -- Вызов этой функции если есть
         external: function()
@@ -215,40 +228,11 @@ local record Cfg
         on_write: function(capture: string): {string}
         on_finish: function() -- XXX: Почему только для отладки?
     end
+
     -- }}}
 end
 
 -- {{{ functions 
-
-local function _write_file_bak(fname: string, data: string, bak_cnt: integer)
-    local b = io.open(fname, "r")
-
-    local max_bak <const> = 3
-    if bak_cnt >= max_bak then
-        local baks = fname
-        for _ = 1, max_bak do
-            baks = baks .. ".bak"
-        end
-        local cmd = format("rm %s", baks) 
-        os.execute(cmd)
-    end
-
-    if b then
-        local t: string = b:read("all")
-        b:close()
-        _write_file_bak(fname .. ".bak", t, bak_cnt + 1)
-    end
-
-    local f = io.open(fname, "w")
-    if f then
-        f:write(data)
-        f:close()
-    end
-end
-
-local function write_file_bak(fname: string, data: string)
-    _write_file_bak(fname, data, 0)
-end
 
 --local cmd_do: function(cmd: string|{string}) = cmd_do_uv
 
@@ -372,6 +356,7 @@ end
 local enum Kind
     "app"
     "shared"
+    -- TODO: сделать компиляцию libcaustic.a через bld.lua и project_link(), а koh_link() удалить
     "static"
 end
 
@@ -671,8 +656,11 @@ local function gather_libdirs_abs(cfg: Cfg, deps: {Dependency}): {string}
     assert(deps)
 
     local no_deps: {string: boolean} = {}
-    for _, depname in ipairs(cfg.not_dependencies) do
-        no_deps[depname] = true
+
+    if cfg.not_dependencies then
+        for _, depname in ipairs(cfg.not_dependencies) do
+            no_deps[depname] = true
+        end
     end
 
     local libdirs_tbl = {}
@@ -1455,7 +1443,7 @@ return {
     f:write(tlconfig_lua)
     f:close()
 
-    write_file_bak("bld.tl", bld_tl)
+    ut.write_file_bak("bld.tl", bld_tl)
 
     cmd_do("cyan build")
 
@@ -1824,8 +1812,8 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store);
 
     stage_h = gsub(stage_h, "%$stage%$", stage)
 
-    write_file_bak(prefix .. "stage_" .. stage .. ".c", stage_c)
-    write_file_bak(prefix .. "stage_" .. stage .. ".h", stage_h)
+    ut.write_file_bak(prefix .. "stage_" .. stage .. ".c", stage_c)
+    ut.write_file_bak(prefix .. "stage_" .. stage .. ".h", stage_h)
 
     ut.pop_dir()
 end
@@ -2870,7 +2858,7 @@ local function run_parallel_uv(queue: {Task})
         _stderr:read_start( function(err: string, data: string)
             assert(not err, err)
             if data then
-                --insert(buf_err, t.cmd .. " " .. table.concat(t.args, " "))
+                --insert(buf_err, t.cmd .. " " .. concat(t.args, " "))
                 insert(buf_err, data)
             end
         end)
@@ -2913,20 +2901,16 @@ local function koh_link(objfiles: {string}, _args: Args)
     assert(target)
     local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
-    --print('koh_link:', inspect(_args))
-
     if lfs.attributes(lib_fname) then
         cmd_do("rm " .. lib_fname)
     end
-    --printc('%{green}koh_link: target ' .. target .. '%{green}')
-    --local cmd = format("%s -rcs  \"%s\" %s", ar[target], lib_fname, objfiles_str)
-    local cmd = ar[target] .. " -rcs  \"" .. lib_fname .. "\" " .. 
-                table.concat(objfiles, " ")
+    local cmd = ar[target] 
+        .. " -rcs  \"" 
+        .. lib_fname 
+        .. "\" " 
+        .. concat(objfiles, " ")
 
-    --print("koh_link: currentdir", lfs.currentdir())
-    --print("koh_link:", cmd)
     cmd_do(cmd)
-
     cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
 end
 
@@ -2965,10 +2949,10 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
 
     local flags: string = ""
     if not _args.noasan and _args.target ~= 'wasm' then
-        flags = flags .. table.concat(flags_sanitazer, " ")
+        flags = flags .. concat(flags_sanitazer, " ")
         flags = flags .. " "
         if cfg.flags and type(cfg.flags) == 'table' then
-            flags = flags .. table.concat(cfg.flags, " ")
+            flags = flags .. concat(cfg.flags, " ")
         end
     end
 
@@ -2982,20 +2966,26 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     local cc = compiler[_args.target]
     assert(cc)
 
-
     if _args.target == 'wasm' then
         artifact = artifact .. ".html"
     end
 
-    printc("%{blue}switched to g++%{reset}")
-    cc = "g++ "
+    --printc("%{blue}switched to g++%{reset}")
+    --cc = "g++ "
+
     local is_shared = ""
+
     if cfg.kind == "shared" then
         is_shared = " -shared "
         flags = flags .. " -fPIC "
     elseif cfg.kind == 'app' then
     elseif cfg.kind == 'static' then
+        -- TODO: Здесь может быть ar -rcs для libcaustic.a
+    else
+        printc("%{red} please add 'kind' field in bld.lua")
+        os.exit(1)
     end
+
     print("project_link: cfg.kind", inspect(cfg.kind))
     local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
 
@@ -3020,10 +3010,16 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
 
     local libsdirs = make_L(ctx)
     local libs = make_l(ctx.libs)
-    cmd = cmd .. table.concat(ctx.objfiles, " ") .. " " ..
-                 table.concat( libsdirs, " ") .. " " ..
-                 flags .. " " .. table.concat(libs, " ") 
-                --.. " -error-limit=0"
+    cmd = cmd 
+        .. " -fsanitize=address "
+        .. concat(ctx.objfiles, " ") 
+        .. " " 
+        .. concat( libsdirs, " ") 
+        .. " " 
+        .. flags 
+        .. " " 
+        .. concat(libs, " ") 
+        --.. " -error-limit=0"
 
     if verbose then
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
@@ -3325,7 +3321,7 @@ local function codegen(cg: Cfg.Codegen)
 
     local outfile = io.open(cg.file_out, "w")
     if outfile then
-        outfile:write(table.concat(write_lines, "\n"))
+        outfile:write(concat(write_lines, "\n"))
         outfile:close()
     else
         print(format("Could not open '%s' for writing", cg.file_out))
@@ -3407,6 +3403,50 @@ end
 
 local type MakeDriver = function(queue: {Task})
 
+--[[
+local function sub_make(
+    _args: Args, _: Cfg, _: Target, _: MakeDriver, 
+    push_num?: integer 
+)
+--]]
+
+local sub_make: function(
+    _args: Args, cfg: Cfg, target: Target, driver: MakeDriver, 
+    push_num?: integer 
+)
+
+local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
+    ut.push_current_dir()
+    chdir(e.path_caustic)
+    if verbose then
+        print("sub_make: currentdir", lfs.currentdir())
+    end
+
+    -- Проверка каустики на необходимость пересборки
+    local local_cfgs = search_and_load_cfgs_up('bld.lua')
+
+    for _, local_cfg in ipairs(local_cfgs) do
+        local args = {
+            make = true,
+            c = _args.c,
+            noasan = _args.noasan,
+            release = _args.release
+        }
+
+        -- XXX: Дефайны полностью замещаются, сделать обновление, а не 
+        -- перезапись
+        local_cfg.release_define = cfg.release_define
+        local_cfg.debug_define = cfg.debug_define
+        --print(tabular(local_cfg))
+
+        prepare_make(_args)
+        printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+        sub_make(args, local_cfg, _target, run_parallel_uv)
+    end
+
+    ut.pop_dir()
+end
+
 -- XXX: Идея - файлы описания зависимостей могут лежать вне каустики.
 -- Что за файлы?
 
@@ -3414,7 +3454,7 @@ local type MakeDriver = function(queue: {Task})
 
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
-local function sub_make(
+function sub_make(
     _args: Args, cfg: Cfg, target: Target, driver: MakeDriver, 
     push_num?: integer 
 )
@@ -3432,12 +3472,6 @@ local function sub_make(
             push_num or 0
         ))
     end
-
-    -- XXX: Где я нахожусь в иерархии каталогов?
-    -- Где я должен находиться?
-    --print('sub_make: currentdir', lfs.currentdir())
-
-    -- {{{ подготовка
 
     local curdir = ut.push_current_dir()
     if verbose then
@@ -3474,8 +3508,8 @@ local function sub_make(
     local exclude = {}
 
     -- Исключить некоторые файлы
-    if cfg.exclude then
-        for _, v in ipairs(cfg.exclude) do
+    if cfg.exclude_files then
+        for _, v in ipairs(cfg.exclude_files) do
             table.insert(exclude, v)
         end
     end
@@ -3495,8 +3529,8 @@ local function sub_make(
     end
 
     -- TODO: Дефайны через bld.lua
-    local _defines: string = table.concat(defines, " ")
-    local _includes: string = table.concat({ --[[ "/usr/include", --]] }, " ")
+    local _defines: string = concat(defines, " ")
+    local _includes: string = concat({ --[[ "/usr/include", --]] }, " ")
 
     local includes = {}
 
@@ -3553,7 +3587,7 @@ local function sub_make(
         defines_apply(flags, cfg.release_define)
     end
 
-    _defines = _defines .. " " .. table.concat(debugs, " ")
+    _defines = _defines .. " " .. concat(debugs, " ")
     for _, define in ipairs(debugs) do
         table.insert(defines, define)
     end
@@ -3592,7 +3626,7 @@ local function sub_make(
         print(tabular(flags))
     end
 
-    local _flags: string = table.concat(flags, " ")
+    local _flags: string = concat(flags, " ")
 
     local path = e.path_rel_third_party_t[target]
     assert(path)
@@ -3618,7 +3652,6 @@ local function sub_make(
 
     -- массив с командами
     local cwd = lfs.currentdir() .. "/"
-
     local output_dir: string
 
     -- XXX: Надо класть объектники в output_dir
@@ -3636,8 +3669,6 @@ local function sub_make(
     end
 
     local files_processed =  ut.filter_sources(".", exclude)
-
-    -- TODO: Добавить проход по *.c, *.cpp файлам
 
     local function gather_tasks(ext: string): {Task}
         local matched = {}
@@ -3660,7 +3691,7 @@ local function sub_make(
                 .. "$", "%1o")
             local _input = cwd .. file
 
-            local args = {}
+            local args: {string} = {}
 
             for _, define in ipairs(defines) do
                table.insert(args, define)
@@ -3680,10 +3711,21 @@ local function sub_make(
                 table.insert(args, flag)
             end
 
-            table.insert(args, "-o")
-            table.insert(args, _output)
-            table.insert(args, "-c")
-            table.insert(args, _input)
+            local function add_args(field: string, prefix: string)
+                local fields = (cfg as {string: {string}})[field] 
+                if fields then
+                    for _, f in ipairs(fields) do
+                        insert(args, prefix .. f)
+                    end
+                end
+            end
+
+            add_args('includes', '-I')
+
+            insert(args, "-o")
+            insert(args, _output)
+            insert(args, "-c")
+            insert(args, _input)
 
             if target ~= 'wasm' then
                 for _, lib in ipairs(make_l(libs)) do
@@ -3695,6 +3737,10 @@ local function sub_make(
                 cmd = cc,
                 args = args, 
             }
+
+            print('task', inspect(task))
+            --print(ut.task_get_source(task))
+
             table.insert(tasks, task)
 
             -- XXX: Кэширование работает вообще?
@@ -3727,35 +3773,11 @@ local function sub_make(
     -- TODO: указывать тип - библиотека или программа в конфигурационном 
     -- скрипте.
     if cfg.artifact then
-        -- Сборка проекта
-        ut.push_current_dir()
-        chdir(e.path_caustic)
-        if verbose then
-            print("sub_make: currentdir", lfs.currentdir())
+        -- TODO: Когда отключать ветку пересборки caustic?
+        -- FIXME: дурацкое условие
+        if cfg.kind ~= "shared" then
+            --koh_recompile(_args, cfg, target)
         end
-
-        -- Проверка каустики на необходимость пересборки
-        local local_cfgs = search_and_load_cfgs_up('bld.lua')
-
-        for _, local_cfg in ipairs(local_cfgs) do
-            local args = {
-                make = true,
-                c = _args.c,
-                noasan = _args.noasan,
-                release = _args.release
-            }
-
-            -- XXX: Дефайны полностью замещаются, сделать обновление, а не 
-            -- перезапись
-            local_cfg.release_define = cfg.release_define
-            local_cfg.debug_define = cfg.debug_define
-            --print(tabular(local_cfg))
-
-            prepare_make(_args)
-            sub_make(args, local_cfg, target, run_parallel_uv)
-        end
-
-        ut.pop_dir()
 
         if verbose then
             print("before project link", lfs.currentdir())
@@ -3764,11 +3786,25 @@ local function sub_make(
         --[[
         TODO: koh_link() заменить на project_link()
         --]]
-        project_link({
+        local ctx: LinkContext = {
             objfiles = objfiles,
             libsdirs = libsdirs,
             libs = libs,
-        }, cfg, _args)
+        }
+
+        if cfg.libsdirs then
+            for _, lib in ipairs(cfg.libsdirs) do
+                insert(ctx.libsdirs, lib)
+            end
+        end
+
+        if cfg.libs then
+            for _, lib in ipairs(cfg.libs) do
+                insert(ctx.libs, lib)
+            end
+        end
+
+        project_link(ctx, cfg, _args)
     else
         -- Сборка библиотеки "Щелочь", в зависимоти от того, откуда 
         -- вызывается скрипт
@@ -3776,62 +3812,6 @@ local function sub_make(
     end
 
     ut.pop_dir(push_num)
-end
-
-local function task_get_source(task: Task): string
-    for i = 1, #task.args do
-        if task.args[i] == "-c" then
-            return task.args[i + 1]
-        end
-    end
-    return nil
-end
-
-local function task_get_output(task: Task): string
-    for i = 1, #task.args do
-        if task.args[i] == "-o" then
-            return task.args[i + 1]
-        end
-    end
-    return nil
-end
-
--- Возвращает копию таблицы задания, но без -lбиблиотека и без групп 
--- -Wl,--start-group
-local function task_remove_libs(task: Task): Task
-    local copy = ut.deepcopy(task)
-    local args = copy.args
-    local i = 1
-    local in_group = false
-
-    while i <= #args do
-        local a = args[i]
-
-        -- начало/конец группы линкера
-        if a == "-Wl,--start-group" or string.match(a, "^%-Wl,--start%-group") then
-            in_group = true
-            table.remove(args, i)            -- удалить маркер
-        elseif a == "-Wl,--end-group" or string.match(a, "^%-Wl,--end%-group") then
-            in_group = false
-            table.remove(args, i)            -- удалить маркер
-        elseif in_group then
-            -- внутри группы удаляем всё: -l..., архивы, объекты и т.д.
-            table.remove(args, i)
-        elseif string.match(a, "^%-l%S+") then
-            -- обычные -lflags вне группы
-            table.remove(args, i)
-        elseif string.match(a, "^%-L%S+") then
-            -- обычные -Ldirs вне группы
-            table.remove(args, i)
-        -- опционально: выпиливать и явные архивы/шары вне группы
-        -- elseif string.match(a, "%.a$") or string.match(a, "%.so[%d%.-]*$") then
-        --     table.remove(args, i)
-        else
-            i = i + 1
-        end
-    end
-
-    return copy
 end
 
 function actions.compile_commands(_args: Args)
@@ -3863,13 +3843,13 @@ function actions.compile_commands(_args: Args)
 
     sub_make(_args, cfgs[1], target, function(q: {Task})
         for _, task in ipairs(q) do
-            local task_no_libs = task_remove_libs(task)
+            local task_no_libs = ut.task_remove_libs(task)
             local jt: JsonTask = {
                 directory = lfs.currentdir(),
-                file = task_get_source(task),
-                output = task_get_output(task),
+                file = ut.task_get_source(task),
+                output = ut.task_get_output(task),
                 --command = task_no_libs.cmd .. 
-                --          " " .. table.concat(task_no_libs.args, " "),
+                --          " " .. concat(task_no_libs.args, " "),
                 arguments = task_no_libs.args,
             }
             table.insert(jt.arguments, 1, task_no_libs.cmd)
@@ -3928,6 +3908,14 @@ function actions.run(_args: Args)
     end
 end
 
+local function cfg_empty(cfg: Cfg): boolean
+    local i = 0
+    for _, _ in pairs(cfg as {string: string}) do
+        i = i + 1
+    end
+    return i ~= 0
+end
+
 -- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
 function actions.make(_args: Args)
     if verbose then
@@ -3939,8 +3927,10 @@ function actions.make(_args: Args)
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
     for _, cfg in ipairs(cfgs) do
-        prepare_make(_args)
-        sub_make(_args, cfg, target, run_parallel_uv, push_num)
+        if cfg_empty(cfg) then
+            prepare_make(_args)
+            sub_make(_args, cfg, target, run_parallel_uv, push_num)
+        end
     end
 end
 
@@ -4020,7 +4010,7 @@ local function make_chunker(
             end
 
             table.insert(chunks, {
-                text = table.concat(chunk, "\n"),
+                text = concat(chunk, "\n"),
                 line_start = i,
                 line_end = i + chunk_size,
             })
@@ -4046,7 +4036,7 @@ local function make_chunker(
         stop = function(): {Chunk}
             if #chunk ~= 0 then
                 table.insert(chunks, {
-                    text = table.concat(chunk, "\n"),
+                    text = concat(chunk, "\n"),
                     line_start = i,
                     line_end = i + #chunk,
                 })
@@ -4091,7 +4081,7 @@ end
 -- На входе - таблица регулярок которые комбинируются с |
 local function _fd_code_in_cwd(extensions_t: {string}): {string}
     local result: {string} = {}
-    local extensions = table.concat(extensions_t, "|")
+    local extensions = concat(extensions_t, "|")
     local cmd = format([[fd "%s"]], extensions)
 
     printc(
@@ -4120,7 +4110,7 @@ local function _fd_code_in_modules(): {string}
         ".*\\.md$",
         ".*\\.lua$",
     }
-    local extensions = table.concat(extensions_t, "|")
+    local extensions = concat(extensions_t, "|")
     local cmd = format([[fd "%s"]], extensions)
 
     --for _, module in ipairs(modules) do
@@ -4217,7 +4207,7 @@ end
 
     self.is_up = function(): boolean
             local code = os.execute('lms ps')
-            return code
+            return not not code
         end
 
     self.is_loaded = function(modelname: string): boolean
@@ -4256,7 +4246,7 @@ end
 
             local i = 0
             while not self.is_up() do
-                os.execute("sleep 0.2")
+                os.execute("sleep 2")
                 i = i + 1
                 if i > 20 then
                     print("Could not start lmstudio")
@@ -4301,12 +4291,9 @@ local function chunks_calculate_vectors(chunks: {Chunk})
                 local text = chunk.text
                 assert(text)
 
-                local text_t = table.concat({
-                    "// ", 
-                    chunk.file,
-                    ":",
-                    chunk.line_start,
-                    "\n",
+                local text_t = concat({
+                    "// ", chunk.file,
+                    ":", chunk.line_start, "\n",
                     text
                 })
 
@@ -4388,7 +4375,7 @@ local function load_chunks2string(fname: string): string
     end
 
     infile:close()
-    return table.concat(decompressed)
+    return concat(decompressed)
 end
 --]]
 
@@ -4455,17 +4442,21 @@ end
 function actions.cppcheck(_args: Args)
     mkdir("cppcheck-cache")
 
-    local cmd = "cppcheck -j6 "
+    local cmd = "cppcheck "
+        .. " -j6 "
         .. " --template=gcc "
         .. " --platform=unix64 "
         .. " --enable=warning,style,performance,portability,information "
         .. " --library=posix,emscripten,lua,opengl,pcre,sdl,windows "
         .. " --suppress=constParameterPointer "
         .. " --suppress=constParameterCallback "
-        .. " --suppress=checkersReport " -- упрямая строчка в конце отчета
+        -- убрать упрямую строчку в конце отчета
+        .. " --suppress=checkersReport " 
         .. " --std=c11 --language=c --quiet "
+        -- максимальная глубина проверки
         .. " --check-level=exhaustive "
         .. " --cppcheck-build-dir=cppcheck-cache "
+        -- максимальная глубина анализа всей программы, по умолчанию - 2
         .. " --max-ctu-depth=4 "
         --.. " --inconclusive " -- выводить неуверенные замечания
         --.. " --addon=threadsafety.py "
@@ -4473,18 +4464,45 @@ function actions.cppcheck(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target: Target = 'linux'
     local files: {string} = {}
+    local includes: {string:boolean} = {}
+    local defines: {string: boolean} = {}
     sub_make(_args, cfgs[1], target, function(q: {Task})
         for _, task in ipairs(q) do
                 --directory = lfs.currentdir(),
                 --file = task_get_source(task),
                 --output = task_get_output(task),
 
-                insert(files, task_get_source(task))
+                insert(files, ut.task_get_source(task))
+
+                --print(inspect(task))
+
+                --local includes = concat(task_get_includes(task), "\n")
+                for _, inc in ipairs(ut.task_get_includes(task)) do
+                    includes[inc] = true
+                end
+                for _, def in ipairs(ut.task_get_D(task)) do
+                    defines[def] = true
+                end
+                --print('includes', includes)
         end
     end)
 
-    print('files', inspect(files))
-    cmd = cmd .. table.concat(files, " ")
+    --print(inspect(includes))
+    local t = {}
+    for i, _ in pairs(includes) do
+        insert(t, i)
+    end
+    cmd = cmd .. concat(t, " ") .. " "
+
+    local d = {}
+    for i, _ in pairs(defines) do
+        insert(d, i)
+    end
+    cmd = cmd .. concat(d, " ") .. " "
+
+    --print('files', inspect(files))
+    cmd = cmd .. concat(files, " ")
+    --print('cmd', cmd)
     cmd_do(cmd)
 end
 
@@ -4586,7 +4604,7 @@ $modules_list$
     for m in mods.iter() do
         insert(modules_list, format("       %q,", m.name))
     end
-    local modules_str = table.concat(modules_list, "\n")
+    local modules_str = concat(modules_list, "\n")
     --print("actions.bld_lua: modules_str", modules_str)
 
     bld_lua_full = gsub(
@@ -4973,7 +4991,7 @@ local function ctag_to_str(n: CTag, lines: {string}): string
     for i = n.line, n._end, 1 do
         table.insert(chunks_lines, lines[i])
     end
-    return table.concat(chunks_lines, '\n')
+    return concat(chunks_lines, '\n')
 end
 
 local function ctags_load(tags_fname: string): {CTag}
@@ -5497,7 +5515,7 @@ local function searcher_instance(index_fname: string): Searcher
                 -- TODO: Словарь по файлам, потом сортировать по line_start
                 if ch then
                     --print(ch.text)
-                    local text = table.concat({
+                    local text = concat({
                         "// file: " .. ch.file .. " , " .. 
                         "line_start " .. ch.line_start .. " , " ..
                         "line_end " .. ch.line_end .. "\n\n",
@@ -5537,7 +5555,7 @@ local function markdown_instance(): Markdown
             tok_i = (tok_i + 1) % tok_buf_size
             tok_buf[tok_i] = _inp
 
-            local inp = table.concat(tok_buf)
+            local inp = concat(tok_buf)
 
             markdown_f:write("inp:", inp .. "\n")
 
@@ -5576,12 +5594,14 @@ local function markdown_instance(): Markdown
 end
 
 --local mkd = io.open("mkd_chunks.lua", "w")
+-- Строчки токенов полученных из нейронки для проверки разбора markdown
 local mkd: {string} = {}
 
 function actions.ai(_args: Args)
     print("actions.ai")
 
     if not lms.up() then
+        print("actions.ai: lmstudio could not startup")
         return
     end
 
@@ -5678,7 +5698,7 @@ function actions.ai(_args: Args)
         end,
         query = function(carg: string)
             print("::query", carg)
-            --local texts = table.concat(searcher.query(carg), "\n")
+            --local texts = concat(searcher.query(carg), "\n")
             --printc("%{blue}" .. texts .. "%{reset}")
         end,
         -- TODO: Найти парные файлы заголовков и исходников из текущего 
@@ -5727,7 +5747,7 @@ function actions.ai(_args: Args)
 
         -- XXX: Сделать контекстный поиск отключаемым
         -- Поиск и составление контекста из токенов сообщения
-        --local texts = table.concat(searcher.query(inp), "\n")
+        --local texts = concat(searcher.query(inp), "\n")
         local texts = ""
 
         local f_tmp = io.open("contex.txt", "w")
@@ -5831,7 +5851,7 @@ local function ctags_write(tags_fname: string, target: Target, _args?: Args)
 
     local sources = {}
     for _, task in ipairs(tasks) do
-        local src = task_get_source(task)
+        local src = ut.task_get_source(task)
         if src then
             table.insert(sources, src)
         else
@@ -5861,7 +5881,7 @@ local function ctags_write(tags_fname: string, target: Target, _args?: Args)
                 --.. "--c-kinds=+fpvsumedi "
                 .. "--c-kinds=+defgpstuvmi "
                 .. "--extras=+q 2>&1 " 
-                .. table.concat(sources, " ") 
+                .. concat(sources, " ") 
 
     local pipe = io.popen(cmd, "r")
     assert(pipe)
@@ -5925,6 +5945,11 @@ function actions.ctags(_args: Args)
         local target = _args.t or "linux"
         ctags_write(o.tags_fname, target, _args)
 
+        -- стартую lmstudio
+        if not lms.up() then
+            print("actions.ai: lmstudio could not startup")
+            os.exit(1)
+        end
         chunks = tags2chunks(o)
 
         local f = io.open(chunks_lua, "w")

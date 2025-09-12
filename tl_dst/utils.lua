@@ -5,6 +5,12 @@ local chdir = lfs.chdir
 local tabular = require("tabular").show
 local format = string.format
 local dir_stack = {}
+local ansicolors = require('ansicolors')
+local insert = table.insert
+
+local function printc(...)
+   print(ansicolors(table.concat({ ... })))
+end
 
 
 
@@ -99,10 +105,14 @@ end
 
 
 local function filter_sources(path, exclude)
+   printc("%{green}filter_sources:%{reset}", lfs.currentdir())
 
    local files = {}
    for file in lfs.dir(path) do
-      table.insert(files, file)
+      local attrs = lfs.attributes(file)
+      if attrs and attrs.mode == 'file' then
+         table.insert(files, file)
+      end
    end
 
    local files_processed = {}
@@ -396,16 +406,11 @@ end
 
 
 local cmd_do = cmd_do_execute
-local ansicolors = require('ansicolors')
 
 
 local function find_and_remove_cmake_cache()
    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
    cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
-end
-
-local function printc(...)
-   print(ansicolors(table.concat({ ... })))
 end
 
 
@@ -717,6 +722,124 @@ local function _remove(path, dirnames)
    pop_dir()
 end
 
+local function _write_file_bak(
+   fname, data, bak_cnt)
+
+   local b = io.open(fname, "r")
+
+   local max_bak <const> = 3
+   if bak_cnt >= max_bak then
+      local baks = fname
+      for _ = 1, max_bak do
+         baks = baks .. ".bak"
+      end
+      local cmd = format("rm %s", baks)
+      local ok = os.execute(cmd)
+      if not ok then
+         return false
+      end
+   end
+
+   if b then
+      local t = b:read("all")
+      b:close()
+      if not _write_file_bak(fname .. ".bak", t, bak_cnt + 1) then
+         return false
+      end
+   end
+
+   local f = io.open(fname, "w")
+   if f then
+      f:write(data)
+      f:close()
+   end
+
+   return true
+end
+
+local function write_file_bak(fname, data)
+   return _write_file_bak(fname, data, 0)
+end
+
+local function task_get_source(task)
+   for i = 1, #task.args do
+      if task.args[i] == "-c" then
+         return task.args[i + 1]
+      end
+   end
+   return nil
+end
+
+local function task_get_D(task)
+   local defines = {}
+   for _, a in ipairs(task.args) do
+      local inc = string.match(a, "-D(.*)")
+      if inc then
+         insert(defines, a)
+      end
+   end
+   return defines
+end
+
+local function task_get_includes(task)
+   local includes = {}
+   for _, a in ipairs(task.args) do
+      local inc = string.match(a, "-I(.*)")
+      if inc then
+         insert(includes, a)
+      end
+   end
+   return includes
+end
+
+local function task_get_output(task)
+   for i = 1, #task.args do
+      if task.args[i] == "-o" then
+         return task.args[i + 1]
+      end
+   end
+   return nil
+end
+
+
+
+local function task_remove_libs(task)
+   local copy = deepcopy(task)
+   local args = copy.args
+   local i = 1
+   local in_group = false
+
+   while i <= #args do
+      local a = args[i]
+
+
+      if a == "-Wl,--start-group" or string.match(a, "^%-Wl,--start%-group") then
+         in_group = true
+         table.remove(args, i)
+      elseif a == "-Wl,--end-group" or string.match(a, "^%-Wl,--end%-group") then
+         in_group = false
+         table.remove(args, i)
+      elseif in_group then
+
+         table.remove(args, i)
+      elseif string.match(a, "^%-l%S+") then
+
+         table.remove(args, i)
+      elseif string.match(a, "^%-L%S+") then
+
+         table.remove(args, i)
+
+
+
+      else
+         i = i + 1
+      end
+   end
+
+   return copy
+end
+
+
 return {
    _remove = _remove,
    readonly = readonly,
@@ -742,4 +865,10 @@ return {
    do_parser_setup = do_parser_setup,
    remove_last_backslash = remove_last_backslash,
    paste_from_one_to_other = paste_from_one_to_other,
+   write_file_bak = write_file_bak,
+   task_get_source = task_get_source,
+   task_get_D = task_get_D,
+   task_get_includes = task_get_includes,
+   task_remove_libs = task_remove_libs,
+   task_get_output = task_get_output,
 }

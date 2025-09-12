@@ -8,7 +8,7 @@ return {
       -- список отклченных для данной сборки зависимостей
       not_dependencies = {
           "llama_cpp",
-          "xxhash",
+          --"xxhash",
           "freetype",
           "wormseffect",
           "nanosvg",
@@ -31,6 +31,7 @@ return {
       },
       -- результат компиляции и линковки
       artifact = "libkoh.so",
+
       kind = 'shared',
       --kind = "app",
       --kind = "shared",
@@ -42,7 +43,7 @@ return {
       --src = "src",
       
       -- исключать следующие имена файлов, можно использовать Lua шаблоны
-      exclude = {
+      exclude_file = {
             --"t80_stage_empty.c",
       },
       -- список дефайнов которые применяются всегда
@@ -80,6 +81,22 @@ return {
          },
       },
       --]]
+      
+      libs = {
+          "blake3",
+          "lua",
+      },
+      includes = {
+          ".",
+          "blake3_c",
+          "hnswlib",
+      },
+      libsdirs = {
+          "blake3_c",
+          -- на всякий случай
+          --"..", 
+      }
+
    },
    -- конец еденицы трансляции
 
