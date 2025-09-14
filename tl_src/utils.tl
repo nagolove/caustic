@@ -365,7 +365,12 @@ local function do_parser_setup(
     end
 end
 
-local function cmd_do_execute(_cmd: string|{string})
+local function cmd_do_execute(_cmd: string|{string}): boolean
+    assert(type(_cmd) == 'string')
+    local ok =  os.execute(_cmd as string)
+    return not not ok
+
+    --[[
 -- NOTE: Не использовать io.popen() так могут быть проблемы с кодом возврата
     if verbose then
         os.execute("echo `pwd`")
@@ -402,6 +407,7 @@ local function cmd_do_execute(_cmd: string|{string})
             os.exit(1)
         end
     end
+    --]]
 end
 
 --------------------------------------------------------------
@@ -409,8 +415,9 @@ local cmd_do: function(cmd: string|{string}) = cmd_do_execute
 
 -- TODO: Проверка наличия fd
 local function find_and_remove_cmake_cache()
-    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-    cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
+    local args = ' -HI "CMakeCache\\.txt" -x rm {}'
+    cmd_do('fd ' .. args)
+    --cmd_do('fdfind ' .. args)
 end
 
 --[[
@@ -437,7 +444,7 @@ local function match_in_file(fname: string, pattern: string): boolean
     for l in f:lines() do
         i = i + 1
         if string.match(l, pattern) then
-            return true;
+            return true
         end
     end
     --print("match_in_file:", i)
@@ -568,7 +575,7 @@ local function test_readonly()
     local v1 = x.p.i[1]
 
     -- чтение и запись
-    local ok, errmsg = pcall(function()
+    local ok, _ = pcall(function()
         local x_ro = readonly(x)
         local v2 = x_ro.p.i[1]
         assert(v1 == v2)
@@ -582,7 +589,7 @@ local function test_readonly()
     end
 
     -- только чтение
-    ok, errmsg = pcall(function()
+    ok, _ = pcall(function()
         local x_ro = readonly(x)
         local v2 = x_ro.p.i[1]
         assert(v1 == v2)

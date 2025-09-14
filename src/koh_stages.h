@@ -75,9 +75,9 @@ KOH_FORCE_INLINE static Stage *l_stage_find(
     assert(l);
     //trace("l_stage_find: [%s]\n", stack_dump(l));
     lua_getglobal(l, store_name);
-    StagesStore *ss = lua_touserdata(l, -1);
-    assert(ss);
+    StagesStore *store = lua_touserdata(l, -1);
+    assert(store);
     lua_pop(l, 1);
     //trace("l_stage_find: [%s]\n", stack_dump(l));
-    return stage_find(ss, stage_name);
+    return stage_find(store, stage_name);
 }

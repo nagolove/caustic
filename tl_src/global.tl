@@ -35,26 +35,6 @@ global record ParserSetup
     arguments: {{string|integer}}
 end
 
---[[
-Пример структуры дерева проекта
-project dir -> bld.lua
-            -> src      -> main.c
-                        -> other_file.c
-                        -> header.р
-                        -> cache.lua [created by caustic]
-            -> assets
-            -> linux_objects            | объектные файлы
-            -> win_objects              | объектные файлы
-            -> wasm_objects             | объектные файлы
-            -> bin  -> bin_d.linux
-                    -> bin_r.linux
-                    -> bin_d.exe
-                    -> bin_r.exe
-                    -> bin.html
-                    -> assets.zip
--- }}}
---]]
-
 global enum Target
     "linux"
     "win"
@@ -74,17 +54,10 @@ global record Dependency
     -- полный абсолютный путь до каталога модуля
     path_abs: string
 
-    -- хеш коммита который будет скачиваться
-    revision: string
-
-    -- ветка которая будет скачиваться
-    branch: string
-
     -- заполняется сборочным скриптом, используется внутри функций сборки
     -- инициализации модулей
     target: Target
 
-    -- {{{
     description: string -- описание компонента зависимости
     disabled: boolean   -- временно исключает запись из обработки
 
@@ -95,10 +68,17 @@ global record Dependency
     --depends: {string}   -- список имен зависомостей от которых зависит данная
 
     url_action: UrlAction
-    -- Если указано, то копировать определенную ветку
+
+    -- ветка которая будет скачиваться
     git_branch: string
+    -- хеш коммита который будет скачиваться
     git_tag: string
-    url: string         -- git ссылка или ссылка на zip для wget
+    -- если значение поля присутствует, то репозиторий копируется на всю 
+    -- глубину и после копирования вызвается git checkout commit
+    git_commit: string      
+    
+    -- git ссылка или ссылка на zip для wget
+    url: string         
 
     -- имя каталога в который производится копирование и сборка
     dir: string         
@@ -106,10 +86,6 @@ global record Dependency
     -- Название файла, в который будет скачан zip архив по ссылке url
     fname: string       
     copy_for_wasm: boolean
-
-    -- если значение поля присутствует, то репозиторий копируется на всю 
-    -- глубину и после копирования вызвается git checkout commit
-    git_commit: string      
 
     -- Ручное обновление репозитория
     update: function(e: Env, _dep: Dependency)
@@ -144,7 +120,7 @@ global record Dependency
     build_win: function(e: Env, dep: Dependency) 
 
     after_build: function(e: Env, dep: Dependency)
-    -- }}}
+
     -- XXX: Добавить методы к зависимостям
     --get_cc_includes: function(e: Env, dep: Dependency)
 

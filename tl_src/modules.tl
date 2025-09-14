@@ -11,8 +11,11 @@ local chdir = lfs.chdir
 local printc = ut.printc
 local insert = table.insert
 local format = string.format
+--local modules = require "modules"
 
 --global modules: {Dependency}
+
+local _modules: {Dependency}
 
 -- XXX: Какую лучше использовать сигнатуру функции?
 local function update_box2c(e: Env, dep: Dependency)
@@ -84,6 +87,7 @@ local function build_pcre2_w(_: Env, dep: Dependency)
     ut.pop_dir()
 end
 
+--[[
 local function build_cimgui_common(_: Env, dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
@@ -103,6 +107,32 @@ local function build_cimgui_common(_: Env, dep: Dependency)
             "%{red}build_cimgui_common:bad target" .. dep.target .. 
             "%{reset}"
         )
+    end
+end
+--]]
+
+local function build_cimgui_common(_: Env, dep: Dependency)
+    print('build_cimgui:', inspect(dep))
+
+    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
+
+    print("current dir", lfs.currentdir())
+    local c = make[dep.target]
+
+    printc('%{red}c%{reset}', c)
+
+    cmd_do(string.format("%s clean", c))
+
+    if dep.target == 'linux' then
+        local flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
+        -- ВАЖНО: пробрасываем и CFLAGS, и CXXFLAGS
+        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+    elseif dep.target == 'wasm' then
+        -- для wasm -fPIC не нужен/не применяется
+        local flags = "-g3 -DPLATFORM_WEB=1"
+        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+    else
+        printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
     end
 end
 
@@ -360,7 +390,20 @@ extern int luaopen_raylib(lua_State *L);
     cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
 end
 
-local function cimgui_after_init(e: Env, dep: Dependency, mods: Modules)
+local function get_deps_name_map(): {string: Dependency}
+    local map = {}
+    for _, dep in ipairs(_modules) do
+        if map[dep.name] then
+            print("get_deps_name_map: name dublicated", dep.name)
+            os.exit(1)
+        end
+        map[dep.name] = dep
+    end
+    return map
+end
+
+local function cimgui_after_init(e: Env, dep: Dependency)
+--local function cimgui_after_init(e: Env, dep: Dependency, mods: Modules)
     print("cimgui_after_init:", lfs.currentdir())
 
     --[[
@@ -415,11 +458,17 @@ local function cimgui_after_init(e: Env, dep: Dependency, mods: Modules)
 
     --print("get_additional_includes")
     --print(tabular(get_additional_includes(dep.target)))
-    --print("AAAAAAAAAAAAAAAAAA")
+    print("AAAAAAAAAAAAAAAAAA")
 
     -- TODO: перенести CXXFLAGS в CMAKE_CXX_FLAGS
     local cxx_flags = '-DCMAKE_CXX_FLAGS="'
-    local includes = mods.get_deps_name_map()["raylib"].includes
+
+    --local mods = modules.modules_instance()
+
+    printc("%{green}_modules:%{reset}", inspect(_modules))
+    local deps_name_map = get_deps_name_map() --["raylib"].includes
+    print('deps_name_map', inspect(deps_name_map))
+    local includes = deps_name_map["raylib"].includes
     for _, include in ipairs(includes) do
         local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
         cxx_flags = cxx_flags .. s .. " "
@@ -431,6 +480,10 @@ local function cimgui_after_init(e: Env, dep: Dependency, mods: Modules)
         cmake[dep.target],
         "-DIMGUI_STATIC=1",
         "-DNO_FONT_AWESOME=1",
+
+        -- XXX: две страные строчки, привет
+        '-DCMAKE_C_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC" ',
+        '-DCMAKE_CXX_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC"',
         cxx_flags,
     }
 
@@ -1004,6 +1057,9 @@ local _modules: {Dependency} = {
         url = 'https://github.com/cimgui/cimgui.git',
         url_action = "git",
         copy_for_wasm = true,
+
+        git_branch = "docking_inter",
+        git_commit = "205107640d70aeffc9cd37a1e7a8d240708a55e5",
     },
 
     --[[
@@ -1214,8 +1270,8 @@ local function modules_instance(e: Env, target?: Target): Modules
         if m_copy.dir then
             m_copy.path_abs = path_base .. "/" .. m_copy.dir
 
-            m_copy.branch = git.current_branch(m_copy.path_abs)
-            m_copy.revision = git.current_revision(m_copy.path_abs)
+            m_copy.git_branch = git.current_branch(m_copy.path_abs)
+            m_copy.git_commit = git.current_revision(m_copy.path_abs)
         else
             m_copy.path_abs = nil
         end

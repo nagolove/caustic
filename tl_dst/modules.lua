@@ -15,6 +15,9 @@ local format = string.format
 
 
 
+local _modules
+
+
 local function update_box2c(e, dep)
    ut.push_current_dir()
    local ok
@@ -84,6 +87,30 @@ local function build_pcre2_w(_, dep)
    ut.pop_dir()
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local function build_cimgui_common(_, dep)
    print('build_cimgui:', inspect(dep))
 
@@ -91,18 +118,21 @@ local function build_cimgui_common(_, dep)
 
    print("current dir", lfs.currentdir())
    local c = make[dep.target]
-   cmd_do(format("%s clean", c))
-   if dep.target == 'linux' then
-      cmd_do(format("%s -j CFLAGS=\"-g3 -DPLATFORM_DESKTOP\"", c))
-   elseif dep.target == 'wasm' then
-      local cmd = format("%s -j CFLAGS=\"-g3 -DPLATFORM_WEB=1\"", c)
-      printc("%{green}build_cimgui_common: " .. cmd .. "%{reset}")
-      cmd_do(cmd)
-   else
-      printc(
-      "%{red}build_cimgui_common:bad target" .. dep.target ..
-      "%{reset}")
 
+   printc('%{red}c%{reset}', c)
+
+   cmd_do(string.format("%s clean", c))
+
+   if dep.target == 'linux' then
+      local flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
+
+      cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+   elseif dep.target == 'wasm' then
+
+      local flags = "-g3 -DPLATFORM_WEB=1"
+      cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+   else
+      printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
    end
 end
 
@@ -360,7 +390,20 @@ extern int luaopen_raylib(lua_State *L);
    cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
 end
 
-local function cimgui_after_init(e, dep, mods)
+local function get_deps_name_map()
+   local map = {}
+   for _, dep in ipairs(_modules) do
+      if map[dep.name] then
+         print("get_deps_name_map: name dublicated", dep.name)
+         os.exit(1)
+      end
+      map[dep.name] = dep
+   end
+   return map
+end
+
+local function cimgui_after_init(e, dep)
+
    print("cimgui_after_init:", lfs.currentdir())
 
 
@@ -415,11 +458,17 @@ local function cimgui_after_init(e, dep, mods)
 
 
 
-
+   print("AAAAAAAAAAAAAAAAAA")
 
 
    local cxx_flags = '-DCMAKE_CXX_FLAGS="'
-   local includes = mods.get_deps_name_map()["raylib"].includes
+
+
+
+   printc("%{green}_modules:%{reset}", inspect(_modules))
+   local deps_name_map = get_deps_name_map()
+   print('deps_name_map', inspect(deps_name_map))
+   local includes = deps_name_map["raylib"].includes
    for _, include in ipairs(includes) do
       local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
       cxx_flags = cxx_flags .. s .. " "
@@ -431,6 +480,10 @@ local function cimgui_after_init(e, dep, mods)
       cmake[dep.target],
       "-DIMGUI_STATIC=1",
       "-DNO_FONT_AWESOME=1",
+
+
+      '-DCMAKE_C_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC" ',
+      '-DCMAKE_CXX_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC"',
       cxx_flags,
    }
 
@@ -1004,6 +1057,9 @@ local _modules = {
       url = 'https://github.com/cimgui/cimgui.git',
       url_action = "git",
       copy_for_wasm = true,
+
+      git_branch = "docking_inter",
+      git_commit = "205107640d70aeffc9cd37a1e7a8d240708a55e5",
    },
 
 
@@ -1214,8 +1270,8 @@ local function modules_instance(e, target)
       if m_copy.dir then
          m_copy.path_abs = path_base .. "/" .. m_copy.dir
 
-         m_copy.branch = git.current_branch(m_copy.path_abs)
-         m_copy.revision = git.current_revision(m_copy.path_abs)
+         m_copy.git_branch = git.current_branch(m_copy.path_abs)
+         m_copy.git_commit = git.current_revision(m_copy.path_abs)
       else
          m_copy.path_abs = nil
       end

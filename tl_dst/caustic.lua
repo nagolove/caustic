@@ -35,7 +35,7 @@ home .. "/.luarocks/share/lua/" .. lua_ver .. "/?/init.lua;" ..
 e.path_caustic .. "/" .. e.path_rel_third_party .. "/json.lua/?.lua;" .. package.path
 
 package.cpath =
-e.path_caustic .. "/koh_src/lib?.so;" ..
+
 e.path_caustic .. "/lib?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
@@ -82,6 +82,7 @@ local hash32 = require('xxhash').hash32
 local hash64 = require('xxhash').hash64
 local serpent = require('serpent')
 local assist = require("assist")
+local git = require('git')
 
 
 
@@ -136,7 +137,7 @@ local flags_sanitazer = {
 
 
    "-fsanitize=undefined,address",
-   "-fsanitize-address-use-after-scope",
+
 }
 
 ut.assert_file(e.cmake_toolchain_win)
@@ -710,98 +711,6 @@ local function get_map_dir2dep(modules)
    return res
 end
 
-local function after_init(dep)
-   assert(dep)
-   if not dep.after_init then
-      return
-   end
-
-   ut.push_current_dir()
-   local ok, errmsg = pcall(function()
-      print('after_init:', dep.name)
-      chdir(dep.dir)
-      dep.after_init(e, dep)
-   end)
-   if not ok then
-      local msg = 'after_init() failed with ' .. errmsg
-      printc("%{red}" .. msg .. "%{reset}")
-      print(debug.traceback())
-   end
-   ut.pop_dir()
-end
-
-local ssh_github_active = false
-
-local function git_clone_with_checkout(dep, checkout_arg)
-   local dst = dep.dir or ""
-
-
-   if not ssh_github_active and string.match(dep.url, "git@github.com") then
-      local errcode = os.execute("ssh -T git@github.com")
-      print("errcode", errcode)
-      if errcode then
-         local msg = format(
-         "Could not access through ssh to github.com with '%s'",
-         errcode)
-
-         printc("%{red}" .. msg .. "%{reset}")
-         error()
-      else
-         ssh_github_active = true
-      end
-   end
-
-   cmd_do("git clone --depth=1 " .. dep.url .. " " .. dst)
-   if dep.dir then
-      chdir(dep.dir)
-   else
-      print('git_clone: dep.dir == nil', lfs.currentdir())
-   end
-
-   cmd_do("git pull origin " .. checkout_arg)
-
-end
-
-local function git_clone(dep)
-   print('git_clone:', lfs.currentdir())
-   print(tabular(dep))
-   ut.push_current_dir()
-   if dep.git_commit then
-      git_clone_with_checkout(dep, dep.git_commit)
-   elseif dep.git_branch then
-      git_clone_with_checkout(dep, dep.git_branch)
-   else
-      local dst = dep.dir or ""
-      local git_cmd = "git clone --depth=1 " .. dep.url .. " " .. dst
-
-
-
-      cmd_do(git_cmd)
-      ut.push_current_dir()
-      chdir(dst)
-
-      if dep.git_tag then
-         printc("%{blue}using tag' " .. dep.git_tag .. "'%{reset}")
-
-         local c1 = "git fetch origin tag " .. dep.git_tag
-         local c2 = "git checkout tags/" .. dep.git_tag
-
-         print(format("'%s'", c1))
-         print(format("'%s'", c2))
-
-         cmd_do(c1)
-         cmd_do(c2)
-
-
-
-
-      end
-
-      ut.pop_dir()
-   end
-   ut.pop_dir()
-end
-
 
 local function download_and_unpack_zip(dep)
    print('download_and_unpack_zip', inspect(dep))
@@ -873,7 +782,7 @@ local function _dependency_init(dep)
    end
 
    if dep.url_action == "git" then
-      git_clone(dep)
+      git.clone(dep)
    elseif dep.url_action == "zip" then
       download_and_unpack_zip(dep)
    else
@@ -881,7 +790,23 @@ local function _dependency_init(dep)
       print("_dependecy_init: unknown dep.url_action", dep.url_action)
       os.exit(1)
    end
-   after_init(dep)
+
+   if not dep.after_init then
+      return
+   end
+
+   ut.push_current_dir()
+   local ok, errmsg = pcall(function()
+      print('after_init:', dep.name)
+      chdir(dep.dir)
+      dep.after_init(e, dep)
+   end)
+   if not ok then
+      local msg = 'after_init() failed with ' .. errmsg
+      printc("%{red}" .. msg .. "%{reset}")
+
+   end
+   ut.pop_dir()
 end
 
 
@@ -1896,15 +1821,12 @@ function actions.init(_args)
       printc("%{red}" .. msg .. "%{reset}")
    end
 
-   require('compat53')
 
 
 
 
 
 
-
-   local single_thread = true
 
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
@@ -1912,23 +1834,7 @@ function actions.init(_args)
 
       print('processing', dep.name)
 
-      do
-         print('without dependency', dep.name)
-
-         if single_thread then
-            _dependency_init(dep)
-         else
-            assert("Single thread only")
-
-
-
-
-
-
-
-
-         end
-      end
+      _dependency_init(dep)
    end
 
 
@@ -2948,12 +2854,16 @@ local function project_link(ctx, cfg, _args)
    print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
 
    local flags = ""
-   if not _args.noasan and _args.target ~= 'wasm' then
-      flags = flags .. concat(flags_sanitazer, " ")
-      flags = flags .. " "
-      if cfg.flags and type(cfg.flags) == 'table' then
-         flags = flags .. concat(cfg.flags, " ")
-      end
+
+
+
+
+
+
+
+
+   if cfg.flags and type(cfg.flags) == 'table' then
+      flags = flags .. concat(cfg.flags, " ")
    end
 
 
@@ -3010,8 +2920,12 @@ local function project_link(ctx, cfg, _args)
 
    local libsdirs = make_L(ctx)
    local libs = make_l(ctx.libs)
+
+   if not _args.noasan then
+      cmd = cmd .. " -fsanitize=address "
+   end
+
    cmd = cmd ..
-   " -fsanitize=address " ..
    concat(ctx.objfiles, " ") ..
    " " ..
    concat(libsdirs, " ") ..
@@ -3253,7 +3167,7 @@ local function codegen(cg)
    end
    file:close()
 
-   local on_write
+   local on_write = nil
    if cg.on_write then
       on_write = cg.on_write
    else
@@ -3568,6 +3482,8 @@ function sub_make(
       insert(flags, "-pthread")
    end
 
+   defines_apply(flags, cfg.common_define)
+
    if not _args.release then
 
 
@@ -3592,16 +3508,21 @@ function sub_make(
       table.insert(defines, define)
    end
 
-   if not _args.noasan and _args.target ~= 'wasm' then
-      for _, flag in ipairs(flags_sanitazer) do
-         table.insert(flags, flag)
-      end
 
-      if cfg.flags and type(cfg.flags) == 'table' then
-         for _, flag in ipairs(cfg.flags) do
-            assert(type(flag) == 'string')
-            table.insert(flags, flag)
-         end
+
+
+
+
+
+
+
+
+
+
+   if cfg.flags and type(cfg.flags) == 'table' then
+      for _, flag in ipairs(cfg.flags) do
+         assert(type(flag) == 'string')
+         table.insert(flags, flag)
       end
    end
 
@@ -3776,7 +3697,7 @@ function sub_make(
 
 
       if cfg.kind ~= "shared" then
-
+         koh_recompile(_args, cfg, target)
       end
 
       if verbose then

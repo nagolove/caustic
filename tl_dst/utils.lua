@@ -366,42 +366,48 @@ local function do_parser_setup(
 end
 
 local function cmd_do_execute(_cmd)
+   assert(type(_cmd) == 'string')
+   local ok = os.execute(_cmd)
+   return not not ok
 
-   if verbose then
-      os.execute("echo `pwd`")
-   end
-   if type(_cmd) == 'string' then
-      if verbose then
-         print('cmd_do:', _cmd)
-      end
-      if not os.execute(_cmd) then
-         if verbose then
-            print(format('cmd was failed "%s"', _cmd))
-         end
-         if errexit then
-            os.exit(1)
-         end
-      end
-   elseif (type(_cmd) == 'table') then
-      for _, v in ipairs(_cmd) do
-         if verbose then
-            print('cmd_do', v)
-         end
-         if not os.execute(v) then
-            if verbose then
-               print(format('cmd was failed "%s"', _cmd))
-            end
-            if errexit then
-               os.exit(1)
-            end
-         end
-      end
-   else
-      print('Wrong type in cmd_do', type(_cmd))
-      if errexit then
-         os.exit(1)
-      end
-   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end
 
 
@@ -409,8 +415,9 @@ local cmd_do = cmd_do_execute
 
 
 local function find_and_remove_cmake_cache()
-   cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
-   cmd_do('fdfind -HI "CMakeCache\\.txt" -x rm {}')
+   local args = ' -HI "CMakeCache\\.txt" -x rm {}'
+   cmd_do('fd ' .. args)
+
 end
 
 
@@ -568,7 +575,7 @@ local function test_readonly()
    local v1 = x.p.i[1]
 
 
-   local ok, errmsg = pcall(function()
+   local ok, _ = pcall(function()
       local x_ro = readonly(x)
       local v2 = x_ro.p.i[1]
       assert(v1 == v2)
@@ -582,7 +589,7 @@ local function test_readonly()
    end
 
 
-   ok, errmsg = pcall(function()
+   ok, _ = pcall(function()
       local x_ro = readonly(x)
       local v2 = x_ro.p.i[1]
       assert(v1 == v2)

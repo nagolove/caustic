@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 
+# Самозагрузка каустики.
+
 # какие команды выполняются
 set -x
+# прерывать при ненулевом коде возврата команды
 set -e
 
-cd koh_src
-
-pushd .
-cd ..
-
+cd $CAUSTIC_PATH
 echo "" > koh_src/tl_dst.h 
 fd ".*\.lua" tl_dst --exec xxd -i {} >> koh_src/tl_dst.h 
-
-popd
 
 # Генерируем список имён переменных, начинающихся на "tl_dst_" и объявленных как массивы
 # 1. rg ищет строки вида: "unsigned char tl_dst_.*[] = {"
@@ -21,7 +18,7 @@ popd
 # 4. Добавляем запятую к каждому имени
 # 5. Оборачиваем в C-массив строк, терминированный NULL
 
-pushd .
+cd $CAUSTIC_PATH/koh_src
 
 # Всё внутри фигурных скобок перенаправляется в файл
 {
@@ -32,22 +29,8 @@ pushd .
 } > tl_dst_inc.h
 
 
-popd
-
-#assist.lua
-#hnswlib
-#koh.cpp
-#linenoise.hpp
-#lua
-#redis.lua
-#tl_dst.h
-#tl_dst_inc.h
-#tl.lua
-
 pushd .
 cd lua
-#make clean
-#make MYCFLAGS="-fPIC" linux
 make MYCFLAGS="-fPIC" 
 popd
 
@@ -59,13 +42,15 @@ popd
 #-fsanitize=address \
 gcc -c ./index.c \
     -g3 -Wall -fPIC \
+    -DNO_KOH=1 \
     -I. -I./blake3_c \
     -I../src \
     -I../modules_linux/cimgui/ \
     -I../modules_linux/munit/ \
     -L. \
     -lm \
-    #-lcaustic \
+
+    #-fsanitize=address \
 
 # не получается слинковаться с cimgui
 # 
@@ -75,19 +60,51 @@ gcc -c ./index.c \
 pwd
 g++ ./koh.cpp \
     index.o \
+    -DNO_KOH=1 \
     -g3 -Wall -fPIC \
     -I. -I./hnswlib \
     -L./blake3_c \
     -L/home/nagolove/caustic/modules_linux/cimgui/ \
     -L.. \
     -shared \
-    -o libkoh.so \
+    -o ../libkoh.so \
     -lm \
     -lblake3 \
     -llua \
+
+    #-fsanitize=address \
+
     #-lcaustic_linux 
     #-lcimgui \
     #-lraylib \
 
     #-lcimgui \
-    #-fsanitize=address \
+
+
+echo "exit 1"
+exit 1
+
+cd $CAUSTIC_PATH
+#koh build -n cimgui
+
+cp libkoh.so libkoh.so.1
+
+pushd .
+cd $CAUSTIC_PATH/koh_src
+# собрать без санитайзера что-бы не было проблем LD_PRELOAD в lua
+#LD_PRELOAD="$(gcc -print-file-name=libasan.so)" koh make -a
+koh make -a
+popd
+
+cd $CAUSTIC_PATH
+cp libkoh.so libkoh.so.2
+
+#diff libkoh.so.1 libkoh.so.2
+set +e
+for f in libkoh.so.1 libkoh.so.2; do
+  if nm -D "$f" 2>/dev/null | grep -qw 'htable_new'; then
+    echo "$f: FOUND"
+  else
+    echo "$f: NOTFOUND"
+  fi
+done
