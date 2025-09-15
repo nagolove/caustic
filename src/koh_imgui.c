@@ -23,9 +23,8 @@ static const char *map_TreeNodeFlags[] = {
     [ImGuiTreeNodeFlags_SpanAvailWidth] = "ImGuiTreeNodeFlags_SpanAvailWidth",
     [ImGuiTreeNodeFlags_SpanFullWidth] = "ImGuiTreeNodeFlags_SpanFullWidth",
     [ImGuiTreeNodeFlags_SpanAllColumns] = "ImGuiTreeNodeFlags_SpanAllColumns",
-    [ImGuiTreeNodeFlags_NavLeftJumpsBackHere] = "ImGuiTreeNodeFlags_NavLeftJumpsBackHere",
+    [ImGuiTreeNodeFlags_NavLeftJumpsToParent] = "ImGuiTreeNodeFlags_NavLeftJumpsToParent",
     [ImGuiTreeNodeFlags_CollapsingHeader] = "ImGuiTreeNodeFlags_CollapsingHeader",
-
     // }}}
 };
 
