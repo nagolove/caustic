@@ -15,16 +15,16 @@ return {
           --"munit",
           "uthash",
           "enkits",
-          "pcre2",
+          --"pcre2",
           "imgui",
-          "rlimgui",
-          "raylib",
-          "cimgui",
+          --"rlimgui",
+          --"raylib",
+          --"cimgui",
           "box2c",
           "chipmunk",
-          "lua",
+          --"lua",
           "sol2",
-          "utf8proc",
+          --"utf8proc",
           "stb",
           "wfc",
           "libtess2",
@@ -48,20 +48,19 @@ return {
       },
       -- список дефайнов которые применяются всегда
       common_define = {
+          ["KOH"] = "1",
       },
       -- список дефайнов для отладочной сборки
       debug_define = {
-         ["BOX2C_SENSOR_SLEEP"] = "1",
-        --DEBUG = 0,
       },
       -- список дефайнов для релизной сборки
       release_define = {
-         ["T80_NO_ERROR_HANDLING"] = "1",
       },
       -- куда подставляются флаги?
       flags = {
          --"-fopenmp",
       },
+
       --[[
       codegen = {
          {
@@ -84,7 +83,7 @@ return {
       
       libs = {
           "blake3",
-          "lua",
+          --"lua",
       },
       includes = {
           ".",
