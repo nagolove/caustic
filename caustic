@@ -28,4 +28,6 @@ export LUA_CPATH="$LUA_CPATH_STR"
 export PATH="$LUAROCKS_BIN:$PATH"
 
 # Запуск Caustic
-lua5.4 "$CAUSTIC_PATH/tl_dst/caustic.lua" "$@"
+#lua5.4 "$CAUSTIC_PATH/tl_dst/caustic.lua" "$@"
+
+LD_PRELOAD="$(gcc -print-file-name=libasan.so)" ASAN_OPTIONS=halt_on_error=0:detect_leaks=0 lua5.4 "$CAUSTIC_PATH/tl_dst/caustic.lua" "$@"
