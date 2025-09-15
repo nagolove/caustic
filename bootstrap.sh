@@ -81,8 +81,8 @@ g++ ./koh.cpp \
     #-lcimgui \
 
 
-echo "exit 1"
-exit 1
+echo "FIRST STAGE"
+#exit 1
 
 cd $CAUSTIC_PATH
 #koh build -n cimgui
@@ -96,6 +96,8 @@ cd $CAUSTIC_PATH/koh_src
 koh make -a
 popd
 
+echo "SECOND STAGE"
+
 cd $CAUSTIC_PATH
 cp libkoh.so libkoh.so.2
 
@@ -108,3 +110,5 @@ for f in libkoh.so.1 libkoh.so.2; do
     echo "$f: NOTFOUND"
   fi
 done
+
+koh --help
