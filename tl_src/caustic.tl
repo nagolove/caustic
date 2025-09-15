@@ -1821,13 +1821,6 @@ function actions.init(_args: Args)
         printc("%{red}" .. msg .. "%{reset}")
     end
 
-    --[[
-    require 'compat53'
-    local threads: {lanes.Thread} = {}
-    local opt_tbl = { required = {"lfs", "compat53" }, }
-    local func = lanes.gen("*", opt_tbl, _dependency_init)
-    --]]
-
     for _, dep in ipairs(deps) do
         assert(type(dep.url) == 'string')
         assert(dep.name)
@@ -1836,6 +1829,13 @@ function actions.init(_args: Args)
         --sorter:add(dep.name, "null")
         _dependency_init(dep)
     end
+
+    --[[
+    require 'compat53'
+    local threads: {lanes.Thread} = {}
+    local opt_tbl = { required = {"lfs", "compat53" }, }
+    local func = lanes.gen("*", opt_tbl, _dependency_init)
+    --]]
 
     --[[
 	if #threads ~= 0 then
@@ -2935,12 +2935,14 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         .. concat(libs, " ") 
         --.. " -error-limit=0"
 
+        --[[
     if verbose then
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
         printc("project_link: %{blue}" .. cmd .. "%{reset}")
     end
+        --]]
 
-    printc("project_link: %{blue}" .. cmd .. "%{reset}")
+    --printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
     cmd_do(cmd)
 end
@@ -3659,7 +3661,7 @@ function sub_make(
                 args = args, 
             }
 
-            print('task', inspect(task))
+            --print('task', inspect(task))
             --print(ut.task_get_source(task))
 
             table.insert(tasks, task)
