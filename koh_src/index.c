@@ -16,7 +16,16 @@
 #include "lua.h"
 #include "lauxlib.h"
 
-//#define KOH
+// Дефайн отвечает за bootstrap 
+// При начальной сборке - не указывается, так как либы koh_ не доступны
+// После первой сборки можно собрать все либы koh_ и пересобрать libkoh с
+// их поддержкой
+#ifdef NO_KOH
+#undef KOH
+#endif
+#ifdef KOH
+#undef NO_KOH
+#endif
 
 #ifdef KOH
 #include "koh_strbuf.h"
@@ -198,6 +207,10 @@ char *str_slice_end_alloc(const char *s, int n) {
     if (n >= len)
         return NULL;
     char *buf_2 = calloc(n + 1, sizeof(char));
+    if (!buf_2) {
+        fprintf(stderr, "str_slice_end_alloc: bad allocation\n");
+        exit(EXIT_FAILURE);
+    }
     memcpy(buf_2, s + strlen(s) - n, sizeof(char) * n);
     return buf_2;
 }
@@ -209,6 +222,10 @@ char *str_slice_beg_alloc(const char *s, int n) {
     if (n >= len)
         return NULL;
     char *buf_2 = calloc(n + 1, sizeof(char));
+    if (!buf_2) {
+        fprintf(stderr, "str_slice_beg_alloc: bad allocation\n");
+        exit(EXIT_FAILURE);
+    }
     memcpy(buf_2, s, sizeof(char) * n);
     return buf_2;
 }
@@ -697,7 +714,7 @@ const char *index_chunk_raw(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
-            stderr, "index_chunk_raw: i value is too large (%ld/%ld)\n",
+            stderr, "index_chunk_raw: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -734,16 +751,17 @@ const char *index_chunk_raw(Index *index, u64 i) {
 
     return s;
 #else
-    fprintf(stderr, "index_chunk_raw: this function is deprecated\n");
+    fprintf(stderr, "index_chunk_raw: this function was disabled\n");
     return "HUI";
 #endif
+
 }
 
 const char *index_chunk_id(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
-            stderr, "index_chunk_id: i value is too large (%ld/%ld)\n",
+            stderr, "index_chunk_id: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -754,7 +772,7 @@ const char *index_chunk_id_hash(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
-            stderr, "index_chunk_id_hash: i value is too large (%ld/%ld)\n",
+            stderr, "index_chunk_id_hash: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -765,7 +783,7 @@ const char *index_chunk_file(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
-            stderr, "index_chunk_id_file: i value is too large (%ld/%ld)\n",
+            stderr, "index_chunk_id_file: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -777,7 +795,7 @@ u64 index_chunk_line_start(Index *index, u64 i) {
     if (i >= index->chunks_num) {
         fprintf(
             stderr,
-            "index_chunk_id_line_start: i value is too large (%ld/%ld)\n",
+            "index_chunk_id_line_start: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -789,7 +807,7 @@ u64 index_chunk_line_end(Index *index, u64 i) {
     if (i >= index->chunks_num) {
         fprintf(
             stderr,
-            "index_chunk_id_line_end: i value is too large (%ld/%ld)\n",
+            "index_chunk_id_line_end: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -800,7 +818,7 @@ const char *index_chunk_text(Index *index, u64 i) {
     assert(index);
     if (i >= index->chunks_num) {
         fprintf(
-            stderr, "index_chunk_id_text: i value is too large (%ld/%ld)\n",
+            stderr, "index_chunk_id_text: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -812,7 +830,7 @@ const char *index_chunk_text_zlib(Index *index, u64 i) {
     if (i >= index->chunks_num) {
         fprintf(
             stderr,
-            "index_chunk_id_text_zlib: i value is too large (%ld/%ld)\n",
+            "index_chunk_id_text_zlib: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
@@ -824,7 +842,7 @@ const char *index_chunk_embedding(Index *index, u64 i) {
     if (i >= index->chunks_num) {
         fprintf(
             stderr,
-            "index_chunk_id_embedding: i value is too large (%ld/%ld)\n",
+            "index_chunk_id_embedding: i value is too large (%lu/%lu)\n",
             i, index->chunks_num
         );
     }
