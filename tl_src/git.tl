@@ -17,7 +17,7 @@ local function clone_with_checkout(dep: Dependency)
 
     -- TODO: Сделать проверку для других хостов
     if not ssh_github_active and string.match(dep.url, "git@github.com") then
-        local errcode = os.execute("ssh -T git@github.com") as integer
+        local errcode = not not os.execute("ssh -T git@github.com") as integer
         print("errcode", errcode)
         if errcode then
             local msg = format(
@@ -36,22 +36,31 @@ local function clone_with_checkout(dep: Dependency)
 
     chdir(dep.dir)
 
-    if not(dep.git_branch and dep.git_commit) then
-        print(format(
+    --[[
+    if (dep.git_branch or dep.git_commit) and 
+       (not (dep.git_branch and dep.git_commit)) then
+        printc("%{red}" .. format(
             "clone_with_checkout: git_branch '%s', git_commit '%s'",
             dep.git_branch, dep.git_commit
-        ))
+        ) .. "%{reset}")
         os.exit(1)
     end
+    --]]
     assert(not(dep.git_branch and dep.git_commit))
 
     if dep.git_branch then
-        cmd_do("git checkout " .. dep.git_branch)
+        local cmd1 = "git fetch " .. dep.git_branch
+        cmd_do(cmd1)
+        local cmd2 = "git checkout " .. dep.git_branch
+        cmd_do(cmd2)
+
+        print(format("%q", cmd1))
+        print(format("%q", cmd2))
         --cmd_do(("git clone --depth=1 --branch %s --single-branch %s %s")
         --    :format(dep.git_branch, dep.url, dep.dir))
-    end
-    if dep.git_commit then
-        cmd_do("git checkout --detached " .. dep.git_commit)
+    elseif dep.git_commit then
+        --cmd_do("git checkout --detached " .. dep.git_commit)
+        cmd_do("git checkout " .. dep.git_commit)
     end
 end
 
