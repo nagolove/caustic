@@ -2,7 +2,7 @@
 require "global"
 
 local ut = require 'utils'
-local git = require 'git'
+--local git = require 'git'
 local cmd_do = ut.cmd_do
 local find_and_remove_cmake_cache = ut.find_and_remove_cmake_cache
 local inspect = require 'inspect'
@@ -11,6 +11,7 @@ local chdir = lfs.chdir
 local printc = ut.printc
 local insert = table.insert
 local format = string.format
+
 --local modules = require "modules"
 
 --global modules: {Dependency}
@@ -461,7 +462,7 @@ local function cimgui_after_init(e: Env, dep: Dependency)
     print("AAAAAAAAAAAAAAAAAA")
 
     -- TODO: перенести CXXFLAGS в CMAKE_CXX_FLAGS
-    local cxx_flags = '-DCMAKE_CXX_FLAGS="'
+    local cxx_flags = "-DCMAKE_CXX_FLAGS='"
 
     --local mods = modules.modules_instance()
 
@@ -473,21 +474,55 @@ local function cimgui_after_init(e: Env, dep: Dependency)
         local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
         cxx_flags = cxx_flags .. s .. " "
     end
-    cxx_flags = cxx_flags .. '"'
+
+--[[
+    if dep.target == 'linux' then
+        local flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
+        -- ВАЖНО: пробрасываем и CFLAGS, и CXXFLAGS
+        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+    elseif dep.target == 'wasm' then
+        -- для wasm -fPIC не нужен/не применяется
+        local flags = "-g3 -DPLATFORM_WEB=1"
+        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+    else
+        printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
+    end
+
+-- XXX: две страные строчки, привет
+'-DCMAKE_C_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC" ',
+'-DCMAKE_CXX_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC"',
+--]]
+
+    local flags: string
+    if dep.target == 'linux' then
+        flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
+    elseif dep.target == 'wasm' then
+        flags = "-g3 -DPLATFORM_WEB=1"
+    else
+        printc(
+            "%{red}build_cimgui_common:bad target "
+            .. dep.target
+            .. "%{reset}"
+        )
+    end
+
+    cxx_flags = cxx_flags 
+        .. " "
+        .. flags 
+        .. " " 
+        .. format('-I%s/freetype/include -I%s/raylib/src', path, path)
+
+    cxx_flags = cxx_flags .. "'"
+
+    printc('%{blue}cxx_flags%{reset}', cxx_flags)
 
     local cmake_cmd = {
-        format('CXXFLAGS=\'-I%s/freetype/include -I%s/raylib/src\'', path, path),
+        --format('CXXFLAGS=\'-I%s/freetype/include -I%s/raylib/src\'', path, path),
         cmake[dep.target],
         "-DIMGUI_STATIC=1",
         "-DNO_FONT_AWESOME=1",
-
-        -- XXX: две страные строчки, привет
-        '-DCMAKE_C_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC" ',
-        '-DCMAKE_CXX_FLAGS="-g3 -DPLATFORM_DESKTOP -fPIC"',
         cxx_flags,
     }
-
-    print('cxx_flags', cxx_flags)
 
     if dep.target == 'wasm' then
         insert(cmake_cmd, "-DPLATFORM_WEB=1")
@@ -504,12 +539,6 @@ local function cimgui_after_init(e: Env, dep: Dependency)
         "%{blue} " .. format("cmake_cmd %s", inspect(cmake_cmd)) .. " %{reset}"
     )
     cmd_do(table.concat(cmake_cmd, " "))
-
-    --[[
-    print('dep.target', dep.target)
-    print("os.exit(1)")
-    os.exit(1)
-    --]]
 
     local rlimgui_pattern = 
         "void%s*rlImGuiSetup(struct%s*igSetupOptions%s*%*opts);"
@@ -578,7 +607,7 @@ local function build_lua_common(_: Env, dep: Dependency)
         )
     elseif dep.target == 'linux' then
         cmd_do("make clean")
-        cmd_do("make -j")
+        cmd_do("make -j CFLAGS+=' -fPIC'")
     else
         printc(
             "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}"
@@ -681,7 +710,7 @@ local function build_libtess2_common(_: Env, _: Dependency)
     ut.pop_dir()
 end
 
-local _modules: {Dependency} = {
+_modules = {
 
     --[[
     -- {{{
@@ -987,7 +1016,6 @@ local _modules: {Dependency} = {
     },
     --]]
 
-    -- TODO: обновить зависимость
     {
         -- компилировать не нужно
         after_init = rlimgui_after_init,
@@ -1000,6 +1028,8 @@ local _modules: {Dependency} = {
         --url = "https://github.com/raylib-extras/rlImGui.git",
         url_action = "git",
         copy_for_wasm = true,
+        -- новая ветка
+        git_branch = "dear_imgui_v1.92.1",
     },
 
     {
@@ -1058,8 +1088,9 @@ local _modules: {Dependency} = {
         url_action = "git",
         copy_for_wasm = true,
 
-        git_branch = "docking_inter",
-        git_commit = "205107640d70aeffc9cd37a1e7a8d240708a55e5",
+        --git_branch = "docking_inter",
+        --git_commit = "205107640d70aeffc9cd37a1e7a8d240708a55e5", -- старая ветка, все работало
+        git_commit = "d61baefa0ce2a9db938ffdeb29e64f90f44cc037"
     },
 
     --[[
@@ -1270,8 +1301,9 @@ local function modules_instance(e: Env, target?: Target): Modules
         if m_copy.dir then
             m_copy.path_abs = path_base .. "/" .. m_copy.dir
 
-            m_copy.git_branch = git.current_branch(m_copy.path_abs)
-            m_copy.git_commit = git.current_revision(m_copy.path_abs)
+            -- XXX: Зачем установка значений git_ ?
+            --m_copy.git_branch = git.current_branch(m_copy.path_abs)
+            --m_copy.git_commit = git.current_revision(m_copy.path_abs)
         else
             m_copy.path_abs = nil
         end
