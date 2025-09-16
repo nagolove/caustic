@@ -28,4 +28,4 @@ export LUA_CPATH="$LUA_CPATH_STR"
 export PATH="$LUAROCKS_BIN:$PATH"
 
 # Запуск Caustic
-lua5.4 "$CAUSTIC_PATH/tl_dst/caustic.lua" "$@"
+ASAN_OPTIONS=verify_asan_link_order=0 lua5.4 "$CAUSTIC_PATH/tl_dst/caustic.lua" "$@"
