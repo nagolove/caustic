@@ -1821,13 +1821,6 @@ function actions.init(_args)
       printc("%{red}" .. msg .. "%{reset}")
    end
 
-
-
-
-
-
-
-
    for _, dep in ipairs(deps) do
       assert(type(dep.url) == 'string')
       assert(dep.name)
@@ -1836,6 +1829,13 @@ function actions.init(_args)
 
       _dependency_init(dep)
    end
+
+
+
+
+
+
+
 
 
 
@@ -2935,12 +2935,14 @@ local function project_link(ctx, cfg, _args)
    concat(libs, " ")
 
 
-   if verbose then
-      printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
-      printc("project_link: %{blue}" .. cmd .. "%{reset}")
-   end
 
-   printc("project_link: %{blue}" .. cmd .. "%{reset}")
+
+
+
+
+
+
+
 
    cmd_do(cmd)
 end
@@ -3659,7 +3661,7 @@ function sub_make(
             args = args,
          }
 
-         print('task', inspect(task))
+
 
 
          table.insert(tasks, task)
