@@ -105,7 +105,7 @@ end
 -- В таблице исключаемых имен могут быть шаблоны string.match()
 -- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
 local function filter_sources(path: string, exclude?: {string}): {string}
-    printc("%{green}filter_sources:%{reset}", lfs.currentdir())
+    --printc("%{green}filter_sources:%{reset}", lfs.currentdir())
 
     local files: {string} = {}
     for file in lfs.dir(path) do

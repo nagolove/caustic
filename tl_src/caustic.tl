@@ -830,6 +830,7 @@ end
 local record Actions
     -- {{{
 
+    clean: function(Args)
     cppcheck: function(Args)
     bld_lua: function(Args)
     mmap: function(Args)
@@ -2851,7 +2852,7 @@ local function make_L(ctx: LinkContext): {string}
 end
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
-    print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
+    --print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
 
     local flags: string = ""
 
@@ -2896,7 +2897,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         os.exit(1)
     end
 
-    print("project_link: cfg.kind", inspect(cfg.kind))
+    --print("project_link: cfg.kind", inspect(cfg.kind))
     local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
 
     -- Добавить какие-то wasm флаги
@@ -2916,7 +2917,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         --.. "/raylib/src/minshell.html "
     end
 
-    print("cmd:", cmd)
+    --print("cmd:", cmd)
 
     local libsdirs = make_L(ctx)
     local libs = make_l(ctx.libs)
@@ -3135,15 +3136,17 @@ end
 --]]
 
 local function codegen(cg: Cfg.Codegen)
-    print("codegen", inspect(cg))
+    --print("codegen", inspect(cg))
     if not cg.file_in or not cg.file_out then
         print("codegen: no file_in or file_out, returning")
         return
     end
 
+    --[[
     if verbose then
         print('codegen', inspect(cg))
     end
+    --]]
 
     if cg.external then
         ut.push_current_dir()
@@ -3283,7 +3286,7 @@ local function defines_apply(flags: {string}, defines: {string: string})
         return
     end
 
-    print("defines_apply: flags", inspect(flags), "defines", inspect(defines))
+    --print("defines_apply: flags", inspect(flags), "defines", inspect(defines))
 
     for define, value in pairs(defines) do
         assert(type(define) == 'string');
@@ -3814,8 +3817,16 @@ function actions.run(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     cmd_do("reset")
     actions.make(_args)
-    assert(cfgs[1])
-    assert(cfgs[1].artifact)
+
+    if not cfgs[1] then
+        printc("%{red}actions.run:%{reset} no translation unit in bld.lua")
+        return
+    end
+
+    if not cfgs[1].artifact then
+        printc("%{red}actions.run:%{reset} no artifact in bld.lua")
+        return
+    end
 
     if not _args.debug then
         local cmd = "./" .. cfgs[1].artifact
@@ -4335,6 +4346,11 @@ end
 
 local sha2 = require 'sha2'
 
+-- TODO: Найти объектные файлы проекта и удалить их вместе с бинарником
+function actions.clean(_: Args)
+    print("actions.clean:")
+end
+
 function actions.mmap(_: Args)
     local Index = require "index"
     local index = Index.new("./chunks.bin")
@@ -4351,7 +4367,31 @@ function actions.mmap(_: Args)
             local s: string = index:chunk_raw(i)
             local chunk: Chunk = load(s)() as Chunk
             chunk.embedding = nil
-            print(inspect(chunk))
+            printc("%{blue}" .. inspect(chunk) .. "%{reset}")
+
+            local text = index:chunk_text(i)
+            local text_zlib = index:chunk_text_zlib(i)
+            local embedding = index:chunk_embedding(i)
+            local chunk_id = index:chunk_id(i)
+            local chunk_id_hash = index:chunk_id_hash(i)
+            local chunk_file = index:chunk_file(i)
+
+            print(
+                "text",
+                text,
+                "text_zlib",
+                text_zlib,
+                "embedding",
+                embedding,
+                "chunk_id",
+                chunk_id,
+                "chunk_id_hash",
+                chunk_id_hash,
+                "chunk_file",
+                chunk_file
+            )
+
+
         end) as boolean, string
         if not ok then
             print('errmsg', inspect(errmsg))
