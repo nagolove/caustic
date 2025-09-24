@@ -148,11 +148,17 @@ global make = {
               '-D_WIN32 -DWIN32 '
 }
 
-
-global compiler = {
+global compiler_c = {
     ['linux'] = 'gcc',
     ['wasm'] = 'emcc',
     ['win'] = 'x86_64-w64-mingw32-gcc',
+    --['android'] = 'какая-то супер команда',
+}
+
+global compiler_cpp = {
+    ['linux'] = 'g++',
+    ['wasm'] = 'em++',
+    ['win'] = 'x86_64-w64-mingw32-g++',
     --['android'] = 'какая-то супер команда',
 }
 
