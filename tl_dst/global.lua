@@ -148,11 +148,17 @@ make = {
    '-D_WIN32 -DWIN32 ',
 }
 
-
-compiler = {
+compiler_c = {
    ['linux'] = 'gcc',
    ['wasm'] = 'emcc',
    ['win'] = 'x86_64-w64-mingw32-gcc',
+
+}
+
+compiler_cpp = {
+   ['linux'] = 'g++',
+   ['wasm'] = 'em++',
+   ['win'] = 'x86_64-w64-mingw32-g++',
 
 }
 

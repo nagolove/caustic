@@ -18,6 +18,18 @@ local format = string.format
 
 local _modules
 
+local function get_deps_name_map()
+   local map = {}
+   for _, dep in ipairs(_modules) do
+      if map[dep.name] then
+         print("get_deps_name_map: name dublicated", dep.name)
+         os.exit(1)
+      end
+      map[dep.name] = dep
+   end
+   return map
+end
+
 
 local function update_box2c(e, dep)
    ut.push_current_dir()
@@ -51,8 +63,82 @@ local function update_box2c(e, dep)
    ut.pop_dir()
 end
 
-local function build_implot(_, _)
+
+local function build_cimplot(e, dep)
    print("build_implot:")
+
+
+
+
+
+
+
+
+
+
+
+   local deps_name_map = get_deps_name_map()
+
+   local includes = deps_name_map["imgui"].includes
+   assert(includes)
+
+   local cxx_flags = ""
+   for _, include in ipairs(includes) do
+      local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
+      cxx_flags = cxx_flags .. s .. " "
+   end
+   print('cxx_flags', cxx_flags)
+
+
+   local includes_cimgui = deps_name_map["cimgui"].includes
+   assert(includes_cimgui)
+
+   local cxx_flags_cimgui = ""
+   print("includes", inspect(includes_cimgui))
+   for _, include in ipairs(includes_cimgui) do
+      local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
+      cxx_flags_cimgui = cxx_flags_cimgui .. s .. " "
+   end
+   print('cxx_flags_cimgui', cxx_flags_cimgui)
+
+   local cmd = compiler_cpp[dep.target] .. " -c cimplot.cpp" ..
+   " -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS " ..
+   " " ..
+   cxx_flags ..
+   " -I" .. e.path_abs_third_party[dep.target] ..
+   " " ..
+   cxx_flags_cimgui
+   print('cmd', cmd)
+   cmd_do(cmd)
+end
+
+local function build_implot(e, dep)
+   print("build_implot:")
+   local files_f = io.popen("fd '.*\\.cpp$'", "r")
+   local files = {}
+   for line in files_f:lines() do
+
+      table.insert(files, line)
+   end
+
+
+   local deps_name_map = get_deps_name_map()
+
+   local includes = deps_name_map["imgui"].includes
+   assert(includes)
+   local cxx_flags = ""
+   for _, include in ipairs(includes) do
+      local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
+      cxx_flags = cxx_flags .. s .. " "
+   end
+
+
+   cmd_do(
+   compiler_cpp[dep.target] ..
+   " -c " ..
+   cxx_flags ..
+   table.concat(files, " "))
+
 end
 
 local function build_box2c_common(_, dep)
@@ -257,7 +343,7 @@ local function build_munit_common(_, dep)
    if dep.target == "wasm" then
       flags = flags .. " -pthread "
    end
-   local cmd = compiler[dep.target] .. " -c munit.c " .. flags
+   local cmd = compiler_c[dep.target] .. " -c munit.c " .. flags
 
 
 
@@ -387,24 +473,12 @@ extern int luaopen_raylib(lua_State *L);
    print('swig_cmd', swig_cmd)
    cmd_do(swig_cmd)
 
-   local c = compiler[dep.target] ..
+   local c = compiler_c[dep.target] ..
    " -fPIC -g3 -c raylib_wrap.c " ..
    " -I../../lua -L../../lua -llua"
    print(c)
    cmd_do(c)
    cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
-end
-
-local function get_deps_name_map()
-   local map = {}
-   for _, dep in ipairs(_modules) do
-      if map[dep.name] then
-         print("get_deps_name_map: name dublicated", dep.name)
-         os.exit(1)
-      end
-      map[dep.name] = dep
-   end
-   return map
 end
 
 local function cimgui_after_init(e, dep)
@@ -742,35 +816,6 @@ _modules = {
    {
       disabled = true,
       copy_for_wasm = false,
-      description = "graphs plotting for imgui",
-      custom_defines = nil,
-      dir = "implot",
-      includes = {
-         "implot",
-         "implot",
-      },
-      libdirs = {
-         "implot",
-
-
-      },
-      links = {
-
-         "implot",
-      },
-      links_internal = {},
-      name = "implot",
-      url_action = "git",
-      build = build_implot,
-      url = "https://github.com/epezent/implot.git",
-
-   },
-
-
-
-   {
-      disabled = true,
-      copy_for_wasm = false,
       description = "llm interface",
       custom_defines = nil,
       dir = "llama_cpp",
@@ -1019,10 +1064,63 @@ _modules = {
       disabled = false,
       copy_for_wasm = true,
       name = "imgui",
+      includes = {
+         "imgui",
+      },
       dir = "imgui",
       url_action = "git",
       url = "https://github.com/ocornut/imgui.git",
    },
+
+
+   {
+      disabled = true,
+      copy_for_wasm = false,
+      description = "graphs plotting for imgui",
+      custom_defines = nil,
+      dir = "implot",
+      includes = {
+         "implot",
+         "implot",
+      },
+      libdirs = {
+         "implot",
+      },
+      links = {
+         "implot",
+      },
+      links_internal = {},
+      name = "implot",
+      url_action = "git",
+      build = build_implot,
+      url = "https://github.com/epezent/implot.git",
+   },
+
+
+
+   {
+      disabled = true,
+      copy_for_wasm = false,
+      description = "graphs plotting for imgui, C wrappers",
+      custom_defines = nil,
+      dir = "cimplot",
+      includes = {
+         "cimplot",
+         "cimplot",
+      },
+      libdirs = {
+         "cimplot",
+      },
+      links = {
+         "cimplot",
+      },
+      links_internal = {},
+      name = "cimplot",
+      url_action = "git",
+      build = build_cimplot,
+      url = "https://github.com/cimgui/cimplot.git",
+   },
+
 
 
 

@@ -7,6 +7,7 @@ local format = string.format
 local dir_stack = {}
 local ansicolors = require('ansicolors')
 local insert = table.insert
+local inspect = require('inspect')
 
 local function printc(...)
    print(ansicolors(table.concat({ ... })))
@@ -104,16 +105,29 @@ end
 
 
 
+
+
 local function filter_sources(path, exclude)
+
+
+
+
+
+
+
+
 
 
    local files = {}
    for file in lfs.dir(path) do
       local attrs = lfs.attributes(file)
       if attrs and attrs.mode == 'file' then
+
          table.insert(files, file)
       end
    end
+
+
 
    local files_processed = {}
    if exclude then
@@ -315,14 +329,13 @@ local function assert_file(fname)
 end
 
 local argparse = require('argparse')
-local inspect = require('inspect')
 
 local function do_parser_setup(
    parser, setup)
 
    local prnt = function(...)
-      local x = table.unpack({ ... })
-      x = nil
+      local _ = table.unpack({ ... })
+
    end
 
    prnt("do_parser_setup:")
