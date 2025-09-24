@@ -51,6 +51,10 @@ local function update_box2c(e: Env, dep: Dependency)
     ut.pop_dir()
 end
 
+local function build_implot(_: Env, _: Dependency)
+    print("build_implot:")
+end
+
 local function build_box2c_common(_: Env, dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     find_and_remove_cmake_cache()
@@ -733,6 +737,35 @@ _modules = {
     },
     -- }}}
     --]]
+
+    -- {{{
+    {
+        disabled = true,
+        copy_for_wasm = false,
+        description = "graphs plotting for imgui",
+        custom_defines = nil,
+        dir = "implot",
+        includes = { 
+            "implot",
+            "implot",
+        },
+        libdirs = { 
+            "implot", 
+            --"llama_cpp/build/ggml/src",
+            --"llama_cpp/build/common",
+        },
+        links = {
+            --"stdc++",
+            "implot",
+        },
+        links_internal = {},
+        name = "implot",
+        url_action = "git",
+        build = build_implot,
+        url = "https://github.com/epezent/implot.git"
+        --update = update_default,
+    },
+    -- }}}
 
     -- {{{
     {
