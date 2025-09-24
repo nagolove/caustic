@@ -559,24 +559,26 @@ local function gather_links(deps: {Dependency}): {string}
     local links_tbl = {}
     local linkstype = "links"
     for _, dep in ipairs(deps) do
-        local dep_links = (dep as {any:any})[linkstype] as DepLinks
-        if dep_links then
-            local list: {string}
+        if not dep.disabled then
+            local dep_links = (dep as {any:any})[linkstype] as DepLinks
+            if dep_links then
+                local list: {string}
 
-            if type(dep_links) == 'table' then
-                list = dep_links as {string}
-            elseif type(dep_links) == 'function' then
-                list = (dep_links as function(Dependency): {string})(dep)
-            else
-                printc(
-                    "%{red}gather_links: bad type in links type " ..
-                    inspect(dep) .. "%{reset}"
-                )
-            end
+                if type(dep_links) == 'table' then
+                    list = dep_links as {string}
+                elseif type(dep_links) == 'function' then
+                    list = (dep_links as function(Dependency): {string})(dep)
+                else
+                    printc(
+                        "%{red}gather_links: bad type in links type " ..
+                        inspect(dep) .. "%{reset}"
+                    )
+                end
 
-            if list then
-                for _, link in ipairs(list) do
-                    table.insert(links_tbl, link)
+                if list then
+                    for _, link in ipairs(list) do
+                        table.insert(links_tbl, link)
+                    end
                 end
             end
         end
@@ -614,7 +616,7 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
     return ready_deps
 end
 
-local function get_ready_links(cfg: Cfg, _: Target): {string}
+local function get_ready_l(cfg: Cfg, _: Target): {string}
     local merge_tables = ut.merge_tables
     return merge_tables({ "stdc++", "m", }, gather_links(get_ready_deps(cfg)))
 end
@@ -666,7 +668,7 @@ local function gather_libdirs_abs(cfg: Cfg, deps: {Dependency}): {string}
 
     local libdirs_tbl = {}
     for _, dep in ipairs(deps) do
-        if not no_deps[dep.name] and dep.libdirs then
+        if not no_deps[dep.name] and dep.libdirs and not dep.disabled then
             assert(dep.target)
             local path = e.path_abs_third_party[dep.target] .. "/"
             assert(path)
@@ -774,6 +776,11 @@ end
 local function _dependency_init(dep: Dependency): any
 	assert(dep)
     if dep.disabled then
+        printc(
+            "%{yellow}_dependency_init: module '" 
+            .. dep.name 
+            .. "'is disabled%{reset}"
+        )
         return
     end
 
@@ -2874,7 +2881,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     end
 
     local artifact = "../" .. cfg.artifact
-    local cc = compiler[_args.target]
+    local cc = compiler_c[_args.target]
     assert(cc)
 
     if _args.target == 'wasm' then
@@ -2929,7 +2936,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     cmd = cmd
         .. concat(ctx.objfiles, " ") 
         .. " " 
-        .. concat( libsdirs, " ") 
+        .. concat(libsdirs, " ") 
         .. " " 
         .. flags 
         .. " " 
@@ -2943,7 +2950,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     end
         --]]
 
-    --printc("project_link: %{blue}" .. cmd .. "%{reset}")
+    printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
     cmd_do(cmd)
 end
@@ -3426,6 +3433,16 @@ function sub_make(
 
     local exclude = {}
 
+    --print('cfg', inspect(cfg))
+    if (cfg as {string:string})['exclude'] then
+        printc(
+            "%{green}sub_make: bld.lua processing %{reset" 
+            .. "%{red}'exclude' field is deprecated, "
+            .. "use 'exclude_files' instead"
+        )
+        os.exit(1)
+    end
+
     -- Исключить некоторые файлы
     if cfg.exclude_files then
         for _, v in ipairs(cfg.exclude_files) do
@@ -3564,7 +3581,7 @@ function sub_make(
     end
 
     local libs = ut.merge_tables(
-        get_ready_links(cfg, target),
+        get_ready_l(cfg, target),
         get_ready_links_linux_only(cfg)
     )
 
@@ -3604,7 +3621,7 @@ function sub_make(
             end
         end
 
-        local cc = compiler[target]
+        local cc = compiler_c[target]
         assert(cc)
 
         local tasks: {Task} = {}
