@@ -7,6 +7,7 @@ local format = string.format
 local dir_stack: {string} = {}
 local ansicolors = require 'ansicolors'
 local insert     = table.insert
+local inspect = require 'inspect'
 
 local function printc(...: string)
     print(ansicolors(table.concat({...})))
@@ -102,18 +103,31 @@ local function cat_file(fname: string)
 end
 
 -- TODO: {exclude} may be a map, not a array
+-- Как ты себе представляешь exclude: {string: string} ?
+
 -- В таблице исключаемых имен могут быть шаблоны string.match()
 -- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
 local function filter_sources(path: string, exclude?: {string}): {string}
-    --printc("%{green}filter_sources:%{reset}", lfs.currentdir())
+
+    --[[
+    printc(
+        "%{green}filter_sources:%{reset}",
+        lfs.currentdir(),
+        "exclude",
+        inspect(exclude)
+    )
+    --]]
 
     local files: {string} = {}
     for file in lfs.dir(path) do
         local attrs = lfs.attributes(file)
         if attrs and attrs.mode == 'file' then
+            --table.insert(files, lfs.currentdir() .. "/" .. file)
             table.insert(files, file)
         end
     end
+
+    --print("filter_sources:", tabular(files))
 
     local files_processed = {}
     if exclude then
@@ -315,14 +329,13 @@ local function assert_file(fname: string)
 end
 
 local argparse = require 'argparse'
-local inspect = require 'inspect'
 
 local function do_parser_setup(
     parser: argparse.Parser, setup: {string:ParserSetup}
 )
     local prnt = function(...:any) 
-        local x = table.unpack({...})
-        x = nil
+        local _ = table.unpack({...})
+        --x = nil
     end
 
     prnt("do_parser_setup:")
