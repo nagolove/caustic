@@ -105,7 +105,7 @@ end
 
 
 local function filter_sources(path, exclude)
-   printc("%{green}filter_sources:%{reset}", lfs.currentdir())
+
 
    local files = {}
    for file in lfs.dir(path) do
