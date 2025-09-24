@@ -694,6 +694,42 @@ static int l_chunks_num(lua_State *L) {
     return 1;
 }
 
+static int l_chunk_method_str(
+    lua_State *L,
+    const char *(*index_cb)(Index *index, u64 i)
+) {
+    assert(index_cb);
+    lua_index_ud *ud = check_index(L, 1);
+    luaL_argcheck(L, ud->ptr != NULL, 1, "invalid Index");
+
+    // Индексы в Lua — 1-based
+    lua_Integer i = luaL_checkinteger(L, 2);
+    if (i < 1) {
+        return luaL_error(L, "chunk index must be >= 1");
+    }
+
+    u64 total = index_chunks_num(ud->ptr);
+    if ((u64)(i - 1) >= total) {
+        return luaL_error(
+                L, 
+                "chunk index out of range (got %" LUA_INTEGER_FMT
+                ", available 1..%" PRIu64 ")",
+                i, total
+            );
+    }
+
+    //const char *p = index_chunk_raw(ud->ptr, (u64)(i - 1));
+    const char *p = index_cb(ud->ptr, (u64)(i - 1));
+    if (!p) {
+        lua_pushnil(L);
+        //lua_pushstring(L, "HELLO");
+        return 1;
+    }
+
+    lua_pushstring(L, p);
+    return 1;
+}
+
 static int l_chunk_raw(lua_State *L) {
     lua_index_ud *ud = check_index(L, 1);
     luaL_argcheck(L, ud->ptr != NULL, 1, "invalid Index");
@@ -721,6 +757,39 @@ static int l_chunk_raw(lua_State *L) {
     return 1;
 }
 
+/*
+// Возвращает -1 при отсутствии поля
+u64 index_chunk_line_start(Index *index, u64 i);
+// Возвращает -1 при отсутствии поля
+u64 index_chunk_line_end(Index *index, u64 i);
+
+*/
+
+static int l_index_chunk_text(lua_State *L) {
+    return l_chunk_method_str(L, index_chunk_text);
+}
+
+static int l_index_chunk_text_zlib(lua_State *L) {
+    return l_chunk_method_str(L, index_chunk_text_zlib);
+}
+
+static int l_index_chunk_embedding(lua_State *L) {
+    return l_chunk_method_str(L, index_chunk_embedding);
+}
+
+static int l_index_chunk_id(lua_State *L) {
+    return l_chunk_method_str(L, index_chunk_id);
+}
+
+static int l_index_chunk_id_hash(lua_State *L) {
+    return l_chunk_method_str(L, index_chunk_id_hash);
+}
+
+static int l_index_chunk_file(lua_State *L) {
+    return l_chunk_method_str(L, index_chunk_file);
+}
+
+
 // ------------ модульные функции ------------
 
 static int l_new(lua_State *L) {
@@ -746,7 +815,14 @@ static int l_new(lua_State *L) {
 static const luaL_Reg handle_methods_index[] = {
     {"chunks_num", l_chunks_num},
     {"chunk_raw", l_chunk_raw},
-    {"__gc",       l_index_gc},
+
+    {"chunk_text", l_index_chunk_text},
+    {"chunk_text_zlib", l_index_chunk_text_zlib},
+    {"chunk_embedding", l_index_chunk_embedding},
+    {"chunk_id", l_index_chunk_id},
+    {"chunk_id_hash", l_index_chunk_id_hash},
+    {"chunk_file", l_index_chunk_file},
+
     {"__tostring", l_index_tostring},
     {NULL, NULL}
 };

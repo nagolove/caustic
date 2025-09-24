@@ -732,7 +732,7 @@ const char *index_chunk_raw(Index *index, u64 i) {
         strbuf_addf(&b, "%lu", index_chunk_line_end(index, i));
         strbuf_addf(&b, "%s", index_chunk_text(index, i));
         strbuf_addf(&b, "%s", index_chunk_text_zlib(index, i));
-        strbuf_addf(&b, "%s", index_chunk_embedding(index, i));
+        //strbuf_addf(&b, "%s", index_chunk_embedding(index, i));
 
         assert(index->id_hash2str);
 
