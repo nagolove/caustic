@@ -1272,3 +1272,12 @@ b2TreeStats b2World_OverlapPolygon( b2WorldId worldId, const b2Polygon* polygon,
 }
 
 #endif
+
+void b2Body_set_filter(b2BodyId bid, b2Filter fltr) {
+    const int shapes_cap = 16;
+    b2ShapeId shapes[shapes_cap] = {};
+    int shapes_num = b2Body_GetShapes(bid, shapes, shapes_cap);
+    for (int j = 0; j < shapes_num; j++) {
+        b2Shape_SetFilter(shapes[j], fltr);
+    }
+}

@@ -356,3 +356,6 @@ b2TreeStats b2World_OverlapCapsule( b2WorldId worldId, const b2Capsule* capsule,
 b2TreeStats b2World_OverlapPolygon( b2WorldId worldId, const b2Polygon* polygon, b2Transform transform,
 												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context );
 #endif
+
+
+void b2Body_set_filter(b2BodyId bid, b2Filter fltr);
