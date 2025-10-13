@@ -14,10 +14,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
 static HotkeyStorage    state_stack[8] = {0};
 static int              state_sz = 0;
 static HotkeyStorage *last_storage = NULL;
 bool hotkey_verbose = false;
+*/
 
 struct {
     int key;
@@ -265,6 +267,7 @@ const char *koh_key2str[] = {
 };
 
 
+/*
 // TODO: Сделать вывод в консоль через tabular()
 void hotkeys_enumerate(HotkeyStorage *storage) {
     assert(storage);
@@ -286,16 +289,6 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
         char name[82] = {0};
         sprintf(name, "\"%s\"", hk->name ? hk->name : "NULL");
 
-        /*
-        console_buf_write("[%16s] %8s %20s %6s - %s", 
-                get_key2str(hk->combo.key),
-                uint8t_to_bitstr(hk->groups),
-                name,
-                hk->enabled ? "true" : "false",
-                hk->description ? hk->description : "NULL"
-        );
-        */
-
         int lead_zeros = (8 - maxgroupnum);
         char buf[128] = {0};
         snprintf(
@@ -307,7 +300,6 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
                 get_key2str(hk->combo.mod),
                 get_key2str(hk->combo.mod2),
                 get_key2str(hk->combo.key),
-                /*skip_lead_zeros(uint8t_to_bitstr(hk->groups)),*/
                 to_bitstr_uint8_t(hk->groups) + lead_zeros,
                 name,
                 hk->enabled ? "t" : "f",
@@ -316,7 +308,9 @@ void hotkeys_enumerate(HotkeyStorage *storage) {
 
     }
 }
+*/
 
+/*
 int l_keys(lua_State *lua) {
     // TODO: Здесь что-то изменить, проверка кажется ненадежной
     if (last_storage)
@@ -336,8 +330,6 @@ void hotkey_init(HotkeyStorage *storage) {
 
 void hotkey_register(HotkeyStorage *storage, Hotkey hk) {
     assert(storage);
-
-    /*trace_push_group("hotkey_register");*/
 
     if (storage->keysnum + 1 == MAX_HOTKEYS) {
         //traceg("hotkeys limit are reached\n");
@@ -433,15 +425,13 @@ void hotkey_process(HotkeyStorage *storage) {
             trace("hotkey_process: unknowd mode\n");
         }
 
-        /*
-        bool mod = hk->combo.mod ? IsKeyDown(hk->combo.mod) : true; 
-        bool mod2 = hk->combo.mod2 ? IsKeyDown(hk->combo.mod2) : true;
-
-        if (mod && mod2) {
-            if (handler && handler(hk->combo.key) && hk->func)
-                hk->func(hk);
-        }
-        */
+        //bool mod = hk->combo.mod ? IsKeyDown(hk->combo.mod) : true; 
+        //bool mod2 = hk->combo.mod2 ? IsKeyDown(hk->combo.mod2) : true;
+        //
+        //if (mod && mod2) {
+        //    if (handler && handler(hk->combo.key) && hk->func)
+        //        hk->func(hk);
+        //}
 
         bool mod_down = IsKeyDown(hk->combo.mod);
         bool mod2_down = IsKeyDown(hk->combo.mod2);
@@ -537,3 +527,4 @@ void hotkey_state_pop(HotkeyStorage *storage) {
     }
 }
 
+*/

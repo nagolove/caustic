@@ -2,11 +2,14 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "koh_common.h"
 
 /*
     Хоткеи должны переключаться в зависимости от активной сцены. Если сцена
     не активна, то ее хоткеи не обрабатываются.
 */
+
+/*
 
 #define MAX_HOTKEYS 64
 
@@ -61,3 +64,20 @@ void hotkey_state_pop(HotkeyStorage *storage);
 
 extern bool hotkey_verbose;
 extern const char *koh_key2str[];
+
+*/
+
+typedef struct KeyStroke KeyStroke;
+
+KeyStroke *ks_new();
+void ks_free(KeyStroke *ks);
+
+typedef struct StrokeOpts {
+    char *stroke; // mode1 + mode2 + key
+    char *stroke_modes; // kd + kd + kp
+    char *gp_stroke; // ???
+} StrokeOpts;
+
+i32 ks_add(KeyStroke *ks, StrokeOpts *opts);
+bool ks_fetch(KeyStroke *ks, i32 id);
+void ks_update(KeyStroke *ks);
