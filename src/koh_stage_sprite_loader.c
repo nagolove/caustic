@@ -1835,13 +1835,12 @@ void stage_sprite_loader_gui_window(struct Stage *s) {
     //gui_modal_save_meta(st);
 }
 
-Stage *stage_sprite_loader_new(HotkeyStorage *hk_store) {
+Stage *stage_sprite_loader_new() {
     Stage_SpriteLoader *st = calloc(1, sizeof(Stage_SpriteLoader));
     if (!st) {
         printf("stage_sprite_loader_new: could not allocate memory\n");
         koh_fatal();
     } else {
-        st->parent.data = hk_store;
         st->parent.init = (Stage_callback)stage_sprite_loader_init;
         st->parent.update = (Stage_callback)stage_sprite_loader_update;
         st->parent.draw = (Stage_callback)stage_sprite_loader_draw;

@@ -23,13 +23,12 @@ static const float CIRCLE_RADIUS = 40;
 //static int height = 0;
 static Font fnt;
 
-Stage *stage_adsr_new(HotkeyStorage *hk_store) {
+Stage *stage_adsr_new() {
     Stage_ADSR *st = calloc(1, sizeof(Stage_ADSR));
     if (!st) {
         printf("stage_adsr_new: allocation failed\n");
         koh_fatal();
     } else {
-        st->hk_store = hk_store;
         st->parent.init = (Stage_callback)stage_adsr_init;
         st->parent.update = (Stage_callback)stage_adsr_update;
         st->parent.shutdown = (Stage_callback)stage_adsr_shutdown;

@@ -18,7 +18,7 @@
 
 typedef struct Stage_BzrCurve {
     Stage         parent;
-    HotkeyStorage *hk_store;
+    //HotkeyStorage *hk_store;
     Vector2       guides[4];
     Vector2       *points;
     int           pointsnum;
@@ -30,13 +30,13 @@ void stage_bzr_curve_init(Stage_BzrCurve *st);
 void stage_bzr_curve_update(Stage_BzrCurve *st);
 void stage_bzr_curve_shutdown(Stage_BzrCurve *st);
 
-Stage *stage_bzr_curve_new(HotkeyStorage *hk_store) {
+Stage *stage_bzr_curve_new() {
     Stage_BzrCurve *st = calloc(1, sizeof(Stage_BzrCurve));
     if (!st) {
         printf("stage_bzr_curve_new: bad calloc()\n");
         koh_fatal();
     } else {
-        st->hk_store = hk_store;
+        //st->hk_store = hk_store;
         st->parent.init = (Stage_callback)stage_bzr_curve_init;
         st->parent.update = (Stage_callback)stage_bzr_curve_update;
         st->parent.shutdown = (Stage_callback)stage_bzr_curve_shutdown;

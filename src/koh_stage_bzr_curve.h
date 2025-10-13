@@ -6,7 +6,7 @@
 #include "koh_hotkey.h"
 #include "koh_stages.h"
 
-Stage *stage_bzr_curve_new(HotkeyStorage *hk_store);
+Stage *stage_bzr_curve_new();
 
 
 

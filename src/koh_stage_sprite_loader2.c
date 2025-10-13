@@ -1913,20 +1913,20 @@ static void stage_sprite_loader_gui_window(struct Stage *s) {
     //gui_modal_save_meta(st);
 }
 
-Stage *stage_sprite_loader_new2(HotkeyStorage *hk_store) {
+Stage *stage_sprite_loader_new2() {
     Stage_SpriteLoader *st = calloc(1, sizeof(Stage_SpriteLoader));
     if (!st) {
         printf("stage_sprite_loader_new2: bad allocation\n");
         koh_fatal();
+    } else {
+        st->parent.init = (Stage_callback)stage_sprite_loader_init;
+        st->parent.update = (Stage_callback)stage_sprite_loader_update;
+        st->parent.draw = (Stage_callback)stage_sprite_loader_draw;
+        st->parent.shutdown = (Stage_callback)stage_sprite_loader_shutdown;
+        st->parent.enter = (Stage_callback)stage_sprite_loader_enter;
+        st->parent.leave = (Stage_callback)stage_sprite_loader_leave;
+        st->parent.gui = stage_sprite_loader_gui_window;
     }
-    st->parent.data = hk_store;
-    st->parent.init = (Stage_callback)stage_sprite_loader_init;
-    st->parent.update = (Stage_callback)stage_sprite_loader_update;
-    st->parent.draw = (Stage_callback)stage_sprite_loader_draw;
-    st->parent.shutdown = (Stage_callback)stage_sprite_loader_shutdown;
-    st->parent.enter = (Stage_callback)stage_sprite_loader_enter;
-    st->parent.leave = (Stage_callback)stage_sprite_loader_leave;
-    st->parent.gui = stage_sprite_loader_gui_window;
     return (Stage*)st;
 }
 

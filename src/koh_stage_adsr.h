@@ -35,7 +35,7 @@ struct DragIndex {
 
 typedef struct Stage_ADSR {
     Stage               parent;
-    HotkeyStorage       *hk_store;
+    //HotkeyStorage       *hk_store;
 
     struct ADSR          envelopes[MAX_ENVELOPES];
     struct ADSR_view     views[MAX_ENVELOPES];
@@ -44,7 +44,7 @@ typedef struct Stage_ADSR {
     int                  envelopes_num;
 } Stage_ADSR;
 
-Stage *stage_adsr_new(HotkeyStorage *hk_store);
+Stage *stage_adsr_new();
 void stage_adsr_init(Stage_ADSR *st);
 void stage_adsr_update(Stage_ADSR *st);
 void stage_adsr_shutdown(Stage_ADSR *st);

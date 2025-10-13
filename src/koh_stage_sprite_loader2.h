@@ -6,4 +6,4 @@
 #include "koh.h"
 /*#include "t80.h"*/
 
-Stage *stage_sprite_loader_new2(HotkeyStorage *hk_store);
+Stage *stage_sprite_loader_new2();
