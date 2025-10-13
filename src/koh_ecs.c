@@ -3012,7 +3012,13 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
         for (; htable_iter_valid(&i); htable_iter_next(&i)) {
             e_cp_type *type = htable_iter_value(&i, NULL);
             //printf("e_register: '%zu'\n", type->priv.cp_id);
-            assert(type->priv.cp_id != comp->priv.cp_id);
+            if (type->priv.cp_id == comp->priv.cp_id) {
+                printf(
+                    "e_register: comp '%s' has the same cp_id as '%s'\n",
+                    comp->name, type->name
+                );
+                koh_fatal();
+            }
         }
     }
 

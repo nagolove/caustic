@@ -92,9 +92,10 @@ typedef struct e_cp_type {
 } e_cp_type;
 
 extern MunitSuite test_e_suite_internal;
+
 // Инициализация внутренних структур e_cp_type для тестов. Без инициализации
 // поведение test_ecs_t_suite_internal непредсказуемо.
-void e_test_init();
+//void e_test_init();
 
 typedef struct ecs_t ecs_t;
 
