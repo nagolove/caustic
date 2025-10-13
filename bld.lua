@@ -6,8 +6,9 @@ return {
             "lfs",
         },
         artifact = nil,
+        --kind = 'app',
         src = 'src',
-        exclude = {
+        exclude_files = {
             "stage_template.h",
             "stage_template.c",
         },
