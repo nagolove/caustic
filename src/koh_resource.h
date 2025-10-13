@@ -18,6 +18,7 @@ void reslist_free(ResList *l);
 // XXX: Кеш не работает.
 Font reslist_load_font_unicode(ResList *l, const char *fname, int size);
 Font reslist_load_font(ResList *l, const char *fname, int size);
+Font reslist_load_font_dlft(ResList *l);
 Texture reslist_load_texture(ResList *l, const char *fname);
 // XXX: Если текстура не загружена, а лог выключен - как узнать об ошибке?
 // Что лучше - возвращать еденичную текстуру или пустую?

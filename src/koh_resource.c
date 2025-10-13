@@ -382,6 +382,17 @@ Texture reslist_load_texture(ResList *l, const char *fname) {
 
 RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
     assert(l);
+
+    if (w <= 0) {
+        trace("reslist_load_rt: w %d\n", w);
+        koh_fatal();
+    }
+
+    if (h <= 0) {
+        trace("reslist_load_rt: h %d\n", h);
+        koh_fatal();
+    }
+
     assert(w > 0);
     assert(h > 0);
     RenderTexture2D rt = LoadRenderTexture(w, h);
@@ -417,3 +428,14 @@ Font reslist_load_font(ResList *l, const char *fname, int size) {
     r->raylib_object = copy_alloc(&f, sizeof(f));
     return f;
 }
+
+Font reslist_load_font_dlft(ResList *l) {
+    assert(l);
+    Font f = GetFontDefault();
+    R *r = reslist_add(l);
+    r->type = RT_FONT;
+    r->fnt_size = 0;
+    r->raylib_object = NULL;
+    return f;
+}
+
