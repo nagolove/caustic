@@ -2615,6 +2615,7 @@ bool bit_calculator_gui(const char *caption, u64 *value) {
 }
 
 NORETURN void koh_fatal() {
+    printf("koh_fatal:\n");
     // TODO: Разные варинаты - для win, android
     // Вызов abort() в отладочном режиме
     exit(EXIT_FAILURE);

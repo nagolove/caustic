@@ -12,6 +12,19 @@
 #include <stdint.h>
 #include <stdio.h>
 
+//////////////////////////// отключить предупреждения при снятии константности
+#if defined(__GNUC__) || defined(__clang__)
+#define DIAG_PUSH_WCASTQUAL_OFF \
+    _Pragma("GCC diagnostic push") \
+    _Pragma("GCC diagnostic ignored \"-Wcast-qual\"")
+#define DIAG_POP \
+    _Pragma("GCC diagnostic pop")
+#else
+#define DIAG_PUSH_WCASTQUAL_OFF
+#define DIAG_POP
+#endif
+
+
 //////////////////// NORETURN
 // кросс-языковая обёртка
 #if __STDC_VERSION__ >= 201112L

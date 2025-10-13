@@ -71,6 +71,7 @@ void camp_update(CameraProcessor *cp) {
 }
 */
 
+// TODO: Сделать обработку мыши отлючаемой
 void camp_update(CameraProcessor *cp) {
     const float zoom_min = 0.01f;
     const float zoom_max = 100.0f;
