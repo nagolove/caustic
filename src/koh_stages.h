@@ -18,6 +18,11 @@ typedef void (*Stage_callback)(struct Stage *s);
 /*typedef void (*Stage_data_callback)(struct Stage *s, const char *str);*/
 typedef struct StagesStore StagesStore;
 
+typedef struct ArgV {
+    int     argc;
+    char    **argv;
+} ArgV;
+
 // TODO: Оставить одну структуру сцены. В ней хранить подсцены вместо
 // StagesStore
 typedef struct Stage {
@@ -39,8 +44,11 @@ typedef struct StageStoreSetup {
     char        *stage_store_name;
 } StageStoreSetup;
 
+ArgV stage_argv(StagesStore *ss);
+bool stage_arg_check(StagesStore *ss, const char *flag);
+
 // Инициализация подсистемы
-StagesStore *stage_new(struct StageStoreSetup *setup);
+StagesStore *stage_new(struct StageStoreSetup *setup, int argc, char **argv);
 // Добавить сцену. Внутри - st освобождается через free()
 Stage *stage_add(StagesStore *ss, Stage *st, const char *name);
 // Инициализация добавленных сцен

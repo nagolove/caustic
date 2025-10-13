@@ -27,6 +27,7 @@ struct StagesStore {
     bool     selected[MAX_STAGES_NUM];
     Stage    *cur;
     uint32_t num;
+    ArgV     argv;
 };
 
 // Убрать глобальную переменную, использовать переносимый контекст сцен.
@@ -41,7 +42,7 @@ int l_stage_get_active(lua_State *lua);
 Как провести попытку рефакторинга минимально разрушая текущую конфигурацию?
 Скопировать файлы, переименовать подсистему, добавить суффикс7
  */
-StagesStore *stage_new(struct StageStoreSetup *setup) {
+StagesStore *stage_new(struct StageStoreSetup *setup, int argc, char **argv) {
     StagesStore *ss = calloc(1, sizeof(*ss));
     assert(ss);
     if (setup && setup->l && setup->stage_store_name) {
@@ -63,6 +64,10 @@ StagesStore *stage_new(struct StageStoreSetup *setup) {
             lua_setglobal(setup->l, setup->stage_store_name);
         }
     }
+
+    ss->argv.argv = argv;
+    ss->argv.argc = argc;
+
     return ss;
 }
 
@@ -115,6 +120,7 @@ Stage *stage_add(StagesStore *ss, Stage *st, const char *name) {
     assert(strlen(name) < MAX_STAGE_NAME);
     assert(ss->num < MAX_STAGES_NUM);
 
+    st->store = ss;
     ss->stages[ss->num++] = st;
     strncpy(st->name, name, MAX_STAGE_NAME - 1);
     trace(
@@ -311,7 +317,7 @@ const char *stage_active_name_get(StagesStore *ss) {
     assert(ss);
     if (ss->cur) {
         static char ret_buf[MAX_STAGE_NAME] = {0};
-        strcpy(ret_buf, ss->cur->name);
+        strncpy(ret_buf, ss->cur->name, sizeof(ret_buf));
         return ret_buf;
     }
     return NULL;
@@ -493,4 +499,25 @@ void stage_free(StagesStore *ss) {
     if (ss) {
         free(ss);
     }
+}
+
+ArgV stage_argv(StagesStore *ss) {
+    assert(ss);
+    return ss->argv;
+}
+
+bool stage_arg_check(StagesStore *ss, const char *flag) {
+    assert(ss);
+    assert(flag);
+
+    if (ss->argv.argc <= 1) 
+        return false;
+
+    for (int i = 0; i < ss->argv.argc; i++) {
+        if (!strcmp(ss->argv.argv[i], flag)) {
+            return true;
+        }
+    }
+
+    return false;
 }
