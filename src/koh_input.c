@@ -385,7 +385,19 @@ struct InputGamepadDrawer {
     RenderTexture2D         rt;    
     int                     active_gp;
     float                   scale; // масштаб рисования картинки геймпада
+    Font                    fnt; // подсказки с названиями кнопок
+    bool                    draw_labels, advanched_mode;
 };
+
+static void gp_load_tex(InputGamepadDrawer *gp) {
+    assert(gp);
+    ResList *rl = gp->reslist;
+    assert(rl);
+    gp->tex_xbox = reslist_load_tex(rl, "assets/gfx/xbox.png");
+    float ws = gp->tex_xbox.width * gp->scale,
+          hs = gp->tex_xbox.height * gp->scale;
+    gp->rt = reslist_load_rt(rl, ws, hs);
+}
 
 InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
     assert(setup);
@@ -399,10 +411,12 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 
     ResList *rl = gp->reslist = reslist_new();
     SetTraceLogLevel(LOG_ERROR);
-    gp->tex_xbox = reslist_load_tex(rl, "assets/gfx/xbox.png");
-    float ws = gp->tex_xbox.width * gp->scale,
-          hs = gp->tex_xbox.height * gp->scale;
-    gp->rt = reslist_load_rt(rl, ws, hs);
+
+    gp_load_tex(gp);
+
+    //gp->fnt = GetFontDefault();
+    gp->fnt = reslist_load_font_dlft(rl);
+
     SetTraceLogLevel(LOG_INFO);
 
     if (koh_verbose_input) {
@@ -432,6 +446,76 @@ void input_gp_free(InputGamepadDrawer *gp) {
     free(gp);
 }
 
+static const char *gp_button2name[] = {
+    [GAMEPAD_BUTTON_UNKNOWN] = "UNKNOWN",
+    [GAMEPAD_BUTTON_LEFT_FACE_UP] = "LEFT_FACE_UP",
+    [GAMEPAD_BUTTON_LEFT_FACE_RIGHT] = "LEFT_FACE_RIGHT",
+    [GAMEPAD_BUTTON_LEFT_FACE_DOWN] = "LEFT_FACE_DOWN",
+    [GAMEPAD_BUTTON_LEFT_FACE_LEFT] = "LEFT_FACE_LEFT",
+    [GAMEPAD_BUTTON_RIGHT_FACE_UP] = "RIGHT_FACE_UP",
+    [GAMEPAD_BUTTON_RIGHT_FACE_RIGHT] = "RIGHT_FACE_RIGHT",
+    [GAMEPAD_BUTTON_RIGHT_FACE_DOWN] = "RIGHT_FACE_DOWN",
+    [GAMEPAD_BUTTON_RIGHT_FACE_LEFT] = "RIGHT_FACE_LEFT",
+    [GAMEPAD_BUTTON_LEFT_TRIGGER_1] = "LEFT_TRIGGER_1",
+    [GAMEPAD_BUTTON_LEFT_TRIGGER_2] = "LEFT_TRIGGER_2",
+    [GAMEPAD_BUTTON_RIGHT_TRIGGER_1] = "RIGHT_TRIGGER_1",
+    [GAMEPAD_BUTTON_RIGHT_TRIGGER_2] = "RIGHT_TRIGGER_2",
+    [GAMEPAD_BUTTON_MIDDLE_LEFT] = "MIDDLE_LEFT",
+    [GAMEPAD_BUTTON_MIDDLE] = "MIDDLE",
+    [GAMEPAD_BUTTON_MIDDLE_RIGHT] = "MIDDLE_RIGHT",
+    [GAMEPAD_BUTTON_LEFT_THUMB] = "LEFT_THUMB",
+    [GAMEPAD_BUTTON_RIGHT_THUMB] = "RIGHT_THUMB",
+};
+
+static const char *gp_axis2name[] = {
+    [GAMEPAD_AXIS_LEFT_X] = "AXIS_LEFT_X",
+    [GAMEPAD_AXIS_LEFT_Y] = "AXIS_LEFT_Y",
+    [GAMEPAD_AXIS_RIGHT_X] = "AXIS_RIGHT_X",
+    [GAMEPAD_AXIS_RIGHT_Y] = "AXIS_RIGHT_Y",
+    [GAMEPAD_AXIS_LEFT_TRIGGER] = "AXIS_LEFT_TRIGGER",
+    [GAMEPAD_AXIS_RIGHT_TRIGGER] = "AXIS_RIGHT_TRIGGER",
+};
+
+static float (*axis_move)(int gamepad, int axis) = GetGamepadAxisMovement;
+static const f32 fnt_size = 20;
+
+static void draw_triggers(InputGamepadDrawer *gp) {
+    DrawRectangle(170, 30, 15, 70, LIGHTGRAY);
+    DrawRectangle(604, 30, 15, 70, LIGHTGRAY);
+
+    i32 l = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70,
+        r = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70;
+    DrawRectangle( 170, 30, 15, l, RED);
+    DrawRectangle( 604, 30, 15, r, RED);
+}
+
+static void draw_stick(
+    InputGamepadDrawer *gp, Vector2 p, i32 axis_base, i32 thumb
+) {
+    const i32 gamepad = gp->active_gp;
+
+    Color color = BLACK;
+    if (IsGamepadButtonDown(gamepad, thumb)) {
+        color = RED;
+    }
+
+    f32 l = axis_move(gamepad, axis_base),
+        r = axis_move(gamepad, axis_base + 1);
+
+    DrawCircle(p.x + l * 20, p.y + r * 20, 25, color);
+
+    Font fnt = gp->fnt;
+    if (fabs(l) >= 0.01) {
+        const char *lbl = gp_axis2name[axis_base];
+        DrawTextEx(fnt, lbl, p, fnt_size, fnt_size / 5, GREEN);
+    }
+    if (fabs(r) >= 0.01) {
+        const char *lbl = gp_axis2name[axis_base + 1];
+        Vector2 newp = Vector2Add(p, (Vector2){ 0, fnt_size});
+        DrawTextEx(fnt, lbl, newp, fnt_size, fnt_size / 5, GREEN);
+    }
+}
+
 void input_gp_update(InputGamepadDrawer *gp) {
     // {{{
     assert(gp);
@@ -447,122 +531,160 @@ void input_gp_update(InputGamepadDrawer *gp) {
     ClearBackground(GRAY);
     DrawTexture(gp->tex_xbox, 0, 0, DARKGRAY);
 
-    int gamepad = gp->active_gp;
+    const i32 gamepad = gp->active_gp;
 
-    // Draw buttons: xbox home
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE)) {
-        DrawCircle(394, 89, 19, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_MIDDLE\n");
-    }
+    i32 btns[] = {
+        GAMEPAD_BUTTON_MIDDLE,
+        GAMEPAD_BUTTON_MIDDLE_RIGHT,
+        GAMEPAD_BUTTON_MIDDLE_LEFT,
+        GAMEPAD_BUTTON_RIGHT_FACE_LEFT,
+        GAMEPAD_BUTTON_RIGHT_FACE_DOWN,
+        GAMEPAD_BUTTON_RIGHT_FACE_RIGHT,
+        GAMEPAD_BUTTON_RIGHT_FACE_UP,
 
-    // Draw buttons: basic
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_RIGHT)) {
-        DrawCircle(436, 150, 9, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_MIDDLE_RIGHT\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_LEFT)) {
-        DrawCircle(352, 150, 9, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_MIDDLE_LEFT\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) {
-        DrawCircle(501, 151, 15, BLUE);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_RIGHT_FACE_LEFT\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
-        DrawCircle(536, 187, 15, LIME);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_RIGHT_FACE_DOWN\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) {
-        DrawCircle(572, 151, 15, MAROON);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_RIGHT_FACE_RIGHT\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
-        DrawCircle(536, 115, 15, GOLD);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_RIGHT_FACE_UP\n");
-    }
+        GAMEPAD_BUTTON_LEFT_FACE_UP,
+        GAMEPAD_BUTTON_LEFT_FACE_DOWN,
+        GAMEPAD_BUTTON_LEFT_FACE_LEFT,
+        GAMEPAD_BUTTON_LEFT_FACE_RIGHT,
+        GAMEPAD_BUTTON_LEFT_TRIGGER_1,
+        GAMEPAD_BUTTON_RIGHT_TRIGGER_1,
+
+    };
+    i32 btns_num = sizeof(btns) / sizeof(btns[0]);
+
+    static const struct {
+        Vector2 p, wh;
+        f32     radius;
+        bool    has_wh;
+    } desc[] = {
+        [GAMEPAD_BUTTON_MIDDLE] = {
+            { 394, 89,},
+            .radius = 19,
+        },
+        [GAMEPAD_BUTTON_MIDDLE_RIGHT] = {
+            {436, 150},
+            .radius = 19,
+        },
+        [GAMEPAD_BUTTON_MIDDLE_LEFT] = {
+            {352, 150},
+            .radius = 19,
+        },
+        [GAMEPAD_BUTTON_RIGHT_FACE_LEFT] = {
+            {501, 151},
+            .radius = 19,
+        },
+        [GAMEPAD_BUTTON_RIGHT_FACE_DOWN] = {
+            {536, 187},
+            .radius = 19,
+        },
+        [GAMEPAD_BUTTON_RIGHT_FACE_RIGHT] = {
+            {572, 151},
+            .radius = 19,
+        },
+        [GAMEPAD_BUTTON_RIGHT_FACE_UP] = {
+            {536, 115},
+            .radius = 19,
+        },
+
+        [GAMEPAD_BUTTON_LEFT_FACE_UP] = {
+            {317, 202},
+            .has_wh = 1,
+            .wh = {19, 26},
+        },
+        [GAMEPAD_BUTTON_LEFT_FACE_DOWN] = {
+            {317, 202 + 45},
+            .has_wh = 1,
+            .wh = { 19, 26},
+        },
+        [GAMEPAD_BUTTON_LEFT_FACE_LEFT] = {
+            {292, 228},
+            .has_wh = 1,
+            .wh = { 26, 19},
+        },
+        [GAMEPAD_BUTTON_LEFT_FACE_RIGHT] = {
+            {292 + 44, 228},
+            .has_wh = 1,
+            .wh = { 26, 19},
+        },
+        [GAMEPAD_BUTTON_LEFT_TRIGGER_1] = {
+            {259, 61},
+            .radius = 20,
+        },
+        [GAMEPAD_BUTTON_RIGHT_TRIGGER_1]= {
+            {536, 61},
+            .radius = 20,
+        }
+
+    };
+
+    //i32 num = sizeof(desc) / sizeof(desc[0]);
 
     // Draw buttons: d-pad
     DrawRectangle(317, 202, 19, 71, BLACK);
     DrawRectangle(293, 228, 69, 19, BLACK);
 
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_FACE_UP)) {
-        DrawRectangle(317, 202, 19, 26, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_LEFT_FACE_UP\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_FACE_DOWN)) {
-        DrawRectangle(317, 202 + 45, 19, 26, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_LEFT_FACE_DOWN\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_FACE_LEFT)) {
-        DrawRectangle(292, 228, 25, 19, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_LEFT_FACE_LEFT\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_FACE_RIGHT)) {
-        DrawRectangle(292 + 44, 228, 26, 19, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_LEFT_FACE_RIGHT\n");
-    }
-
-    // Draw buttons: left-right back
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_TRIGGER_1)) {
-        DrawCircle(259, 61, 20, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_LEFT_TRIGGER_1\n");
-    }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)) {
-        DrawCircle(536, 61, 20, RED);
-        if (koh_verbose_input)
-            trace("input_gp_update: GAMEPAD_BUTTON_RIGHT_TRIGGER_1\n");
-    }
-
-    // Draw axis: left joystick
-
-    Color leftGamepadColor = BLACK;
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_THUMB)) leftGamepadColor = RED;
+    // левый стик
     DrawCircle(259, 152, 39, BLACK);
     DrawCircle(259, 152, 34, LIGHTGRAY);
-    DrawCircle(259 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X)*20),
-               152 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y)*20), 25, leftGamepadColor);
-
-    // Draw axis: right joystick
-    Color rightGamepadColor = BLACK;
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_THUMB)) rightGamepadColor = RED;
+    // правый стик
     DrawCircle(461, 237, 38, BLACK);
     DrawCircle(461, 237, 33, LIGHTGRAY);
-    DrawCircle(461 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_RIGHT_X)*20),
-               237 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_RIGHT_Y)*20), 25, rightGamepadColor);
 
-    // Draw axis: left-right triggers
-    DrawRectangle(170, 30, 15, 70, GRAY);
-    DrawRectangle(604, 30, 15, 70, GRAY);
+    for (i32 i = 0; i < btns_num; ++i) {
+        i32 btn = btns[i];
+        if (IsGamepadButtonDown(gamepad, btn)) {
+            const Vector2 p = desc[btn].p;
+            if (desc[btn].has_wh)
+                DrawRectangleV(p, desc[btn].wh, RED);
+            else
+                DrawCircleV(p, desc[btn].radius, RED);
+            //DrawTextEx(
+            //    gp->fnt, gp_button2name[btn],
+            //    p, fnt_size, fnt_size / 5, GREEN
+            //);
+        }
+    }
 
-    float (*axis_movement)(int gamepad, int axis) = GetGamepadAxisMovement;
-
-    if (koh_verbose_input && axis_movement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER) != 0.)
-        trace("input_gp_update: GAMEPAD_AXIS_LEFT_TRIGGER\n");
-    DrawRectangle(
-        170, 30, 15, 
-        (int)(((1 + axis_movement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70),
-        RED
+    draw_stick(
+        gp, (Vector2) { .x = 259, .y = 152 },
+        GAMEPAD_AXIS_LEFT_X, GAMEPAD_BUTTON_LEFT_THUMB
+    );
+    draw_stick(
+        gp, (Vector2) { .x = 461, .y = 237 },
+        GAMEPAD_AXIS_RIGHT_X, GAMEPAD_BUTTON_RIGHT_THUMB
     );
 
-    DrawRectangle(
-        604, 30, 15, 
-        (int)(((1 + axis_movement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70),
-        RED
-    );
-    if (koh_verbose_input && axis_movement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))
-        trace("input_gp_update: GAMEPAD_AXIS_RIGHT_TRIGGER\n");
+    /*
+    // Draw axis: right joystick
+    Color rightGamepadColor = BLACK;
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_THUMB)) {
+        //printf("input_gp_update: GAMEPAD_BUTTON_RIGHT_THUMB\n");
+        rightGamepadColor = RED;
+    }
+
+    l = axis_move(gamepad, GAMEPAD_AXIS_RIGHT_X)*20;
+    r = axis_move(gamepad, GAMEPAD_AXIS_RIGHT_Y)*20;
+    p.x = 461, p.y = 237;
+    DrawCircle(p.x + l, p.y + r, 25, rightGamepadColor);
+
+    // */
+
+    draw_triggers(gp);
+
+    // Рисовать подписи для активных кнопок
+    for (i32 i = 0; i < btns_num; ++i) {
+        i32 btn = btns[i];
+        if (IsGamepadButtonDown(gamepad, btn)) {
+            Font fnt = gp->fnt;
+            const char *name = gp_button2name[btn];
+            // XXX: Проблема - текст может рисоваться в одном и том-же месте,
+            // что создает перекрытие
+            DrawTextEx(fnt, name, desc[btn].p, fnt_size, fnt_size / 5, GREEN);
+        }
+    }
+
+    //if (koh_verbose_input && axis_movement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))
+    //    trace("input_gp_update: GAMEPAD_AXIS_RIGHT_TRIGGER\n");
 
     EndMode2D();
     EndTextureMode();
@@ -574,8 +696,22 @@ void input_gp_update(InputGamepadDrawer *gp) {
 
     rlImGuiImageRenderTexture(&gp->rt);
 
+    if (igIsItemClicked(ImGuiMouseButton_Right))
+        gp->advanched_mode = !gp->advanched_mode;
+
+    if (gp->advanched_mode) {
+        igCheckbox("labels", &gp->draw_labels);
+        igSameLine(0.f, 0.);
+
+        igPushItemWidth(100);
+        //igPushItemWidth(gp->tex_xbox.width * .5);
+        if (igSliderFloat("scale", &gp->scale, 0.5, 2.5, "%.2f", 0)) {
+            gp_load_tex(gp);
+        }
+        igPopItemWidth();
+    }
+
     igEnd();
     // }}}
 }
-
 
