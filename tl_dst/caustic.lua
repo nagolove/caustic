@@ -285,14 +285,24 @@ local function search_and_load_cfgs_up(fname)
    end
 
    local cfgs
+
+   local code, err = loadfile(fname)
+   if not code then
+      print(format(
+      "search_and_load_cfgs_up: could not load config in " ..
+      "'%s' with '%s', fname '%s', aborting",
+      lfs.currentdir(), err, fname))
+
+      os.exit(1)
+   end
+
    local ok, errmsg = pcall(function()
-      cfgs = loadfile(fname)()
+      cfgs = code()
    end)
 
    if not ok then
-
       print(format(
-      "search_and_load_cfgs_up: could not load config in " ..
+      "search_and_load_cfgs_up: could not execute config in " ..
       "'%s' with '%s', fname '%s', aborting",
       lfs.currentdir(),
       errmsg,
@@ -882,6 +892,10 @@ end
 local parser_setup = {
 
 
+   clean = {
+      summary = [[remove compiled objects files and binaries]],
+   },
+
    cppcheck = {
       summary = [[run cppcheck on current project directory]],
    },
@@ -1001,6 +1015,7 @@ local parser_setup = {
       summary = "make and run current project",
       flags = {
          { "-d --debug", "run artifact in gdb" },
+         { "--noreset", "no call 'reset' for clearing terminal output" },
       },
    },
 
@@ -1074,6 +1089,7 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
+
 
 
 
@@ -1982,8 +1998,9 @@ function actions.selftest(_args)
       for _, dir in ipairs(test_dirs) do
          assert(type(dir) == "string")
          chdir(dir)
-         cmd_do("caustic make -x")
-         cmd_do("caustic run -c -x")
+         printc("%{green}" .. lfs.currentdir() .. " %{reset}")
+
+         cmd_do("koh run --noreset")
       end
       ut.pop_dir()
    end)
@@ -3145,7 +3162,7 @@ end
 local function codegen(cg)
 
    if not cg.file_in or not cg.file_out then
-      print("codegen: no file_in or file_out, returning")
+
       return
    end
 
@@ -3406,7 +3423,7 @@ function sub_make(
    end
 
    local src_dir = cfg.src or ""
-   print(format('src_dir %q', src_dir))
+
 
    if src_dir ~= '' then
       local ok, errmsg = chdir(src_dir)
@@ -3832,7 +3849,11 @@ end
 
 function actions.run(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
-   cmd_do("reset")
+
+   if not _args.noreset then
+      cmd_do("reset")
+   end
+
    actions.make(_args)
 
    if not cfgs[1] then
@@ -4363,9 +4384,27 @@ local hnswlib = require('hnswlib')
 
 local sha2 = require('sha2')
 
-
 function actions.clean(_)
-   print("actions.clean:")
+
+
+   local cfgs = search_and_load_cfgs_up("bld.lua")
+   if not cfgs then
+      printc("%{yellow}config file bld.lua is not found%{reset}")
+      return
+   end
+
+   local cfg = cfgs[1]
+   assert(cfg)
+   if cfg.artifact then
+      os.execute("rm " .. cfg.artifact)
+      os.execute("rm " .. cfg.artifact .. ".wasm")
+      os.execute("rm " .. cfg.artifact .. ".data")
+      os.execute("rm " .. cfg.artifact .. ".html")
+      os.execute("rm " .. cfg.artifact .. ".js")
+   end
+
+   os.execute("rm ./obj_linux/*")
+   os.execute("rm ./obj_wasm/*")
 end
 
 function actions.mmap(_)
