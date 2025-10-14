@@ -210,8 +210,14 @@ void push_adsr(
 void stage_adsr_init(Stage_ADSR *st) {
     printf("stage_adsr_init:\n");
 
-    fnt = load_font_unicode("assets/dejavusansmono.ttf", 23);
-    cam.zoom = 1;
+    const char *main_font = "assets/dejavusansmono.ttf";
+    const i32 fnt_size = 23;
+    if (koh_file_exist(main_font))
+        fnt = load_font_unicode(main_font, fnt_size);
+    else
+        fnt = GetFontDefault();
+
+    cam.zoom = 1.;
 
     //push_adsr(st, 1., 0.8, 2., 1., 10., 5.);
     //push_adsr(st, 0.5, 0.5, 0.5, 0.5, 1., 0.5);
