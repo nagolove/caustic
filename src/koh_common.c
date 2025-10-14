@@ -866,20 +866,30 @@ const char *transform2str(cpTransform tr) {
 const char *camera2str(Camera2D cam, bool multiline) {
     static char buf[256] = {0};
     memset(buf, 0, sizeof(buf));
+
     static char mt[4] = {};
+    static char space[4] = {};
+
     memset(mt, 0, sizeof(mt));
-    if (multiline)
+    memset(space, 0, sizeof(space));
+
+    if (multiline) {
         strcat(mt, ",\n");
-    else
+        strcat(space, "\n");
+    } else {
         strcat(mt, ",");
+        strcat(space, "");
+    }
     snprintf(
         buf,
         sizeof(buf) - 1,
-        "{ offset = %s%s target = %s%s rotation = %f%s zoom = %f }", 
+        "{ %s offset = %s%s target = %s%s rotation = %f%s zoom = %f %s }", 
+        space,
         Vector2_tostr(cam.offset), mt,
         Vector2_tostr(cam.target), mt,
         cam.rotation, mt,
-        cam.zoom
+        cam.zoom,
+        space
     );
     return buf;
 }
