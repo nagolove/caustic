@@ -324,6 +324,7 @@ struct IgWindowState {
     Vector2 wnd_pos, wnd_size;
 };
 
+// XXX: Зачем нужны следущие функции?
 void koh_window_post();
 const struct IgWindowState *koh_window_state();
 void koh_window_state_print();
