@@ -386,7 +386,10 @@ struct InputGamepadDrawer {
     int                     active_gp;
     float                   scale; // масштаб рисования картинки геймпада
     Font                    fnt; // подсказки с названиями кнопок
-    bool                    draw_labels, advanched_mode;
+    bool                    // писать названия активных клавиш
+                            is_draw_labels, 
+                            // показывать опции
+                            is_advanched_mode; 
 };
 
 static void gp_load_tex(InputGamepadDrawer *gp) {
@@ -408,6 +411,8 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
     assert(gp);
 
     gp->scale = setup->scale;
+    gp->is_advanched_mode = false;
+    gp->is_draw_labels = true;
 
     ResList *rl = gp->reslist = reslist_new();
     SetTraceLogLevel(LOG_ERROR);
@@ -483,10 +488,35 @@ static void draw_triggers(InputGamepadDrawer *gp) {
     DrawRectangle(170, 30, 15, 70, LIGHTGRAY);
     DrawRectangle(604, 30, 15, 70, LIGHTGRAY);
 
-    i32 l = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70,
+    f32 l = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70,
         r = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70;
-    DrawRectangle( 170, 30, 15, l, RED);
-    DrawRectangle( 604, 30, 15, r, RED);
+
+    Vector2 p1 = {170, 30},
+            p2 = {604, 30};
+    DrawRectangleV(p1, (Vector2) {15, l}, RED);
+    DrawRectangleV(p2, (Vector2) {15, r}, RED);
+
+    if (l != 0.)
+        DrawTextEx(
+            gp->fnt, "AXIS_LEFT_TRIGGER", 
+            p1, fnt_size, fnt_size / 5., GREEN
+    );
+    if (r != 0.)
+        DrawTextEx(
+            gp->fnt, "AXIS_RIGHT_TRIGGER", 
+            p2, fnt_size, fnt_size / 5., GREEN
+        );
+}
+
+static void draw_text(
+    InputGamepadDrawer *gp, const char *text, Vector2 position, 
+    float fontSize, Color tint
+) {
+
+    if (!gp->is_draw_labels) 
+        return;
+
+    DrawTextEx(gp->fnt, text, position, fontSize, fontSize / 5., tint);
 }
 
 static void draw_stick(
@@ -504,15 +534,14 @@ static void draw_stick(
 
     DrawCircle(p.x + l * 20, p.y + r * 20, 25, color);
 
-    Font fnt = gp->fnt;
     if (fabs(l) >= 0.01) {
         const char *lbl = gp_axis2name[axis_base];
-        DrawTextEx(fnt, lbl, p, fnt_size, fnt_size / 5, GREEN);
+        draw_text(gp, lbl, p, fnt_size, GREEN);
     }
     if (fabs(r) >= 0.01) {
         const char *lbl = gp_axis2name[axis_base + 1];
         Vector2 newp = Vector2Add(p, (Vector2){ 0, fnt_size});
-        DrawTextEx(fnt, lbl, newp, fnt_size, fnt_size / 5, GREEN);
+        draw_text(gp, lbl, newp, fnt_size, GREEN);
     }
 }
 
@@ -533,7 +562,8 @@ void input_gp_update(InputGamepadDrawer *gp) {
 
     const i32 gamepad = gp->active_gp;
 
-    i32 btns[] = {
+    // массивы {{{
+    static const i32 btns[] = {
         GAMEPAD_BUTTON_MIDDLE,
         GAMEPAD_BUTTON_MIDDLE_RIGHT,
         GAMEPAD_BUTTON_MIDDLE_LEFT,
@@ -616,8 +646,7 @@ void input_gp_update(InputGamepadDrawer *gp) {
         }
 
     };
-
-    //i32 num = sizeof(desc) / sizeof(desc[0]);
+    // }}}
 
     // Draw buttons: d-pad
     DrawRectangle(317, 202, 19, 71, BLACK);
@@ -638,10 +667,6 @@ void input_gp_update(InputGamepadDrawer *gp) {
                 DrawRectangleV(p, desc[btn].wh, RED);
             else
                 DrawCircleV(p, desc[btn].radius, RED);
-            //DrawTextEx(
-            //    gp->fnt, gp_button2name[btn],
-            //    p, fnt_size, fnt_size / 5, GREEN
-            //);
         }
     }
 
@@ -654,37 +679,16 @@ void input_gp_update(InputGamepadDrawer *gp) {
         GAMEPAD_AXIS_RIGHT_X, GAMEPAD_BUTTON_RIGHT_THUMB
     );
 
-    /*
-    // Draw axis: right joystick
-    Color rightGamepadColor = BLACK;
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_THUMB)) {
-        //printf("input_gp_update: GAMEPAD_BUTTON_RIGHT_THUMB\n");
-        rightGamepadColor = RED;
-    }
-
-    l = axis_move(gamepad, GAMEPAD_AXIS_RIGHT_X)*20;
-    r = axis_move(gamepad, GAMEPAD_AXIS_RIGHT_Y)*20;
-    p.x = 461, p.y = 237;
-    DrawCircle(p.x + l, p.y + r, 25, rightGamepadColor);
-
-    // */
-
     draw_triggers(gp);
 
     // Рисовать подписи для активных кнопок
     for (i32 i = 0; i < btns_num; ++i) {
         i32 btn = btns[i];
         if (IsGamepadButtonDown(gamepad, btn)) {
-            Font fnt = gp->fnt;
             const char *name = gp_button2name[btn];
-            // XXX: Проблема - текст может рисоваться в одном и том-же месте,
-            // что создает перекрытие
-            DrawTextEx(fnt, name, desc[btn].p, fnt_size, fnt_size / 5, GREEN);
+            draw_text(gp, name, desc[btn].p, fnt_size, GREEN);
         }
     }
-
-    //if (koh_verbose_input && axis_movement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))
-    //    trace("input_gp_update: GAMEPAD_AXIS_RIGHT_TRIGGER\n");
 
     EndMode2D();
     EndTextureMode();
@@ -697,10 +701,10 @@ void input_gp_update(InputGamepadDrawer *gp) {
     rlImGuiImageRenderTexture(&gp->rt);
 
     if (igIsItemClicked(ImGuiMouseButton_Right))
-        gp->advanched_mode = !gp->advanched_mode;
+        gp->is_advanched_mode = !gp->is_advanched_mode;
 
-    if (gp->advanched_mode) {
-        igCheckbox("labels", &gp->draw_labels);
+    if (gp->is_advanched_mode) {
+        igCheckbox("labels", &gp->is_draw_labels);
         igSameLine(0.f, 0.);
 
         igPushItemWidth(100);
