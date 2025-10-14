@@ -28,6 +28,7 @@ struct StagesStore {
     Stage    *cur;
     uint32_t num;
     ArgV     argv;
+    bool     is_advanched_mode;
 };
 
 // Убрать глобальную переменную, использовать переносимый контекст сцен.
@@ -355,6 +356,21 @@ void sort_table_specs(ImGuiTableSortSpecs *specs) {
     }
 }
 
+static void stage_selected_set_active(StagesStore *ss) {
+    const Stage *selected = get_selected_stage(ss);
+    printf("stage_selected_set_active: selected %p\n", selected);
+    if (selected)
+        stage_active_set(ss, selected->name);
+}
+
+static void reinit(Stage *s) {
+    if (!s) return;
+    if (s->shutdown && s->init) {
+        s->shutdown(s);
+        s->init(s);
+    }
+}
+
 void stages_gui_window(StagesStore *ss) {
     assert(ss);
     bool opened = true;
@@ -369,9 +385,12 @@ void stages_gui_window(StagesStore *ss) {
 
     igBegin(buf, &opened, flags);
 
-    igText("active stage: %s", ss->cur ? ss->cur->name : NULL);
+    if (ss->is_advanched_mode) {
+        igText("active stage: %s", ss->cur ? ss->cur->name : NULL);
+    }
 
     ImGuiTableFlags table_flags = 
+        ImGuiTableFlags_RowBg |
         ImGuiTableFlags_SizingStretchSame |
         ImGuiTableFlags_Resizable |
         ImGuiTableFlags_BordersOuter |
@@ -384,6 +403,8 @@ void stages_gui_window(StagesStore *ss) {
 
     ImVec2 outer_size = {0., 0.};
     const int columns_num = 8;
+    static bool double_selected = false;
+
     if (igBeginTable("stage", columns_num, table_flags, outer_size, 0.)) {
         // table {{{
         igTableSetupColumn("name", 0, 0, 0);
@@ -415,7 +436,7 @@ void stages_gui_window(StagesStore *ss) {
         }
         ImGuiListClipper_destroy(clipper);
         // */
-
+        
         for (int i = 0; i < ss->num; ++i) {
             ImGuiTableFlags row_flags = 0;
             igTableNextRow(row_flags, 0);
@@ -423,6 +444,8 @@ void stages_gui_window(StagesStore *ss) {
             char name_label[64] = {};
             sprintf(name_label, "%s", ss->stages[i]->name);
             igTableSetColumnIndex(0);
+
+            /*
             if (igSelectable_BoolPtr(
                 name_label, &ss->selected[i],
                 ImGuiSelectableFlags_SpanAllColumns, (ImVec2){0, 0}
@@ -432,6 +455,23 @@ void stages_gui_window(StagesStore *ss) {
                         ss->selected[j] = false;
                 }
             }
+            */
+
+
+            if (igSelectable_BoolPtr(
+                name_label, &ss->selected[i],
+                ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowDoubleClick, (ImVec2){0, 0}
+            )) {
+                for (int j = 0; j < ss->num; ++j) {
+                    ss->selected[j] = j == i;
+                }
+
+                double_selected = 
+                    igIsMouseDoubleClicked_Nil(ImGuiMouseButton_Left) && 
+                    igIsItemHovered(0);
+            }
+
 
             igTableSetColumnIndex(1);
             igText("%p", ss->stages[i]->init);
@@ -459,30 +499,27 @@ void stages_gui_window(StagesStore *ss) {
         // }}}
     }
 
-    /*
-    static char stage_str_argument[64] = {};
-    igInputText(
-        "stage string argument",
-        stage_str_argument, sizeof(stage_str_argument), input_flags, 0, NULL
-    );
-    */
-
-    if (igButton("switch to selected stage", (ImVec2) {0, 0})) {
-        const Stage *selected = get_selected_stage(ss);
-        if (selected)
-            stage_active_set(ss, selected->name);
+    if (igIsItemClicked(ImGuiMouseButton_Right)) {
+        ss->is_advanched_mode = !ss->is_advanched_mode;
+        printf("stages_gui_window: is_advanched_mode\n");
     }
 
-    igSameLine(0., 5.);
+    if (double_selected) {
+        stage_selected_set_active(ss);
+        double_selected = false;
+    }
 
-    if (igButton("shutdown/init selected", (ImVec2) {0, 0})) {
-        Stage *selected = get_selected_stage(ss);
-        if (selected) {
-            if (selected->shutdown && selected->init) {
-                selected->shutdown(selected);
-                selected->init(selected);
-            }
-            //stage_active_set(ss, selected->name, NULL);
+    if (ss->is_advanched_mode) {
+        ImVec2 z = {};
+        if (igButton("switch to selected stage", z)) {
+            stage_selected_set_active(ss);
+        }
+
+        igSameLine(0., 5.);
+
+        if (igButton("shutdown/init selected", (ImVec2) {0, 0})) {
+            Stage *selected = get_selected_stage(ss);
+            reinit(selected);
         }
     }
 
