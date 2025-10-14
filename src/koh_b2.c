@@ -1225,9 +1225,16 @@ bool b2Filter_gui(const char *caption, b2Filter *qf, float spacing) {
     assert(qf);
     bool ret = false;
     if (igCollapsingHeader_TreeNodeFlags(caption, 0)) {
-        u64 *cb = &qf->categoryBits;
-        ret |= u64_bit_gui("categoryBits", caption, cb, spacing);
-        ret |= u64_bit_gui("maskBits", caption, &qf->maskBits, spacing);
+        const char *s1 = "categoryBits";
+        const char *s2 = "maskBits";
+        ret |= u64_bit_gui(s1, caption, &qf->categoryBits, spacing);
+        ret |= u64_bit_gui(s2, caption, &qf->maskBits, spacing);
+
+        static int cnt = 0;
+        cnt++;
+        char buf[64] = {};
+        sprintf(buf, "##%d_groupIndex", cnt);
+        igInputInt(buf, &qf->groupIndex, 1, 10, 0);
     }
     return ret;
 }
