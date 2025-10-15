@@ -476,7 +476,6 @@ static inline void em_setup_screen_size(int *_w, int *_h) {
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
-
 int get_hardware_concurrency();
 
 // Примитивный многочлен: x^64 + x^4 + x^3 + x + 1

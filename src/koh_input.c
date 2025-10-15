@@ -513,10 +513,8 @@ static void draw_text(
     float fontSize, Color tint
 ) {
 
-    if (!gp->is_draw_labels) 
-        return;
-
-    DrawTextEx(gp->fnt, text, position, fontSize, fontSize / 5., tint);
+    if (gp->is_draw_labels) 
+        DrawTextEx(gp->fnt, text, position, fontSize, fontSize / 5., tint);
 }
 
 static void draw_stick(
