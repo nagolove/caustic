@@ -689,6 +689,143 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
     return MUNIT_OK;
 }
 
+MunitResult test_remove_safe(const MunitParameter params[], void* userdata) {
+
+    // с удалением компонент
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_id e0 = e_create(r),
+             e1 = e_create(r),
+             e2 = e_create(r),
+             e3 = e_create(r);
+
+        // there is no e_emplace()
+        munit_assert(e_has(r, e0, cp_type_one) == false);
+        munit_assert(e_has(r, e0, cp_type_two) == false);
+        munit_assert(e_has(r, e0, cp_type_three) == false);
+
+        e_emplace(r, e1, cp_type_one);
+        munit_assert(e_has(r, e1, cp_type_one) == true);
+        munit_assert(e_has(r, e1, cp_type_two) == false);
+        munit_assert(e_has(r, e1, cp_type_three) == false);
+        e_remove_safe(r, e1, cp_type_one);
+        munit_assert(e_has(r, e1, cp_type_one) == false);
+        munit_assert(e_has(r, e1, cp_type_two) == false);
+        munit_assert(e_has(r, e1, cp_type_three) == false);
+
+        e_emplace(r, e2, cp_type_one);
+        e_emplace(r, e2, cp_type_two);
+        munit_assert(e_has(r, e2, cp_type_one) == true);
+        munit_assert(e_has(r, e2, cp_type_two) == true);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+        e_remove_safe(r, e2, cp_type_two);
+        munit_assert(e_has(r, e2, cp_type_one) == true);
+        munit_assert(e_has(r, e2, cp_type_two) == false);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+        e_remove_safe(r, e2, cp_type_one);
+        munit_assert(e_has(r, e2, cp_type_one) == false);
+        munit_assert(e_has(r, e2, cp_type_two) == false);
+        munit_assert(e_has(r, e2, cp_type_three) == false);
+
+        e_emplace(r, e3, cp_type_one);
+        e_emplace(r, e3, cp_type_two);
+        e_emplace(r, e3, cp_type_three);
+        munit_assert(e_has(r, e3, cp_type_one) == true);
+        munit_assert(e_has(r, e3, cp_type_two) == true);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+        e_remove_safe(r, e3, cp_type_two);
+        munit_assert(e_has(r, e3, cp_type_one) == true);
+        munit_assert(e_has(r, e3, cp_type_two) == false);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+        e_remove_safe(r, e3, cp_type_one);
+        munit_assert(e_has(r, e3, cp_type_one) == false);
+        munit_assert(e_has(r, e3, cp_type_two) == false);
+        munit_assert(e_has(r, e3, cp_type_three) == true);
+        e_remove_safe(r, e3, cp_type_three);
+        munit_assert(e_has(r, e3, cp_type_one) == false);
+        munit_assert(e_has(r, e3, cp_type_two) == false);
+        munit_assert(e_has(r, e3, cp_type_three) == false);
+
+        e_free(r);
+    }
+
+    // с удалением компонент
+    // итеративно
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        for (int i = 0; i < 100; i++) {
+            e_id e0 = e_create(r),
+                 e1 = e_create(r),
+                 e2 = e_create(r),
+                 e3 = e_create(r);
+
+            // there is no e_emplace()
+            munit_assert(e_has(r, e0, cp_type_one) == false);
+            munit_assert(e_has(r, e0, cp_type_two) == false);
+            munit_assert(e_has(r, e0, cp_type_three) == false);
+
+            e_emplace(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            munit_assert(e_has(r, e1, cp_type_two) == false);
+            munit_assert(e_has(r, e1, cp_type_three) == false);
+            e_remove_safe(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == false);
+            munit_assert(e_has(r, e1, cp_type_two) == false);
+            munit_assert(e_has(r, e1, cp_type_three) == false);
+
+            e_emplace(r, e2, cp_type_one);
+            e_emplace(r, e2, cp_type_two);
+            munit_assert(e_has(r, e2, cp_type_one) == true);
+            munit_assert(e_has(r, e2, cp_type_two) == true);
+            munit_assert(e_has(r, e2, cp_type_three) == false);
+            e_remove_safe(r, e2, cp_type_two);
+            munit_assert(e_has(r, e2, cp_type_one) == true);
+            munit_assert(e_has(r, e2, cp_type_two) == false);
+            munit_assert(e_has(r, e2, cp_type_three) == false);
+            e_remove_safe(r, e2, cp_type_one);
+            munit_assert(e_has(r, e2, cp_type_one) == false);
+            munit_assert(e_has(r, e2, cp_type_two) == false);
+            munit_assert(e_has(r, e2, cp_type_three) == false);
+
+            e_emplace(r, e3, cp_type_one);
+            e_emplace(r, e3, cp_type_two);
+            e_emplace(r, e3, cp_type_three);
+            munit_assert(e_has(r, e3, cp_type_one) == true);
+            munit_assert(e_has(r, e3, cp_type_two) == true);
+            munit_assert(e_has(r, e3, cp_type_three) == true);
+            e_remove_safe(r, e3, cp_type_two);
+            munit_assert(e_has(r, e3, cp_type_one) == true);
+            munit_assert(e_has(r, e3, cp_type_two) == false);
+            munit_assert(e_has(r, e3, cp_type_three) == true);
+            e_remove_safe(r, e3, cp_type_one);
+            munit_assert(e_has(r, e3, cp_type_one) == false);
+            munit_assert(e_has(r, e3, cp_type_two) == false);
+            munit_assert(e_has(r, e3, cp_type_three) == true);
+            e_remove_safe(r, e3, cp_type_three);
+            munit_assert(e_has(r, e3, cp_type_one) == false);
+            munit_assert(e_has(r, e3, cp_type_two) == false);
+            munit_assert(e_has(r, e3, cp_type_three) == false);
+
+            e_destroy(r, e0);
+            e_destroy(r, e1);
+            e_destroy(r, e2);
+            e_destroy(r, e3);
+        }
+
+        e_free(r);
+    }
+
+    return MUNIT_OK;
+}
+
 // проверка прицепления компонент к сущности
 MunitResult test_has(const MunitParameter params[], void* userdata) {
 
@@ -2623,6 +2760,15 @@ static MunitTest test_e_internal[] = {
     },
 
     {
+      "/remove_safe",
+      test_remove_safe,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    {
       "/types",
       test_types,
       NULL,
@@ -4140,57 +4286,57 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
         a.cp_sizeof == b.cp_sizeof;
 }
 
-
+// TODO: Как сделать что-бы работал только koh_ecs интерфейс?
 koh_ecs koh_ecs_get() {
     koh_ecs r = {};
 
-    r.e_new = e_new;
-    r.e_free = e_free;
-    r.e_register = e_register;
-    r.e_create = e_create;
-    r.e_destroy = e_destroy;
-    r.e_valid = e_valid;
-    r.e_remove_all = e_remove_all;
-    r.e_emplace = e_emplace;
-    r.e_num = e_num;
-    r.e_remove = e_remove;
-    r.e_remove_safe = e_remove_safe;
-    r.e_has = e_has;
-    r.e_get = e_get;
-    r.e_get_fast = e_get_fast;
-    r.e_each = e_each;
-    r.e_orphan = e_orphan;
-    r.e_orphans_each = e_orphans_each;
-    r.e_view_create = e_view_create;
-    r.e_view_create_single = e_view_create_single;
-    r.e_view_valid = e_view_valid;
-    r.e_view_entity = e_view_entity;
-    r.e_view_get = e_view_get;
-    r.e_view_next = e_view_next;
-    r.e_entities_alloc = e_entities_alloc;
-    r.e_clone = e_clone;
-    r.e_print_entities = e_print_entities;
-    r.e_entities2table_alloc = e_entities2table_alloc;
-    r.e_entities2table_alloc2 = e_entities2table_alloc2;
-    r.e_gui = e_gui;
-    r.e_gui_buf = e_gui_buf;
-    r.e_types_print = e_types_print;
-    r.e_types = e_types;
-    r.e_cp_type_2str = e_cp_type_2str;
-    r.e_each_begin = e_each_begin;
-    r.e_each_valid = e_each_valid;
-    r.e_each_next = e_each_next;
-    r.e_each_entity = e_each_entity;
-    r.e_cp_type_cmp = e_cp_type_cmp;
-    r.e_id_ver = e_id_ver;
-    r.e_id_ord = e_id_ord;
-    r.e_from_void = e_from_void;
-    r.e_build = e_build;
-    r.e_id2str = e_id2str;
-    r.e_is_null = e_is_null;
-    r.e_is_not_null = e_is_not_null;
+    r.new = e_new;
+    r.free = e_free;
+    r.reg = e_register;
+    r.create = e_create;
+    r.destroy = e_destroy;
+    r.valid = e_valid;
+    r.remove_all = e_remove_all;
+    r.emplace = e_emplace;
+    r.num = e_num;
+    r.remove = e_remove;
+    r.remove_safe = e_remove_safe;
+    r.has = e_has;
+    r.get = e_get;
+    r.get_fast = e_get_fast;
+    r.each = e_each;
+    r.orphan = e_orphan;
+    r.orphans_each = e_orphans_each;
+    r.view_create = e_view_create;
+    r.view_create_single = e_view_create_single;
+    r.view_valid = e_view_valid;
+    r.view_entity = e_view_entity;
+    r.view_get = e_view_get;
+    r.view_next = e_view_next;
+    r.entities_alloc = e_entities_alloc;
+    r.clone = e_clone;
+    r.print_entities = e_print_entities;
+    r.entities2table_alloc = e_entities2table_alloc;
+    r.entities2table_alloc2 = e_entities2table_alloc2;
+    r.gui = e_gui;
+    r.gui_buf = e_gui_buf;
+    r.types_print = e_types_print;
+    r.types = e_types;
+    r.cp_type_2str = e_cp_type_2str;
+    r.each_begin = e_each_begin;
+    r.each_valid = e_each_valid;
+    r.each_next = e_each_next;
+    r.each_entity = e_each_entity;
+    r.cp_type_cmp = e_cp_type_cmp;
+    r.id_ver = e_id_ver;
+    r.id_ord = e_id_ord;
+    r.from_void = e_from_void;
+    r.build = e_build;
+    r.id2str = e_id2str;
+    r.is_null = e_is_null;
+    r.is_not_null = e_is_not_null;
     r.htable_eid_str = htable_eid_str;
-    r.e_is_cp_registered = e_is_cp_registered;
+    r.is_cp_registered = e_is_cp_registered;
 
     return r;
 }
