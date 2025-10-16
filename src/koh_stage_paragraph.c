@@ -55,13 +55,13 @@ void stage_paragraph_update(Stage_paragraph *st) {
     Vector2 pos = GetMousePosition();
 
     Paragraph pa;
-    paragraph_init(&pa);
+    paragraph_init(&pa, st->fnt);
     paragraph_add(&pa, "id = %.4d", 441);
     paragraph_add(&pa, "rotation = %8.4f", 31.2);
     paragraph_add(&pa, "strength = %8.4f", 313.013);
     /*paragraph_add(&pa, "pos = %s", cpVect_tostr(cpvzero));*/
     paragraph_add(&pa, "weapon = %11s", "KEkekekekekekekek");
-    paragraph_build(&pa, st->fnt);
+    paragraph_build(&pa);
     paragraph_draw(&pa, pos);
     paragraph_shutdown(&pa);
 
