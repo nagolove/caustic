@@ -420,7 +420,8 @@ Font reslist_load_font(ResList *l, const char *fname, int size) {
     assert(l);
     assert(fname);
     assert(size > 0);
-    Font f = LoadFontEx(fname, size, NULL, 0);
+    //Font f = LoadFontEx(fname, size, NULL, 0);
+    Font f = load_font_unicode(fname, size);
     R *r = reslist_add(l);
     r->type = RT_FONT;
     r->fnt_size = size;
