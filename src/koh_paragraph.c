@@ -18,18 +18,21 @@ Color paragraph_default_color_background = (Color){
 };
 Color paragraph_default_color_text = BLACK;
 
-void paragraph_init(Paragraph *prgh) {
+void paragraph_init(Paragraph *prgh, Font fnt) {
     assert(prgh);
     memset(prgh, 0, sizeof(Paragraph));
     prgh->color_text = paragraph_default_color_text;
     prgh->color_background = paragraph_default_color_background;
+    prgh->visible = true;
+    prgh->fnt = fnt;
 }
 
 void paragraph_shutdown(Paragraph *prgh) {
     assert(prgh);
     if (prgh->lines) {
         for(int i = 0; i < prgh->linesnum; i++) {
-            free(prgh->lines[i]);
+            if (prgh->lines[i])
+                free(prgh->lines[i]);
         }
         free(prgh->lines);
         prgh->lines = NULL;
@@ -68,10 +71,11 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     prgh->lines[prgh->linesnum++] = strndup(buf, sizeof(buf));
 }
 
-void paragraph_build(Paragraph *prgh, Font fnt) {
+void paragraph_build(Paragraph *prgh) {
     assert(prgh);
 
-    prgh->fnt = fnt;
+    //prgh->fnt = fnt;
+
     // Количество строчек + верхняя + нижняя
     prgh->transformed_linesnum = prgh->linesnum + 2;
     prgh->transformed_lines = calloc(
@@ -133,9 +137,12 @@ void paragraph_build(Paragraph *prgh, Font fnt) {
 void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
     assert(prgh);
 
+    if (!prgh->visible)
+        return;
+
     if (!prgh->builded) {
-        perror("paragraph_draw: not builded");
-        exit(EXIT_FAILURE);
+        //perror("paragraph_draw: not builded");
+        //exit(EXIT_FAILURE);
     }
 
     Vector2 coord = pos;
