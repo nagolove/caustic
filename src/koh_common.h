@@ -113,7 +113,6 @@ const char *to_bitstr_uint32_t(uint32_t value);
 const char *to_bitstr_uint64_t(uint64_t value);
 
 int u8_codeptlen(const char *str);
-void save_scripts(FILE *file);
 //void bb_draw(cpBB bb, Color color);
 Vector2 random_inrect(xorshift32_state *st, Rectangle rect);
 Vector2 random_outrect_quad(
