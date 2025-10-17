@@ -75,6 +75,7 @@ void strbuf_add(StrBuf *s, const char *str) {
 
 }
 
+/*
 void strbuf_addf(StrBuf *s, const char *fmt, ...) {
     assert(s);
 
@@ -96,16 +97,14 @@ void strbuf_addf(StrBuf *s, const char *fmt, ...) {
     char *str = calloc(require_len + 1, sizeof(str[0]));
 
     va_start(args, fmt);
-    /*int last_len = */
     vsnprintf(str, require_len + 1, fmt, args);
     va_end(args);
-
-    /*trace("strbuf_addf: last_len %d\n", last_len);*/
 
     s->s[s->num] = str;
     s->s[s->num + 1] = NULL;
     s->num++;
 }
+*/
 
 char *strbuf_concat_alloc(const StrBuf *s, const char *sep) {
     size_t required_len = 0, 
@@ -146,4 +145,72 @@ char *strbuf_last(StrBuf *s) {
         return s->s[s->num - 1];
     } else 
         return NULL;
+}
+
+// Новое: реализация strbuf_add_va()
+void strbuf_add_va(StrBuf *s, const char *fmt, va_list ap) {
+    assert(s);
+    if (!fmt) return;
+
+    if (s->num + 1 >= s->cap)
+        strbuf_realloc(s, 1.5f);
+
+    // vsnprintf потребляет va_list — делаем копию для прогона на длину
+    va_list ap_len;
+    va_copy(ap_len, ap);
+    int require_len = vsnprintf(NULL, 0, fmt, ap_len);
+    va_end(ap_len);
+
+    if (require_len < 0) {
+        trace("strbuf_add_va: vsnprintf failed\n");
+        return;
+    }
+
+    char *str = calloc((size_t)require_len + 1, sizeof(str[0]));
+    if (!str) {
+        trace("strbuf_add_va: not enough memory\n");
+        koh_trap();
+    }
+
+    // Вторая копия — для фактического форматирования
+    va_list ap_write;
+    va_copy(ap_write, ap);
+    (void)vsnprintf(str, (size_t)require_len + 1, fmt, ap_write);
+    va_end(ap_write);
+
+    s->s[s->num] = str;
+    s->s[s->num + 1] = NULL;
+    s->num++;
+}
+
+// Обновлено: теперь просто обёртка над strbuf_add_va()
+void strbuf_addf(StrBuf *s, const char *fmt, ...) {
+    assert(s);
+    if (!fmt) return;
+
+    va_list args;
+    va_start(args, fmt);
+    strbuf_add_va(s, fmt, args);
+    va_end(args);
+}
+
+void strbuf_clear(StrBuf *s) {
+    assert(s);
+    if (!s->s) {
+        s->num = 0;
+        return;
+    }
+
+    // Освободить все строки
+    for (int i = 0; i < s->num; ++i) {
+        free(s->s[i]);
+        s->s[i] = NULL;
+    }
+    // Сбросить состояние, но сохранить уже выделенный массив
+    s->num = 0;
+
+    // Гарантировать корректный NULL-терминатор массива
+    // (если cap >= 1, то ставим s[0] = NULL; если cap == 0 — нечего ставить)
+    if (s->cap > 0)
+        s->s[0] = NULL;
 }

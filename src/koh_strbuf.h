@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdarg.h>
+
 typedef struct StrBufOpts {
     int cap;
 } StrBufOpts;
@@ -29,11 +31,15 @@ char *strbuf_last(StrBuf *s);
 // Возвращает первую добавленную строку из буфера или NULL
 char *strbuf_first(StrBuf *s);
 
-// TODO: strbuf_clear()
+void strbuf_clear(StrBuf *s);
 
 // Копировать строку в буфер с форматированием
 __attribute__((__format__ (__printf__, 2, 3)))
 void strbuf_addf(StrBuf *s, const char *fmt, ...);
+
+// Новое: форматирование из va_list
+__attribute__((__format__ (__printf__, 2, 0)))
+void strbuf_add_va(StrBuf *s, const char *fmt, va_list ap);
 
 // Возвращает склейку всех строк буфера. Память нужно освобождать.
 char *strbuf_concat_alloc(const StrBuf *s, const char *sep);
