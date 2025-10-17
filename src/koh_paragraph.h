@@ -2,13 +2,15 @@
 #pragma once
 
 #include "raylib.h"
-
-#define KOH_PARAGRAPH_INITIAL_LINES 25
+#include "koh_strbuf.h"
 
 typedef struct Paragraph {
+    StrBuf  b_lines, b_tlines;
     Color   color_text, color_background;
-    int     linescap, linesnum, transformed_linesnum;
-    char    **lines, **transformed_lines;
+
+    //int     linescap, linesnum, transformed_linesnum;
+    //char    **lines, **transformed_lines;
+
     Vector2 measure;
     bool    builded, visible;
     Font    fnt;
