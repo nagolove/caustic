@@ -67,24 +67,34 @@ void paragraph_build(Paragraph *prgh) {
     char line[(longest + 1) * 3];
     memset(line, 0, sizeof(line));
 
+    const char *dash = "─"; // UTF - 3 chars len
+    size_t dash_len = strlen(dash);
+
+    char *pline = line;
     for(int i = 0; i < longest; i++) {
-        // XXX: O(i^2), исправить на линейное время
-        strcat(line, "─");
+        strcpy(pline, dash);
+        pline += dash_len;
     }
 
     strbuf_addf(&prgh->b_tlines, "┌%s┐", line);
 
     int j = 1;
     for(int i = 0; i < prgh->b_lines.num; i++, j++) {
-        char spaces[longest + 1];
-        memset(spaces, 0, sizeof(spaces));
+        const char *cur_line = prgh->b_lines.s[i];
 
-        int spacesnum = longest - u8_codeptlen(prgh->b_lines.s[i]);
-        for(int _j = 0; _j < spacesnum; _j++) {
-            spaces[_j] = ' ';
+        if (strcmp(cur_line, "-") == 0)
+            strbuf_addf(&prgh->b_tlines, "├%s┤", line);
+        else {
+            char spaces[longest + 1];
+            memset(spaces, 0, sizeof(spaces));
+
+            int spacesnum = longest - u8_codeptlen(cur_line);
+            for(int _j = 0; _j < spacesnum; _j++) {
+                spaces[_j] = ' ';
+            }
+
+            strbuf_addf(&prgh->b_tlines, "│%s%s│", cur_line, spaces);
         }
-
-        strbuf_addf(&prgh->b_tlines, "│%s%s│", prgh->b_lines.s[i], spaces);
     }
 
 
@@ -193,4 +203,10 @@ void paragraph_set(Paragraph *prgh, const char *txt) {
         *line_ptr = '\0';
         paragraph_add(prgh, "%s", line);
     }
+}
+
+
+void paragraph_add_break(Paragraph *prgh) {
+    prgh->builded = false;
+    strbuf_addf(&prgh->b_lines, "-");
 }

@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 #include "koh_strbuf.h"
+#include "koh_common.h"
 
 typedef struct Paragraph {
     StrBuf  b_lines, b_tlines;
@@ -24,6 +25,7 @@ void paragraph_draw(Paragraph *prgh, Vector2 pos);
 void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle);
 Vector2 paragraph_get_size(Paragraph *prgh);
 void paragraph_set(Paragraph *prgh, const char *txt);
+void paragraph_add_break(Paragraph *prgh);
 
 void paragraph_init(Paragraph *prgh, Font fnt);
 void paragraph_shutdown(Paragraph *prgh);
