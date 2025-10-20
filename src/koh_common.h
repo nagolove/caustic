@@ -490,3 +490,10 @@ bool bit_calculator_gui(const char *caption, u64 *value);
 const char *uint64_to_str_bin(uint64_t value);
 
 NORETURN void koh_fatal();
+
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define KOH_UNUSED __attribute__((unused))
+#else
+#  define KOH_UNUSED
+#endif
