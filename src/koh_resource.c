@@ -114,9 +114,10 @@ void res_unload_all(Resource *res_list, bool no_log) {
     // Сколько всего элементов?
     int num = 0;
     for (Resource *cur = allocated; cur; cur = cur->next, num++);
-    trace("res_unload_all: list of %d resources\n", num);
+    printf("res_unload_all: list of %d resources\n", num);
 
-    int (*qtrace)(const char *fmt, ...) = no_log ? trace_null : trace;
+    //int (*qtrace)(const char *fmt, ...) = no_log ? trace_null : trace;
+    int (*qtrace)(const char *fmt, ...) = printf;
 
     koh_term_color_set(KOH_TERM_GREEN);
     SetTraceLogLevel(LOG_FATAL);
@@ -384,12 +385,12 @@ RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
     assert(l);
 
     if (w <= 0) {
-        trace("reslist_load_rt: w %d\n", w);
+        printf("reslist_load_rt: w %d\n", w);
         koh_fatal();
     }
 
     if (h <= 0) {
-        trace("reslist_load_rt: h %d\n", h);
+        printf("reslist_load_rt: h %d\n", h);
         koh_fatal();
     }
 
