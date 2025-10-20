@@ -533,6 +533,7 @@ void stage_active_gui_render(StagesStore *ss) {
 }
 
 void stage_free(StagesStore *ss) {
+    stage_shutdown(ss);
     if (ss) {
         free(ss);
     }

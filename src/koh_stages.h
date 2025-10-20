@@ -56,7 +56,6 @@ Stage *stage_add(StagesStore *ss, Stage *st, const char *name);
 // типа stage_init_added()
 void stage_init(StagesStore *ss);
 // Деинициализация всех сцен
-void stage_shutdown(StagesStore *ss);
 void stage_free(StagesStore *ss);
 // Установить текущую сцену
 void stage_active_set(StagesStore *ss, const char *name);
