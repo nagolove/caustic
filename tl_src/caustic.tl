@@ -1448,7 +1448,6 @@ static const int screen_width_web = 1920;
 static const int screen_height_web = 1080;
 #endif
 
-static HotkeyStorage hk_store = {};
 static StagesStore *ss = NULL;
 static Camera2D cam = {
     .zoom = 1.,
@@ -1588,23 +1587,18 @@ int main(int argc, char **argv) {
 
 #endif
 
-    stage_shutdown(ss);// добавить в систему инициализации
-    koh_music_shutdown();       // добавить в систему инициализации
-    koh_fpsmeter_shutdown(); // добавить в систему инициализации
-    koh_render_shutdown();// добавить в систему инициализации
-    hotkey_shutdown(&hk_store);// добавить в систему инициализации, void*
-    if (ss) {
-        stage_free(ss);
-        ss = NULL;
-    }
-    koh_common_shutdown();// добавить в систему инициализации
-    sc_shutdown();// добавить в систему инициализации
-    sfx_shutdown();// добавить в систему инициализации
-    inotifier_shutdown();// добавить в систему инициализации
-    rlImGuiShutdown();// добавить в систему инициализации
-    CloseWindow();// добавить в систему инициализации
-
-    //dotool_free(testing_ctx);
+    stage_free(ss);
+    stage_shutdown(ss);
+    koh_music_shutdown();       
+    koh_fpsmeter_shutdown(); 
+    koh_render_shutdown();
+    hotkey_shutdown();
+    koh_common_shutdown();
+    sc_shutdown();
+    sfx_shutdown();
+    inotifier_shutdown();
+    rlImGuiShutdown();
+    CloseWindow();
     logger_shutdown();
 
     return EXIT_SUCCESS;
@@ -1721,20 +1715,23 @@ static void stage_$stage$_leave(Stage_$Stage$ *st) {
     trace("stage_$stage$_leave:\n");
 }
 
-Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
+Stage *stage_$stage$_new() {
     //assert(hk_store);
     Stage_$Stage$ *st = calloc(1, sizeof(*st));
-    st->parent.data = hk_store;
-
-    st->parent.init = (Stage_callback)stage_$stage$_init;
-    st->parent.enter = (Stage_callback)stage_$stage$_enter;
-    st->parent.leave = (Stage_callback)stage_$stage$_leave;
-
-    st->parent.update = (Stage_callback)stage_$stage$_update;
-    st->parent.draw = (Stage_callback)stage_$stage$_draw;
-    st->parent.gui = (Stage_callback)stage_$stage$_gui;
-    st->parent.shutdown = (Stage_callback)stage_$stage$_shutdown;
-    return (Stage*)st;
+    if (!st) {
+        printf("stage_$stage$_new: bad allocation\n");
+        koh_fatal();
+        return NULL;
+    } else {
+        st->parent.init = (Stage_callback)stage_$stage$_init;
+        st->parent.enter = (Stage_callback)stage_$stage$_enter;
+        st->parent.leave = (Stage_callback)stage_$stage$_leave;
+        st->parent.update = (Stage_callback)stage_$stage$_update;
+        st->parent.draw = (Stage_callback)stage_$stage$_draw;
+        st->parent.gui = (Stage_callback)stage_$stage$_gui;
+        st->parent.shutdown = (Stage_callback)stage_$stage$_shutdown;
+        return (Stage*)st;
+    }
 }
 ]]
     -- }}}
@@ -1756,7 +1753,7 @@ Stage *stage_$stage$_new(HotkeyStorage *hk_store) {
 
 #include "koh.h"
 
-Stage *stage_$stage$_new(HotkeyStorage *hk_store);
+Stage *stage_$stage$_new();
 ]]
 
     stage_h = gsub(stage_h, "%$stage%$", stage)
