@@ -731,12 +731,16 @@ void env_free(Envelope_t e) {
     env_free_points(e);
 
     if (e->rt_main.id) {
-        UnloadRenderTexture(e->rt_main);
+        // TODO: Создавать текстуры только когда есть отображение
+        // XXX: Падает, закомменчено
+        //UnloadRenderTexture(e->rt_main);
         memset(&e->rt_main, 0, sizeof(e->rt_main));
     }
 
     if (e->rt_text.id) {
-        UnloadRenderTexture(e->rt_text);
+        // TODO: Создавать текстуры только когда есть отображение
+        // XXX: Падает, закомменчено
+        //UnloadRenderTexture(e->rt_text);
         memset(&e->rt_text, 0, sizeof(e->rt_text));
     }
 
