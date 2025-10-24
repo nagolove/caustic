@@ -3745,8 +3745,9 @@ struct TypeCtx {
 3 num
 4 initial_cap
 5 on_destroy
-6 on_emplace
-7 description
+5 on_destroy2
+7 on_emplace
+8 description
 // }}}
 */
 static HTableAction iter_type( 
@@ -3781,31 +3782,13 @@ static HTableAction iter_type(
     (*i)++;
 
     igTableSetColumnIndex(3);
-    igText("%zu", type->cp_sizeof);
+    assert(type);
+    igText("%zu", e_num(r, *type));
 
     igTableSetColumnIndex(4);
     igText("%zu", type->initial_cap);
 
-    // NOTE: Почему закомменчено? Что происходит в этом коде?
-    /*
-    igTableSetColumnIndex(5);
-    bool use_on_destroy = type->callbacks_flags & DE_CB_ON_DESTROY;
-    igCheckbox("", &use_on_destroy);
-    if (use_on_destroy)
-        type->callbacks_flags |= DE_CB_ON_DESTROY;
-    else
-        type->callbacks_flags &=  ~DE_CB_ON_DESTROY;
-
-    igTableSetColumnIndex(6);
-    bool use_on_emplace = type->callbacks_flags & DE_CB_ON_EMPLACE;
-    igCheckbox("", &use_on_emplace);
-    if (use_on_emplace)
-        type->callbacks_flags |= DE_CB_ON_EMPLACE;
-    else
-        type->callbacks_flags &=  ~DE_CB_ON_EMPLACE;
-        */
-
-    igTableSetColumnIndex(7);
+    igTableSetColumnIndex(8);
     igText("%s", type->description);
 
     return HTABLE_ACTION_NEXT;
@@ -3969,10 +3952,10 @@ void e_gui(ecs_t *r, e_id e) {
     // }}}
 
     //ImGuiInputTextFlags input_flags = 0;
-    static bool use_lua_filter = false;
+    //static bool use_lua_filter = false;
+    //igCheckbox("lua filter", &use_lua_filter);
+    //igSameLine(0., 5.);
     static bool show_hightlight = false;
-    igCheckbox("lua filter", &use_lua_filter);
-    igSameLine(0., 5.);
     igCheckbox("show hightlight", &show_hightlight);
 
 /*
@@ -4014,9 +3997,9 @@ void e_gui(ecs_t *r, e_id e) {
         igTableSetupColumn("name", 0, 0, 2);
         igTableSetupColumn("num", 0, 0, 3);
         igTableSetupColumn("initial_cap", 0, 0, 4);
-        igTableSetupColumn("on_destroy", 0, 0, 5);
-        igTableSetupColumn("on_destroy2", 0, 0, 6);
-        igTableSetupColumn("on_emplace", 0, 0, 7);
+        //igTableSetupColumn("on_destroy", 0, 0, 5);
+        //igTableSetupColumn("on_destroy2", 0, 0, 6);
+        //igTableSetupColumn("on_emplace", 0, 0, 7);
         igTableSetupColumn("description", 0, 0, 8);
         igTableHeadersRow();
 
