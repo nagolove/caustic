@@ -144,6 +144,14 @@ static inline Vector2 b2Vec2_to_Vector2(b2Vec2 v) {
     return (Vector2) { v.x, v.y };
 }
 
+static inline Vector2 b2Vector2(b2Vec2 v) {
+    return (Vector2) { v.x, v.y };
+}
+
+static inline Vector2 Vector2b2(b2Vec2 v) {
+    return (Vector2) { v.x, v.y };
+}
+
 static inline b2AABB rect2aabb(Rectangle r) {
     return (b2AABB) {
         .lowerBound.x = r.x,// + r.width,
@@ -359,3 +367,19 @@ b2TreeStats b2World_OverlapPolygon( b2WorldId worldId, const b2Polygon* polygon,
 
 
 void b2Body_set_filter(b2BodyId bid, b2Filter fltr);
+
+static inline const char *b2Transform_2str(b2Transform t) {
+    static char slots[5][64] = {0};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+
+    snprintf(
+        buf, sizeof(slots[0]),
+        "{ p = {%f, %f}, q = {%f, %f}",
+        t.p.x, t.p.y, 
+        t.q.c, t.q.s
+    );
+
+    return buf;
+}
