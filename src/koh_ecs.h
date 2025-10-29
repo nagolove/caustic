@@ -59,6 +59,7 @@ typedef struct e_cp_type_private {
 typedef struct e_cp_type e_cp_type;
 
 typedef struct e_cp_type {
+    // XXX: что делает этот флаг?
     bool        manual_cp_id;
     e_cp_type_private priv;
     // component sizeof
@@ -179,7 +180,8 @@ size_t e_num(ecs_t* r, e_cp_type cp_type);
     Warning: attempting to use invalid entity results in undefined behavior
 */
 void e_remove(ecs_t* r, e_id e, e_cp_type cp_type);
-void e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type);
+// Возвращает истину если удаление прошло успешно
+bool e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type);
 
 /*
     Checks if the entity has the given component
@@ -448,7 +450,7 @@ typedef struct koh_ecs {
     void* (*emplace)(ecs_t* r, e_id e, e_cp_type cp_type);
     size_t (*num)(ecs_t* r, e_cp_type cp_type);
     void (*remove)(ecs_t* r, e_id e, e_cp_type cp_type);
-    void (*remove_safe)(ecs_t* r, e_id e, e_cp_type cp_type);
+    bool (*remove_safe)(ecs_t* r, e_id e, e_cp_type cp_type);
     bool (*has)(ecs_t* r, e_id e, const e_cp_type cp_type);
     void* (*get)(ecs_t* r, e_id e, e_cp_type cp_type);
     void* (*get_fast)(ecs_t* r, e_id e, e_cp_type cp_type);

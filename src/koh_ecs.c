@@ -15,6 +15,32 @@
 #include "koh_routine.h"
 #include "koh_b2.h"
 
+#include <stddef.h>
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer)
+#    define USING_ASAN 1
+#  endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#  define USING_ASAN 1
+#endif
+
+#ifdef USING_ASAN
+#  include <sanitizer/asan_interface.h>
+#endif
+
+static inline int asan_can_write(const void *p, size_t n) {
+#ifdef USING_ASAN
+    // true, если во всём диапазоне нет «яда»
+    return !__asan_region_is_poisoned(p, n);
+#else
+    // без ASan — считаем, что всё ок (или сделайте тут свою политику)
+    (void)p; (void)n;
+    return 1;
+#endif
+}
+
+
 // test types {{{
 typedef char type_one;
 
@@ -31,18 +57,21 @@ typedef struct {
 static e_cp_type cp_type_one = {
     .name = "one",
     .cp_sizeof = sizeof(char),
+    .initial_cap = 1,
 };
 
 // тип для тестирования
 static e_cp_type cp_type_two = {
     .name = "two",
     .cp_sizeof = sizeof(type_two),
+    .initial_cap = 1,
 };
 
 // тип для тестирования
 static e_cp_type cp_type_three = {
     .name = "three",
     .cp_sizeof = sizeof(type_three),
+    .initial_cap = 1,
 };
 
 const char *type_one_2str(type_one t);
@@ -829,6 +858,65 @@ MunitResult test_remove_safe(const MunitParameter params[], void* userdata) {
 // проверка прицепления компонент к сущности
 MunitResult test_has(const MunitParameter params[], void* userdata) {
 
+    // по мотивам koh-hexia: h_stage_main.c, hm_snake_move()
+    /*
+    bool e1 = e_has(r, e_head, cmp_snake_body);
+    e_remove_safe(r, e_head, cmp_snake_head);
+    bool e2 = e_has(r, e_head, cmp_snake_body);
+    */
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_id e0 = e_create(r);
+
+        type_one *one = e_emplace(r, e0, cp_type_one);
+        munit_assert_not_null(one);
+        *one = 11;
+
+        type_two *two = e_emplace(r, e0, cp_type_two);
+        munit_assert_not_null(two);
+        two->x = 2;
+        two->y = 3;
+        two->z = 4;
+
+        munit_assert(e_has(r, e0, cp_type_one));
+        e_remove(r, e0, cp_type_two);
+        munit_assert(e_has(r, e0, cp_type_one));
+
+        e_destroy(r, e0);
+        e_free(r);
+    }
+
+
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_id e0 = e_create(r);
+
+        type_one *one = e_emplace(r, e0, cp_type_one);
+        munit_assert_not_null(one);
+        *one = 11;
+
+        type_two *two = e_emplace(r, e0, cp_type_two);
+        munit_assert_not_null(two);
+        two->x = 2;
+        two->y = 3;
+        two->z = 4;
+
+        munit_assert(e_has(r, e0, cp_type_one));
+        e_remove_safe(r, e0, cp_type_two);
+        munit_assert(e_has(r, e0, cp_type_one));
+
+        e_destroy(r, e0);
+        e_free(r);
+    }
+
     // без удаления компонент
     {
         ecs_t *r = e_new(NULL);
@@ -1038,6 +1126,7 @@ MunitResult test_view_get(const MunitParameter params[], void* userdata) {
         e_id *e_fr_set = htable_get(set, two, sizeof(*two), NULL);
         munit_assert(e_fr_set != NULL);
         // Результат из хештаблицы должен совпадать с связью в ецс
+        munit_assert_not_null(e_fr_set);
         munit_assert((*e_fr_set).id == e.id);
     }
     free(entts);
@@ -2960,11 +3049,11 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
             );
         }
 
-        if (r->storages_size + 1 == r->storages_cap) {
+        if (r->storages_size + 1 >= r->storages_cap) {
             printf(
                 "e_assure: storages_cap %d is not enough\n", r->storages_cap
             );
-            abort();
+            koh_fatal();
         }
 
         s = &r->storages[r->storages_size++];
@@ -3135,8 +3224,10 @@ static void imgui_update(ecs_t *r, e_cp_type cp_type) {
 
 e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     ecs_assert(r);
-    assert(strlen(comp->name) >= 1);
     assert(comp);
+    assert(strlen(comp->name) >= 1);
+    assert(comp->cp_sizeof > 0);
+    assert(comp->initial_cap > 0);
 
     // Проверка идет только по имени типа
     if (e_is_cp_registered(r, comp->name)) {
@@ -3154,6 +3245,7 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     else {
         assert(comp->priv.cp_id < 128);
 
+        // Проверка на корректность cp_id, используется ли уже идентификатор
         HTableIterator i = htable_iter_new(r->cp_types);
         for (; htable_iter_valid(&i); htable_iter_next(&i)) {
             e_cp_type *type = htable_iter_value(&i, NULL);
@@ -3349,9 +3441,10 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
     if (!e_valid(r, e))
         return NULL;
 
-    // XXX: какое поведение выбрать?
-    if (e_has(r, e, cp_type))
+    if (e_has(r, e, cp_type)) {
+        printf("e_emplace: double emplace for '%s'\n", cp_type.name);
         return NULL;
+    }
 
     e_storage *s = e_assure(r, cp_type);
 
@@ -3359,9 +3452,19 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
 
     // Проверить вместимость и выделить еще памяти при необходимости
     if (s->cp_data_size + 1 >= s->cp_data_cap) {
-        s->cp_data_cap *= cp_data_grow_policy;
-        s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
-        assert(s->cp_data);
+        s->cp_data_cap++;
+        s->cp_data_cap = s->cp_data_cap * 3 / 2;
+        //s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
+        void *newp = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
+
+        if (!newp) {
+            printf("e_emplace: bad realloc() for '%s'\n", s->name);
+            koh_fatal();
+            return NULL;
+        }
+
+        s->cp_data = newp;
+        printf("e_emplace: component '%s' was realloced\n", s->name);
     }
 
     s->cp_data_size++;
@@ -3373,7 +3476,13 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
     // Добавить сущность в разреженный массив
     ss_add(&s->sparse, e.ord);
 
-    memset(comp_data, 0, cp_type.cp_sizeof);
+    if (!asan_can_write(comp_data, cp_type.cp_sizeof)) {
+        printf("e_emplace: poisoned pointer\n");
+        koh_fatal();
+    }
+
+    //printf("e_emplace: cp_type.cp_sizeof %zu\n", cp_type.cp_sizeof);
+    memset(comp_data, 0, s->cp_sizeof);
 
     if (s->on_emplace)
         s->on_emplace(comp_data, e);
@@ -4253,14 +4362,16 @@ const char *htable_eid_str(const void *data, int len) {
 bool e_verbose = false;
 
 
-void e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type) {
+bool e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type) {
     ecs_assert(r);
     assert(e_valid(r, e));
     cp_is_registered_assert(r, cp_type);
 
     if (e_has(r, e, cp_type)) {
         e_storage_remove(e_assure(r, cp_type), e);
+        return true;
     }
+    return false;
 }
 
 int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
