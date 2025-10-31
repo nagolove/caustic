@@ -107,9 +107,8 @@ typedef struct e_storage {
     // TODO: Хранить указателья на ect_t для дополнительных проверок
 } e_storage;
 
-#define E_REGISTRY_MAX 64
-const static int cp_data_initial_cap = 100;
-const static float cp_data_grow_policy = 1.5;
+enum { cp_data_initial_cap = 100, };
+//const static float cp_data_grow_policy = 1.5;
 
 typedef struct ecs_t {
     e_storage       *storages; 
@@ -161,7 +160,7 @@ struct EachCtx {
     int num;
 };
 
-e_cp_type cp_type_tmp = {
+static e_cp_type cp_type_tmp = {
     .cp_sizeof = sizeof(int),
     .name = "int",
 };
@@ -4380,8 +4379,49 @@ int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
         a.cp_sizeof == b.cp_sizeof;
 }
 
+// Удалить все сущности связанные с данным типом компонента
+void e_remove_by_type(ecs_t *r, e_cp_type type) {
+    ecs_assert(r);
+    cp_is_registered_assert(r, type);
+
+    int type_cap = e_num(r, type);
+
+    enum { MAX_VLA_CAP = 4096, };
+    e_id _destroyed[MAX_VLA_CAP + 1] = {};
+
+    e_id *destroyed = _destroyed;
+    bool use_vla = true;
+
+    // Использовать VLA или выделать память?
+    if (type_cap > MAX_VLA_CAP) {
+        destroyed = calloc(type_cap + 1, sizeof(destroyed[0]));
+        if (!destroyed) {
+            printf("e_remove_by_type: bad alloc\n");
+            koh_fatal();
+            return;
+        }
+        use_vla = false;
+    }
+
+    int destroyed_num = 0;
+    e_view v = e_view_create_single(r, type);
+    for (; e_view_valid(&v); e_view_next(&v)) {
+        destroyed[destroyed_num++] = e_view_entity(&v);
+    }
+
+    for (int k = 0; k < destroyed_num; k++) {
+        e_destroy(r, destroyed[k]);
+    }
+   
+    if (!use_vla) {
+        free(destroyed);
+    }
+}
+
+
 // TODO: Как сделать что-бы работал только koh_ecs интерфейс?
-koh_ecs koh_ecs_get() {
+// Чего?
+const koh_ecs koh_ecs_get() {
     koh_ecs r = {};
 
     r.new = e_new;
@@ -4431,6 +4471,7 @@ koh_ecs koh_ecs_get() {
     r.is_not_null = e_is_not_null;
     r.htable_eid_str = htable_eid_str;
     r.is_cp_registered = e_is_cp_registered;
+    r.remove_by_type = e_remove_by_type;
 
     return r;
 }

@@ -15,13 +15,9 @@
 /*
 TODO: предложения gpt:
 Создать обёртку e_assert(), которая в debug режиме вызывает assert(), а в релизе логирует ошибку или вызывает abort().
-
 Инкапсулировать выделение памяти в e_alloc(), e_free() — позволит логировать и обрабатывать ошибки централизованно.
-
 Добавить "мета"-флаги для сущностей и компонентов — active, enabled, dirty, pending_destroy.
-
 Сделать e_register() идемпотентным — не регистрировать типы повторно.
-
 Ввести понятие "пулов" (опционально) — чтобы хранить однотипные компоненты в непрерывной памяти.
 */
 
@@ -83,8 +79,7 @@ typedef struct e_cp_type {
     /*__attribute_deprecated__*/
     char        **(*str_repr)(void *payload, e_id e);
 
-    // Сериазизация в Луа таблицу. Память требует освобождения.
-    /*char        *(*str_repr_alloc)(void *payload, e_id e);*/
+    // Сериазизация в Луа таблицу. StrBuf требует освобождения.
     StrBuf        (*str_repr_buf)(void *payload, e_id e);
 
     const char  *name; // component name
@@ -438,6 +433,9 @@ const char *htable_eid_str(const void *data, int len);
 // Возвращает истину если тип зарегестрирован в системе.
 bool e_is_cp_registered(ecs_t *r, const char *cp_type);
 
+// Удалить все сущности связанные с данным типом компонента
+void e_remove_by_type(ecs_t *r, e_cp_type type);
+
 // {{{
 typedef struct koh_ecs {
     ecs_t *(*new)(e_options *opts);
@@ -487,7 +485,8 @@ typedef struct koh_ecs {
     bool (*is_not_null)(e_id e);
     const char *(*htable_eid_str)(const void *data, int len);
     bool (*is_cp_registered)(ecs_t *r, const char *cp_type);
+    void (*remove_by_type)(ecs_t *r, e_cp_type type);
 } koh_ecs;
 // }}}
 
-koh_ecs koh_ecs_get();
+const koh_ecs koh_ecs_get();
