@@ -2894,6 +2894,8 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         flags = ""
     end
 
+    flags = flags .. " -flto=4 "
+
     local artifact = "../" .. cfg.artifact
     local cc = compiler_c[_args.target]
     assert(cc)
@@ -3502,12 +3504,16 @@ function sub_make(
         -- }}}
     }
 
+    --[[
     if _args.link then
         if verbose then
             print("using flto")
         end
         table.insert(flags, "-flto=4")
     end
+    --]]
+
+    table.insert(flags, "-flto=4")
     --]]
 
     local debugs = {}
