@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "koh_strbuf.h"
 
 //////////////////////////// отключить предупреждения при снятии константности
 #if defined(__GNUC__) || defined(__clang__)
@@ -497,3 +498,6 @@ NORETURN void koh_fatal();
 #else
 #  define KOH_UNUSED
 #endif
+
+
+StrBuf Texture2D_2str(const Texture2D *tex);

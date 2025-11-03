@@ -1761,6 +1761,21 @@ char **Texture2D_to_str(Texture2D *tex) {
 #undef STR_NUM
 #undef BUF_LEN
 
+StrBuf Texture2D_2str(const Texture2D *tex) {
+    assert(tex);
+    StrBuf b = strbuf_init(NULL);
+
+    strbuf_addf(&b, "{");
+    strbuf_addf(&b, "id = %u, ", tex->id);
+    strbuf_addf(&b, "width = %d, ", tex->width);
+    strbuf_addf(&b, "height = %d, ", tex->height);
+    strbuf_addf(&b, "mipmaps = %d, ", tex->mipmaps);
+    strbuf_addf(&b, "format = %d, ", tex->format);
+    strbuf_addf(&b, "}");
+
+    return b;
+}
+
 Rectangle rect_by_texture(Texture2D tex) {
     return (Rectangle) {
         .x = 0,
