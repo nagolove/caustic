@@ -871,7 +871,7 @@ de_entity spawn_segment(struct WorldCtx *wctx, struct SegmentSetup *setup) {
 b2BodyId body_create(struct WorldCtx *wctx, b2BodyDef *def) {
     b2BodyId id = b2CreateBody(wctx->world, def);
     if (koh_components_verbose)
-        trace("body_create: %s\n", b2BodyId_id_to_str(id));
+        trace("body_create: %s\n", b2BodyId_tostr(id));
     return id;
 }
 
@@ -1663,7 +1663,7 @@ void sensors_destroy_bodies(de_ecs *r, WorldCtx *wctx) {
             b2Shape_SetUserData(visitor, (void*)(uintptr_t)de_null);
         }
         b2BodyId bid = b2Shape_GetBody(visitor);
-        trace("sensors_step: body destroyed %s\n", b2BodyId_id_to_str(bid));
+        trace("sensors_step: body destroyed %s\n", b2BodyId_2str(bid));
         b2DestroyBody(bid);
 
         bool is_eq = !memcmp(&to_remove[i], &last, sizeof(to_remove[0]));

@@ -435,6 +435,13 @@ MunitResult test_valid(const MunitParameter params[], void* userdata) {
 
     {
         ecs_t *r = e_new(NULL);
+        // поведение по дизайну - пустая сущность является инвалидной
+        munit_assert_false(e_valid(r, e_null));
+        e_free(r);
+    }
+
+    {
+        ecs_t *r = e_new(NULL);
 
         // проверка с заведомо неправильными сущностями
         munit_assert(e_valid(r, e_build(100, 0)) == false);
@@ -4174,7 +4181,7 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
         assert(type_name);
         if (!type_name) {
             printf("e_types: type_name is NULL\n");
-            exit(EXIT_FAILURE);
+            koh_fatal();
         }
 
         /*printf("e_types: '%s'\n", type_name);*/
