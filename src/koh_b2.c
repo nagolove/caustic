@@ -47,10 +47,15 @@ _Static_assert(
 static const float default_line_thick = 13.;
 static bool verbose_b2 = false;
 
+typedef struct Ctx {
+    f32 u2pix;
+} Ctx;
+
 /// Draw a closed polygon provided in CCW order.
 static void draw_polygon(
     const b2Vec2* vertices, int vertexCount, b2HexColor color, void* context
 ) {
+  
     /*
     char *str = b2Vec2_tostr_alloc(vertices, vertexCount);
     assert(str);
@@ -58,10 +63,16 @@ static void draw_polygon(
     free(str);
     */
 
-    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+    const Ctx *ctx = context;
+    float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
-    const Vector2 *verts = (const Vector2*)vertices;
+    Vector2 verts[10] = {};
+    for (int i = 0; i < vertexCount; i++) {
+        verts[i].x = vertices[i].x * ctx->u2pix;
+        verts[i].y = vertices[i].y * ctx->u2pix;
+    }
+
     for (int i = 0; i < vertexCount - 1; i++) {
         DrawLineEx(
             verts[i], verts[i + 1], line_thick, b2Color_to_Color(color)
@@ -88,10 +99,17 @@ static void draw_solid_polygon(
     DrawTriangleFan(_vertices, vertexCount, b2Color_to_Color(color));
     */
 
-    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+    float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
-    const Vector2 *verts = (const Vector2*)vertices;
+    Vector2 verts[10] = {};
+    const Ctx *ctx = context;
+    assert(ctx);
+    for (int i = 0; i < vertexCount; i++) {
+        verts[i].x = vertices[i].x * ctx->u2pix;
+        verts[i].y = vertices[i].y * ctx->u2pix;
+    }
+
     DrawTriangleFan(verts, vertexCount, b2Color_to_Color(color));
 
     Color solid_color = BLACK;
@@ -134,9 +152,10 @@ static void draw_circle(
 ) {
     if (verbose_b2)
         trace("draw_circle:\n");
+    const Ctx *ctx = context;
     DrawCircleLinesV(
-        (Vector2) { center.x, center.y },
-        radius, 
+        (Vector2) { center.x * ctx->u2pix, center.y * ctx->u2pix, },
+        radius * ctx->u2pix, 
         b2Color_to_Color(color)
     );
 }
@@ -153,9 +172,10 @@ static void draw_solid_circle(
 */
     if (verbose_b2)
         trace("draw_solid_circle:\n");
+    const Ctx *ctx = context;
     DrawCircleV(
-        (Vector2) { transform.p.x, transform.p.y, },
-        radius, 
+        (Vector2) { transform.p.x * ctx->u2pix, transform.p.y * ctx->u2pix, },
+        radius * ctx->u2pix, 
         b2Color_to_Color(color)
     );
 }
@@ -167,21 +187,24 @@ static void draw_solid_capsule(
     if (verbose_b2)
         trace("draw_capsule:\n");
 
-    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+    float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
+    const Ctx *ctx = context;
     DrawCircleLinesV(
-        (Vector2) { p1.x, p1.y },
-        radius, 
+        (Vector2) { p1.x * ctx->u2pix, p1.y * ctx->u2pix },
+        radius * ctx->u2pix, 
         b2Color_to_Color(color)
     );
     DrawCircleLinesV(
-        (Vector2) { p2.x, p2.y },
-        radius, 
+        (Vector2) { p2.x * ctx->u2pix, p2.y * ctx->u2pix },
+        radius * ctx->u2pix, 
         b2Color_to_Color(color)
     );
     DrawLineEx(
-        b2Vec2_to_Vector2(p1), b2Vec2_to_Vector2(p2), line_thick, 
+        b2Vector2(b2MulSV(ctx->u2pix, p1)),
+        b2Vector2(b2MulSV(ctx->u2pix, p2)),
+        line_thick, 
         b2Color_to_Color(color)
     );
 }
@@ -208,7 +231,7 @@ static void draw_solid_capsule(
         b2Color_to_Color(color)
     );
     DrawLineEx(
-        b2Vec2_to_Vector2(p1), b2Vec2_to_Vector2(p2), line_thick, 
+        b2Vector2(p1), b2Vector2(p2), line_thick, 
         b2Color_to_Color(color)
     );
 }
@@ -219,12 +242,13 @@ static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* context) 
     if (verbose_b2)
         trace("draw_segment:\n");
 
-    float line_thick = context ? ((WorldCtx*)context)->line_thick : 
+    float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
+    Ctx *ctx = context;
     DrawLineEx(
-        b2Vec2_to_Vector2(p1),
-        b2Vec2_to_Vector2(p2),
+        b2Vector2(b2MulSV(ctx->u2pix, p1)),
+        b2Vector2(b2MulSV(ctx->u2pix, p2)),
         line_thick,
         b2Color_to_Color(color)
     );
@@ -234,14 +258,15 @@ static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* context) 
 static void draw_transform(b2Transform xf, void* context) {
     if (verbose_b2)
         trace("draw_transform:\n");
-    DrawCircleV(b2Vec2_to_Vector2(xf.p), 5., BLUE);
+    DrawCircleV(b2Vector2(b2MulSV(((Ctx*)context)->u2pix, xf.p)), 5., BLUE);
 }
 
 /// Draw a point.
 static void draw_point(b2Vec2 p, float size, b2HexColor color, void* context) {
     if (verbose_b2)
         trace("draw_point:\n");
-    DrawCircle(p.x, p.y, size, b2Color_to_Color(color));
+    Ctx *ctx = context;
+    DrawCircle(p.x * ctx->u2pix, p.y * ctx->u2pix, size, b2Color_to_Color(color));
 }
 
 /// Draw a string.
@@ -251,10 +276,11 @@ static void draw_string(
 /*static void draw_string(b2Vec2 p, const char* s, void* context) {*/
     if (verbose_b2)
         trace("draw_string:\n");
-    DrawText(s, p.x, p.y, 20, BLACK);
+    Ctx *ctx = context;
+    DrawText(s, p.x * ctx->u2pix, p.y * ctx->u2pix, 20, BLACK);
 }
 
-b2DebugDraw b2_world_dbg_draw_create2() {
+b2DebugDraw b2_world_dbg_draw_create2(f32 u2pix) {
 #ifndef B2_LATEST
     return (struct b2DebugDraw) {
         .DrawPolygonFcn = draw_polygon,
@@ -275,6 +301,13 @@ b2DebugDraw b2_world_dbg_draw_create2() {
         .drawGraphColors = true,
     };
 #else
+
+    static i32 index = 0;
+    static Ctx contexts[10] = {};
+    Ctx *ctx = &contexts[index];
+    index = (index + 1) % 10;
+    ctx->u2pix = u2pix;
+
     return (struct b2DebugDraw) {
         .DrawPolygonFcn = draw_polygon,
         .DrawSolidPolygonFcn = draw_solid_polygon,
@@ -290,11 +323,12 @@ b2DebugDraw b2_world_dbg_draw_create2() {
         .drawBounds = true,
         .drawMass = true,
         .drawGraphColors = true,
+        .context = ctx,
     };
 #endif
 }
 
-
+/*
 b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
 #ifndef B2_LATEST
     return (struct b2DebugDraw) {
@@ -332,10 +366,12 @@ b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
         .drawBounds = true,
         .drawMass = true,
         .drawGraphColors = true,
-        .context = wctx,
+        //.context = wctx,
+        .context = &(Ctx) { .u2pix = u2pix, },
     };
 #endif
 }
+*/
 
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num) {
     assert(verts);
@@ -394,7 +430,7 @@ static void _b2WorldDef_to_str_lua(char *buf[], int *i, b2WorldDef *def) {
     assert(i);
     assert(def);
     int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
-    const char *grav = Vector2_tostr(b2Vec2_to_Vector2(def->gravity));
+    const char *grav = Vector2_tostr(b2Vector2(def->gravity));
     p(buf[(*i)++], "{ ");
     p(buf[(*i)++], "gravity = %s,", grav);
     p(buf[(*i)++], "restitutionThreshold = %f,", def->restitutionThreshold);
@@ -417,7 +453,7 @@ static void _b2WorldDef_to_str_pure(char *buf[], int *i, b2WorldDef *def) {
     assert(i);
     assert(def);
     int (*p)(char *s, const char *f, ...) KOH_ATTR_FORMAT(2, 3) = sprintf;
-    const char *grav = Vector2_tostr(b2Vec2_to_Vector2(def->gravity));
+    const char *grav = Vector2_tostr(b2Vector2(def->gravity));
     p(buf[(*i)++], "gravity %s", grav);
     p(buf[(*i)++], "restitutionThreshold %f", def->restitutionThreshold);
     /*p(buf[(*i)++], "contactPushoutVelocity %f", def->contactPushoutVelocity);*/
@@ -651,6 +687,22 @@ const char *b2BodyId_id_to_str(b2BodyId id) {
     return buf;
 }
 
+const char *b2BodyId_tostr(b2BodyId id) {
+    static char slots[5][128] = {};
+    static int index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+    sprintf(
+        buf, "{ index1 = %d, world0 = %hd, generation = %hu }",
+        id.index1, id.world0, id.generation
+    );
+    return buf;
+}
+
+const char *b2BodyId_2str(b2BodyId id) {
+    return b2BodyId_tostr(id);
+}
+
 const char *b2ShapeId_tostr(b2ShapeId id) {
     static char slots[5][128] = {};
     static int index = 0;
@@ -690,11 +742,11 @@ const char *b2Polygon_to_str(const b2Polygon *poly) {
     return buf;
 }
 
-static void stat_gui(struct WorldCtx *ctx) {
+void b2_stat_gui(b2WorldId wid) {
     static bool tree_open = false;
     igSetNextItemOpen(tree_open, ImGuiCond_Once);
-    if (igTreeNode_Str("stat")) {
-        char **lines = b2Counters_to_str(ctx->world, false);
+    if (igTreeNode_Str("b2stat")) {
+        char **lines = b2Counters_to_str(wid, false);
         while (*lines) {
             igText("%s", *lines);
             lines++;
@@ -733,7 +785,7 @@ void box2d_gui(struct WorldCtx *wctx) {
     // Что за 5. ? Дай комментарий
     igSameLine(0., 5.);
     igCheckbox("pause", &wctx->is_paused);
-    stat_gui(wctx);
+    b2_stat_gui(wctx->world);
     world_def_gui(wctx->world_def);
     igEnd();
 
@@ -976,6 +1028,7 @@ WorldCtx world_init2(WorldCtxSetup *setup) {
 
     wctx.substeps = 4;
 
+    /*
 #define SLOTS_NUM 10
     static WorldCtx contexts[SLOTS_NUM];
     static int context_index = 0;
@@ -983,8 +1036,11 @@ WorldCtx world_init2(WorldCtxSetup *setup) {
 
     contexts[context_index] = wctx;
 #undef SLOTS_NUM
+    */
 
-    wctx.world_dbg_draw = b2_world_dbg_draw_create(&contexts[context_index]);
+    //wctx.world_dbg_draw = b2_world_dbg_draw_create(&contexts[context_index]);
+    f32 u2pix = setup->u2pix == 0.f ? 1.f : setup->u2pix;
+    wctx.world_dbg_draw = b2_world_dbg_draw_create2(u2pix);
     wctx.is_dbg_draw = false;
 
     assert(setup->xrng);
@@ -1040,7 +1096,7 @@ void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
     wctx->xrng = setup->xrng;
     wctx->substeps = 4;
 
-    wctx->world_dbg_draw = b2_world_dbg_draw_create(wctx);
+    wctx->world_dbg_draw = b2_world_dbg_draw_create2(1.f);
     wctx->is_dbg_draw = false;
 
     assert(setup->xrng);

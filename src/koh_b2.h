@@ -50,10 +50,8 @@ typedef struct WorldCtx {
 
 typedef WorldCtx WCtx;
 
-b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx);
-// XXX: Работает некорректно, приводит к падению программы, видимо
-// разыменовывание нулевого адреса.
-b2DebugDraw b2_world_dbg_draw_create2();
+//b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx);
+b2DebugDraw b2_world_dbg_draw_create2(f32 u2pix);
 char *b2Vec2_tostr_alloc(const b2Vec2 *verts, int num);
 
 // Хранение информации из AABB запроса
@@ -92,7 +90,10 @@ char ** b2Counters_to_str(b2WorldId world, bool lua);
 char **b2ShapeDef_to_str(b2ShapeDef sd);
 char **b2BodyDef_to_str(b2BodyDef bd);
 char **b2BodyId_to_str(b2BodyId bid);
+__attribute_deprecated_msg__("use shorter function")
 const char *b2BodyId_id_to_str(b2BodyId id);
+const char *b2BodyId_tostr(b2BodyId id);
+const char *b2BodyId_2str(b2BodyId id);
 __attribute_deprecated__
 const char *b2ShapeId_id_to_str(b2ShapeId id);
 const char *b2ShapeId_tostr(b2ShapeId id);
@@ -310,6 +311,7 @@ typedef struct WorldCtxSetup {
     // В каких еденицаз размер мира? Где он используется?
     unsigned         width, height;
     b2WorldDef       *wd;
+    f32              u2pix;
 } WorldCtxSetup;
 
 // NOTE: Более удобный вариант функции конструирования:
@@ -383,3 +385,5 @@ static inline const char *b2Transform_2str(b2Transform t) {
 
     return buf;
 }
+
+void b2_stat_gui(b2WorldId wid);
