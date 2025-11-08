@@ -1922,47 +1922,7 @@ bool koh_str_match_err(
 }
 
 bool koh_str_match(const char *str, size_t *str_len, const char *pattern) {
-    assert(str);
-    assert(pattern);
-
-    pcre2_code          *r = NULL;
-    pcre2_match_data    *match_data = NULL;
-    int    errnumner = 0;
-    size_t erroffset = 0;
-    uint32_t flags = 0;
-
-    r = pcre2_compile(
-        (const u8*)pattern, 
-        PCRE2_ZERO_TERMINATED, flags, 
-        &errnumner, &erroffset, 
-        NULL
-    );
-
-    if (!r) {
-        printf(
-            "rgexpr_match: could not compile pattern '%s' with '%s'\n",
-            pattern, pcre_code_str(errnumner)
-        );
-        return false;
-    }
-
-    //printf("rgexpr_match: compiled\n");
-
-    match_data = pcre2_match_data_create_from_pattern(r, NULL);
-    assert(match_data);
-
-    int rc = pcre2_match(
-        r, (const u8*)str, str_len ? *str_len : strlen(str), 
-        0, 0, match_data, NULL
-    );
-    //printf("rc %d\n", rc);
-
-    if (match_data)
-        pcre2_match_data_free(match_data);
-    if (r)
-        pcre2_code_free(r);
-
-    return rc > 0;
+    return koh_str_match_err(str, str_len, pattern, NULL);
 }
 
 static const char *extensions[] = {

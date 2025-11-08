@@ -370,7 +370,9 @@ __attribute_deprecated__
 bool rgexpr_match(const char *str, size_t *str_len, const char *pattern);
 // str_len может быть равна NULL, тогда будет вызвана функция strlen(str)
 bool koh_str_match(const char *str, size_t *str_len, const char *pattern);
-bool koh_str_match_err(const char *str, size_t *str_len, const char *pattern, bool *err);
+bool koh_str_match_err(
+    const char *str, size_t *str_len, const char *pattern, bool *err
+);
 
 // Проверяет окончивается ли имя файла на
 // ".png", ".jpg", ".tga", ".PNG", ".JPG", ".TGA"
