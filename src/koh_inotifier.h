@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include "koh_strbuf.h"
 
 typedef void (*WatchCallback)(const char *fname, void *data);
 
@@ -14,6 +15,7 @@ void inotifier_shutdown();
 void inotifier_watch(const char *fname, WatchCallback cb, void *data);
 void inotifier_watch_remove(const char *fname);
 void inotifier_update();
-void inotifier_list();
+StrBuf inotifier_list();
+void inotifier_gui();
 
 extern bool inotifier_verbose;

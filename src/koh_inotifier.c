@@ -12,6 +12,8 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) { };
 void inotifier_remove_watch(const char *fname) { }
 #else
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
 #include "koh_logger.h"
 #include "koh_table.h"
 #include "raylib.h"
@@ -23,6 +25,7 @@ void inotifier_remove_watch(const char *fname) { }
 #include <string.h>
 #include <sys/inotify.h>
 #include <unistd.h>
+#include "cimgui.h"
 
 struct WatchContext {
     WatchCallback   cb;
@@ -40,7 +43,9 @@ struct {
     char     *fnames[MAX_WATCHED_FILES];
     uint32_t masks[MAX_WATCHED_FILES];
     int      watched_num;
-    HTable   *tbl;
+
+    // const char *fname => struct WatchContext
+    HTable   *fname2ctx;
     struct pollfd fds[1];
 } in;
 
@@ -145,7 +150,7 @@ static void process_event(const struct inotify_event *event) {
 
     //trace("fname %s\n", fname);
     struct WatchContext *ctx;
-    ctx = htable_get(in.tbl, fname, strlen(fname) + 1, NULL);
+    ctx = htable_get(in.fname2ctx, fname, strlen(fname) + 1, NULL);
     //trace("ctx %p\n", ctx);
     if (ctx && ctx->cb) {
         if (inotifier_verbose)
@@ -184,10 +189,12 @@ static HTableAction iter_list(
     const void *key, int key_len, void *value, int value_len, void *udata
 ) {
     /*console_buf_write(">%s", (char*)key);*/
-    trace("inotifier_list: %s\n", (const char*)key);
+    //trace("inotifier_list: %s\n", (const char*)key);
+    assert(udata);
+    StrBuf *b = udata;
+    strbuf_addf(b, "%s", (const char*)key);
     return HTABLE_ACTION_NEXT;
 }
-
 
 /*
 static int l_inotifier_list(lua_State *lua) {
@@ -196,17 +203,55 @@ static int l_inotifier_list(lua_State *lua) {
 }
 */
 
-void inotifier_list() {
-    htable_each(in.tbl, iter_list, NULL);
+StrBuf inotifier_list() {
+    StrBuf b = strbuf_init(NULL);
+    htable_each(in.fname2ctx, iter_list, &b);
+    return b;
+}
+
+void inotifier_gui() {
+    /*
+    static bool tree_open = false;
+    igSetNextItemOpen(tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str("inotifier_list")) {
+        StrBuf fnames = inotifier_list();
+        for (i32 i = 0; i < fnames.num; ++i) {
+            igText("%s", fnames.s[i]);
+        }
+        igTreePop();
+        strbuf_shutdown(&fnames);
+    }
+    */
+
+    static int selected = -1;
+    static bool tree_open = false;
+    igSetNextItemOpen(tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str("inotifier_list")) {
+        StrBuf fnames = inotifier_list();
+        for (i32 i = 0; i < fnames.num; ++i) {
+            bool is_selected = (selected == i);
+            ImVec2 zero = {};
+            if (igSelectable_Bool(fnames.s[i], is_selected, 0, zero)) {
+                selected = i; // кликнули по строке
+                              // тут твоя логика
+            }
+
+            //igText("%s", fnames.s[i]);
+
+            igTreePop();
+            strbuf_shutdown(&fnames);
+        }
+    }
+
 }
 
 void inotifier_init() {
     if (inotifier_verbose)
         trace("inotifier_init:\n");
 
-    assert(in.tbl == NULL);
+    assert(in.fname2ctx == NULL);
 
-    in.tbl = htable_new(&(struct HTableSetup) {
+    in.fname2ctx = htable_new(&(struct HTableSetup) {
         .cap    = MAX_WATCHED_FILES,
         //.f_hash = koh_hasher_mum,
     });
@@ -237,7 +282,7 @@ void inotifier_init() {
 
 void inotifier_update() {
     // Система не инициализирована
-    if (!in.tbl) return;
+    if (!in.fname2ctx) return;
 
     //trace("inotifier_update\n");
     //fds[0].fd = STDIN_FILENO;       [> Console input <]
@@ -289,9 +334,9 @@ static void fnames_free() {
 void inotifier_shutdown() {
     if (inotifier_verbose)
         trace("inotifier_shutdown:\n");
-    if (in.tbl) {
-        htable_free(in.tbl);
-        in.tbl = NULL;
+    if (in.fname2ctx) {
+        htable_free(in.fname2ctx);
+        in.fname2ctx = NULL;
     }
     close(in.fd);
     fnames_free();
@@ -299,7 +344,7 @@ void inotifier_shutdown() {
 
 void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     // Система не инициализирована
-    if (!in.tbl) return;
+    if (!in.fname2ctx) return;
 
     if (in.watched_num == MAX_WATCHED_FILES) {
         if (inotifier_verbose)
@@ -325,20 +370,20 @@ void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
     struct WatchContext ctx = {
         .cb = cb, .data = data,
     };
-    htable_add(in.tbl, fname, strlen(fname) + 1, &ctx, sizeof(ctx));
+    htable_add(in.fname2ctx, fname, strlen(fname) + 1, &ctx, sizeof(ctx));
     in.watched_num++;
 }
 
 void inotifier_watch_remove(const char *fname) {
     // Система не инициализирована
-    if (!in.tbl) return;
+    if (!in.fname2ctx) return;
 
     assert(fname);
     // XXX: Где удаление in.fnames? Где декремент in.watched_num?
     for (int i = 0; i < in.watched_num; i++) {
         if (!strcmp(fname, in.fnames[i])) {
             inotify_rm_watch(in.fd, in.wd[i]);
-            htable_remove(in.tbl, fname, strlen(fname) + 1);
+            htable_remove(in.fname2ctx, fname, strlen(fname) + 1);
         }
     }
 }
