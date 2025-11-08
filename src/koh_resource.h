@@ -25,17 +25,21 @@ Texture reslist_load_texture(ResList *l, const char *fname);
 Texture reslist_load_tex(ResList *l, const char *fname);
 RenderTexture2D reslist_load_rt(ResList *l, int w, int h);
 Shader reslist_load_shader(ResList *l, const char *fname);
-////////////////////////////////////////////////////////////////////
+Shader reslist_load_shader_str(ResList *l, const char *code);
 
+void reslist_gui(ResList *l);
+void reslist_label_set(ResList *l, const char *label);
+////////////////////////////////////////////////////////////////////
 //void reslist_reload_all(ResList *l);
 ///////////////////////////////////////////////////////////////////
 
+
 typedef enum ResourceType {
-    RT_LIST_ROOT,
-    RT_TEXTURE,
-    RT_TEXTURE_RT,
-    RT_FONT,
-    RT_SHADER,
+    RT_LIST_ROOT  = 0b00000000,
+    RT_TEXTURE    = 0b00000001,
+    RT_TEXTURE_RT = 0b00000010,
+    RT_FONT       = 0b00000100,
+    RT_SHADER     = 0b00001000,
 } ResourceType;
 
 typedef struct Resource {

@@ -1,5 +1,7 @@
 #include "koh_resource.h"
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
 #include <stdatomic.h>
 #include "koh_common.h"
 #include "koh_logger.h"
@@ -8,6 +10,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
+#include "cimgui.h"
+#include "koh_common.h"
+
+typedef struct R {
+    ResourceType type;
+    char         fname[128];
+    int          rt_w, rt_h, fnt_size;
+    void         *raylib_object;
+} R;
+
+struct ResList {
+    // уникальное имя для подписи в reslist_gui() 
+    char label[256]; 
+    R    *arr;
+    int  arr_num, arr_cap;
+    //u32  filter;
+    bool is_minipreview;
+};
 
 Resource *res_add(
     Resource *res_list, 
@@ -258,18 +278,6 @@ Texture2D res_tex_load_async(
 void res_async_loader_pump(ResAsyncLoader *al, Res *res_list) {
 }
 
-typedef struct R {
-    ResourceType type;
-    char         fname[128];
-    int          rt_w, rt_h, fnt_size;
-    void         *raylib_object;
-} R;
-
-struct ResList {
-    R   *arr;
-    int arr_num, arr_cap;
-};
-
 ResList *reslist_new() {
     ResList *l = calloc(1, sizeof(*l));
     if (!l) {
@@ -278,6 +286,7 @@ ResList *reslist_new() {
     } else {
         l->arr_cap = 16;
         l->arr = calloc(l->arr_cap, sizeof(l->arr[0]));
+        reslist_label_set(l, NULL);
     }
     return l;
 }
@@ -302,6 +311,7 @@ void reslist_free(ResList *l) {
                 koh_term_color_reset();
                 Texture2D *t = r->raylib_object;
                 UnloadTexture(*t);
+                free(t);
                 break;
             }
             case RT_TEXTURE_RT: {
@@ -310,6 +320,7 @@ void reslist_free(ResList *l) {
                 koh_term_color_reset();
                 RenderTexture2D *rt = r->raylib_object;
                 UnloadRenderTexture(*rt);
+                free(rt);
                 break;
             }
             case RT_FONT: {
@@ -318,12 +329,16 @@ void reslist_free(ResList *l) {
                 koh_term_color_reset();
                 Font *f = r->raylib_object;
                 UnloadFont(*f);
+                free(f);
                 break;
             }
             case RT_SHADER: {
                 koh_term_color_set(KOH_TERM_RED);
                 printf("reslist_free: unload shader [%s]\n", r->fname);
                 koh_term_color_reset();
+                Shader *sh = r->raylib_object;
+                UnloadShader(*sh);
+                free(sh);
                 break;
             }
         };
@@ -441,3 +456,112 @@ Font reslist_load_font_dlft(ResList *l) {
     return f;
 }
 
+Shader reslist_load_shader_str(ResList *l, const char *code) {
+    assert(l);
+    assert(code);
+    Shader s = LoadShaderFromMemory(NULL, code);
+    R *r = reslist_add(l);
+    r->type = RT_SHADER;
+    //assert(strlen(fname) < sizeof(r->fname));
+    const char *fname = "[memory]";
+    strncpy(r->fname, fname, sizeof(r->fname));
+    r->raylib_object = copy_alloc(&s, sizeof(s));
+    return s;
+}
+
+const char *type2str[] = {
+    [RT_LIST_ROOT]     = "LIST_ROOT",
+    [RT_TEXTURE]       = "TEXTURE",
+    [RT_TEXTURE_RT]    = "TEXTURE_RT",
+    [RT_FONT]          = "FONT",
+    [RT_SHADER]        = "SHADER",
+};
+
+void reslist_gui(ResList *l) {
+    assert(l);
+
+    static bool tree_open = false;
+    igSetNextItemOpen(tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str(l->label)) {
+
+        igCheckbox("minipreview", &l->is_minipreview);
+
+        static char pattern[256] = {};
+        igInputText("regex pattern", pattern, sizeof(pattern), 0, NULL, NULL);
+
+        bool pattern_err = false;
+        igSameLine(0., 10.f);
+        koh_str_match_err("", NULL, pattern, &pattern_err);
+
+        if (pattern_err)
+            igText("ERROR");
+        else
+            igText("COMPILED");
+
+        i32 flags = ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_Borders | 
+            ImGuiTableFlags_Resizable;
+        ImVec2 outer_sz = {};
+        f32 inner_width = 0.f;
+        if (igBeginTable("ImagesTable", 3, flags, outer_sz, inner_width)) {
+            // Заголовки столбцов
+            igTableSetupColumn("fname", 0, 0, 0);
+            igTableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 0, 0);
+            igTableSetupColumn("img", 0, 0, 0);
+            igTableHeadersRow();
+
+            for (i32 i = 0; i < l->arr_num; ++i) {
+                R *r = &l->arr[i];
+                assert(r);
+
+                ResourceType type = r->type;
+                if (type != RT_TEXTURE && type != RT_TEXTURE_RT) {
+                    continue;
+                }
+
+                if (!koh_str_match(r->fname, NULL, pattern))
+                    continue;
+
+                igTableNextRow(0, 0.f);
+
+                // Колонка fname (строка)
+                igTableSetColumnIndex(0);
+                igTextUnformatted(r->fname, NULL);
+
+                igTableSetColumnIndex(1);
+                igTextUnformatted(type2str[type], NULL);
+
+                // Колонка img (текстура через rlImGuiImage)
+                igTableSetColumnIndex(2);
+
+                if (type == RT_TEXTURE) {
+                    Texture2D *t = r->raylib_object;
+                    const Vector2 minisize = {64, 64};
+                    if (t) {
+                        if (l->is_minipreview)
+                            rlImGuiImageSizeV(t, minisize);
+                        else
+                            rlImGuiImage(t);
+                    }
+                } else if (type == RT_TEXTURE_RT) {
+                    RenderTexture2D *t = r->raylib_object;
+                    if (t) {
+                        rlImGuiImageRenderTextureFit(t, false);
+                    }
+                }
+
+            }
+
+            igEndTable();
+        }
+
+        igTreePop();
+    }
+}
+
+void reslist_label_set(ResList *l, const char *label) {
+    assert(l);
+    if (!label) 
+        label = "";
+    snprintf(l->label, sizeof(l->label), "reslist - %s", label);
+}
