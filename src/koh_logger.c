@@ -127,10 +127,11 @@ int trace(const char * format, ...) {
 // Custom logging function
 // TODO: Использовать trace() внутри или нет?
 // XXX: Падает из-за рекурсии
-void koh_log_custom(int msgType, const char *text, va_list args) {
+/*
+void koh_log_custom(int logLevel, const char *text, va_list args) {
     printf("[%.4f] ", time_get());
 
-    switch (msgType) {
+    switch (logLevel) {
         case LOG_INFO: printf("[\033[1;32mINFO] : \033[0m"); break;
         case LOG_ERROR: printf("[\033[1;31mERROR] : \033[0m"); break;
         case LOG_WARNING: printf("[\033[1;33mWARN] : \033[0m"); break;
@@ -138,6 +139,58 @@ void koh_log_custom(int msgType, const char *text, va_list args) {
         default: break;
     }
 
+    if ((logLevel == LOG_WARNING || logLevel == LOG_ERROR) &&
+        strstr(text, "SHADER") != NULL)
+    {
+        printf(">>>>>>>>>>>>>>>>\n");
+        char shader_msg[4096] = {};
+        // Сделай здесь вывод текста в shader_msg
+        printf(">>>>>>>>>>>>>>>>\n");
+    }
+
+    // Обычный вывод текста также оставь
+    vprintf(text, args);
+    printf("\n");
+}
+*/
+
+void koh_log_custom(int logLevel, const char *text, va_list args) {
+    printf("[%.4f] ", time_get());
+
+    switch (logLevel) {
+        case LOG_INFO:    printf("[\033[1;32mINFO] : \033[0m"); break;
+        case LOG_ERROR:   printf("[\033[1;31mERROR] : \033[0m"); break;
+        case LOG_WARNING: printf("[\033[1;33mWARN] : \033[0m"); break;
+        case LOG_DEBUG:   printf("[\033[1;34mDEBUG] : \033[0m"); break;
+        default: break;
+    }
+
+    if ((logLevel == LOG_WARNING || logLevel == LOG_ERROR) &&
+        strstr(text, "SHADER") != NULL)
+    {
+        printf(">>>>>>>>>>>>>>>>\n");
+
+        // Локальный буфер под сформированное сообщение
+        char shader_msg[4096];
+
+        // Делаем копию args, потому что va_list можно "прочитать" только один раз
+        va_list args_copy;
+        va_copy(args_copy, args);
+
+        // Форматируем текст в shader_msg
+        vsnprintf(shader_msg, sizeof(shader_msg), text, args_copy);
+
+        va_end(args_copy);
+
+        // Здесь можно:
+        //  - вывести в консоль
+        //  - сохранить в глобальную переменную
+        printf("%s\n", shader_msg);
+
+        printf(">>>>>>>>>>>>>>>>\n");
+    }
+
+    // Обычный вывод текста также оставляем
     vprintf(text, args);
     printf("\n");
 }
