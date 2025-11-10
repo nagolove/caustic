@@ -86,7 +86,6 @@ typedef struct {
 } v2;
 
 struct Common {
-    bool    quit;
     int     *font_chars;
     int     font_chars_num, font_chars_cap;
 };

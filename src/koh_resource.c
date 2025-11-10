@@ -286,6 +286,7 @@ ResList *reslist_new() {
     } else {
         l->arr_cap = 16;
         l->arr = calloc(l->arr_cap, sizeof(l->arr[0]));
+        l->is_minipreview = true;
         reslist_label_set(l, NULL);
     }
     return l;
