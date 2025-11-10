@@ -780,6 +780,16 @@ local function libtess2_after_init(_, _)
 
 end
 
+local function build_md4c_common(_, _)
+
+
+   ut.push_current_dir()
+   chdir("src")
+   cmd_do("gcc -c md4c.c")
+   cmd_do("ar -rcs md4c.a md4c.o")
+   ut.pop_dir()
+end
+
 local function build_libtess2_common(_, _)
    cmd_do("premake5 gmake")
    ut.push_current_dir()
@@ -926,6 +936,9 @@ _modules = {
 
 
 
+
+
+
    {
       disabled = false,
       copy_for_wasm = true,
@@ -966,6 +979,10 @@ _modules = {
 
 
 
+
+
+
+
    {
       disabled = false,
       copy_for_wasm = true,
@@ -982,6 +999,8 @@ _modules = {
       url = "git@github.com:nagolove/munit.git",
    },
 
+
+
    {
       disabled = false,
       url_action = "git",
@@ -996,6 +1015,10 @@ _modules = {
       links_internal = {},
       copy_for_wasm = true,
    },
+
+
+
+
 
 
 
@@ -1043,6 +1066,10 @@ _modules = {
 
 
 
+
+
+
+
    {
       disabled = false,
       build = build_pcre2,
@@ -1060,6 +1087,8 @@ _modules = {
    },
 
 
+
+
    {
       disabled = false,
       copy_for_wasm = true,
@@ -1071,6 +1100,7 @@ _modules = {
       url_action = "git",
       url = "https://github.com/ocornut/imgui.git",
    },
+
 
 
    {
@@ -1147,6 +1177,11 @@ _modules = {
 
 
 
+
+
+
+
+
    {
 
       after_init = rlimgui_after_init,
@@ -1162,6 +1197,8 @@ _modules = {
 
       git_branch = "dear_imgui_v1.92.1",
    },
+
+
 
    {
       copy_for_wasm = true,
@@ -1198,6 +1235,8 @@ _modules = {
       url_action = "git",
       url = "https://github.com/raysan5/raylib.git",
    },
+
+
 
    {
 
@@ -1262,6 +1301,12 @@ _modules = {
 
 
 
+
+
+
+
+
+
    {
       build = build_box2c_common,
       build_w = build_box2c_common,
@@ -1285,6 +1330,8 @@ _modules = {
       url_action = 'git',
    },
 
+
+
    {
       disabled = false,
       copy_for_wasm = true,
@@ -1299,6 +1346,8 @@ _modules = {
       url_action = 'git',
       url = "https://github.com/nagolove/Chipmunk2D.git",
    },
+
+
 
    {
       build = build_lua_common,
@@ -1316,6 +1365,8 @@ _modules = {
       url_action = "git",
    },
 
+
+
    {
       copy_for_wasm = true,
       disabled = false,
@@ -1327,6 +1378,8 @@ _modules = {
       url = "https://github.com/ThePhD/sol2.git",
       url_action = "git",
    },
+
+
 
 
 
@@ -1366,6 +1419,8 @@ _modules = {
       url_action = "git",
    },
 
+
+
    {
       copy_for_wasm = true,
       description = "набор библиотека заголовочных файлов для разных нужд",
@@ -1375,6 +1430,8 @@ _modules = {
       url = "https://github.com/nothings/stb.git",
       url_action = "git",
    },
+
+
 
    {
       dir = "wfc",
@@ -1388,9 +1445,6 @@ _modules = {
       url_action = "git",
       url = "https://github.com/krychu/wfc.git",
    },
-
-
-
 
 
 
@@ -1409,6 +1463,25 @@ _modules = {
       url_action = "git",
       url = "https://github.com/memononen/libtess2",
    },
+
+
+
+   {
+      dir = "md4c",
+      build = build_md4c_common,
+      build_w = build_md4c_common,
+      copy_for_wasm = true,
+      includes = { "md4c/src" },
+      libdirs = { "md4c/src" },
+      links = { "md4c" },
+      links_internal = { "md4c" },
+      description = "sax парсер markdown",
+      name = 'md4c',
+      url_action = "git",
+      url = "https://github.com/mity/md4c.git",
+   },
+
+
 
 
 }
