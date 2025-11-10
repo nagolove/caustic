@@ -1802,7 +1802,7 @@ end
 -- зависимости
 function actions.init(_args: Args)
     if not _args.target then
-        printc("%{red}target is not selected(linux, wasm)%{reset}")
+        printc("%{red}--target[-t] is not selected(linux, wasm)%{reset}")
         return
     end
 

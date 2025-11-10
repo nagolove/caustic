@@ -780,6 +780,16 @@ local function libtess2_after_init(_: Env, _: Dependency)
 
 end
 
+local function build_md4c_common(_: Env, _: Dependency)
+    --cmd_do("cmake .")
+    --cmd_do("make")
+    ut.push_current_dir()
+    chdir("src")
+    cmd_do("gcc -c md4c.c")
+    cmd_do("ar -rcs md4c.a md4c.o")
+    ut.pop_dir()
+end
+
 local function build_libtess2_common(_: Env, _: Dependency)
     cmd_do("premake5 gmake")
     ut.push_current_dir()
@@ -791,7 +801,7 @@ end
 _modules = {
 
     --[[
-    -- {{{
+    -- {{{ remotery
     {
         disabled = true,
         description = "online profiler",
@@ -812,7 +822,7 @@ _modules = {
     -- }}}
     --]]
 
-    -- {{{
+    -- {{{ llama_cpp
     {
         disabled = true,
         copy_for_wasm = false,
@@ -843,7 +853,7 @@ _modules = {
     -- }}}
 
 
-    -- {{{
+    -- {{{ xxhash
     {
         disabled = false,
         copy_for_wasm = true,
@@ -865,7 +875,7 @@ _modules = {
     -- }}}
 
 
-    -- {{{
+    -- {{{ freetype
     {
         disabled = false,
         copy_for_wasm = true,
@@ -888,7 +898,7 @@ _modules = {
     },
     -- }}}
 
-    -- TODO: Включать только те модули, которые объявлены в bld.lua
+    -- {{{ wormseffect
     {
         disabled = false,
         description = "color worms moving on texture",
@@ -907,9 +917,10 @@ _modules = {
         build_w = build_with_make_common,
         url = "git@github.com:nagolove/raylib_colorwormseffect.git",
     },
-    --]]
+    -- }}}
 
     --[[
+    -- {{{ luafun
     {
         disabled = true,
         description = "lua functional style library",
@@ -924,8 +935,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/luafun/luafun.git",
     },
+    -- }}}
     --]]
 
+    -- {{{ nanosvg
     {
         disabled = false,
         copy_for_wasm = true,
@@ -943,8 +956,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/memononen/nanosvg.git",
     },
+    -- }}}
 
     --[[
+    -- {{{ resvg
     {
         disabled = true,
         build = build_resvg,
@@ -964,8 +979,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/RazrFalcon/resvg.git",
     },
+    -- }}}
     --]]
 
+    -- {{{ munit
     {
         disabled = false,
         copy_for_wasm = true,
@@ -981,7 +998,9 @@ _modules = {
         url_action = "git",
         url = "git@github.com:nagolove/munit.git",
     },
+    -- }}}
 
+    -- {{{ uthash
     {
         disabled = false,
         url_action = "git",
@@ -996,8 +1015,10 @@ _modules = {
         links_internal = {},
         copy_for_wasm = true,
     },
+    -- }}}
 
     --[[
+    -- {{{ mum-hash
     {
         disabled = false,
         copy_for_wasm = true,
@@ -1012,8 +1033,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/vnmakarov/mum-hash",
     },
+    -- }}}
     --]]
 
+    -- {{{ enkits
     {
         disabled = false,
         copy_for_wasm = true,
@@ -1029,8 +1052,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/dougbinks/enkiTS.git",
     },
+    -- }}}
 
     --[[
+    -- {{{ enet
     {
         -- XXX: Не работает с WASM, нужны веб-сокеты
         disabled = false,
@@ -1041,8 +1066,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/zpl-c/enet.git",
     },
+    -- }}}
     --]]
 
+    -- {{{ pcre2
     {
         disabled = false,
         build = build_pcre2,
@@ -1058,7 +1085,9 @@ _modules = {
         url_action = "git",
         url = "https://github.com/PhilipHazel/pcre2.git",
     },
+    -- }}}
 
+    -- {{{ imgui
     -- XXX: Используется в cimgui?
     {
         disabled = false,
@@ -1071,8 +1100,9 @@ _modules = {
         url_action = "git",
         url = "https://github.com/ocornut/imgui.git",
     },
+    -- }}}
 
-    -- {{{
+    -- {{{ implot
     {
         disabled = true,
         copy_for_wasm = false,
@@ -1097,7 +1127,7 @@ _modules = {
     },
     -- }}}
 
-    -- {{{
+    -- {{{ cimplot
     {
         disabled = true,
         copy_for_wasm = false,
@@ -1123,6 +1153,7 @@ _modules = {
     -- }}}
 
 	--[[
+    -- {{{ json.lua
     {
         description = "загрузчик json данных в lua",
 		build_method = "none",
@@ -1130,9 +1161,11 @@ _modules = {
         name = "json.lua",
         url = "https://github.com/rxi/json.lua.git",
     },
+    -- }}}
 	--]]
 
     --[[
+    -- {{{ lfs
     {
         disabled = true,
         build = build_lfs,
@@ -1145,8 +1178,10 @@ _modules = {
         url = "https://github.com/lunarmodules/luafilesystem.git",
         url_action = "git",
     },
+    -- }}}
     --]]
 
+    -- {{{ rlImGui
     {
         -- компилировать не нужно
         after_init = rlimgui_after_init,
@@ -1162,7 +1197,9 @@ _modules = {
         -- новая ветка
         git_branch = "dear_imgui_v1.92.1",
     },
+    -- }}}
 
+    -- {{{ raylib
     {
         copy_for_wasm = true,
         description = "библиотека для всякого",
@@ -1198,7 +1235,9 @@ _modules = {
         url_action = "git",
         url = "https://github.com/raysan5/raylib.git",
     },
+    -- }}}
 
+    -- {{{ cimgui
     {
         -- скопировать файлы из rlimgui
         after_init = cimgui_after_init,
@@ -1223,8 +1262,10 @@ _modules = {
         --git_commit = "205107640d70aeffc9cd37a1e7a8d240708a55e5", -- старая ветка, все работало
         git_commit = "d61baefa0ce2a9db938ffdeb29e64f90f44cc037"
     },
+    -- }}}
 
     --[[
+    -- {{{ sunvox
     {
         disabled = true,
         after_init = sunvox_after_init,
@@ -1240,9 +1281,11 @@ _modules = {
         url_action = "zip",
         url = "https://warmplace.ru/soft/sunvox/sunvox_lib-2.1.1c.zip",
     },
+    -- }}}
     --]]
 
     --[[
+    -- {{{ genann
     {
         disabled = true,
         build = build_with_make,
@@ -1260,8 +1303,10 @@ _modules = {
         url_action = "git",
         url = "https://github.com/codeplea/genann.git",
     },
+    -- }}}
     --]]
 
+    -- {{{ box2d
     {
         build = build_box2c_common,
         build_w = build_box2c_common,
@@ -1284,7 +1329,9 @@ _modules = {
         url = "https://github.com/erincatto/box2d.git",
         url_action = 'git',
     },
+    -- }}}
 
+    -- {{{ Chipmunk2D
     {
         disabled = false,
         copy_for_wasm = true,
@@ -1299,7 +1346,9 @@ _modules = {
         url_action = 'git',
         url = "https://github.com/nagolove/Chipmunk2D.git",
     },
+    -- }}}
 
+    -- {{{ lua
     {
         build = build_lua_common,
         build_w = build_lua_common,
@@ -1315,7 +1364,9 @@ _modules = {
         git_tag = "v5.4.0",
         url_action = "git",
     },
+    -- }}}
 
+    -- {{{ sol2
     {
         copy_for_wasm = true,
         disabled = false,
@@ -1327,11 +1378,12 @@ _modules = {
         url = "https://github.com/ThePhD/sol2.git",
         url_action = "git",
     },
+    -- }}}
 
     --[[
+    -- {{{ rlwr
     {
         name = 'rlwr',
-        -- {{{
         disabled = false,
         build = build_rlwr_common,
         -- TODO: Сперва собрать sol c правильной версией lua
@@ -1346,10 +1398,11 @@ _modules = {
         links_internal = { "rlwr" },
         url = "git@github.com:nagolove/rlwr.git",
         url_action = "git",
-        -- }}}
     },
+    -- }}}
     --]]
 
+    -- {{{ utf8proc 
     {
         build = build_with_make_common,
         build_w = build_with_make_common,
@@ -1365,7 +1418,9 @@ _modules = {
         url = "https://github.com/JuliaLang/utf8proc.git",
         url_action = "git",
     },
+    -- }}}
 
+    -- {{{ stb
     {
         copy_for_wasm = true,
         description = "набор библиотека заголовочных файлов для разных нужд",
@@ -1375,7 +1430,9 @@ _modules = {
         url = "https://github.com/nothings/stb.git",
         url_action = "git",
     },
+    -- }}}
 
+    -- {{{ wfc
     {
         dir = "wfc",
         build = build_with_make_common,
@@ -1388,12 +1445,9 @@ _modules = {
         url_action = "git",
         url = "https://github.com/krychu/wfc.git",
     },
+    -- }}}
 
-
-    --[[
-    Когда вернуть к программированию на С - возлагаю большие надежды на данную
-    либу предназначенную для разбиения(тесселяции) svg образов на треугольники.
-    --]]
+    -- {{{ libtess2
     {
         dir = "libtess2",
         after_init = libtess2_after_init,
@@ -1409,6 +1463,25 @@ _modules = {
         url_action = "git",
         url = "https://github.com/memononen/libtess2",
     },
+    -- }}}
+
+    -- {{{ md4c
+    {
+        dir = "md4c",
+        build = build_md4c_common,
+        build_w = build_md4c_common,
+        copy_for_wasm = true,
+        includes = { "md4c/src" },
+        libdirs = { "md4c/src" },
+        links = { "md4c" },
+        links_internal = { "md4c" },
+        description = "sax парсер markdown",
+        name = 'md4c',
+        url_action = "git",
+        url = "https://github.com/mity/md4c.git",
+    },
+    -- }}}
+
 
 
 }
