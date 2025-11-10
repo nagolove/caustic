@@ -15,8 +15,12 @@
 
 #include <string.h>
 
+static const Vector2 z = {};
 Color paragraph_default_color_background = (Color){
-    255 / 2, 255 / 2, 255 / 2, 255
+    255 / 2 + 10,
+    255 / 2 + 10,
+    255 / 2 + 10,
+    255
 };
 Color paragraph_default_color_text = BLACK;
 
@@ -25,14 +29,15 @@ void paragraph_init(Paragraph *prgh, Font fnt) {
     memset(prgh, 0, sizeof(Paragraph));
     prgh->color_text = paragraph_default_color_text;
     prgh->color_background = paragraph_default_color_background;
-    prgh->visible = true;
+    prgh->is_visible = true;
     prgh->fnt = fnt;
 
     prgh->b_lines = strbuf_init(NULL);
     prgh->b_tlines = strbuf_init(NULL);
+    prgh->use_cache = false;
 }
 
-void paragraph_init2(Paragraph *prgh, ParagraphOpts *_opts) {
+void paragraph_init2(Paragraph *prgh, const ParagraphOpts *_opts) {
     assert(prgh);
 
     ParagraphOpts opts = {
@@ -53,7 +58,7 @@ void paragraph_init2(Paragraph *prgh, ParagraphOpts *_opts) {
     memset(prgh, 0, sizeof(Paragraph));
     prgh->color_text = paragraph_default_color_text;
     prgh->color_background = paragraph_default_color_background;
-    prgh->visible = true;
+    prgh->is_visible = true;
     //prgh->fnt = fnt;
     
     struct Common *cmn = koh_cmn();
@@ -94,6 +99,7 @@ void paragraph_init2(Paragraph *prgh, ParagraphOpts *_opts) {
 
     prgh->fnt.baseSize = opts.base_size;
     prgh->fnt.glyphCount = cmn->font_chars_num;
+    prgh->use_cache = true;
 
     prgh->b_lines = strbuf_init(NULL);
     prgh->b_tlines = strbuf_init(NULL);
@@ -108,11 +114,9 @@ void paragraph_shutdown(Paragraph *prgh) {
     if (prgh->sh_sdf.id != 0) {
         UnloadShader(prgh->sh_sdf);
     }
-    /*
-    if (prgh->fnt.glyphs || prgh->fnt.texture.id != 0) {
-        UnloadFont(prgh->fnt);
+    if (prgh->rt_cache.id != 0) {
+        UnloadRenderTexture(prgh->rt_cache);
     }
-    */
 
     strbuf_shutdown(&prgh->b_lines);
     strbuf_shutdown(&prgh->b_tlines);
@@ -124,7 +128,7 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     assert(prgh);
     assert(fmt);
 
-    prgh->builded = false;
+    prgh->is_builded = false;
 
     va_list args;
     va_start(args, fmt);
@@ -155,7 +159,7 @@ void paragraph_build(Paragraph *prgh) {
         if (len > longest) longest = len;
     }
 
-    char line[(longest + 1) * 3];
+    char line[(longest + 1) * 4];
     memset(line, 0, sizeof(line));
 
     const char *dash = "─"; // UTF - 3 chars len
@@ -187,59 +191,91 @@ void paragraph_build(Paragraph *prgh) {
         }
     }
 
-
     strbuf_addf(&prgh->b_tlines, "└%s┘", line);
 
     prgh->measure = MeasureTextEx(
         prgh->fnt, prgh->b_tlines.s[0], prgh->fnt.baseSize, 0
     );
 
-    prgh->builded = true;
+    if (!prgh->rt_cache.id) {
+        i32 w = prgh->measure.x,
+            h = prgh->b_tlines.num * prgh->fnt.baseSize;
+        printf("paragraph_build: create rt texture %dx%d\n", w, h);
+        prgh->rt_cache = LoadRenderTexture(w, h);
+    }
+
+    prgh->is_builded = true;
+}
+
+static void _paragraph_draw2(Paragraph *prgh) {
+    Rectangle background = {
+        .x = 0, .y = 0,
+        .width = prgh->measure.x,
+        .height = prgh->b_tlines.num * prgh->fnt.baseSize,
+    };
+
+    float angle = 0.f;
+    DrawRectanglePro(background, z, angle, prgh->color_background);
+
+    Vector2 p = {};
+    for(int i = 0; i < prgh->b_tlines.num; ++i) {
+        const char *line = prgh->b_tlines.s[i];
+        if (prgh->is_sdf) 
+            BeginShaderMode(prgh->sh_sdf);
+        i32 bs = prgh->fnt.baseSize;
+        Color color_text = prgh->color_text;
+        DrawTextPro(prgh->fnt, line, p, z, angle, bs, 0, color_text);
+        if (prgh->is_sdf)
+            EndShaderMode();            
+        p.y += prgh->fnt.baseSize;
+    }
 }
 
 // TODO: Повернутый текст работает некорректно
 void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
     assert(prgh);
 
-    if (!prgh->visible)
+    if (!prgh->is_visible)
         return;
 
-    if (!prgh->builded) {
+    if (!prgh->is_builded) {
         paragraph_build(prgh);
     }
 
-    Vector2 coord = pos;
-    Rectangle background = {
-        .x = pos.x,
-        .y = pos.y,
-        .width = prgh->measure.x,
-        .height = prgh->b_tlines.num * prgh->fnt.baseSize,
-    };
-
-    DrawRectanglePro(
-        background, 
-        Vector2Zero(),
-        angle,
-        prgh->color_background
+    DrawRectanglePro((Rectangle) {
+            .x = pos.x,
+            .y = pos.y,
+            .width = prgh->measure.x,
+            .height = prgh->b_tlines.num * prgh->fnt.baseSize,
+        }, z, angle, BROWN
     );
+    // */
 
-    for(int i = 0; i < prgh->b_tlines.num; ++i) {
-        const char *line = prgh->b_tlines.s[i];
-        //printf("paragraph_draw2: %s\n", line);
-        
-        if (prgh->is_sdf) 
-            BeginShaderMode(prgh->sh_sdf);
+    if (prgh->use_cache) {
+        if (!prgh->is_cached) {
+            prgh->is_cached = true;
 
-        DrawTextPro(
-            prgh->fnt, line, coord, Vector2Zero(),
-            angle, prgh->fnt.baseSize, 0, prgh->color_text
-        );
+            BeginTextureMode(prgh->rt_cache);
+            BeginMode2D((Camera2D) { .zoom = 1.f, });
+            _paragraph_draw2(prgh);
+            EndMode2D();
+            EndTextureMode();
+        }
+        //texture_save(prgh->rt_cache.texture, "analiz.paragraph.png");
 
-        if (prgh->is_sdf)
-            EndShaderMode();            
-
-        coord.y += prgh->fnt.baseSize;
+        Texture2D tex = prgh->rt_cache.texture;
+        Rectangle src = {
+            0, 0, tex.width, -tex.height,
+        }, dst = {
+            pos.x, pos.y, 
+            tex.width, 
+            tex.height,
+        };
+        DrawTexturePro(tex, src, dst, z, 0.f, WHITE);
+    } else {
+        _paragraph_draw2(prgh);
     }
+
 }
 
 void paragraph_draw(Paragraph *prgh, Vector2 pos) {
@@ -257,7 +293,7 @@ Vector2 paragraph_align_center(Paragraph *prgh) {
 
 Vector2 paragraph_get_size(Paragraph *prgh) {
     assert(prgh);
-    if (!prgh->builded) {
+    if (!prgh->is_builded) {
         perror("paragraph_get_size: not builded");
         koh_fatal();
     }
@@ -305,13 +341,13 @@ void paragraph_set(Paragraph *prgh, const char *txt) {
 
 
 void paragraph_add_break(Paragraph *prgh) {
-    prgh->builded = false;
+    prgh->is_builded = false;
     strbuf_addf(&prgh->b_lines, "-");
 }
 
 void paragraph_clear(Paragraph *prgh) {
     assert(prgh);
-    prgh->builded = false;
+    prgh->is_builded = false;
     strbuf_clear(&prgh->b_tlines);
     strbuf_clear(&prgh->b_lines);
 }
