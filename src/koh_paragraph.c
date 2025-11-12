@@ -103,6 +103,34 @@ void paragraph_init2(Paragraph *prgh, const ParagraphOpts *_opts) {
 
     prgh->b_lines = strbuf_init(NULL);
     prgh->b_tlines = strbuf_init(NULL);
+
+    i32     errnumner = 0;
+    size_t  erroffset = 0;
+    u32     flags = 0;
+
+    const char *pattern_start =
+        "\\\\color\\s*=\\s*\\{"
+            "([0-9]{1,3})\\s*,\\s*"
+            "([0-9]{1,3})\\s*,\\s*"
+            "([0-9]{1,3})\\s*,\\s*"
+            "([0-9]{1,3})"
+        "\\}";
+
+    prgh->rx_code = pcre2_compile(
+        (const u8*)pattern_start, 
+        PCRE2_ZERO_TERMINATED, flags, 
+        &errnumner, &erroffset, 
+        NULL
+    );
+
+    assert(prgh->rx_code);
+    if (!prgh->rx_code) {
+        printf(
+            "paragraph_init: could not compile pattern '%s' with '%s'\n",
+            pattern_start, pcre_code_str(errnumner)
+        );
+        koh_fatal();
+    }
 }
 
 void paragraph_shutdown(Paragraph *prgh) {
@@ -129,6 +157,7 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     assert(fmt);
 
     prgh->is_builded = false;
+    prgh->is_cached = false;
 
     va_list args;
     va_start(args, fmt);
@@ -150,6 +179,9 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
 
 void paragraph_build(Paragraph *prgh) {
     assert(prgh);
+
+    /*
+    // */
 
     strbuf_clear(&prgh->b_tlines);
 
@@ -175,7 +207,60 @@ void paragraph_build(Paragraph *prgh) {
 
     for(int i = 0; i < prgh->b_lines.num; i++) {
         const char *cur_line = prgh->b_lines.s[i];
+        //size_t cur_line_len = strlen(cur_line);
 
+        // в этот буфер полетят строчки очишенные от команд
+        //char cur_line_buf[cur_line_len] = {};
+
+        /*
+        pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(
+            prgh->rx_code, NULL
+        );
+
+        int rc = pcre2_match(
+            prgh->rx_code,
+            (const u8*)cur_line,
+            cur_line_len,
+            0,          // start offset
+            0,          // options
+            match_data,
+            NULL
+        );
+        */
+
+        /*
+    if (rc < 0) {
+        // нет совпадений или ошибка
+        pcre2_match_data_free(match_data);
+        // ...
+    }
+    */
+
+
+        /*
+PCRE2_SIZE *ov = pcre2_get_ovector_pointer(match_data);
+
+// group 1..4 — это r,g,b,a
+for (int g = 1; g <= 4; ++g) {
+    PCRE2_SIZE start = ov[2 * g];
+    PCRE2_SIZE end   = ov[2 * g + 1];
+    PCRE2_SIZE len   = end - start;
+
+    // ВАЖНО: subject — это исходный буфер, берем оттуда
+    char tmp[4] = {0}; // max "255" + '\0'
+    if (len >= sizeof(tmp)) len = sizeof(tmp) - 1;
+
+    memcpy(tmp, subject + start, len);
+    tmp[len] = '\0';
+
+    int value = atoi(tmp);
+    // value — число из группы
+}
+*/
+
+        //pcre2_match_data_free(match_data);
+
+        // "-" - просто строка разрыва
         if (strcmp(cur_line, "-") == 0)
             strbuf_addf(&prgh->b_tlines, "├%s┤", line);
         else {
@@ -197,19 +282,33 @@ void paragraph_build(Paragraph *prgh) {
         prgh->fnt, prgh->b_tlines.s[0], prgh->fnt.baseSize, 0
     );
 
+    i32 new_w = prgh->measure.x,
+        new_h = prgh->b_tlines.num * prgh->fnt.baseSize;
+
     if (!prgh->rt_cache.id) {
-        i32 w = prgh->measure.x,
-            h = prgh->b_tlines.num * prgh->fnt.baseSize;
-        printf("paragraph_build: create rt texture %dx%d\n", w, h);
-        prgh->rt_cache = LoadRenderTexture(w, h);
+        printf("paragraph_build: create rt texture %dx%d\n", new_w, new_h);
+        prgh->rt_cache = LoadRenderTexture(new_w, new_h);
+        SetTextureFilter(prgh->rt_cache.texture, TEXTURE_FILTER_BILINEAR);
+    }
+
+    if (prgh->rt_cache.id) {
+        i32 cur_w = prgh->rt_cache.texture.width,
+            cur_h = prgh->rt_cache.texture.height;
+
+        // текстура увеличилась, надо пересоздавать
+        // кеш текстура только увеличивается в размере
+        if (new_w > cur_w || new_h > cur_h) {
+            UnloadRenderTexture(prgh->rt_cache);
+            prgh->rt_cache = LoadRenderTexture(new_w, new_h);
+        }
     }
 
     prgh->is_builded = true;
 }
 
-static void _paragraph_draw2(Paragraph *prgh) {
+static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
     Rectangle background = {
-        .x = 0, .y = 0,
+        .x = pos.x, .y = pos.y,
         .width = prgh->measure.x,
         .height = prgh->b_tlines.num * prgh->fnt.baseSize,
     };
@@ -217,7 +316,7 @@ static void _paragraph_draw2(Paragraph *prgh) {
     float angle = 0.f;
     DrawRectanglePro(background, z, angle, prgh->color_background);
 
-    Vector2 p = {};
+    Vector2 p = pos;
     for(int i = 0; i < prgh->b_tlines.num; ++i) {
         const char *line = prgh->b_tlines.s[i];
         if (prgh->is_sdf) 
@@ -232,7 +331,7 @@ static void _paragraph_draw2(Paragraph *prgh) {
 }
 
 // TODO: Повернутый текст работает некорректно
-void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
+void paragraph_draw2(Paragraph *prgh, Vector2 pos) {
     assert(prgh);
 
     if (!prgh->is_visible)
@@ -242,6 +341,7 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
         paragraph_build(prgh);
     }
 
+    /*
     DrawRectanglePro((Rectangle) {
             .x = pos.x,
             .y = pos.y,
@@ -257,7 +357,8 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
 
             BeginTextureMode(prgh->rt_cache);
             BeginMode2D((Camera2D) { .zoom = 1.f, });
-            _paragraph_draw2(prgh);
+            ClearBackground(BLANK);
+            _paragraph_draw2(prgh, (Vector2) {});
             EndMode2D();
             EndTextureMode();
         }
@@ -273,17 +374,18 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos, float angle) {
         };
         DrawTexturePro(tex, src, dst, z, 0.f, WHITE);
     } else {
-        _paragraph_draw2(prgh);
+        _paragraph_draw2(prgh, pos);
     }
 
 }
 
 void paragraph_draw(Paragraph *prgh, Vector2 pos) {
-    paragraph_draw2(prgh, pos, 0.);
+    paragraph_draw2(prgh, pos);
 }
 
 Vector2 paragraph_align_center(Paragraph *prgh) {
     assert(prgh);
+    assert(prgh->is_builded);
     int w = GetScreenWidth(), h = GetScreenHeight();
     return (Vector2) {
         .x = (w - prgh->measure.x) / 2.,
@@ -324,10 +426,10 @@ void paragraph_set(Paragraph *prgh, const char *txt) {
             // TODO: Автоформатирование под заранее определенную максимальную 
             // ширину текста
             if (line_len < (int)sizeof(line) - 1) {
-                printf("paragraph_set: text line truncated\n");
                 *line_ptr++ = *txt_ptr;
                 line_len++;
-            }
+            } else
+                printf("paragraph_set: text line truncated\n");
         }
         txt_ptr++;
     }
@@ -342,12 +444,14 @@ void paragraph_set(Paragraph *prgh, const char *txt) {
 
 void paragraph_add_break(Paragraph *prgh) {
     prgh->is_builded = false;
+    prgh->is_cached = false;
     strbuf_addf(&prgh->b_lines, "-");
 }
 
 void paragraph_clear(Paragraph *prgh) {
     assert(prgh);
     prgh->is_builded = false;
+    prgh->is_cached = false;
     strbuf_clear(&prgh->b_tlines);
     strbuf_clear(&prgh->b_lines);
 }
