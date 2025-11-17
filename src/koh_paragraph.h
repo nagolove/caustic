@@ -8,18 +8,36 @@
 #include "koh_strbuf.h"
 #include "koh_common.h"
 
+// с какой позиции какой цвет начинается
+/*
+typedef struct ParagraphColorPosition {
+    i32     pos;
+    Color   c;
+} ParagraphColorPosition;
+*/
+
+enum {
+    MAX_PARAGRAPH_COLOR_POSITION = 1024,
+};
+
 typedef struct Paragraph {
+    // с какой позиции 
+    i32     positions[MAX_PARAGRAPH_COLOR_POSITION];
+    // какой цвет начинается
+    Color   colors[MAX_PARAGRAPH_COLOR_POSITION];
+    i32     color_positions_num;
+
     StrBuf  b_lines, b_tlines;
     Color   color_text, color_background;
 
-    pcre2_code          *rx_code;
-    pcre2_match_data    *rx_match;
+    //pcre2_code          *rx_color;
+    //pcre2_match_data    *rx_match;
 
     bool            is_sdf;
     Shader          sh_sdf;
     Texture2D       tex_sdf;
     RenderTexture2D rt_cache;
-    bool            is_cached, use_cache;
+    bool            is_cached, use_cache, is_cmd;
 
     Vector2 measure;
     bool    is_builded, is_visible;
