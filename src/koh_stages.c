@@ -129,7 +129,34 @@ Stage *stage_add(StagesStore *ss, Stage *st, const char *name) {
         ss->stages[ss->num - 1]->name,
         ss->num
     );
+
     return st;
+}
+
+static void stage_activate(StagesStore *ss, Stage *st) {
+    assert(ss);
+    assert(st);
+
+    if (ss->cur && ss->cur->leave) {
+        trace("stage_set_active: leave from '%s'\n", ss->cur->name);
+        ss->cur->leave(ss->cur);
+    }
+
+    ss->cur = st;
+
+    if (st && st->enter) {
+        trace("stage_set_active: enter to '%s'\n", st->name);
+        st->enter(st);
+    }
+}
+
+void stage_active_last_added(StagesStore *ss) {
+    Stage *st = NULL;
+    if (ss->num >= 1) {
+        st = ss->stages[ss->num - 1];
+    }
+    if (st)
+        stage_activate(ss, st);
 }
 
 void stage_shutdown(StagesStore *ss) {
@@ -178,25 +205,8 @@ Stage *stage_find(StagesStore *ss, const char *name) {
 
 void stage_active_set(StagesStore *ss, const char *name) {
     Stage *st = stage_find(ss, name);
-
-    if (!st) {
-        trace("stage_set_active: '%s' not found\n", name);
-    }
-
-    if (ss->cur && ss->cur->leave) {
-        trace(
-            "stage_set_active: leave from '%s'\n",
-            ss->cur->name
-        );
-        ss->cur->leave(ss->cur);
-    }
-
-    ss->cur = st;
-
-    if (st && st->enter) {
-        trace("stage_set_active: enter to '%s'\n", st->name);
-        st->enter(st);
-    }
+    if (st)
+        stage_activate(ss, st);
 }
 
 /*

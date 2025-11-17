@@ -57,8 +57,10 @@ Stage *stage_add(StagesStore *ss, Stage *st, const char *name);
 void stage_init(StagesStore *ss);
 // Деинициализация всех сцен
 void stage_free(StagesStore *ss);
-// Установить текущую сцену
+// Установить текущую сцену по имени
 void stage_active_set(StagesStore *ss, const char *name);
+// Установить текущей сценой последную добавленную
+void stage_active_last_added(StagesStore *ss);
 // Обработать сцену. Вызывает update(), потом draw()
 void stage_active_update(StagesStore *ss);
 // Получить имя текущей сцены
@@ -76,6 +78,7 @@ void stages_gui_window(StagesStore *ss);
 
 void stage_active_gui_render(StagesStore *ss);
 
+/*
 KOH_FORCE_INLINE static Stage *l_stage_find(
     lua_State *l, const char *store_name, const char *stage_name
 ) {
@@ -88,3 +91,4 @@ KOH_FORCE_INLINE static Stage *l_stage_find(
     //trace("l_stage_find: [%s]\n", stack_dump(l));
     return stage_find(store, stage_name);
 }
+*/
