@@ -45,6 +45,8 @@ enum RegexEngine {
     RE_PCRE2,
 };
 
+static const ImVec2 imzero = {};
+
 struct FilesSearchResultInternal {
     enum RegexEngine regex_engine;
     union {
@@ -863,6 +865,7 @@ const char *transform2str(cpTransform tr) {
 }
 */
 
+// XXX: сделать слоты
 const char *camera2str(Camera2D cam, bool multiline) {
     static char buf[256] = {0};
     memset(buf, 0, sizeof(buf));
@@ -971,7 +974,7 @@ const char *font2str(Font fnt) {
     memset(buf, 0, sizeof(buf));
     sprintf(
         buf,
-        "baseSize %d, glyphCount %d, texture.id %d",
+        "baseSize %d, glyphCount %d, texture.id %u",
         fnt.baseSize, fnt.glyphCount, fnt.texture.id
     );
     return buf;
@@ -2655,4 +2658,179 @@ NORETURN void koh_fatal() {
     // TODO: Разные варинаты - для win, android
     // Вызов abort() в отладочном режиме
     exit(EXIT_FAILURE);
+}
+
+void camera_gui(Camera2D *cam, const char *cam_label) {
+    assert(cam);
+    assert(cam_label);
+
+    static bool tree_open = false;
+    igSetNextItemOpen(tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str(cam_label)) {
+
+        //igBeginGroup();
+        igText("reset");
+
+        if (igBeginChild_Str("CameraControls", (ImVec2){0, 100}, ImGuiChildFlags_Borders, 0)) {
+
+        ImVec2 zero = {};
+        if (igButton("zoom", zero)) {
+            cam->zoom = 1.;
+        }
+        igSameLine(0., 10.);
+        if (igButton("offset", zero)) {
+            cam->offset = (Vector2) {};
+        }
+        igSameLine(0., 10.);
+        if (igButton("target", zero)) {
+            cam->target = (Vector2) {};
+        }
+        igSameLine(0., 10.);
+        if (igButton("full", zero)) {
+            *cam = (Camera2D) { .zoom = 1., };
+        }
+
+            igEndChild();
+        }
+        //igEndGroup();
+
+        if (igButton("copy", imzero)) {
+            SetClipboardText(camera2str(*cam, true));
+        }
+        igSameLine(0., 10.);
+        if (igButton("paste", imzero)) {
+            bool ok = camera_parse_from_buf(GetClipboardText(), cam);
+            igSameLine(0.f, 10.f);
+            igText("%s", ok ? "OK" : "FAIL");
+        }
+
+        igText("cam: %s", camera2str(*cam, true));
+
+        igInputFloat("offset.x", &cam->offset.x, 10.f, 200.f, "%.3f", 0);
+        igInputFloat("offset.y", &cam->offset.y, 10.f, 200.f, "%.3f", 0);
+
+        igInputFloat("target.x", &cam->target.x, 10.f, 200.f, "%.3f", 0);
+        igInputFloat("target.y", &cam->target.y, 10.f, 200.f, "%.3f", 0);
+
+        igSliderFloat("rotation", &cam->rotation, 0.f, 360.f, "%.3f", 0);
+        igTreePop();
+    }
+}
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+
+typedef struct camera {
+    float offset[2];
+    float target[2];
+    float rotation;
+    float zoom;
+} camera_t;
+
+// XXX: Тестировать
+bool camera_parse_from_buf(const char *buf, Camera2D *out)
+{
+    if (!buf || !out) {
+        return false;
+    }
+
+    // Один раз компилируем шаблон, переиспользуем между вызовами.
+    static pcre2_code *re = NULL;
+    static const PCRE2_SPTR pattern = (PCRE2_SPTR)
+        "\\{\\s*"
+        "offset\\s*=\\s*\\{\\s*"
+            "([-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\\s*,\\s*"
+            "([-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?)"
+        "\\s*\\}\\s*,\\s*"
+        "target\\s*=\\s*\\{\\s*"
+            "([-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\\s*,\\s*"
+            "([-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?)"
+        "\\s*\\}\\s*,\\s*"
+        "rotation\\s*=\\s*"
+            "([-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?)"
+        "\\s*,\\s*"
+        "zoom\\s*=\\s*"
+            "([-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?)"
+        "\\s*\\}";
+
+    if (!re) {
+        int error_code = 0;
+        PCRE2_SIZE error_offset = 0;
+
+        re = pcre2_compile(
+            pattern,
+            PCRE2_ZERO_TERMINATED,
+            0,                // опции (при желании можно добавить PCRE2_UTF и т.п.)
+            &error_code,
+            &error_offset,
+            NULL              // use default compile context
+        );
+
+        if (!re) {
+            // Компиляция регулярки не удалась – можно залогировать error_code/error_offset.
+            return false;
+        }
+    }
+
+    pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
+    if (!match_data) {
+        return false;
+    }
+
+    int rc = pcre2_match(
+        re,
+        (PCRE2_SPTR)buf,
+        PCRE2_ZERO_TERMINATED,
+        0,          // start offset
+        0,          // options
+        match_data,
+        NULL        // match context
+    );
+
+    if (rc < 0) {
+        // Нет матча или ошибка.
+        pcre2_match_data_free(match_data);
+        return false;
+    }
+
+    // Ожидаем 1 (вся строка) + 6 групп = 7.
+    if (rc < 7) {
+        pcre2_match_data_free(match_data);
+        return false;
+    }
+
+    float values[6];
+
+    for (int i = 0; i < 6; ++i) {
+        PCRE2_UCHAR *substring = NULL;
+        PCRE2_SIZE substring_length = 0;
+
+        int sub_rc = pcre2_substring_get_bynumber(
+            match_data,
+            i + 1,              // группы нумеруются с 1
+            &substring,
+            &substring_length
+        );
+
+        if (sub_rc != 0 || !substring) {
+            pcre2_match_data_free(match_data);
+            return false;
+        }
+
+        // PCRE2_UCHAR для WIDTH=8 это unsigned char, приводим к const char*.
+        values[i] = strtof((const char *)substring, NULL);
+
+        pcre2_substring_free(substring);
+    }
+
+    pcre2_match_data_free(match_data);
+
+    out->offset.x = values[0];
+    out->offset.y = values[1];
+    out->target.x = values[2];
+    out->target.y = values[3];
+    out->rotation  = values[4];
+    out->zoom      = values[5];
+
+    return true;
 }

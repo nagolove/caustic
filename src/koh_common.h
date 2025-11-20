@@ -204,7 +204,10 @@ struct CameraAxisDrawCtx {
 
 void draw_camera_axis(Camera2D *cam, struct CameraAxisDrawCtx ctx);
 //const char *transform2str(cpTransform tr);
+
+// XXX: сделать слоты
 const char *camera2str(Camera2D cam, bool multiline);
+
 Color random_raylib_color();
 uint32_t next_eq_pow2(uint32_t p);
 
@@ -503,3 +506,5 @@ NORETURN void koh_fatal();
 
 
 StrBuf Texture2D_2str(const Texture2D *tex);
+void camera_gui(Camera2D *cam, const char *cam_label);
+bool camera_parse_from_buf(const char *buf, Camera2D *out);
