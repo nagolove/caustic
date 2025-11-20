@@ -402,12 +402,15 @@ static void process_colors(
 }
 */
 
+
+/*
 static void process_colors(
     Paragraph *prgh,
     const char *cur_line, size_t cur_line_len,
     char *cur_line_buf
 ) {
 }
+*/
 
 void paragraph_build(Paragraph *prgh) {
     assert(prgh);
@@ -451,12 +454,12 @@ void paragraph_build(Paragraph *prgh) {
         const char *cur_line = prgh->b_lines.s[i];
         // XXX: Сделать инфраструктуру для обработки нескольких типов \команд
 
-        size_t cur_line_len = strlen(cur_line);
+        //size_t cur_line_len = strlen(cur_line);
 
-        parse_line(cur_line);
+        //parse_line(cur_line);
 
         // в этот буфер полетит строчка очищенная от команд
-        char cur_line_buf[cur_line_len + 1] = {};
+        //char cur_line_buf[cur_line_len + 1] = {};
 
         // нужно найти длиннейшую строку для выравнивания.
         // тогда сперва надо провести обработку цветов
@@ -541,8 +544,8 @@ static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
         // */
 
         //Color color_text = prgh->colors[cpos];
-        i32 pos = prgh->positions[cpos];
-        const char *slice = line;
+        //i32 pos = prgh->positions[cpos];
+        //const char *slice = line;
 
         for (i32 j = 0; j < line_len; ++j) {
             if (prgh->positions[cpos]) {
