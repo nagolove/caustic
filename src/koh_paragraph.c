@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "koh_routine.h"
 //#include "koh_console.h"
 
 static const Vector2 z = {};
@@ -444,7 +445,8 @@ void paragraph_build(Paragraph *prgh) {
 
     char *pline = line;
     for(int i = 0; i < longest; i++) {
-        strcpy(pline, dash);
+        // NOTE: здесь strncpy() только что-бы clang не бухтел
+        strncpy(pline, dash, dash_len);
         pline += dash_len;
     }
 
@@ -529,9 +531,13 @@ static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
         cpos = 0;
     for(int i = 0; i < prgh->b_tlines.num; ++i) {
         const char *line = prgh->b_tlines.s[i];
+
         // на непредвиденный случай
         if (!line)
             continue;
+
+        //printf("_paragraph_draw2: line %s\n", line);
+
         size_t line_len = strlen(line);
 
         if (prgh->is_sdf) 
@@ -540,6 +546,8 @@ static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
 
         ///*
         Color color_text = prgh->color_text;
+#warning "не рисует"
+        printf("_paragraph_draw2: p %s\n", Vector2_tostr(p));
         DrawTextPro(prgh->fnt, line, p, z, angle, bs, 0, color_text);
         // */
 
@@ -565,6 +573,8 @@ static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
 void paragraph_draw2(Paragraph *prgh, Vector2 pos) {
     assert(prgh);
 
+    // XXX: Нужно ли строить параграф если он не виден?
+    // Возможно нужно что-бы получить корректные размеры текста
     if (!prgh->is_visible)
         return;
 
@@ -685,4 +695,15 @@ void paragraph_clear(Paragraph *prgh) {
     prgh->is_cached = false;
     strbuf_clear(&prgh->b_tlines);
     strbuf_clear(&prgh->b_lines);
+}
+
+
+void paragraph_draw_center(Paragraph *prgh) {
+    assert(prgh);
+    Vector2 sz = paragraph_get_size(prgh);
+    Vector2 pos = {
+        .x = (GetScreenWidth() - sz.x) / 2.,
+        .y = (GetScreenHeight() - sz.y) / 2.,
+    };
+    paragraph_draw(prgh, pos);
 }
