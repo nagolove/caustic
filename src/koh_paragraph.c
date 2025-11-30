@@ -209,6 +209,9 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     struct Common *cmn = koh_cmn();
     assert(cmn);
 
+    assert(opts.base_size >= 0);
+    assert(opts.ttf_fname);
+
     if (!cmn->font_chars) {
         printf("paragraph_init2: use koh_common_init() before loading font\n");
         koh_fatal();
@@ -221,15 +224,15 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     // SDF font generation from TTF font
     // Parameters > font size: 16, no glyphs array provided (0), glyphs count: 0 (defaults to 95)
     prgh->fnt.glyphs = LoadFontData(
-            fileData, fileSize, opts.base_size,
-            cmn->font_chars, cmn->font_chars_num, FONT_SDF
-            );
+        fileData, fileSize, opts.base_size,
+        cmn->font_chars, cmn->font_chars_num, FONT_SDF
+    );
 
     // Parameters > glyphs count: 95, font size: opts.base_size, glyphs padding in image: 0 px, pack method: 1 (Skyline algorythm)
     Image atlas = GenImageFontAtlas(
-            prgh->fnt.glyphs, &prgh->fnt.recs,
-            cmn->font_chars_num, opts.base_size, 0, 1
-            );
+        prgh->fnt.glyphs, &prgh->fnt.recs,
+        cmn->font_chars_num, opts.base_size, 0, 1
+    );
     prgh->tex_sdf = LoadTextureFromImage(atlas);
     UnloadImage(atlas);
 
@@ -243,6 +246,7 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     prgh->fnt.texture = prgh->tex_sdf;
     prgh->fnt.baseSize = opts.base_size;
     prgh->fnt.glyphCount = cmn->font_chars_num;
+    prgh->use_cache = opts.use_caching;
 }
 
 void paragraph_init2(Paragraph *prgh, const ParagraphOpts *_opts) {
@@ -546,8 +550,8 @@ static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
 
         ///*
         Color color_text = prgh->color_text;
-#warning "не рисует"
-        printf("_paragraph_draw2: p %s\n", Vector2_tostr(p));
+//#warning "не рисует"
+        //printf("_paragraph_draw2: p %s\n", Vector2_tostr(p));
         DrawTextPro(prgh->fnt, line, p, z, angle, bs, 0, color_text);
         // */
 
@@ -593,6 +597,8 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos) {
     // */
 
     if (prgh->use_cache) {
+        //DrawCircleV(pos, 400, BLUE);
+
         if (!prgh->is_cached) {
             prgh->is_cached = true;
 
@@ -615,6 +621,7 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos) {
         };
         DrawTexturePro(tex, src, dst, z, 0.f, WHITE);
     } else {
+        //DrawCircleV(pos, 400, RED);
         _paragraph_draw2(prgh, pos);
     }
 
