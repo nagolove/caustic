@@ -27,6 +27,10 @@ local e = glob.env_instance()
 assert(e.path_caustic)
 
 
+
+
+
+
 package.path = package.path .. ";" .. e.path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. e.path_caustic .. "/tl_dst/?.lua;"
 package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
@@ -1197,6 +1201,7 @@ return {
             "resvg",
         },
         artifact = "$NAME",
+        kind = 'app',
         main = "$NAME.c",
         src = "src",
     },
@@ -1281,11 +1286,11 @@ function actions.project(_args)
       return
    end
 
-   local ok = mkdir(project_name)
+   local ok, err = mkdir(project_name)
    if not ok then
       print(format(
-      "Could not create '%s', may be directory exists",
-      project_name))
+      "Could not create '%s', error '%s'",
+      project_name, err))
 
       return
    end
@@ -1350,9 +1355,10 @@ return {
         -- каталог с исходными текстами
         src = "src",
         -- исключать следующие имена, можно использовать Lua шаблоны
-        exclude = {
+        exclude_files = {
             --"t80_stage_empty.c",
         },
+        kind = 'app',
         -- список дефайнов для отладочной сборки
         debug_define = {
             ["BOX2C_SENSOR_SLEEP"] = "1",
@@ -4526,124 +4532,6 @@ function actions.cppcheck(_args)
    cmd = cmd .. concat(files, " ")
 
    cmd_do(cmd)
-end
-
-
-
-function actions.bld_lua(_args)
-   local bld_lua = 'bld.lua'
-
-   _args.target = 'linux'
-
-   local attr = lfs.attributes(bld_lua)
-   if attr and attr.mode == 'file' then
-      assert(_args.target == 'linux')
-      cmd_do(format("cp %s %s", bld_lua, bld_lua .. ".bak"))
-   end
-
-   local f_lua = io.open(bld_lua .. ".tmp", "w")
-   assert(f_lua)
-
-
-
-   local bld_lua_full =
-
-   [[
--- vim: set colorcolumn=85
--- vim: fdm=marker
-
-return {
-
-   -- еденица трансляции
-   {
-      -- список отклченных для данной сборки зависимостей
-      not_dependencies = {
-$modules_list$
-      },
-      -- результат компиляции и линковки
-      artifact = "e.exe",
-      kind = 'app',
-      --kind = "app",
-      --kind = "shared",
-      --kind = "static",
-      -- файл с функцикй main()
-      main = "main.c",
-      -- каталог с исходными текстами
-      src = "src",
-      -- исключать следующие имена файлов, можно использовать Lua шаблоны
-      exclude = {
-            --"t80_stage_empty.c",
-      },
-      -- список дефайнов которые применяются всегда
-      common_define = {
-      },
-      -- список дефайнов для отладочной сборки
-      debug_define = {
-         ["BOX2C_SENSOR_SLEEP"] = "1",
-        DEBUG = 0,
-      },
-      -- список дефайнов для релизной сборки
-      release_define = {
-         ["T80_NO_ERROR_HANDLING"] = "1",
-      },
-      -- куда подставляются флаги?
-      flags = {
-         --"-fopenmp",
-      },
-
-      includes = {
-      },
-      libs = {
-      },
-      libsdirs = {
-      },
-
-      codegen = {
-         {
-            -- нет входного или выходного файла - нет кодогенерации
-            --file_in = "t80_defaults.c.in",
-            --file_out = "t80_defaults.c",
-            on_read = function(line)
-            end,
-            on_write = function(capture)
-                return {
-                    "line1",
-                    "line2",
-                }
-            end,
-            on_finish = function()
-            end,
-         },
-      },
-   },
-   -- конец еденицы трансляции
-
-}
-]]
-
-
-   local modules_list = {}
-   for m in mods.iter() do
-      insert(modules_list, format("       %q,", m.name))
-   end
-   local modules_str = concat(modules_list, "\n")
-
-
-   bld_lua_full = gsub(
-   bld_lua_full,
-   "%$modules_list%$",
-   modules_str)
-
-
-   local func, errmsg = load(bld_lua_full)
-   if not func then
-      print('actions.bld_lua: error in generate file', errmsg)
-   end
-
-   f_lua:write(bld_lua_full)
-   f_lua:close()
-
-   cmd_do(format("cp %s %s", bld_lua .. ".tmp", bld_lua))
 end
 
 function actions.sha256(_)
