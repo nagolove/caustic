@@ -141,3 +141,98 @@ static inline void tmr_end(Tmr *t) {
 }
 
 // }}}
+
+
+/* // gpt
+
+Я бы добавил паузу как “заморозку времени”, чтобы:
+
+не шёл start_delay
+
+не тикал period
+
+не выгорал time_loop
+
+time_amount оставался на месте
+
+Самый простой и надёжный способ в твоей текущей модели (где всё завязано на GetTime() и time_init/time_last) — при resume сдвигать якоря вперёд на длительность паузы.
+
+1) Добавь поля в Tmr
+typedef struct Tmr {
+    f64 time_init, time_last;
+    f32 period, time_amount, time_loop, time_start_delay;
+    bool expired, once, is_inited;
+
+    // --- pause ---
+    bool paused;
+    f64  time_paused_at;   // GetTime() в момент постановки на паузу
+} Tmr;
+
+2) API
+static inline void tmr_pause(Tmr *t);
+static inline void tmr_resume(Tmr *t);
+static inline void tmr_set_paused(Tmr *t, bool paused);
+static inline bool tmr_is_paused(const Tmr *t);
+
+3) Реализация
+static inline bool tmr_is_paused(const Tmr *t) {
+    return t && t->is_inited && t->paused;
+}
+
+static inline void tmr_pause(Tmr *t) {
+    if (!t || !t->is_inited || t->expired) return;
+    if (t->paused) return;
+    t->paused = true;
+    t->time_paused_at = GetTime();
+}
+
+static inline void tmr_resume(Tmr *t) {
+    if (!t || !t->is_inited || t->expired) return;
+    if (!t->paused) return;
+
+    const double now = GetTime();
+    const double dt  = now - t->time_paused_at; // сколько стояли на паузе
+
+    // “замораживаем время”: сдвигаем якоря вперёд
+    t->time_init += dt;
+    t->time_last += dt;
+
+    t->paused = false;
+}
+
+static inline void tmr_set_paused(Tmr *t, bool paused) {
+    if (paused) tmr_pause(t);
+    else        tmr_resume(t);
+}
+
+4) Маленькие правки в твоих функциях
+
+Чтобы пауза реально “стопала” поведение:
+
+static inline bool tmr_begin(Tmr *t) {
+    if (!t || t->expired) return false;
+    if (!t->is_inited)    return false;
+    if (t->paused)        return false;  // <- важно
+
+    ...
+}
+
+static inline void tmr_end(Tmr *t) {
+    if (!t) return;
+    if (!t->is_inited || t->expired) return;
+    if (t->paused) return;              // <- важно
+
+    ...
+}
+
+Почему это хороший вариант
+
+Не нужно переписывать вычисления start_at/end_at.
+
+Пауза автоматически корректно работает и для once, и для time_loop, и для периодического режима.
+
+Можно вызывать pause/resume хоть до старта (start_delay тоже “заморозится”).
+
+Если хочешь, могу предложить второй вариант (через effective_now = GetTime() - paused_total), он полезен если тебе важно хранить “реальное” time_init без сдвигов, но в твоей текущей структуре сдвиг якорей — самый чистый и простой.
+
+ */
