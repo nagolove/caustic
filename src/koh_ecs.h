@@ -248,7 +248,7 @@ void e_orphans_each(ecs_t* r, e_each_function fun, void* udata);
 
 */
 
-#define E_MAX_VIEW_COMPONENTS (16)
+#define E_MAX_VIEW_COMPONENTS (24)
 
 typedef struct e_view {
     /* value is the component id, index is where is located in the all_pools array */
