@@ -93,6 +93,14 @@ static inline const char *Vector2_tostr(Vector2 v) {
     return buf[cnt];
 }
 
+static inline const char *Vector2str(Vector2 v) {
+    static char buf[10][100] = {};
+    static int cnt = 0;
+    cnt = (cnt + 1) % 10;
+    snprintf(buf[cnt], sizeof(buf) - 1, "{%f, %f}", v.x, v.y);
+    return buf[cnt];
+}
+
 /*
 static inline Rectangle from_bb(cpBB bb) {
     return (Rectangle) { 
