@@ -980,11 +980,13 @@ const char *font2str(Font fnt) {
     return buf;
 }
 
+// TODO: Проверка на существование файлов. Но как тогда не запутаться в 
+// файлах - какой старше, какой младше?
 void koh_screenshot_incremental() {
     static int counter = 0;
     Image img = LoadImageFromScreen();
     char fname[64] = {0};
-    sprintf(fname, "screen_%d.png", counter++);
+    sprintf(fname, "screen_%.2d.png", counter++);
     ExportImage(img, fname);
     UnloadImage(img);
 };
