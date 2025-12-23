@@ -149,8 +149,8 @@ static inline Vector2 b2Vector2(b2Vec2 v) {
     return (Vector2) { v.x, v.y };
 }
 
-static inline Vector2 Vector2b2(b2Vec2 v) {
-    return (Vector2) { v.x, v.y };
+static inline b2Vec2 Vector2b2(Vector2 v) {
+    return (b2Vec2) { v.x, v.y };
 }
 
 static inline b2AABB rect2aabb(Rectangle r) {
