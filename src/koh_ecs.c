@@ -4307,7 +4307,10 @@ e_id *e_entities_alloc(ecs_t *r, size_t *num) {
 }
 
 const char *e_id2str(e_id e) {
-    static char buf[128] = {};
+    static char slots[5][128] = {};
+    static i32 index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
     sprintf(buf, "{ ord = %u, ver = %u }", e.ord, e.ver);
     return buf;
 }
