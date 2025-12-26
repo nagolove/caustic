@@ -2,6 +2,7 @@
 #pragma once
 
 #include "raymath.h"
+#include <string.h>
 #include "koh_common.h"
 #include "raylib.h"
 #include <assert.h>
@@ -39,6 +40,8 @@ static inline void tmr_pause(Tmr *t);
 static inline void tmr_resume(Tmr *t);
 static inline void tmr_set_paused(Tmr *t, bool paused);
 static inline bool tmr_is_paused(const Tmr *t);
+static inline void tmr_null(Tmr *t);
+
 // */
 
 /*
@@ -199,6 +202,11 @@ static inline void tmr_end(Tmr *t) {
     if (now < start_at) return;
 
     t->time_last = now;
+}
+
+static inline void tmr_null(Tmr *t) {
+    assert(t);
+    memset(t, 0, sizeof(*t));
 }
 
 // }}}
