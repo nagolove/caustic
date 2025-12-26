@@ -1344,3 +1344,17 @@ void b2Body_set_filter(b2BodyId bid, b2Filter fltr) {
         b2Shape_SetFilter(shapes[j], fltr);
     }
 }
+
+const char *b2World_2str(b2WorldId wid) {
+    static char slots[5][128] = {};
+    static i32 index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+
+    snprintf(
+        buf, sizeof(slots[0]),
+        "{ generation = %u, index1 = %u }",
+        wid.generation, wid.index1
+    );
+    return buf;
+}

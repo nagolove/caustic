@@ -387,3 +387,4 @@ static inline const char *b2Transform_2str(b2Transform t) {
 }
 
 void b2_stat_gui(b2WorldId wid);
+const char *b2World_2str(b2WorldId wid);
