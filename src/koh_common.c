@@ -4,6 +4,9 @@
 
 #define PCRE2_CODE_UNIT_WIDTH   8
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include "pcre2.h"
+
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
 #include "cimgui_impl.h"
@@ -13,7 +16,6 @@
 #include "koh_rand.h"
 #include "koh_routine.h"
 #include "koh_table.h"
-#include "pcre2.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "utf8proc.h"
@@ -2672,29 +2674,29 @@ void camera_gui(Camera2D *cam, const char *cam_label) {
 
         //igBeginGroup();
         igText("reset");
+        
+        i32 flag = ImGuiChildFlags_Borders;
+        if (igBeginChild_Str("CameraControls", (ImVec2){0, 100}, flag, 0)) {
 
-        if (igBeginChild_Str("CameraControls", (ImVec2){0, 100}, ImGuiChildFlags_Borders, 0)) {
+            ImVec2 zero = {};
+            if (igButton("zoom", zero)) {
+                cam->zoom = 1.;
+            }
+            igSameLine(0., 10.);
+            if (igButton("offset", zero)) {
+                cam->offset = (Vector2) {};
+            }
+            igSameLine(0., 10.);
+            if (igButton("target", zero)) {
+                cam->target = (Vector2) {};
+            }
+            igSameLine(0., 10.);
+            if (igButton("full", zero)) {
+                *cam = (Camera2D) { .zoom = 1., };
+            }
 
-        ImVec2 zero = {};
-        if (igButton("zoom", zero)) {
-            cam->zoom = 1.;
         }
-        igSameLine(0., 10.);
-        if (igButton("offset", zero)) {
-            cam->offset = (Vector2) {};
-        }
-        igSameLine(0., 10.);
-        if (igButton("target", zero)) {
-            cam->target = (Vector2) {};
-        }
-        igSameLine(0., 10.);
-        if (igButton("full", zero)) {
-            *cam = (Camera2D) { .zoom = 1., };
-        }
-
-            igEndChild();
-        }
-        //igEndGroup();
+        igEndChild();
 
         if (igButton("copy", imzero)) {
             SetClipboardText(camera2str(*cam, true));
@@ -2715,12 +2717,10 @@ void camera_gui(Camera2D *cam, const char *cam_label) {
         igInputFloat("target.y", &cam->target.y, 10.f, 200.f, "%.3f", 0);
 
         igSliderFloat("rotation", &cam->rotation, 0.f, 360.f, "%.3f", 0);
+        igSliderFloat("zoom", &cam->zoom, 0.01f, 5.f, "%.3f", 0);
         igTreePop();
     }
 }
-
-#define PCRE2_CODE_UNIT_WIDTH 8
-#include <pcre2.h>
 
 typedef struct camera {
     float offset[2];
