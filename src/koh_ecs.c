@@ -2981,6 +2981,8 @@ static inline void ecs_assert(ecs_t *r) {
     assert(r->entities_num >= 0);
     // проверить на наличие свободных индексов для сущностей
     if (r->stack_last < 0) {
+        printf("ecs_assert: stack_last < 0, %ld\n", r->stack_last);
+        printf("ecs_assert: max_id %ld\n", r->max_id);
         koh_trap();
     }
     assert(r->stack_last >= 0);
@@ -3459,6 +3461,7 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
     // Проверить вместимость и выделить еще памяти при необходимости
     if (s->cp_data_size + 1 >= s->cp_data_cap) {
         s->cp_data_cap++;
+        size_t prev_cap = s->cp_data_cap;
         s->cp_data_cap = s->cp_data_cap * 3 / 2;
         //s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
         void *newp = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
@@ -3470,7 +3473,11 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
         }
 
         s->cp_data = newp;
-        printf("e_emplace: component '%s' was realloced\n", s->name);
+        printf(
+            "e_emplace: component '%s' was realloced from %zu to %zu cap\n",
+            s->name,
+            prev_cap, s->cp_data_cap
+        );
     }
 
     s->cp_data_size++;
