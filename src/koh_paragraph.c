@@ -162,6 +162,7 @@ bool parse_color_command(
     return true;
 }
 
+// Разбирает строку. Выделяет цвета.
 void parse_line(const char *line) {
     printf("parse_line:\n\n");
 
@@ -462,7 +463,7 @@ void paragraph_build(Paragraph *prgh) {
 
         //size_t cur_line_len = strlen(cur_line);
 
-        //parse_line(cur_line);
+        parse_line(cur_line);
 
         // в этот буфер полетит строчка очищенная от команд
         //char cur_line_buf[cur_line_len + 1] = {};

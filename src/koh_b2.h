@@ -203,18 +203,16 @@ void box2d_gui(struct WorldCtx *wctx);
 static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     assert(cam);
 
-    //assert(cam->zoom == 0.f);
-    //assert(isnan(cam->zoom));
-
     if (isnan(cam->zoom)) {
         cam->zoom = 1.;
     }
 
     float zoom = cam->zoom;
 
-    // XXX: Это не здесь делать, а в koh_camera_scale()
-    if (zoom <= 0.01f)
+    if (zoom <= 0.01f) {
+        printf("camera2aabb: zoom reseted from %f to 0.1f\n", zoom);
         zoom = 0.1;
+    }
 
     float zoom_inv = 1. / zoom;
     float w = GetScreenWidth(), h = GetScreenHeight();
