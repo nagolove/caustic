@@ -113,13 +113,15 @@ static inline double _clamp01(float x) {
     return x;
 }
 
-// TODO: Добавить слоты
 static inline char *tmr_2str(Tmr *t) {
     assert(t);
-    static char buf[256 + 128] = {};
+    static char slots[5][256 + 128] = {};
+    static i32 index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
 
     snprintf(
-        buf, sizeof(buf) - 1,
+        buf, sizeof(slots[0]),
         "{ time_init = %f, time_last = %f, period = %f, time_amount = %f, "
         "time_loop = %s, time_start_delay = %f, expired = %s, once = %s, "
         "is_inited = %s }",
