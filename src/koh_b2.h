@@ -124,6 +124,8 @@ KOH_FORCE_INLINE b2Body *b2Body_get(b2WorldId world_id, b2BodyId id) {
 }
 */
 
+//static inline const char *b2Vec2str(b2Vec2 v);
+
 static inline const char *b2Vec2_to_str(b2Vec2 v) {
     static char slots[5][64] = {0};
     static int index = 0;
@@ -137,10 +139,12 @@ static inline const char *b2Vec2_tostr(b2Vec2 v) {
     return b2Vec2_to_str(v);
 }
 
+__attribute_deprecated__
 static inline b2Vec2 Vector2_to_Vec2(Vector2 v) {
     return (b2Vec2) { v.x, v.y };
 }
 
+__attribute_deprecated__
 static inline Vector2 b2Vec2_to_Vector2(b2Vec2 v) {
     return (Vector2) { v.x, v.y };
 }

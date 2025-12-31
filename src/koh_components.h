@@ -310,7 +310,7 @@ inline static void world_shape_render_circle2(
     }
 
     // Преобразования координаты из локальных в глобальные
-    Vector2 center = b2Vec2_to_Vector2(
+    Vector2 center = b2Vector2(
         b2Body_GetWorldPoint(body_id, sh_circle.center)
     );
 
@@ -392,7 +392,7 @@ inline static void world_shape_render_circle(
     struct ShapeRenderOpts *r_opts = render_opts_get(shape_id, r);
 
     b2Circle sh_circle = b2Shape_GetCircle(shape_id);
-    b2BodyId body_id = b2Shape_GetBody(shape_id);
+    b2BodyId bid = b2Shape_GetBody(shape_id);
 
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
     //assert(shape_type == b2_circleShape);
@@ -402,17 +402,15 @@ inline static void world_shape_render_circle(
     }
 
     // Преобразования координаты из локальных в глобальные
-    Vector2 center = b2Vec2_to_Vector2(
-        b2Body_GetWorldPoint(body_id, sh_circle.center)
-    );
+    Vector2 center = b2Vector2(b2Body_GetWorldPoint(bid, sh_circle.center));
 
     Color color = r_opts->color;
     if (b2Shape_IsSensor(shape_id))
         color = GRAY;
 
     if (r_opts->tex) {
-        b2BodyId bid =  b2Shape_GetBody(shape_id);
-        b2Vec2 pos = b2Body_GetPosition(bid);
+        b2BodyId bid2 =  b2Shape_GetBody(shape_id);
+        b2Vec2 pos = b2Body_GetPosition(bid2);
         b2Circle circle =  b2Shape_GetCircle(shape_id);
 
         /*

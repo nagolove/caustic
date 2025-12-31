@@ -882,7 +882,7 @@ void shape_render_poly(
     //b2Shape *shape = b2Shape_get(wctx->world, shape_id);
     //b2Polygon *poly = &shape->polygon;
     b2Polygon poly = b2Shape_GetPolygon(shape_id);
-    b2BodyId body_id = b2Shape_GetBody(shape_id);
+    b2BodyId bid = b2Shape_GetBody(shape_id);
     b2ShapeType shape_type = b2Shape_GetType(shape_id);
 
     /*
@@ -911,9 +911,7 @@ void shape_render_poly(
     memset(w_verts, 0, sizeof(w_verts));
 
     for (int i = 0; i < poly.count; i++) {
-        w_verts[i] = b2Vec2_to_Vector2(
-            b2Body_GetWorldPoint(body_id, poly.vertices[i])
-        );
+        w_verts[i] = b2Vector2(b2Body_GetWorldPoint(bid, poly.vertices[i]));
     }
 
     int count = poly.count, vertex_disp = opts->vertex_disp;
@@ -1189,9 +1187,8 @@ void shape_render_segment(
     b2Segment seg = b2Shape_GetSegment(shape_id);
     // Преобразования координаты из локальных в глобальные
     Vector2 w_verts[2] = {
-        
-        b2Vec2_to_Vector2(seg.point1),
-        b2Vec2_to_Vector2(seg.point2),
+        b2Vector2(seg.point1),
+        b2Vector2(seg.point2),
     };
 
     assert(opts->thick);
@@ -1242,7 +1239,7 @@ void e_draw_box2d_bodies_positions(
         if (!body_id)
             continue;
         b2Vec2 pos = b2Body_GetPosition(*body_id);
-        DrawCircleV(b2Vec2_to_Vector2(pos), setup->radius, setup->color);
+        DrawCircleV(b2Vector2(pos), setup->radius, setup->color);
     }
 }
 
