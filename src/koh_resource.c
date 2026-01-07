@@ -414,6 +414,7 @@ RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
     assert(h > 0);
     RenderTexture2D rt = LoadRenderTexture(w, h);
     R *r = reslist_add(l);
+    memset(r->fname, 0, sizeof(r->fname));
     r->type = RT_TEXTURE_RT;
     r->rt_w = w, r->rt_h = h;
     r->raylib_object = copy_alloc(&rt, sizeof(rt));
@@ -478,6 +479,10 @@ const char *type2str[] = {
     [RT_SHADER]        = "SHADER",
 };
 
+static Vector2 preview_minisize = {
+    64 * 1.5, 64 * 1.5
+};
+
 void reslist_gui(ResList *l) {
     assert(l);
 
@@ -504,11 +509,12 @@ void reslist_gui(ResList *l) {
             ImGuiTableFlags_Resizable;
         ImVec2 outer_sz = {};
         f32 inner_width = 0.f;
-        if (igBeginTable("ImagesTable", 3, flags, outer_sz, inner_width)) {
+        if (igBeginTable("ImagesTable", 4, flags, outer_sz, inner_width)) {
             // Заголовки столбцов
-            igTableSetupColumn("fname", 0, 0, 0);
-            igTableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 0, 0);
             igTableSetupColumn("img", 0, 0, 0);
+            igTableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 0, 0);
+            igTableSetupColumn("fname", 0, 0, 0);
+            igTableSetupColumn("sz", 0, 0, 0);
             igTableHeadersRow();
 
             for (i32 i = 0; i < l->arr_num; ++i) {
@@ -525,31 +531,43 @@ void reslist_gui(ResList *l) {
 
                 igTableNextRow(0, 0.f);
 
-                // Колонка fname (строка)
-                igTableSetColumnIndex(0);
-                igTextUnformatted(r->fname, NULL);
-
-                igTableSetColumnIndex(1);
-                igTextUnformatted(type2str[type], NULL);
-
                 // Колонка img (текстура через rlImGuiImage)
-                igTableSetColumnIndex(2);
+                igTableSetColumnIndex(0);
 
+                i32 w = -1, 
+                    h = -1;
                 if (type == RT_TEXTURE) {
                     Texture2D *t = r->raylib_object;
-                    const Vector2 minisize = {64, 64};
                     if (t) {
+                        w = t->width, h = t->height;
                         if (l->is_minipreview)
-                            rlImGuiImageSizeV(t, minisize);
+                            rlImGuiImageSizeV(t, preview_minisize);
                         else
                             rlImGuiImage(t);
                     }
                 } else if (type == RT_TEXTURE_RT) {
                     RenderTexture2D *t = r->raylib_object;
                     if (t) {
-                        rlImGuiImageRenderTextureFit(t, false);
+                        w = t->texture.width, h = t->texture.height;
+                        if (l->is_minipreview)
+                            rlImGuiImageSizeV(&t->texture, preview_minisize);
+                        else
+                            rlImGuiImage(&t->texture);
+                        //rlImGuiImageRenderTextureFit(t, false);
                     }
                 }
+                
+                // Колонка тип
+                igTableSetColumnIndex(1);
+                igTextUnformatted(type2str[type], NULL);
+
+                // Колонка fname (строка)
+                igTableSetColumnIndex(2);
+                igTextUnformatted(r->fname, NULL);
+
+                // Колонка размер
+                igTableSetColumnIndex(3);
+                igText("%dx%d", w, h);
 
             }
 
@@ -565,4 +583,15 @@ void reslist_label_set(ResList *l, const char *label) {
     if (!label) 
         label = "";
     snprintf(l->label, sizeof(l->label), "reslist - %s", label);
+}
+
+void reslist_dragndrop_gui(ResList *l) {
+    if (!IsFileDropped())
+        return;
+
+    FilePathList files = LoadDroppedFiles(); 
+    for (i32 i = 0; i < files.count; ++i) {
+        printf("reslist_dragdrop_gui: %s\n", files.paths[i]);
+    }
+    UnloadDroppedFiles(files);                
 }

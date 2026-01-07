@@ -28,7 +28,9 @@ Shader reslist_load_shader(ResList *l, const char *fname);
 Shader reslist_load_shader_str(ResList *l, const char *code);
 
 void reslist_gui(ResList *l);
+// Установить уникальную надпись для списка ресурсов
 void reslist_label_set(ResList *l, const char *label);
+void reslist_dragndrop_gui(ResList *l);
 ////////////////////////////////////////////////////////////////////
 //void reslist_reload_all(ResList *l);
 ///////////////////////////////////////////////////////////////////
