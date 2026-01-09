@@ -51,10 +51,16 @@ typedef struct Paragraph {
     Font    fnt;
 } Paragraph;
 
+typedef enum ParagraphFlags {
+    // XXX: Сделать окантовку двумя режимами - псевдографика и пиксельная рамка
+    PARAGRAPH_FLAGS_BORDER_PSEUDO = 0b01,
+} ParagraphFlags;
+
 typedef struct ParagraphOpts {
     const char  *ttf_fname;
     i32         base_size;
     bool        use_caching;
+    u32         flags;
 } ParagraphOpts;
 
 __attribute__((__format__ (__printf__, 2, 3)))
