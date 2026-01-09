@@ -1,4 +1,5 @@
-// TODO: Перенести весь код в koh_common.h
+// vim: set colorcolumn=85
+// vim: fdm=marker
 #pragma once
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -6,34 +7,31 @@
 #include "cimgui.h"
 #include "cimgui_impl.h"
 
-#include "koh_logger.h"
-/*#include "chipmunk/cpBB.h"*/
-#include "raylib.h"
-#include "raymath.h"
-//#include "chipmunk/chipmunk.h"
-#include <assert.h>
-#include <float.h>
-#include <stdio.h>
-#include <string.h>
-
+/*
 #ifndef BOX2C_SENSOR_SLEEP
-#include "box2d/math_functions.h"
 #else
-/*#include "box2d/math_types.h"*/
 #include "box2d/math_functions.h"
 #endif
+*/
 
+#include "box2d/math_functions.h"
 #include "koh_metaloader.h"
 #include "koh_rand.h"
+#include "koh_strbuf.h"
 #include "koh_timerman.h"
 #include "koh_visual_tools.h"
 #include "raylib.h"
+#include "raylib.h"
+#include "raymath.h"
 #include <assert.h>
+#include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "koh_strbuf.h"
+#include <stdio.h>
+#include <string.h>
 
 //////////////////////////// отключить предупреждения при снятии константности
 #if defined(__GNUC__) || defined(__clang__)
@@ -91,6 +89,38 @@
 #define KOH_INLINE inline __attribute__((always_inline))
 #define KOH_ATTR_FORMAT(f, s) __attribute__((__format__(__printf__, f, s))) 
 #define KOH_HIDDEN __attribute__((visibility("hidden")))
+#define assume(cond) do { if (!(cond)) __builtin_unreachable(); } while (0)
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+#if defined(__GNUC__) || defined(__clang__)
+#  define KOH_UNUSED __attribute__((unused))
+#else
+#  define KOH_UNUSED
+#endif
+
+// Цвета терминала {{{
+#define KOH_TERM_BLACK        30         
+#define KOH_TERM_RED          31         
+#define KOH_TERM_GREEN        32         
+#define KOH_TERM_YELLOW       33         
+#define KOH_TERM_BLUE         34         
+#define KOH_TERM_MAGENTA      35         
+#define KOH_TERM_CYAN         36         
+#define KOH_TERM_WHITE        37         
+
+#define KOH_TERM_BRIGHT_BLACK        90         
+#define KOH_TERM_BRIGHT_RED          91         
+#define KOH_TERM_BRIGHT_GREEN        92         
+#define KOH_TERM_BRIGHT_YELLOW       93         
+#define KOH_TERM_BRIGHT_BLUE         94         
+#define KOH_TERM_BRIGHT_MAGENTA      95         
+#define KOH_TERM_BRIGHT_CYAN         96         
+#define KOH_TERM_BRIGHT_WHITE        97         
+// }}}
+
+// Примитивный многочлен: x^64 + x^4 + x^3 + x + 1
+#define LFSR64_POLY 0x000000000000001B
+
 
 typedef int64_t     i64;
 typedef uint64_t    u64;
@@ -110,6 +140,10 @@ typedef struct {
 struct Common {
     int     *font_chars;
     int     font_chars_num, font_chars_cap;
+};
+
+struct Polar {
+    float angle, len;
 };
 
 struct Common *koh_cmn();
@@ -236,26 +270,6 @@ uint32_t next_eq_pow2(uint32_t p);
 const char *font2str(Font fnt);
 void koh_screenshot_incremental();
 void koh_trap();
-
-// Цвета терминала {{{
-#define KOH_TERM_BLACK        30         
-#define KOH_TERM_RED          31         
-#define KOH_TERM_GREEN        32         
-#define KOH_TERM_YELLOW       33         
-#define KOH_TERM_BLUE         34         
-#define KOH_TERM_MAGENTA      35         
-#define KOH_TERM_CYAN         36         
-#define KOH_TERM_WHITE        37         
-
-#define KOH_TERM_BRIGHT_BLACK        90         
-#define KOH_TERM_BRIGHT_RED          91         
-#define KOH_TERM_BRIGHT_GREEN        92         
-#define KOH_TERM_BRIGHT_YELLOW       93         
-#define KOH_TERM_BRIGHT_BLUE         94         
-#define KOH_TERM_BRIGHT_MAGENTA      95         
-#define KOH_TERM_BRIGHT_CYAN         96         
-#define KOH_TERM_BRIGHT_WHITE        97         
-// }}}
 
 void koh_term_color_set(int color);
 void koh_term_color_reset();
@@ -499,14 +513,7 @@ static inline void em_setup_screen_size(int *_w, int *_h) {
 #endif
 }
 
-#define assume(cond) do { if (!(cond)) __builtin_unreachable(); } while (0)
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
-
 int get_hardware_concurrency();
-
-// Примитивный многочлен: x^64 + x^4 + x^3 + x + 1
-#define LFSR64_POLY 0x000000000000001B
 
 // static uint64_t lfsr = 1; // начальное состояние (≠ 0)
 static inline u64 lfsr64_next(u64 lfsr) {
@@ -520,22 +527,9 @@ const char *uint64_to_str_bin(uint64_t value);
 NORETURN void koh_fatal();
 
 
-#if defined(__GNUC__) || defined(__clang__)
-#  define KOH_UNUSED __attribute__((unused))
-#else
-#  define KOH_UNUSED
-#endif
-
-
 StrBuf Texture2D_2str(const Texture2D *tex);
 void camera_gui(Camera2D *cam, const char *cam_label);
 bool camera_parse_from_buf(const char *buf, Camera2D *out);
-
-
-
-
-
-
 
 static inline Vector2 Im2Vec2(ImVec2 v) {
     return (Vector2) { .x = v.x, .y = v.y, };
@@ -552,10 +546,6 @@ static inline void vec4_from_color(float vec[4], Color c) {
 static inline Vector2 from_polar(float angle, float radius) {
     return (Vector2){ cos(angle) * radius, sin(angle) * radius };
 }
-
-struct Polar {
-    float angle, len;
-};
 
 static inline struct Polar to_polarv(Vector2 p) {
     return (struct Polar){
