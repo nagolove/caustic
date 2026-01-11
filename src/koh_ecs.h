@@ -294,6 +294,16 @@ void e_gui(ecs_t *r, e_id e);
 void e_gui_buf(ecs_t *r);
 void e_types_print(ecs_t *r);
 
+// Возвращает указатель на тип для которого была выделана память по имени типа.
+// Если не найдено - возвращает NULL
+e_cp_type *e_types_allocated_search(ecs_t *r, const char *name);
+
+// Функция для итерации по всем типам для которых выделена память.
+// Возвращет статический массив с NULL элементом в конце. 
+// Типы должны быть предварительтно указаны через e_register().
+// Опционально в num возвращается количество типов.
+e_cp_type **e_types_allocated(ecs_t *r, int *num);
+
 // Функция для итерации по всем типам компонентов прикрепленных к сущности.
 // Возвращет статический массив с NULL элементом в конце. 
 // Типы должны быть предварительтно указаны через e_register().
@@ -436,54 +446,58 @@ void e_remove_by_type(ecs_t *r, e_cp_type type);
 
 // {{{
 typedef struct koh_ecs {
-    ecs_t *(*new)(e_options *opts);
-    void (*free)(ecs_t *r);
-    e_cp_type (*reg)(ecs_t *r, e_cp_type *comp);
-    e_id (*create)(ecs_t* r);
-    void (*destroy)(ecs_t* r, e_id e);
-    bool (*valid)(ecs_t* r, e_id e);
-    void (*remove_all)(ecs_t* r, e_id e);
-    void* (*emplace)(ecs_t* r, e_id e, e_cp_type cp_type);
-    size_t (*num)(ecs_t* r, e_cp_type cp_type);
-    void (*remove)(ecs_t* r, e_id e, e_cp_type cp_type);
-    bool (*remove_safe)(ecs_t* r, e_id e, e_cp_type cp_type);
+
+    bool (*each_valid)(e_each_iter *i);
     bool (*has)(ecs_t* r, e_id e, const e_cp_type cp_type);
-    void* (*get)(ecs_t* r, e_id e, e_cp_type cp_type);
-    void* (*get_fast)(ecs_t* r, e_id e, e_cp_type cp_type);
-    void (*each)(ecs_t* r, e_each_function fun, void* udata);
+    bool (*is_cp_registered)(ecs_t *r, const char *cp_type);
+    bool (*is_not_null)(e_id e);
+    bool (*is_null)(e_id e);
     bool (*orphan)(ecs_t* r, e_id e);
-    void (*orphans_each)(ecs_t* r, e_each_function fun, void* udata);
-    e_view (*view_create)(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
-    e_view (*view_create_single)(ecs_t* r, e_cp_type cp_type);
+    bool (*remove_safe)(ecs_t* r, e_id e, e_cp_type cp_type);
+    bool (*valid)(ecs_t* r, e_id e);
     bool (*view_valid)(e_view* v);
-    e_id (*view_entity)(e_view* v);
-    void* (*view_get)(e_view *v, e_cp_type cp_type);
-    void (*view_next)(e_view* v);
-    e_id *(*entities_alloc)(ecs_t *r, size_t *num);
-    ecs_t *(*clone)(ecs_t *r);
-    void (*print_entities)(ecs_t *r);
     char *(*entities2table_alloc)(ecs_t *r);
     char *(*entities2table_alloc2)(ecs_t *r);
+    const char *(*cp_type_2str)(e_cp_type c);
+    const char *(*htable_eid_str)(const void *data, int len);
+    const char *(*id2str)(e_id e);
+    e_cp_type (*reg)(ecs_t *r, e_cp_type *comp);
+    e_cp_type *(*e_types_allocated_search)(ecs_t *r, const char *name);
+    e_cp_type **(*types)(ecs_t *r, e_id e, int *num);
+    e_cp_type **(*types_allocated)(ecs_t *r, int *num);
+    e_each_iter (*each_begin)(ecs_t *r);
+    e_id (*build)(uint32_t ord, uint32_t ver);
+    e_id (*create)(ecs_t* r);
+    e_id (*each_entity)(e_each_iter *i);
+    e_id (*from_void)(void *p);
+    e_id (*view_entity)(e_view* v);
+    e_id *(*entities_alloc)(ecs_t *r, size_t *num);
+    e_view (*view_create)(ecs_t* r, size_t cp_count, e_cp_type* cp_types);
+    e_view (*view_create_single)(ecs_t* r, e_cp_type cp_type);
+    ecs_t *(*clone)(ecs_t *r);
+    ecs_t *(*new)(e_options *opts);
+    int (*cp_type_cmp)(e_cp_type a, e_cp_type b);
+    size_t (*num)(ecs_t* r, e_cp_type cp_type);
+    uint32_t (*id_ord)(e_id e);
+    uint32_t (*id_ver)(e_id e);
+    void (*destroy)(ecs_t* r, e_id e);
+    void (*each)(ecs_t* r, e_each_function fun, void* udata);
+    void (*each_next)(e_each_iter *i);
+    void (*free)(ecs_t *r);
     void (*gui)(ecs_t *r, e_id e);
     void (*gui_buf)(ecs_t *r);
-    void (*types_print)(ecs_t *r);
-    e_cp_type **(*types)(ecs_t *r, e_id e, int *num);
-    const char *(*cp_type_2str)(e_cp_type c);
-    e_each_iter (*each_begin)(ecs_t *r);
-    bool (*each_valid)(e_each_iter *i);
-    void (*each_next)(e_each_iter *i);
-    e_id (*each_entity)(e_each_iter *i);
-    int (*cp_type_cmp)(e_cp_type a, e_cp_type b);
-    uint32_t (*id_ver)(e_id e);
-    uint32_t (*id_ord)(e_id e);
-    e_id (*from_void)(void *p);
-    e_id (*build)(uint32_t ord, uint32_t ver);
-    const char *(*id2str)(e_id e);
-    bool (*is_null)(e_id e);
-    bool (*is_not_null)(e_id e);
-    const char *(*htable_eid_str)(const void *data, int len);
-    bool (*is_cp_registered)(ecs_t *r, const char *cp_type);
+    void (*orphans_each)(ecs_t* r, e_each_function fun, void* udata);
+    void (*print_entities)(ecs_t *r);
+    void (*remove)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void (*remove_all)(ecs_t* r, e_id e);
     void (*remove_by_type)(ecs_t *r, e_cp_type type);
+    void (*types_print)(ecs_t *r);
+    void (*view_next)(e_view* v);
+    void* (*emplace)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void* (*get)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void* (*get_fast)(ecs_t* r, e_id e, e_cp_type cp_type);
+    void* (*view_get)(e_view *v, e_cp_type cp_type);
+
 } koh_ecs;
 // }}}
 

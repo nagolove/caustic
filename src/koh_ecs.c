@@ -4153,7 +4153,7 @@ void e_gui(ecs_t *r, e_id e) {
 }
 
 void e_types_print(ecs_t *r) {
-    assert(r);
+    ecs_assert(r);
 
     printf("{\n");
     for (int i = 0; i < r->storages_size; i++) {
@@ -4163,18 +4163,69 @@ void e_types_print(ecs_t *r) {
     printf("}\n");
 }
 
+e_cp_type *e_types_allocated_search(ecs_t *r, const char *name) {
+    printf("e_types_allocated_search: name '%s'\n", name);
+
+    i32 num = 0;
+    e_cp_type **types = e_types_allocated(r, &num);
+    
+    for (i32 i = 0; i < num; i++) {
+        printf("e_types_allocated_search: i %d\n", i);
+        printf(
+            "e_types_allocated_search: types[i]->name '%s'\n",
+            types[i]->name
+        );
+        if (strcmp(name, types[i]->name) == 0) {
+            return types[i];
+        }
+    }
+
+    return NULL;
+}
+
+e_cp_type **e_types_allocated(ecs_t *r, int *num) {
+    ecs_assert(r);
+
+    enum {
+        SLOTS_NUM = 10,
+        TYPES_NUM = 128,
+    };
+
+    assert(TYPES_NUM > r->storages_size);
+
+    static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
+    printf("e_types_allocated: sizeof(slots) %zu\n", sizeof(slots));
+    static int index = 0;
+    e_cp_type **types = slots[index];
+
+    memset(types, 0, sizeof(slots[index]));
+    index = (index + 1) % SLOTS_NUM;
+
+    if (num)
+        *num = r->storages_size;
+
+    for (int i = 0; i < r->storages_size; i++) {
+        types[i] = &r->storages[i].type;
+    }
+
+    return types;
+}
+
 e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
     ecs_assert(r);
     assert(e_valid(r, e));
-#define SLOTS_NUM 10
-#define TYPES_NUM 128
-    static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
-    static int i = 0;
-    e_cp_type **types = slots[i];
 
-    memset(types, 0, sizeof(slots[i]));
-    i = (i + 1) % SLOTS_NUM;
-#undef SLOTS_NUM
+    enum {
+        SLOTS_NUM = 10,
+        TYPES_NUM = 128,
+    };
+
+    static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
+    static int index = 0;
+    e_cp_type **types = slots[index];
+
+    memset(types, 0, sizeof(slots[index]));
+    index = (index + 1) % SLOTS_NUM;
 
     int found_types_num = 0;
 
@@ -4472,6 +4523,8 @@ const koh_ecs koh_ecs_get() {
     r.gui = e_gui;
     r.gui_buf = e_gui_buf;
     r.types_print = e_types_print;
+    r.types_allocated = e_types_allocated;
+    r.e_types_allocated_search = e_types_allocated_search;
     r.types = e_types;
     r.cp_type_2str = e_cp_type_2str;
     r.each_begin = e_each_begin;
