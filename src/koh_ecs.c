@@ -4164,17 +4164,21 @@ void e_types_print(ecs_t *r) {
 }
 
 e_cp_type *e_types_allocated_search(ecs_t *r, const char *name) {
-    printf("e_types_allocated_search: name '%s'\n", name);
+    //printf("e_types_allocated_search: name '%s'\n", name);
 
     i32 num = 0;
     e_cp_type **types = e_types_allocated(r, &num);
     
     for (i32 i = 0; i < num; i++) {
+
+        /*
         printf("e_types_allocated_search: i %d\n", i);
         printf(
             "e_types_allocated_search: types[i]->name '%s'\n",
             types[i]->name
         );
+        // */
+
         if (strcmp(name, types[i]->name) == 0) {
             return types[i];
         }
