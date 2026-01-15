@@ -3,6 +3,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include "koh_routine.h"
 
 extern bool koh_verbose_input;
 
@@ -26,6 +27,18 @@ InputKbMouseDrawer *input_kb_new(InputKbMouseDrawerSetup *setup);
 void input_kb_free(InputKbMouseDrawer *kb);
 void input_kb_update(InputKbMouseDrawer *kb);
 void input_kb_gui_update(InputKbMouseDrawer *kb);
+
+// XXX: Сделать подсветку клавишы с биндом и подсказку
+// XXX: Как быть если должен быть модификатор?
+
+typedef struct KbBind {
+    // KEY_ESCAPE и тд
+    i32         keycode;
+    // строка должна быть доступна все время работы InputKbMouseDrawer
+    const char  *msg;
+} KbBind;
+
+void input_kb_bind(InputKbMouseDrawer *kb, KbBind b);
 
 typedef struct InputGamepadDrawer InputGamepadDrawer;
 

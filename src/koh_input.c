@@ -14,12 +14,20 @@
 #include "cimgui.h"
 #include "cimgui_impl.h"
 #include "koh_resource.h"
+#include "koh_table.h"
 
-struct Btn {
+typedef struct Btn {
     char *lbl;
-    int  keycode, dx, dy, sx;
+         // KEY_ESCAPE и т.д.
+    int  keycode,
+         // смещения по x и y на размер кнопки
+         dx, dy, 
+         // сделать кнопку в два раза больше
+         sx;
     bool pressed;
-};
+
+    KbBind bind;
+} Btn;
 
 struct BtnRow {
     int dx, dy, gap;
@@ -27,7 +35,6 @@ struct BtnRow {
 };
 
 bool koh_verbose_input = false;
-static float scale_mouse = 0.10;
 
 static struct Btn row1[] = {
     // {{{
@@ -154,8 +161,8 @@ static struct BtnRow btn_rows[] = {
     // }}}
 };
 
-
 typedef struct InputKbMouseDrawer {
+    f32             scale_mouse;
     ResList         *reslist;
     RenderTexture2D rt;
     Texture2D       tex_mouse, tex_mouse_lb,
@@ -164,11 +171,16 @@ typedef struct InputKbMouseDrawer {
     Color           color_text, color_btn_pressed, color_btn_unpressed;
     int             font_size, line_thick, btn_width;
     Vector2         kb_size;
+
+    bool            is_advanched_mode;
+                    // i32 -> Btn*
+    HTable          *map_keycode2btn;
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
     assert(kb);
     reslist_free(kb->reslist);
+    htable_free(kb->map_keycode2btn);
     //res_unload_all(&kb->reslist, false);
     free(kb);
 }
@@ -202,12 +214,7 @@ static Vector2 kb_size(int btn_width) {
     // }}}
 }
 
-typedef void (*BtnIterCb)(
-            struct Btn *btn, 
-            int x, int y, 
-            int w, int h, 
-            int btn_width, void *user_data
-        );
+typedef void (*BtnIterCb)(Btn *btn, int x, int y, int w, int h, int btn_width, void *user_data);
 
 static void kb_each(
     int x_zero, int y_zero, int btn_width,
@@ -251,6 +258,17 @@ void iter_draw(
         .height = btn_width,
     }, ctx->line_thick, BLACK);
 
+    // XXX: Странное сравнение
+    if (btn->bind.keycode == btn->keycode) {
+        i32 _w = w,
+            _h = btn_width;
+        //DrawRectangle(x, y, w, btn_width, color_btn);
+        Vector2 v1 = { x, y + _h },
+                v2 = { x + _w, y },
+                v3 = { x + _w, y + _h };
+        DrawTriangle(v1, v2, v3, GREEN);
+    }
+
     char msg[32] = {};
     sprintf(msg, "%s", btn->lbl);
     Vector2 m = MeasureTextEx(GetFontDefault(), msg, ctx->font_size, 0.);
@@ -265,6 +283,46 @@ void iter_update(
     btn->pressed = IsKeyDown(btn->keycode);
 }
 
+void iter_map(
+    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
+) {
+    InputKbMouseDrawer *kbm = ud;
+    assert(kbm);
+    assert(kbm->map_keycode2btn);
+    htable_add(
+        kbm->map_keycode2btn,
+        &btn->keycode, sizeof(i32), 
+        btn, sizeof(Btn*)
+    );
+}
+
+// Инициализация системы связанной с размером кнопок и шрифта
+static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
+    kbm->btn_width = btn_width;
+    Vector2 size = kb_size(btn_width);
+    kbm->kb_size = size;
+
+    /*
+    if (btn_width >= 70) {
+        //kbm->font_size = 23 + (btn_width - 70) * 1.05;
+        kbm->font_size = 23 + (btn_width - 70) * 1.01;
+        scale_mouse = 0.10;
+    } else {
+        kbm->font_size = 20;
+        scale_mouse = 0.08;
+    }
+    */
+
+    const i32 btn_width_min = 49;
+    assert(btn_width > btn_width_min);
+    // XXX: Магическая формула
+    kbm->font_size = 10 + (btn_width - btn_width_min) * 0.5;
+
+    ResList *rl = kbm->reslist;
+    kbm->kb_size.x += kbm->tex_mouse.width * kbm->scale_mouse;
+    kbm->rt = reslist_load_rt(rl, kbm->kb_size.x, kbm->kb_size.y);
+}
+
 InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     assert(setup);
     assert(setup->btn_width > 0);
@@ -272,6 +330,7 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     assert(kbm);
 
     ResList *rl = kbm->reslist = reslist_new();
+    kbm->map_keycode2btn = htable_new(NULL);
 
     // TODO: Как и где хранить текстуры если вынести t80_input_kb.c в
     // отдельный проект? Как собирать ресурсы и не делать этого повторно
@@ -283,30 +342,30 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     kbm->tex_mouse_lb = reslist_load_tex(rl, "assets/gfx/mouse/lb.png");
     kbm->tex_mouse_wheel = reslist_load_tex(rl, "assets/gfx/mouse/wheel.png");
 
-    kbm->btn_width = setup->btn_width;
-    Vector2 size = kb_size(setup->btn_width);
-    kbm->kb_size = size;
-    size.x += kbm->tex_mouse.width * scale_mouse;
-
-    kbm->rt = reslist_load_rt(rl, size.x, size.y);
+    input_kb_init_btn_width(kbm, setup->btn_width);
     SetTraceLogLevel(LOG_INFO);
 
     kbm->color_text = BLACK;
     kbm->color_btn_pressed = RED;
     kbm->color_btn_unpressed = BLUE;
 
-    if (setup->btn_width >= 70) {
-        kbm->font_size = 23;
-        scale_mouse = 0.10;
-    } else {
-        kbm->font_size = 20;
-        scale_mouse = 0.08;
-    }
-
     kbm->line_thick = 3;
 
     if (koh_verbose_input)
         trace("input_kb_new: btn_width %d\n", setup->btn_width);
+
+    //kbm->scale = 1.f;
+    kbm->is_advanched_mode = false;
+    kbm->scale_mouse = 0.10;
+
+    /*
+    typedef struct MapCtx {
+        InputKbMouseDrawer  *kb;
+        i32                 keycode;
+    } MapCtx;
+    */
+
+    kb_each(0, 0, kbm->btn_width, iter_map, kbm);
 
     return kbm;
 }
@@ -324,38 +383,17 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
     kb_each(0, 0, kb->btn_width, iter_draw, kb);
 
     const Color color = WHITE;
-    /*
-    trace(
-        "input_kb_gui_update: kb->kb_size.y %f, kb->tex_mouse.height %d\n",
-        kb->kb_size.y, kb->tex_mouse.height
-    );
-    */
 
     // Вручную подобранное смещение для scale_mouse = 0.95
     float manual_shift = 0;
 
-    // /*
-    /*if (kb->btn_width == 70 && scale_mouse - 0.95 < FLT_EPSILON) {*/
-    /*if (kb->btn_width == 70 && scale_mouse - 0.95 < FLT_EPSILON) {*/
     if (kb->btn_width >= 70) {
-
-        /*
-        if (koh_verbose_input) {
-            trace(
-                "input_kb_gui_update: manual_shift %f\n",
-                manual_shift
-            );
-        }
-        */
-
         manual_shift = 200.f;
     } else {
         manual_shift = 150.f;
     }
-    // */
 
-    /*manual_shift = 200.f;*/
-
+    const f32 scale_mouse = kb->scale_mouse;
     const Vector2 pos = {
         kb->kb_size.x - manual_shift,
         (kb->kb_size.y - kb->tex_mouse.height * scale_mouse) / 2.,
@@ -373,9 +411,22 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
 
     bool wnd_open = true;
     ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
-    /*ImGuiWindowFlags wnd_flags = 0;*/
     igBegin("input - keyboard & mouse", &wnd_open, wnd_flags);
     rlImGuiImageRenderTexture(&kb->rt);
+
+    if (igIsItemClicked(ImGuiMouseButton_Right))
+        kb->is_advanched_mode = !kb->is_advanched_mode;
+
+    if (kb->is_advanched_mode) {
+        igPushItemWidth(100);
+        static i32 btn_width = 0;
+        btn_width = kb->btn_width;
+        if (igSliderInt("scale", &btn_width, 50, 200, "%d", 0)) {
+            input_kb_init_btn_width(kb, btn_width);
+        }
+        igPopItemWidth();
+    }
+
     igEnd();
 }
 
@@ -717,3 +768,14 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // }}}
 }
 
+void input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {
+    assert(kb);
+    assert(b.msg);
+
+    i32 len = 0;
+    Btn *btn = htable_get(kb->map_keycode2btn, &b.keycode, sizeof(i32), &len);
+    if (btn) {
+        assert(len == sizeof(void*));
+        btn->bind = b;
+    }
+}
