@@ -15,6 +15,9 @@
 #include "cimgui_impl.h"
 #include "koh_resource.h"
 #include "koh_table.h"
+#include "box2d/box2d.h"
+#include "koh_b2.h"
+#include "koh_paragraph.h"
 
 typedef struct Btn {
     char *lbl;
@@ -26,13 +29,21 @@ typedef struct Btn {
          sx;
     bool pressed;
 
-    KbBind bind;
+    KbBind   bind;
+    b2BodyId bid;
 } Btn;
 
 struct BtnRow {
     int dx, dy, gap;
     struct Btn *btns;
 };
+
+// forward {{{
+static void iter_map(Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud);
+static void iter_b2_create(Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud);
+static void iter_b2_destroy(Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud);
+// }}}
+
 
 bool koh_verbose_input = false;
 
@@ -162,6 +173,8 @@ static struct BtnRow btn_rows[] = {
 };
 
 typedef struct InputKbMouseDrawer {
+    Vector2         paragraph_pos;
+    Paragraph       pr_msg;
     f32             scale_mouse;
     ResList         *reslist;
     RenderTexture2D rt;
@@ -175,13 +188,22 @@ typedef struct InputKbMouseDrawer {
     bool            is_advanched_mode;
                     // i32 -> Btn*
     HTable          *map_keycode2btn;
+    b2WorldId       w;
+    b2DebugDraw     dd;
+    bool            is_debug_draw,
+                    is_draw_paragraph;
+    Btn             *btn_under_cursor;
+                    // курсор мыши в координатах для рендер текстуры
+    Vector2         rel_cursor;
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
+    printf("input_kb_free:\n");
     assert(kb);
+    b2DestroyWorld(kb->w);
     reslist_free(kb->reslist);
     htable_free(kb->map_keycode2btn);
-    //res_unload_all(&kb->reslist, false);
+    paragraph_shutdown(&kb->pr_msg);
     free(kb);
 }
 
@@ -243,84 +265,37 @@ static void kb_each(
     // }}}
 }
 
-void iter_draw(
-    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *user_data
-) {
-    InputKbMouseDrawer *ctx = user_data;
-    Color color_btn = btn->pressed ? 
-        ctx->color_btn_pressed : ctx->color_btn_unpressed;
-
-    DrawRectangle(x, y, w, btn_width, color_btn);
-    DrawRectangleLinesEx((Rectangle) {
-        .x = x,
-        .y = y,
-        .width = w,
-        .height = btn_width,
-    }, ctx->line_thick, BLACK);
-
-    // XXX: Странное сравнение
-    if (btn->bind.keycode == btn->keycode) {
-        i32 _w = w,
-            _h = btn_width;
-        //DrawRectangle(x, y, w, btn_width, color_btn);
-        Vector2 v1 = { x, y + _h },
-                v2 = { x + _w, y },
-                v3 = { x + _w, y + _h };
-        DrawTriangle(v1, v2, v3, GREEN);
-    }
-
-    char msg[32] = {};
-    sprintf(msg, "%s", btn->lbl);
-    Vector2 m = MeasureTextEx(GetFontDefault(), msg, ctx->font_size, 0.);
-    int dx = (w - m.x) / 2.;
-    int dy = (btn_width - m.y) / 2.;
-    DrawText(msg, x + dx, y + dy, ctx->font_size, ctx->color_text);
+static void input_kb_reset_b2(InputKbMouseDrawer *kbm) {
+    // удалить тела если есть
+    kb_each(0, 0, kbm->btn_width, iter_b2_destroy, kbm);
+    // создать тела box2d для коллизий
+    kb_each(0, 0, kbm->btn_width, iter_b2_create, kbm);
 }
 
-void iter_update(
-    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
-) {
-    btn->pressed = IsKeyDown(btn->keycode);
-}
-
-void iter_map(
-    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
-) {
-    InputKbMouseDrawer *kbm = ud;
-    assert(kbm);
-    assert(kbm->map_keycode2btn);
-    htable_add(
-        kbm->map_keycode2btn,
-        &btn->keycode, sizeof(i32), 
-        btn, sizeof(Btn*)
-    );
-}
-
-// Инициализация системы связанной с размером кнопок и шрифта
+// Инициализация системы связанной с размером кнопок, шрифта и физических тел
+// кнопок
 static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
     kbm->btn_width = btn_width;
     Vector2 size = kb_size(btn_width);
     kbm->kb_size = size;
-
-    /*
-    if (btn_width >= 70) {
-        //kbm->font_size = 23 + (btn_width - 70) * 1.05;
-        kbm->font_size = 23 + (btn_width - 70) * 1.01;
-        scale_mouse = 0.10;
-    } else {
-        kbm->font_size = 20;
-        scale_mouse = 0.08;
-    }
-    */
 
     const i32 btn_width_min = 49;
     assert(btn_width > btn_width_min);
     // XXX: Магическая формула
     kbm->font_size = 10 + (btn_width - btn_width_min) * 0.5;
 
+    paragraph_shutdown(&kbm->pr_msg);
+    paragraph_init2(&kbm->pr_msg, &(ParagraphOpts) {
+        .ttf_fname = "assets/DejaVuSansMono.ttf",
+        .base_size = kbm->font_size,
+        //.use_caching = true,
+    });
+
     ResList *rl = kbm->reslist;
     kbm->kb_size.x += kbm->tex_mouse.width * kbm->scale_mouse;
     kbm->rt = reslist_load_rt(rl, kbm->kb_size.x, kbm->kb_size.y);
+
+    input_kb_reset_b2(kbm);
 }
 
 InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
@@ -329,8 +304,14 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     InputKbMouseDrawer *kbm = calloc(1, sizeof(*kbm));
     assert(kbm);
 
+    kbm->dd = b2_world_dbg_draw_create2(1.);
+
     ResList *rl = kbm->reslist = reslist_new();
     kbm->map_keycode2btn = htable_new(NULL);
+
+    b2WorldDef wdef = b2DefaultWorldDef();
+    wdef.gravity = b2Vec2_zero;
+    kbm->w = b2CreateWorld(&wdef);
 
     // TODO: Как и где хранить текстуры если вынести t80_input_kb.c в
     // отдельный проект? Как собирать ресурсы и не делать этого повторно
@@ -342,6 +323,7 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     kbm->tex_mouse_lb = reslist_load_tex(rl, "assets/gfx/mouse/lb.png");
     kbm->tex_mouse_wheel = reslist_load_tex(rl, "assets/gfx/mouse/wheel.png");
 
+    kbm->scale_mouse = 0.10;
     input_kb_init_btn_width(kbm, setup->btn_width);
     SetTraceLogLevel(LOG_INFO);
 
@@ -356,7 +338,6 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
 
     //kbm->scale = 1.f;
     kbm->is_advanched_mode = false;
-    kbm->scale_mouse = 0.10;
 
     /*
     typedef struct MapCtx {
@@ -365,22 +346,185 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     } MapCtx;
     */
 
+    // заполнить map_keycode2btn
     kb_each(0, 0, kbm->btn_width, iter_map, kbm);
+
+    // пересоздать b2 тела
+    input_kb_reset_b2(kbm);
 
     return kbm;
 }
 
+static void iter_b2_destroy(
+    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
+) {
+    InputKbMouseDrawer *kbm = ud;
+    assert(kbm);
+    assert(kbm->map_keycode2btn);
+
+    //printf("iter_b2_destroy:\n");
+    if (b2Body_IsValid(btn->bid)) {
+        b2DestroyBody(btn->bid);
+        //printf("iter_b2_destroy: destroyed\n");
+        memset(&btn->bid, 0, sizeof(btn->bid));
+    }
+}
+
+static void iter_b2_create(
+    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
+) {
+    InputKbMouseDrawer *kbm = ud;
+    assert(kbm);
+    assert(kbm->map_keycode2btn);
+
+    b2BodyDef bdef = b2DefaultBodyDef();
+    bdef.type = b2_staticBody;
+    bdef.userData = btn;
+    bdef.position = (b2Vec2) {
+        .x = x,
+        .y = y,
+    };
+    btn->bid = b2CreateBody(kbm->w, &bdef);
+    b2ShapeDef sdef = b2DefaultShapeDef();
+    sdef.userData = btn;
+    //b2Polygon poly = b2MakeBox(w / 2.f, h / 2.f);
+    //DrawRectangle(x, y, w, btn_width, color_btn);
+    //b2Polygon poly = b2MakeBox(w / 2.f, btn_width / 2.f);
+    b2Polygon poly = b2MakeOffsetBox(
+        w / 2.f, btn_width / 2.f,
+        (b2Vec2) { w / 2.f, btn_width / 2.f, }, 
+        b2Rot_identity
+    );
+    b2CreatePolygonShape(btn->bid, &sdef, &poly);
+}
+
+
+static void iter_map(
+    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
+) {
+    InputKbMouseDrawer *kbm = ud;
+    assert(kbm);
+    assert(kbm->map_keycode2btn);
+    htable_add(
+        kbm->map_keycode2btn,
+        &btn->keycode, sizeof(i32), 
+        &btn, sizeof(Btn*)
+    );
+}
+
+static void iter_draw(
+    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *user_data
+) {
+    InputKbMouseDrawer *kb = user_data;
+    Color color_btn = btn->pressed ? 
+        kb->color_btn_pressed : kb->color_btn_unpressed;
+
+    bool is_under_cursor = btn == kb->btn_under_cursor;
+
+    if (is_under_cursor) {
+        DrawRectangle(x, y, w, btn_width, YELLOW);
+    } else
+        DrawRectangle(x, y, w, btn_width, color_btn);
+
+    // XXX: Странное сравнение
+    if (btn->bind.keycode == btn->keycode && !is_under_cursor) {
+        i32 _w = w,
+            _h = btn_width;
+        //DrawRectangle(x, y, w, btn_width, color_btn);
+        const f32 space = w / 2.f;
+        Vector2 v1 = { x + space, y + _h },
+                v2 = { x + _w, y + space },
+                v3 = { x + _w, y + _h };
+        Color c = GREEN;
+        c.a = 200;
+        DrawTriangle(v2, v1, v3, c);
+
+        //printf("iter_draw: draw triangle '%s'\n", keycode2str[btn->keycode]);
+    }
+
+    if (btn->bind.keycode == btn->keycode && is_under_cursor) {
+        kb->is_draw_paragraph = true;
+        kb->paragraph_pos.x = x;
+        kb->paragraph_pos.y = y;
+        Paragraph *pr_msg = &kb->pr_msg;
+        paragraph_clear(pr_msg);
+        paragraph_add(pr_msg, "%s", btn->bind.msg);
+        paragraph_build(pr_msg);
+    }
+
+    DrawRectangleLinesEx((Rectangle) {
+        .x = x,
+        .y = y,
+        .width = w,
+        .height = btn_width,
+    }, kb->line_thick, BLACK);
+
+    char msg[32] = {};
+    sprintf(msg, "%s", btn->lbl);
+    Vector2 m = MeasureTextEx(GetFontDefault(), msg, kb->font_size, 0.);
+    int dx = (w - m.x) / 2.;
+    int dy = (btn_width - m.y) / 2.;
+    DrawText(msg, x + dx, y + dy, kb->font_size, kb->color_text);
+}
+
+static void iter_update(
+    struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
+) {
+    btn->pressed = IsKeyDown(btn->keycode);
+}
+
+bool overlap_btn(b2ShapeId shapeId, void* context) {
+    InputKbMouseDrawer *kb = context;
+
+    //printf("overlap_btn:\n");
+
+    kb->btn_under_cursor = b2Shape_GetUserData(shapeId);
+
+    // terminate
+    return false;
+}
 
 void input_kb_update(InputKbMouseDrawer *kb) {
     assert(kb);
     kb_each(0, 0, kb->btn_width, iter_update, kb);
+    f32 timestep = 1.0f / GetFPS();
+    b2World_Step(kb->w, timestep, 4);
+
+    b2Vec2 point = {
+        .x = kb->rel_cursor.x,
+        .y = kb->rel_cursor.y,
+    };
+    kb->btn_under_cursor = NULL;
+    b2World_OverlapPoint(
+        kb->w, point, b2Transform_identity, b2DefaultQueryFilter(), 
+        overlap_btn, kb
+    );
+
+    /*
+    if (kb->btn_under_cursor) {
+        printf(
+            "input_kb_update: btn_under_cursor '%s'\n",
+            keycode2str[kb->btn_under_cursor->keycode]
+        );
+    }
+    */
 }
 
-void input_kb_gui_update(InputKbMouseDrawer *kb) {
-    assert(kb);
+static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
     BeginTextureMode(kb->rt);
+    BeginMode2D((Camera2D) {
+        .zoom = 1.f,
+    });
     ClearBackground(GRAY);
+
+    kb->is_draw_paragraph = false;
     kb_each(0, 0, kb->btn_width, iter_draw, kb);
+
+    if (kb->is_draw_paragraph)
+        paragraph_draw(&kb->pr_msg, kb->paragraph_pos);
+
+    if (kb->is_debug_draw)
+        b2World_Draw(kb->w, &kb->dd);
 
     const Color color = WHITE;
 
@@ -407,11 +551,73 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
     if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
         DrawTextureEx(kb->tex_mouse_wheel, pos, 0., scale_mouse, color);
 
+
+    ImVec2 img_min = {},
+           img_max = {};
+    igGetItemRectMin(&img_min);
+    igGetItemRectMax(&img_max);
+
+    //printf("input_kb_gui_update_rt: img_min %s\n", ImVec2str(img_min));
+    //printf("input_kb_gui_update_rt: img_max %s\n", ImVec2str(img_max));
+
+    Vector2 mp = GetMousePosition();
+    ImGuiWindow *wnd = igGetCurrentWindow();
+
+    ImVec2 p0 = {};
+    igGetWindowPos(&p0);
+    ImVec2 pc = {};
+    igGetCursorScreenPos(&pc);
+    float header_h = pc.y - p0.y;
+
+    kb->rel_cursor.x = mp.x - wnd->Pos.x - 0.f;
+    kb->rel_cursor.y = mp.y - wnd->Pos.y - header_h;
+
+    //f32 radius = 20.f;
+    //DrawCircle(kb->rel_cursor.x, kb->rel_cursor.y, radius, MAGENTA);
+
+    /*
+    printf(
+        "input_kb_gui_update_rt: wnd size %s, wnd pos %s\n",
+        ImVec2str(wnd->Size), ImVec2str(wnd->Pos)
+    );
+    // */
+
+    if (mp.x >= img_min.x && mp.x <= img_max.x && 
+            mp.y >= img_min.y && mp.y <= img_max.y) {
+        ImVec2 sz = {
+            img_max.x - img_min.x,
+            img_max.y - img_min.y,
+        };
+        // Необрабытвать ввод на участке окна в который рисуется картинка с 
+        // кривой.
+        //igSetWindowHitTestHole(wnd, img_min, sz);
+
+        char buf[128] = {};
+        Vector2 p = {
+            .x = mp.x - img_min.x,
+            .y = mp.y - img_min.y,
+        };
+        sprintf(buf, "%f, %f", p.x, p.y);
+        DrawText(buf, mp.x, mp.y, 20, BLACK);
+        //printf("input_kb_gui_update_rt: draw text\n");
+    } else {
+        //printf("input_kb_gui_update_rt: not in rect\n");
+    }
+
+    EndMode2D();
     EndTextureMode();
+}
+
+void input_kb_gui_update(InputKbMouseDrawer *kb) {
+    assert(kb);
 
     bool wnd_open = true;
     ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
     igBegin("input - keyboard & mouse", &wnd_open, wnd_flags);
+
+    // После igBegin() что-бы была доступна информация о позиции и размере окна
+    input_kb_gui_update_rt(kb);
+
     rlImGuiImageRenderTexture(&kb->rt);
 
     if (igIsItemClicked(ImGuiMouseButton_Right))
@@ -425,7 +631,34 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
             input_kb_init_btn_width(kb, btn_width);
         }
         igPopItemWidth();
+        igSameLine(0., 10.f);
+        igCheckbox("is_debug_draw", &kb->is_debug_draw);
     }
+
+
+    /*
+    // Получения абсолютных координат окна
+    igGetItemRectMin(&e->img_min);
+    igGetItemRectMax(&e->img_max);
+
+    Vector2 mp = GetMousePosition();
+
+    if (mp.x >= e->img_min.x && mp.x <= e->img_max.x && 
+            mp.y >= e->img_min.y && mp.y <= e->img_max.y) {
+        ImGuiWindow *wnd = igGetCurrentWindow();
+        ImVec2 sz = {
+            e->img_max.x - e->img_min.x,
+            e->img_max.y - e->img_min.y,
+        };
+        // Необрабытвать ввод на участке окна в который рисуется картинка с 
+        // кривой.
+        igSetWindowHitTestHole(wnd, e->img_min, sz);
+        env_input(e);
+    } else {
+        env_input_reset(e);
+    }
+    */
+
 
     igEnd();
 }
@@ -773,9 +1006,13 @@ void input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {
     assert(b.msg);
 
     i32 len = 0;
-    Btn *btn = htable_get(kb->map_keycode2btn, &b.keycode, sizeof(i32), &len);
+    printf("input_kb_bind: keycode '%s'\n", keycode2str[b.keycode]);
+    Btn **btn = htable_get(kb->map_keycode2btn, &b.keycode, sizeof(i32), &len);
     if (btn) {
         assert(len == sizeof(void*));
-        btn->bind = b;
+        (*btn)->bind = b;
+    } else {
+        printf("input_kb_bind: not found\n");
     }
+    
 }
