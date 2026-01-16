@@ -23,7 +23,6 @@ EnvelopeOpts env_partial_opts(EnvelopeOpts opts);
 Envelope_t env_new(EnvelopeOpts opts);
 void env_free(Envelope_t e);
 
-// XXX: Переименовать функции
 __attribute__((deprecated))
 void env_draw_imgui_opts(Envelope_t e);
 __attribute__((deprecated))

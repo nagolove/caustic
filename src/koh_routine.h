@@ -699,4 +699,14 @@ static inline Rectangle b2AABB_to_rect(b2AABB bb) {
 }
 */
 
+static inline char *ImVec2str(ImVec2 v) {
+    static char slots[5][64] = {};
+    static i32 index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+    sprintf(buf, "{%f, %f}", v.x, v.y);
+    return buf;
+}
 
+// Ассоциативный массив для перевода KEY_ESCAPE в "KEY_ESCAPE"
+extern char *keycode2str[];
