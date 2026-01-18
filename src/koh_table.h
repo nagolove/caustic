@@ -2,7 +2,7 @@
 // vim: fdm=marker
 #pragma once
 
-#include "koh_common.h"
+#include "koh_types.h"
 #include "koh_hashers.h"
 #include "munit.h"
 #include <stdbool.h>
@@ -93,6 +93,8 @@ HTable *htable_new(HTableSetup *setup);
 void htable_free(HTable *ht);
 
 // Возвращает истину если ключ был найден в таблице и удален.
+// INFO: Если ранее использовалмя htable_get(), то выданные им указатели 
+// становятся недействительными после htable_remove()
 bool htable_remove(HTable *ht, const void *key, int key_len);
 bool htable_remove_s(HTable *ht, const char *key);
 
