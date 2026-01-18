@@ -45,6 +45,7 @@ static void iter_b2_destroy(Btn *btn ,int x, int y, int w, int h, int btn_width,
 // }}}
 
 
+static const Color color_bind = { 0, 228, 48, 200 };
 bool koh_verbose_input = false;
 
 static struct Btn row1[] = {
@@ -288,8 +289,11 @@ static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
     paragraph_init2(&kbm->pr_msg, &(ParagraphOpts) {
         .ttf_fname = "assets/DejaVuSansMono.ttf",
         .base_size = kbm->font_size,
+        .flags = PARAGRAPH_BORDER_NONE,
         //.use_caching = true,
     });
+    //kbm->pr_msg.color_background = RAYWHITE;
+    kbm->pr_msg.color_background = color_bind;
 
     ResList *rl = kbm->reslist;
     kbm->kb_size.x += kbm->tex_mouse.width * kbm->scale_mouse;
@@ -416,15 +420,15 @@ static void iter_draw(
     struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *user_data
 ) {
     InputKbMouseDrawer *kb = user_data;
-    Color color_btn = btn->pressed ? 
-        kb->color_btn_pressed : kb->color_btn_unpressed;
+    //Color color_btn = btn->pressed ? 
+    //    kb->color_btn_pressed : kb->color_btn_unpressed;
+    DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
 
     bool is_under_cursor = btn == kb->btn_under_cursor;
 
     if (is_under_cursor) {
         DrawRectangle(x, y, w, btn_width, YELLOW);
-    } else
-        DrawRectangle(x, y, w, btn_width, color_btn);
+    }
 
     // XXX: Странное сравнение
     if (btn->bind.keycode == btn->keycode && !is_under_cursor) {
@@ -435,14 +439,10 @@ static void iter_draw(
         Vector2 v1 = { x + space, y + _h },
                 v2 = { x + _w, y + space },
                 v3 = { x + _w, y + _h };
-        Color c = GREEN;
-        c.a = 200;
-        DrawTriangle(v2, v1, v3, c);
+        DrawTriangle(v2, v1, v3, color_bind);
 
         //printf("iter_draw: draw triangle '%s'\n", keycode2str[btn->keycode]);
-    }
-
-    if (btn->bind.keycode == btn->keycode && is_under_cursor) {
+    } else if (btn->bind.keycode == btn->keycode && is_under_cursor) {
         kb->is_draw_paragraph = true;
         kb->paragraph_pos.x = x;
         kb->paragraph_pos.y = y;
@@ -451,6 +451,9 @@ static void iter_draw(
         paragraph_add(pr_msg, "%s", btn->bind.msg);
         paragraph_build(pr_msg);
     }
+
+    if (btn->pressed)
+        DrawRectangle(x, y, w, btn_width, kb->color_btn_pressed);
 
     DrawRectangleLinesEx((Rectangle) {
         .x = x,
@@ -584,10 +587,14 @@ static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
 
     if (mp.x >= img_min.x && mp.x <= img_max.x && 
             mp.y >= img_min.y && mp.y <= img_max.y) {
+
+        /*
         ImVec2 sz = {
             img_max.x - img_min.x,
             img_max.y - img_min.y,
         };
+        */
+
         // Необрабытвать ввод на участке окна в который рисуется картинка с 
         // кривой.
         //igSetWindowHitTestHole(wnd, img_min, sz);
