@@ -14,6 +14,7 @@
 #endif
 */
 
+#include "koh_types.h"
 #include "box2d/math_functions.h"
 #include "koh_metaloader.h"
 #include "koh_rand.h"
@@ -32,6 +33,7 @@
 #include <stdio.h>
 #include <stdio.h>
 #include <string.h>
+#include "koh_table.h"
 
 //////////////////////////// отключить предупреждения при снятии константности
 #if defined(__GNUC__) || defined(__clang__)
@@ -120,18 +122,6 @@
 
 // Примитивный многочлен: x^64 + x^4 + x^3 + x + 1
 #define LFSR64_POLY 0x000000000000001B
-
-
-typedef int64_t     i64;
-typedef uint64_t    u64;
-typedef int32_t     i32;
-typedef uint32_t    u32;
-typedef int16_t     i16;
-typedef uint16_t    u16;
-typedef int8_t      i8;
-typedef uint8_t     u8;
-typedef float       f32;
-typedef double      f64;
 
 typedef struct { 
     f32 x, y; 
@@ -710,3 +700,22 @@ static inline char *ImVec2str(ImVec2 v) {
 
 // Ассоциативный массив для перевода KEY_ESCAPE в "KEY_ESCAPE"
 extern char *keycode2str[];
+
+typedef struct AllocInspector {
+    // api
+    void *(*malloc)(size_t size);
+    void *(*calloc)(size_t nmemb, size_t size);
+    void *(*realloc)(void *ptr, size_t size);
+    void (*free)(void *ptr);
+
+    u64     total_allocated;
+            // void* => size_t
+    HTable  *map_ptr2size;
+    bool    use_map;
+} AllocInspector;
+
+void ainspector_init(AllocInspector *ai, bool use_map);
+void *ainspector_realloc(AllocInspector *ai, void *ptr, size_t size);
+void *ainspector_malloc(AllocInspector *ai, size_t size);
+void *ainspector_calloc(AllocInspector *ai, size_t nmemb, size_t size);
+void ainspector_free(AllocInspector *ai, void *ptr);

@@ -2944,3 +2944,136 @@ char *keycode2str[] = {
     [KEY_VOLUME_DOWN] = "KEY_VOLUME_DOWN",
     // }}}
 };
+
+
+void ainspector_init(AllocInspector *ai, bool use_map) {
+    assert(ai);
+
+    ai->total_allocated = 0;
+    ai->malloc = malloc;
+    ai->calloc = calloc;
+    ai->realloc = realloc;
+    ai->free = free;
+
+    ai->use_map = use_map;
+    if (use_map)
+        ai->map_ptr2size = htable_new(NULL);
+}
+
+void ainspector_shutdown(AllocInspector *ai) {
+    assert(ai);
+
+    if (ai->use_map)
+        htable_free(ai->map_ptr2size);
+}
+
+void *ainspector_malloc(AllocInspector *ai, size_t size) {
+    assert(ai);
+
+    void *ptr = ai->malloc(size);
+
+    if (ai->use_map) {
+        ai->total_allocated += size;
+        htable_add(ai->map_ptr2size, &ptr, sizeof(ptr), &size, sizeof(size));
+    }
+
+    return ptr;
+}
+
+void *ainspector_calloc(AllocInspector *ai, size_t nmemb, size_t size) {
+    assert(ai);
+
+    void *ptr = ai->calloc(nmemb, size);
+
+    if (ai->use_map) {
+        ai->total_allocated += nmemb * size;
+        htable_add(ai->map_ptr2size, &ptr, sizeof(ptr), &size, sizeof(size));
+    }
+
+    return ptr;
+}
+
+void ainspector_free(AllocInspector *ai, void *ptr) {
+    assert(ai);
+
+    ai->free(ptr);
+
+    if (!ai->use_map)
+        return;
+
+    size_t *size = htable_get(ai->map_ptr2size, &ptr, sizeof(ptr), NULL);
+    if (size) {
+        htable_remove(ai->map_ptr2size, &ptr, sizeof(ptr));
+        ai->total_allocated -= *size;
+    }
+}
+
+void *ainspector_realloc(AllocInspector *ai, void *ptr, size_t new_size) {
+    assert(ai);
+
+    /*
+    void *new_ptr = ai->realloc(ptr, size);
+
+    if (ai->use_map) {
+        const size_t szp = sizeof(ptr);
+
+        i32 len = 0;
+        const size_t *old_size = htable_get(ai->map_ptr2size, &ptr, szp, &len);
+        if (old_size) {
+            assert(len == sizeof(size_t));
+            ai->total_allocated -= *old_size;
+            htable_remove(ai->map_ptr2size, &ptr, szp);
+        }
+
+        ai->total_allocated += size;
+        htable_add(ai->map_ptr2size, &new_ptr, szp, &size, sizeof(size));
+    }
+    */
+
+    if (!ai->use_map)
+        return ai->realloc(ptr, new_size);
+
+    // realloc(NULL, n) == malloc(n)
+    if (ptr == NULL)
+        return ainspector_malloc(ai, new_size);
+
+    // Явно обрабатываем realloc(ptr,0) как free + NULL (чтобы учёт был корректный)
+    if (new_size == 0) {
+        ainspector_free(ai, ptr);
+        return NULL;
+    }
+
+    const size_t szp = sizeof(ptr);
+
+    // 1) достаём старый размер (КОПИРУЕМ!)
+    size_t old = 0;
+    bool had_old = false;
+    {
+        int len = 0;
+        size_t *pold = htable_get(ai->map_ptr2size, &ptr, szp, &len);
+        if (pold && len == (int)sizeof(size_t)) {
+            old = *pold;         // копия до remove()
+            had_old = true;
+        }
+    }
+
+    // 2) делаем realloc
+    void *new_ptr = ai->realloc(ptr, new_size);
+
+    // realloc не удался — старый блок жив, учёт НЕ меняем
+    if (new_ptr == NULL)
+        return NULL;
+
+    // 3) обновляем таблицу и total
+    if (had_old) {
+        htable_remove(ai->map_ptr2size, &ptr, szp);
+        ai->total_allocated -= old;
+    }
+
+    ai->total_allocated += new_size;
+    htable_add(ai->map_ptr2size, &new_ptr, szp, &new_size, sizeof(new_size));
+
+     // */
+
+    return new_ptr;
+}

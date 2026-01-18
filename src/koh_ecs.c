@@ -151,6 +151,7 @@ typedef struct ecs_t {
     // Ссылка на Lua функцию которая используется для фильтрации сущностей
     // в ImGui поиска
     int             ref_filter_func;
+    AllocInspector  alli;
 } ecs_t;
 
 // {{{ tests implementation
@@ -3086,6 +3087,7 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         strncpy(s->name, cp_type.name, sizeof(s->name) - 1);
         s->name[sizeof(s->name) - 1] = 0;
 
+        // XXX: Не учитывается в AllocInspector
         s->sparse = ss_alloc(r->max_id);
     }
 
@@ -3093,7 +3095,7 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
     if (!s->cp_data) {
         s->cp_data_cap = s->cp_data_initial_cap ? 
                          s->cp_data_initial_cap : cp_data_initial_cap;
-        s->cp_data = calloc(s->cp_data_cap, s->cp_sizeof);
+        s->cp_data = ainspector_calloc(&r->alli, s->cp_data_cap, s->cp_sizeof);
         assert(s->cp_data);
     }
 
@@ -3119,12 +3121,14 @@ ecs_t *e_new(e_options *opts) {
         r->max_id = opts->max_id + 1 /* резервный e_null */;
     }
 
+    ainspector_init(&r->alli, true);
+
     r->entities_num = 0;
-    r->entities = calloc(r->max_id, sizeof(r->entities[0]));
+    r->entities = ainspector_calloc(&r->alli, r->max_id, sizeof(r->entities[0]));
     assert(r->entities);
-    r->stack = calloc(r->max_id, sizeof(r->stack[0]));
+    r->stack = ainspector_calloc(&r->alli, r->max_id, sizeof(r->stack[0]));
     assert(r->stack);
-    r->entities_ver = calloc(r->max_id, sizeof(r->entities_ver[0]));
+    r->entities_ver = ainspector_calloc(&r->alli, r->max_id, sizeof(r->entities_ver[0]));
     assert(r->entities_ver);
 
     // заполнить стек свободными доступными индексами сущностей
@@ -3143,7 +3147,7 @@ ecs_t *e_new(e_options *opts) {
     r->stack_last--;
 
     r->storages_cap = 32;
-    r->storages = calloc(r->storages_cap, sizeof(r->storages[0]));
+    r->storages = ainspector_calloc(&r->alli, r->storages_cap, sizeof(r->storages[0]));
     r->storages_size = 0;
 
     r->cp_types = htable_new(NULL);
@@ -3464,7 +3468,7 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
         size_t prev_cap = s->cp_data_cap;
         s->cp_data_cap = s->cp_data_cap * 3 / 2;
         //s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
-        void *newp = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
+        void *newp = ainspector_realloc(&r->alli, s->cp_data, s->cp_data_cap * s->cp_sizeof);
 
         if (!newp) {
             printf("e_emplace: bad realloc() for '%s'\n", s->name);
@@ -4072,6 +4076,9 @@ void e_gui(ecs_t *r, e_id e) {
         ImGuiTableFlags_BordersV |
         ImGuiTableFlags_ContextMenuInBody;
     // }}}
+
+    size_t mb = r->alli.total_allocated % 1024 % 1024;
+    igText("total allocated: %zu MB", mb);
 
     //ImGuiInputTextFlags input_flags = 0;
     //static bool use_lua_filter = false;

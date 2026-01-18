@@ -94,6 +94,7 @@ extern MunitSuite test_e_suite_internal;
 typedef struct ecs_t ecs_t;
 
 typedef struct e_options {
+    // сколько максимум сущностей будет в системе?
     int64_t max_id;
 } e_options;
 
