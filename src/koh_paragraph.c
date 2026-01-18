@@ -248,6 +248,7 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     prgh->fnt.baseSize = opts.base_size;
     prgh->fnt.glyphCount = cmn->font_chars_num;
     prgh->use_cache = opts.use_caching;
+    prgh->flags = opts.flags;
 }
 
 void paragraph_init2(Paragraph *prgh, const ParagraphOpts *_opts) {
@@ -445,17 +446,20 @@ void paragraph_build(Paragraph *prgh) {
     char line[(longest + 1) * 4];
     memset(line, 0, sizeof(line));
 
-    const char *dash = "─"; // UTF - 3 chars len
-    size_t dash_len = strlen(dash);
+    bool has_border = !(prgh->flags & PARAGRAPH_BORDER_NONE);
 
-    char *pline = line;
-    for(int i = 0; i < longest; i++) {
-        // NOTE: здесь strncpy() только что-бы clang не бухтел
-        strncpy(pline, dash, dash_len);
-        pline += dash_len;
+    if (has_border) {
+        const char *dash = "─"; // UTF - 3 chars len
+        size_t dash_len = strlen(dash);
+
+        char *pline = line;
+        for(int i = 0; i < longest; i++) {
+            // NOTE: здесь strncpy() только что-бы clang не бухтел
+            strncpy(pline, dash, dash_len);
+            pline += dash_len;
+        }
+        strbuf_addf(&prgh->b_tlines, "┌%s┐", line);
     }
-
-    strbuf_addf(&prgh->b_tlines, "┌%s┐", line);
 
     for(int i = 0; i < prgh->b_lines.num; i++) {
         const char *cur_line = prgh->b_lines.s[i];
@@ -474,9 +478,12 @@ void paragraph_build(Paragraph *prgh) {
         //process_colors(prgh, cur_line, cur_line_len, cur_line_buf);
 
         // "-" - просто строка разрыва
-        if (strcmp(cur_line, "-") == 0)
-            strbuf_addf(&prgh->b_tlines, "├%s┤", line);
-        else {
+        if (strcmp(cur_line, "-") == 0) {
+            if (has_border)
+                strbuf_addf(&prgh->b_tlines, "├%s┤", line);
+            else
+                strbuf_addf(&prgh->b_tlines, "%s", line);
+        } else {
             char spaces[longest + 1];
             memset(spaces, 0, sizeof(spaces));
 
@@ -485,11 +492,15 @@ void paragraph_build(Paragraph *prgh) {
                 spaces[_j] = ' ';
             }
 
-            strbuf_addf(&prgh->b_tlines, "│%s%s│", cur_line, spaces);
+            if (has_border)
+                strbuf_addf(&prgh->b_tlines, "│%s%s│", cur_line, spaces);
+            else
+                strbuf_addf(&prgh->b_tlines, "%s%s", cur_line, spaces);
         }
     }
 
-    strbuf_addf(&prgh->b_tlines, "└%s┘", line);
+    if (has_border)
+        strbuf_addf(&prgh->b_tlines, "└%s┘", line);
 
     prgh->measure = MeasureTextEx(
         prgh->fnt, prgh->b_tlines.s[0], prgh->fnt.baseSize, 0

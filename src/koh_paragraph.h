@@ -49,11 +49,13 @@ typedef struct Paragraph {
     Vector2 measure;
     bool    is_builded, is_visible;
     Font    fnt;
+    u32     flags;
 } Paragraph;
 
 typedef enum ParagraphFlags {
     // XXX: Сделать окантовку двумя режимами - псевдографика и пиксельная рамка
-    PARAGRAPH_FLAGS_BORDER_PSEUDO = 0b01,
+    PARAGRAPH_BORDER_PSEUDO = 0b010,
+    PARAGRAPH_BORDER_NONE   = 0b100,
 } ParagraphFlags;
 
 typedef struct ParagraphOpts {
