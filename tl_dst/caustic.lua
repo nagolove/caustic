@@ -1489,8 +1489,6 @@ static void update(void) {
     BeginDrawing();
     ClearBackground(color_background_clear);
 
-    hotkey_process(&hk_store);
-
     koh_fpsmeter_draw();
 
     gui_render();
@@ -1552,9 +1550,7 @@ int main(int argc, char **argv) {
     ss = stage_new(&(struct StageStoreSetup) {
         .stage_store_name = "main",
         .l = sc_get_state(), // TODO: Зачем передавать Lua состояние?
-    });
-
-    hotkey_init(&hk_store);
+    }, argc, argv);
 
     InitAudioDevice();
 
@@ -1587,18 +1583,16 @@ int main(int argc, char **argv) {
     //dotool_send_signal(testing_ctx);
 
     SetTargetFPS(120 * 3);
-    while (!WindowShouldClose() && !koh_cmn()->quit) {
+    while (!WindowShouldClose()) {
         update();
     }
 
 #endif
 
     stage_free(ss);
-    stage_shutdown(ss);
     koh_music_shutdown();
     koh_fpsmeter_shutdown();
     koh_render_shutdown();
-    hotkey_shutdown();
     koh_common_shutdown();
     sc_shutdown();
     sfx_shutdown();

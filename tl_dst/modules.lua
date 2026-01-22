@@ -76,40 +76,48 @@ local function build_cimplot(e, dep)
 
 
 
-
-   local deps_name_map = get_deps_name_map()
-
-   local includes = deps_name_map["imgui"].includes
-   assert(includes)
-
-   local cxx_flags = ""
-   for _, include in ipairs(includes) do
-      local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
-      cxx_flags = cxx_flags .. s .. " "
-   end
-   print('cxx_flags', cxx_flags)
+   cmd_do("git submodule update --init --force --recursive")
+   cmd_do("cmake . -DIMGUI_STATIC=1")
+   cmd_do("make")
+   cmd_do("mv cimplot.a libcimplot.a")
 
 
-   local includes_cimgui = deps_name_map["cimgui"].includes
-   assert(includes_cimgui)
 
-   local cxx_flags_cimgui = ""
-   print("includes", inspect(includes_cimgui))
-   for _, include in ipairs(includes_cimgui) do
-      local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
-      cxx_flags_cimgui = cxx_flags_cimgui .. s .. " "
-   end
-   print('cxx_flags_cimgui', cxx_flags_cimgui)
 
-   local cmd = compiler_cpp[dep.target] .. " -c cimplot.cpp" ..
-   " -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS " ..
-   " " ..
-   cxx_flags ..
-   " -I" .. e.path_abs_third_party[dep.target] ..
-   " " ..
-   cxx_flags_cimgui
-   print('cmd', cmd)
-   cmd_do(cmd)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end
 
 local function build_implot(e, dep)
@@ -1129,13 +1137,12 @@ _modules = {
 
 
    {
-      disabled = true,
+      disabled = false,
       copy_for_wasm = false,
       description = "graphs plotting for imgui, C wrappers",
       custom_defines = nil,
       dir = "cimplot",
       includes = {
-         "cimplot",
          "cimplot",
       },
       libdirs = {
