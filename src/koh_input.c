@@ -187,7 +187,7 @@ typedef struct InputKbMouseDrawer {
     Vector2         kb_size;
 
     bool            is_advanched_mode;
-                    // i32 -> Btn*
+                    // i32 keycode -> Btn*
     HTable          *map_keycode2btn;
     b2WorldId       w;
     b2DebugDraw     dd;

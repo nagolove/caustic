@@ -141,9 +141,6 @@ struct Common *koh_cmn();
 void koh_common_init(void);
 void koh_common_shutdown(void);
 
-//Color interp_color(Color a, Color b, float t);
-//Color height_color(float value);
-
 const char *color2str(Color c);
 const char *Color_to_str(Color c);
 Font load_font_unicode(const char *fname, int size);
@@ -159,7 +156,6 @@ const char *to_bitstr_uint32_t(uint32_t value);
 const char *to_bitstr_uint64_t(uint64_t value);
 
 int u8_codeptlen(const char *str);
-//void bb_draw(cpBB bb, Color color);
 Vector2 random_inrect(xorshift32_state *st, Rectangle rect);
 Vector2 random_outrect_quad(
     xorshift32_state *st, Vector2 start, int w, int border_width
@@ -207,8 +203,6 @@ void koh_qsort_soa(
     bool reverse
 );
 
-//cpSpaceDebugColor from_Color(Color c);
-
 typedef struct CameraProcessScale {
     Camera2D    *cam;
     float       dscale_value;       // Приращение масштаба
@@ -239,7 +233,6 @@ void cam_auto_update(CameraAutomat *ca);
 // TODO: Добавить сохранение в луа строку
 bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd);
 bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps);
-//bool koh_camera_process_mouse_scale_wheel(Camera2D *cam, float dscale_value);
 //bool koh_color_eq(Color c1, Color c2);
 
 struct CameraAxisDrawCtx {
@@ -525,6 +518,18 @@ static inline Vector2 Im2Vec2(ImVec2 v) {
     return (Vector2) { .x = v.x, .y = v.y, };
 }
 
+static inline f32 *color2vec4(Color c) {
+    static float slots[5][4] = {};
+    static i32 index = 0;
+    index = (index + 1) % 5;
+    f32 *vec = slots[index];
+    vec[0] = c.r / 255.;
+    vec[1] = c.g / 255.;
+    vec[2] = c.b / 255.;
+    vec[3] = c.a / 255.;
+    return vec;
+}
+
 static inline void vec4_from_color(float vec[4], Color c) {
     assert(vec);
     vec[0] = c.r / 255.;
@@ -712,6 +717,11 @@ typedef struct AllocInspector {
             // void* => size_t
     HTable  *map_ptr2size;
     bool    use_map;
+    u64     *total_cb;
+    u64     total_cb_cap;//,
+            //total_cb_num;
+    u64 total_cb_count;   // сколько валидных значений [0..cap]
+    u64 total_cb_head;    // индекс следующей записи [0..cap-1]
 } AllocInspector;
 
 void ainspector_init(AllocInspector *ai, bool use_map);

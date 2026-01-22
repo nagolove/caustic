@@ -2945,7 +2945,6 @@ char *keycode2str[] = {
     // }}}
 };
 
-
 void ainspector_init(AllocInspector *ai, bool use_map) {
     assert(ai);
 
@@ -2954,6 +2953,12 @@ void ainspector_init(AllocInspector *ai, bool use_map) {
     ai->calloc = calloc;
     ai->realloc = realloc;
     ai->free = free;
+
+    ai->total_cb_cap = 1024;
+    ai->total_cb_head = 0;
+    ai->total_cb_count = 0;
+    size_t sz = sizeof(ai->total_cb[0]);
+    ai->total_cb = calloc(ai->total_cb_cap, sz);
 
     ai->use_map = use_map;
     if (use_map)
@@ -2965,6 +2970,20 @@ void ainspector_shutdown(AllocInspector *ai) {
 
     if (ai->use_map)
         htable_free(ai->map_ptr2size);
+
+    if (ai->total_cb) {
+        free(ai->total_cb);
+        ai->total_cb = NULL;
+    }
+}
+
+void ainspector_push_cb(AllocInspector *ai) {
+    //ai->total_cb[ai->total_cb_num] = ai->total_allocated;
+    //ai->total_cb_num = (ai->total_cb_num + 1) % ai->total_cb_cap;
+    ai->total_cb[ai->total_cb_head] = ai->total_allocated;
+    ai->total_cb_head = (ai->total_cb_head + 1) % ai->total_cb_cap;
+    if (ai->total_cb_count < ai->total_cb_cap)
+        ai->total_cb_count++;
 }
 
 void *ainspector_malloc(AllocInspector *ai, size_t size) {
@@ -2975,8 +2994,8 @@ void *ainspector_malloc(AllocInspector *ai, size_t size) {
     if (ai->use_map) {
         ai->total_allocated += size;
         htable_add(ai->map_ptr2size, &ptr, sizeof(ptr), &size, sizeof(size));
+        ainspector_push_cb(ai);
     }
-
     return ptr;
 }
 
@@ -2988,6 +3007,7 @@ void *ainspector_calloc(AllocInspector *ai, size_t nmemb, size_t size) {
     if (ai->use_map) {
         ai->total_allocated += nmemb * size;
         htable_add(ai->map_ptr2size, &ptr, sizeof(ptr), &size, sizeof(size));
+        ainspector_push_cb(ai);
     }
 
     return ptr;
@@ -3003,8 +3023,9 @@ void ainspector_free(AllocInspector *ai, void *ptr) {
 
     size_t *size = htable_get(ai->map_ptr2size, &ptr, sizeof(ptr), NULL);
     if (size) {
-        htable_remove(ai->map_ptr2size, &ptr, sizeof(ptr));
         ai->total_allocated -= *size;
+        htable_remove(ai->map_ptr2size, &ptr, sizeof(ptr));
+        ainspector_push_cb(ai);
     }
 }
 
@@ -3071,6 +3092,7 @@ void *ainspector_realloc(AllocInspector *ai, void *ptr, size_t new_size) {
     }
 
     ai->total_allocated += new_size;
+    ainspector_push_cb(ai);
     htable_add(ai->map_ptr2size, &new_ptr, szp, &new_size, sizeof(new_size));
 
      // */
