@@ -76,6 +76,13 @@ local function build_cimplot(e: Env, dep: Dependency)
     end
     --]]
 
+    cmd_do("git submodule update --init --force --recursive")
+    cmd_do("cmake . -DIMGUI_STATIC=1")
+    cmd_do("make")
+    cmd_do("mv cimplot.a libcimplot.a")
+
+    --[[
+
     --printc("%{green}_modules:%{reset}", inspect(_modules))
     local deps_name_map = get_deps_name_map() --["raylib"].includes
     --print('deps_name_map', inspect(deps_name_map))
@@ -88,7 +95,6 @@ local function build_cimplot(e: Env, dep: Dependency)
         cxx_flags = cxx_flags .. s .. " "
     end
     print('cxx_flags', cxx_flags)
-    --]]
 
     local includes_cimgui = deps_name_map["cimgui"].includes
     assert(includes_cimgui)
@@ -110,6 +116,8 @@ local function build_cimplot(e: Env, dep: Dependency)
     .. cxx_flags_cimgui
     print('cmd', cmd)
     cmd_do(cmd)
+
+    --]]
 end
 
 local function build_implot(e: Env, dep: Dependency)
@@ -1129,13 +1137,12 @@ _modules = {
 
     -- {{{ cimplot
     {
-        disabled = true,
+        disabled = false,
         copy_for_wasm = false,
         description = "graphs plotting for imgui, C wrappers",
         custom_defines = nil,
         dir = "cimplot",
         includes = { 
-            "cimplot",
             "cimplot",
         },
         libdirs = { 
