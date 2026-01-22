@@ -14,6 +14,7 @@
 #include "koh_common.h"
 #include "koh_routine.h"
 #include "koh_b2.h"
+#include "cimplot.h"
 
 #include <stddef.h>
 #if defined(__has_feature)
@@ -152,6 +153,7 @@ typedef struct ecs_t {
     // в ImGui поиска
     int             ref_filter_func;
     AllocInspector  alli;
+    ImPlotContext   *plot_ctx;
 } ecs_t;
 
 // {{{ tests implementation
@@ -3123,6 +3125,8 @@ ecs_t *e_new(e_options *opts) {
 
     ainspector_init(&r->alli, true);
 
+    r->plot_ctx = ImPlot_CreateContext();
+
     r->entities_num = 0;
     r->entities = ainspector_calloc(&r->alli, r->max_id, sizeof(r->entities[0]));
     assert(r->entities);
@@ -3167,6 +3171,11 @@ static void storage_shutdown(e_storage *s) {
 
 void e_free(ecs_t *r) {
     ecs_assert(r);
+
+    if (r->plot_ctx) {
+        ImPlot_DestroyContext(r->plot_ctx);
+        r->plot_ctx = NULL;
+    }
 
     if (r->storages) {
         // printf("e_free: storages_size %d\n", r->storages_size);
@@ -4060,13 +4069,54 @@ void e_gui_buf(ecs_t *r) {
     igEnd();
 }
 
+static void memory_usage_gui(ecs_t *r) {
+    static bool tree_open = false;
+    igSetNextItemOpen(tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str("memory usage")) {
+        ImPlot_SetCurrentContext(r->plot_ctx);
+        bool wnd_open = true;
+        ImPlot_ShowDemoWindow(&wnd_open);
+
+        AllocInspector *ai = &r->alli;
+        ImVec2 plot_size = (ImVec2){-1.0f, 400.0f};
+        if (ImPlot_BeginPlot("total allocated", plot_size, 0)) {
+            int count = (int)ai->total_cb_count;
+
+            // offset в ImPlot нужен как раз для кольцевых буферов
+            // чтобы данные шли "по времени" без копирования.
+            int offset = 0;
+            if (ai->total_cb_count == ai->total_cb_cap)
+                offset = (int)ai->total_cb_head;   // head = начало "самых старых" данных
+
+            //ImPlot_PlotScatter_U64PtrInt(
+            ImPlot_PlotLine_U64PtrInt(
+                "bytes",
+                (const ImU64*)ai->total_cb,
+                count,
+                1.0,          // xscale
+                0.0,          // xstart
+                0,            // flags
+                offset,
+                (int)sizeof(ImU64)
+            );
+
+            ImPlot_EndPlot();
+        }
+
+        igTreePop();
+    }
+}
+
 void e_gui(ecs_t *r, e_id e) {
     assert(r);
 
     bool wnd_open = true;
-    ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
+    //ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
+    ImGuiWindowFlags wnd_flags = 0;
 
     igBegin("ecs", &wnd_open, wnd_flags);
+
+    memory_usage_gui(r);
 
     ImGuiTableFlags table_flags = 
         // {{{
@@ -4555,4 +4605,44 @@ const koh_ecs koh_ecs_get() {
     r.remove_by_type = e_remove_by_type;
 
     return r;
+}
+
+// XXX: Проверить тестированием. Скорее всего ломает e_view
+void e_shrink(ecs_t *r) {
+    ecs_assert(r);
+    printf("e_shrink:\n");
+
+    for (int i = 0; i < r->storages_size; ++i) {
+        e_storage *s = &r->storages[i];
+
+        // если памяти нет — нечего ужимать
+        if (!s->cp_data)
+            continue;
+
+        // если инвариант сломан — лучше не делать realloc
+        if (s->cp_data_size > s->cp_data_cap)
+            continue;
+
+        if (s->cp_data_cap > s->cp_data_size) {
+            size_t new_cap = s->cp_data_size + 1;
+
+            // realloc(ptr,0) == free(ptr) (обычно), сделаем явно
+            if (new_cap == 0) {
+                free(s->cp_data);
+                s->cp_data = NULL;
+                s->cp_data_cap = 0;
+                continue;
+            }
+
+            size_t new_bytes = new_cap * s->cp_sizeof;
+            void *newp = realloc(s->cp_data, new_bytes);
+
+            // shrink realloc почти всегда успешен, но на всякий случай:
+            if (newp) {
+                s->cp_data = newp;
+                s->cp_data_cap = new_cap;
+            }
+            // если вдруг newp == NULL — оставляем старый буфер как есть
+        }
+    }
 }
