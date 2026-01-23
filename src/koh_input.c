@@ -416,12 +416,31 @@ static void iter_map(
     );
 }
 
+static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
+    kb->is_draw_paragraph = true;
+    kb->paragraph_pos.x = x;
+    kb->paragraph_pos.y = y;
+    Paragraph *pr_msg = &kb->pr_msg;
+    paragraph_clear(pr_msg);
+
+    KbBind *bind = &btn->bind;
+    const char *msg = bind->msg ? bind->msg : "";
+    if (bind->get_msg)
+        msg = bind->get_msg(bind->keycode, bind->udata);
+
+    if (msg) {
+        paragraph_add(pr_msg, "%s", msg);
+        paragraph_build(pr_msg);
+    }
+}
+
+// XXX: Отображается только одна подпись при нажатии нескольких клавиш
+// XXX: Не отображаются подпись при нажатии если подпись отображается под
+// курсором мыши
 static void iter_draw(
     struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *user_data
 ) {
     InputKbMouseDrawer *kb = user_data;
-    //Color color_btn = btn->pressed ? 
-    //    kb->color_btn_pressed : kb->color_btn_unpressed;
     DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
 
     bool is_under_cursor = btn == kb->btn_under_cursor;
@@ -429,31 +448,26 @@ static void iter_draw(
     if (is_under_cursor) {
         DrawRectangle(x, y, w, btn_width, YELLOW);
     }
-
-    // XXX: Странное сравнение
-    if (btn->bind.keycode == btn->keycode && !is_under_cursor) {
-        i32 _w = w,
-            _h = btn_width;
-        //DrawRectangle(x, y, w, btn_width, color_btn);
-        const f32 space = w / 2.f;
-        Vector2 v1 = { x + space, y + _h },
-                v2 = { x + _w, y + space },
-                v3 = { x + _w, y + _h };
-        DrawTriangle(v2, v1, v3, color_bind);
-
-        //printf("iter_draw: draw triangle '%s'\n", keycode2str[btn->keycode]);
-    } else if (btn->bind.keycode == btn->keycode && is_under_cursor) {
-        kb->is_draw_paragraph = true;
-        kb->paragraph_pos.x = x;
-        kb->paragraph_pos.y = y;
-        Paragraph *pr_msg = &kb->pr_msg;
-        paragraph_clear(pr_msg);
-        paragraph_add(pr_msg, "%s", btn->bind.msg);
-        paragraph_build(pr_msg);
-    }
+    bool is_eq = btn->bind.keycode == btn->keycode;
 
     if (btn->pressed)
         DrawRectangle(x, y, w, btn_width, kb->color_btn_pressed);
+
+    if (is_eq) {
+        if (!is_under_cursor) {
+            const i32 _w = w, _h = btn_width;
+            const f32 space = w / 2.f;
+            const Vector2 v1 = { x + space, y + _h },
+                          v2 = { x + _w, y + space },
+                          v3 = { x + _w, y + _h };
+            DrawTriangle(v2, v1, v3, color_bind);
+        } else {
+            draw_msg(kb, btn, x, y);
+        }
+    }
+
+    if (btn->pressed)
+        draw_msg(kb, btn, x, y);
 
     DrawRectangleLinesEx((Rectangle) {
         .x = x,
@@ -474,6 +488,15 @@ static void iter_update(
     struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
 ) {
     btn->pressed = IsKeyDown(btn->keycode);
+
+    /*
+    // XXX: Сделать обертку над IsKeyDown(), IsKeyPressed() что-бы отправлять
+    // ввод
+    bool is_under_cursor = btn == kb->btn_under_cursor;
+    if (btn->pressed && is_under_cursor) {
+        printf("iter_update:\n");
+    }
+    */
 }
 
 bool overlap_btn(b2ShapeId shapeId, void* context) {

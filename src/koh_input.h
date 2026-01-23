@@ -33,9 +33,13 @@ void input_kb_gui_update(InputKbMouseDrawer *kb);
 
 typedef struct KbBind {
     // KEY_ESCAPE и тд
-    i32         keycode;
-    // строка должна быть доступна все время работы InputKbMouseDrawer
-    const char  *msg;
+    i32        keycode;
+    // строка подсказки
+    // NOTE: строка должна быть доступна все время работы InputKbMouseDrawer
+    const char *msg;
+    // возвращает подсказку если msg == NULL
+    const char *(*get_msg)(i32 keycode, void *udata);
+    void *udata;
 } KbBind;
 
 void input_kb_bind(InputKbMouseDrawer *kb, KbBind b);
