@@ -67,6 +67,7 @@ typedef struct ParagraphOpts {
 
 __attribute__((__format__ (__printf__, 2, 3)))
 void paragraph_add(Paragraph *prgh, const char *fmt, ...);
+
 //Vector2 paragraph_align_center(Paragraph *prgh);
 void paragraph_build(Paragraph *prgh);
 
