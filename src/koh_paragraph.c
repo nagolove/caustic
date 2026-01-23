@@ -502,9 +502,13 @@ void paragraph_build(Paragraph *prgh) {
     if (has_border)
         strbuf_addf(&prgh->b_tlines, "└%s┘", line);
 
-    prgh->measure = MeasureTextEx(
-        prgh->fnt, prgh->b_tlines.s[0], prgh->fnt.baseSize, 0
-    );
+    if (prgh->b_tlines.num) {
+        const char *cur_line = prgh->b_tlines.s[0];
+        if (cur_line) {
+            i32 base_size = prgh->fnt.baseSize;
+            prgh->measure = MeasureTextEx( prgh->fnt, cur_line, base_size, 0);
+        }
+    }
 
     i32 new_w = prgh->measure.x,
         new_h = prgh->b_tlines.num * prgh->fnt.baseSize;
