@@ -31,18 +31,25 @@ void input_kb_gui_update(InputKbMouseDrawer *kb);
 // XXX: Сделать подсветку клавишы с биндом и подсказку
 // XXX: Как быть если должен быть модификатор?
 
-typedef struct KbBind {
-    // KEY_ESCAPE и тд
+typedef struct KbStroke {
+                // KEY_ESCAPE и тд
     i32        keycode;
+    bool       mod_shift;
+} KbStroke;
+
+typedef struct KbBind {
+    KbStroke   s;
     // строка подсказки
     // NOTE: строка должна быть доступна все время работы InputKbMouseDrawer
     const char *msg;
     // возвращает подсказку если msg == NULL
-    const char *(*get_msg)(i32 keycode, void *udata);
+    const char *(*get_msg)(KbStroke s, void *udata);
     void *udata;
 } KbBind;
 
-void input_kb_bind(InputKbMouseDrawer *kb, KbBind b);
+char *kb_stroke2str(KbStroke s);
+KbStroke input_kb_bind(InputKbMouseDrawer *kb, KbBind b);
+bool input_kb_is_pressed(KbStroke s);
 
 typedef struct InputGamepadDrawer InputGamepadDrawer;
 

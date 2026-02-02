@@ -22,13 +22,16 @@
 typedef struct Btn {
     char *lbl;
          // KEY_ESCAPE и т.д.
-    int  keycode,
+    i32  keycode,
          // смещения по x и y на размер кнопки
          dx, dy, 
          // сделать кнопку в два раза больше
          sx;
     bool pressed;
 
+    // XXX: Биндов на кнопку может быть несколько
+    // простой, left_shitft, left_control и сочетания
+    // Значит надо вынести в отдельную структуру
     KbBind   bind;
     b2BodyId bid;
 } Btn;
@@ -196,6 +199,7 @@ typedef struct InputKbMouseDrawer {
     Btn             *btn_under_cursor;
                     // курсор мыши в координатах для рендер текстуры
     Vector2         rel_cursor;
+    bool            is_mod_shift_true;
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
@@ -350,8 +354,14 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
     } MapCtx;
     */
 
-    // заполнить map_keycode2btn
+    // заполнить map_keycode2btn без шифта
+    kbm->is_mod_shift_true = false;
     kb_each(0, 0, kbm->btn_width, iter_map, kbm);
+
+    // заполнить map_keycode2btn с шифтом
+    kbm->is_mod_shift_true = true;
+    kb_each(0, 0, kbm->btn_width, iter_map, kbm);
+
 
     // пересоздать b2 тела
     input_kb_reset_b2(kbm);
@@ -409,9 +419,15 @@ static void iter_map(
     InputKbMouseDrawer *kbm = ud;
     assert(kbm);
     assert(kbm->map_keycode2btn);
+    printf("iter_map: htable_add %s\n", kb_stroke2str(btn->bind.s));
+    KbStroke tmp = {
+        .keycode = btn->keycode,
+        .mod_shift = kbm->is_mod_shift_true,
+    };
     htable_add(
         kbm->map_keycode2btn,
-        &btn->keycode, sizeof(i32), 
+        //&btn->bind.s, sizeof(KbStroke), 
+        &tmp, sizeof(KbStroke), 
         &btn, sizeof(Btn*)
     );
 }
@@ -426,7 +442,7 @@ static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
     KbBind *bind = &btn->bind;
     const char *msg = bind->msg ? bind->msg : "";
     if (bind->get_msg)
-        msg = bind->get_msg(bind->keycode, bind->udata);
+        msg = bind->get_msg(bind->s, bind->udata);
 
     if (msg) {
         paragraph_add(pr_msg, "%s", msg);
@@ -434,40 +450,43 @@ static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
     }
 }
 
-// XXX: Отображается только одна подпись при нажатии нескольких клавиш
-// XXX: Не отображаются подпись при нажатии если подпись отображается под
-// курсором мыши
 static void iter_draw(
     struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *user_data
 ) {
     InputKbMouseDrawer *kb = user_data;
     DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
 
+    // XXX: Нет показа msg если мышь над любой клавишей с биндом
     bool is_under_cursor = btn == kb->btn_under_cursor;
+    //bool is_under_cursor = !!kb->btn_under_cursor;
 
     if (is_under_cursor) {
         DrawRectangle(x, y, w, btn_width, YELLOW);
     }
-    bool is_eq = btn->bind.keycode == btn->keycode;
+    bool is_keycode = btn->bind.s.keycode == btn->keycode;
+    bool is_keycode_down = IsKeyDown(btn->bind.s.keycode);
+    bool is_mod_shift = IsKeyDown(KEY_LEFT_SHIFT) == btn->bind.s.mod_shift;
 
-    if (btn->pressed)
+    if (is_keycode_down && is_mod_shift) {
         DrawRectangle(x, y, w, btn_width, kb->color_btn_pressed);
-
-    if (is_eq) {
-        if (!is_under_cursor) {
-            const i32 _w = w, _h = btn_width;
-            const f32 space = w / 2.f;
-            const Vector2 v1 = { x + space, y + _h },
-                          v2 = { x + _w, y + space },
-                          v3 = { x + _w, y + _h };
-            DrawTriangle(v2, v1, v3, color_bind);
-        } else {
-            draw_msg(kb, btn, x, y);
-        }
     }
 
-    if (btn->pressed)
+    if (is_keycode && is_mod_shift) {
+        const i32 _w = w, _h = btn_width;
+        const f32 space = w / 2.f;
+        const Vector2 v1 = { x + space, y + _h },
+              v2 = { x + _w, y + space },
+              v3 = { x + _w, y + _h };
+        DrawTriangle(v2, v1, v3, color_bind);
+    }
+
+    if (is_under_cursor) {
         draw_msg(kb, btn, x, y);
+    }
+
+    if (is_keycode_down && is_mod_shift) {
+        draw_msg(kb, btn, x, y);
+    }
 
     DrawRectangleLinesEx((Rectangle) {
         .x = x,
@@ -501,11 +520,7 @@ static void iter_update(
 
 bool overlap_btn(b2ShapeId shapeId, void* context) {
     InputKbMouseDrawer *kb = context;
-
-    //printf("overlap_btn:\n");
-
     kb->btn_under_cursor = b2Shape_GetUserData(shapeId);
-
     // terminate
     return false;
 }
@@ -534,6 +549,7 @@ void input_kb_update(InputKbMouseDrawer *kb) {
         );
     }
     */
+
 }
 
 static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
@@ -1031,18 +1047,40 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // }}}
 }
 
-void input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {
+char *kb_stroke2str(KbStroke s) {
+    static char slots[5][128] = {};
+    static i32 index = 0;
+    index = (index + 1) % 5;
+    char *buf = slots[index];
+    sprintf(
+        buf, "%s %s", keycode2str[s.keycode],
+        s.mod_shift ? "KEY_LEFT_SHIFT" : ""
+    );
+    return buf;
+}
+
+bool input_kb_is_pressed(KbStroke s) {
+    //printf("input_kb_is_pressed: '%s'\n", kb_stroke2str(s));
+    return IsKeyPressed(s.keycode) && IsKeyDown(KEY_LEFT_SHIFT) == s.mod_shift;
+}
+
+KbStroke input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {
     assert(kb);
     assert(b.msg);
 
     i32 len = 0;
-    printf("input_kb_bind: keycode '%s'\n", keycode2str[b.keycode]);
-    Btn **btn = htable_get(kb->map_keycode2btn, &b.keycode, sizeof(i32), &len);
+    printf("input_kb_bind: stroke '%s'\n", kb_stroke2str(b.s));
+    Btn **btn = htable_get(kb->map_keycode2btn, &b.s, sizeof(KbStroke), &len);
     if (btn) {
         assert(len == sizeof(void*));
         (*btn)->bind = b;
     } else {
         printf("input_kb_bind: not found\n");
+        return (KbStroke) {
+            .keycode = KEY_NULL,
+            .mod_shift = false,
+        };
     }
     
+    return b.s;
 }
