@@ -11,6 +11,16 @@
 ///////////////////////////////////////////////////////////////////
 typedef struct ResList ResList;
 
+// Текстура которая может перезагружаться во время работы программы
+typedef struct Tex {
+    Texture2D t;
+    // XXX: Добавить сюда какие-то данные
+    // Подсчет ссылок?
+    /* 
+        Tex reslist_load_tex2(ResList *l, const char *fname);
+     */
+} Tex;
+
 ResList *reslist_new();
 void reslist_free(ResList *l);
 
