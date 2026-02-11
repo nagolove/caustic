@@ -63,61 +63,20 @@ local function update_box2c(e, dep)
    ut.pop_dir()
 end
 
+local function build_physfs(_, _)
+   find_and_remove_cmake_cache()
+   cmd_do("make clean")
+   cmd_do("cmake . -DPHYSFS_BUILD_STATIC=ON -DPHYSFS_BUILD_SHARED=OFF")
+   cmd_do("make -j")
+end
 
-local function build_cimplot(e, dep)
+local function build_cimplot(_, _)
    print("build_implot:")
-
-
-
-
-
-
-
-
-
 
    cmd_do("git submodule update --init --force --recursive")
    cmd_do("cmake . -DIMGUI_STATIC=1")
    cmd_do("make")
    cmd_do("mv cimplot.a libcimplot.a")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 end
 
 local function build_implot(e, dep)
@@ -828,6 +787,31 @@ _modules = {
 
 
 
+
+
+
+   {
+      disabled = false,
+      copy_for_wasm = true,
+      description = "filesystem abstraction layer",
+      custom_defines = nil,
+      dir = "physfs",
+      includes = {
+         "physfs/src",
+      },
+      libdirs = {
+         "physfs",
+      },
+      links = {
+
+         "physfs",
+      },
+      links_internal = {},
+      name = "physfs",
+      url_action = "git",
+      build = build_physfs,
+      url = "https://github.com/icculus/physfs.git",
+   },
 
 
 

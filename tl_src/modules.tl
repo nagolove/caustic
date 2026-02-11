@@ -63,61 +63,20 @@ local function update_box2c(e: Env, dep: Dependency)
     ut.pop_dir()
 end
 
--- XXX: Ни хера не работает, проблемы в cimgui.h
-local function build_cimplot(e: Env, dep: Dependency)
-    print("build_implot:")
+local function build_physfs(_: Env, _: Dependency)
+    find_and_remove_cmake_cache()
+    cmd_do("make clean")
+    cmd_do("cmake . -DPHYSFS_BUILD_STATIC=ON -DPHYSFS_BUILD_SHARED=OFF")
+    cmd_do("make -j")
+end
 
-    --[[
-    local files_f = io.popen("fd '.*\\.cpp$'", "r")
-    local files = {}
-    for line in files_f:lines() do
-        --print(line)
-        table.insert(files, line)
-    end
-    --]]
+local function build_cimplot(_: Env, _: Dependency)
+    print("build_implot:")
 
     cmd_do("git submodule update --init --force --recursive")
     cmd_do("cmake . -DIMGUI_STATIC=1")
     cmd_do("make")
     cmd_do("mv cimplot.a libcimplot.a")
-
-    --[[
-
-    --printc("%{green}_modules:%{reset}", inspect(_modules))
-    local deps_name_map = get_deps_name_map() --["raylib"].includes
-    --print('deps_name_map', inspect(deps_name_map))
-    local includes = deps_name_map["imgui"].includes
-    assert(includes)
-
-    local cxx_flags = ""
-    for _, include in ipairs(includes) do
-        local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
-        cxx_flags = cxx_flags .. s .. " "
-    end
-    print('cxx_flags', cxx_flags)
-
-    local includes_cimgui = deps_name_map["cimgui"].includes
-    assert(includes_cimgui)
-
-    local cxx_flags_cimgui = ""
-    print("includes", inspect(includes_cimgui))
-    for _, include in ipairs(includes_cimgui) do
-        local s = "-I" .. e.path_abs_third_party[dep.target] .. "/" .. include
-        cxx_flags_cimgui = cxx_flags_cimgui .. s .. " "
-    end
-    print('cxx_flags_cimgui', cxx_flags_cimgui)
-
-    local cmd = compiler_cpp[dep.target] .. " -c cimplot.cpp" 
-    .. " -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS "
-    .. " " 
-    .. cxx_flags
-    .. " -I" .. e.path_abs_third_party[dep.target]
-    .. " " 
-    .. cxx_flags_cimgui
-    print('cmd', cmd)
-    cmd_do(cmd)
-
-    --]]
 end
 
 local function build_implot(e: Env, dep: Dependency)
@@ -829,6 +788,31 @@ _modules = {
     },
     -- }}}
     --]]
+
+    -- {{{ physfs
+    {
+        disabled = false,
+        copy_for_wasm = true,
+        description = "filesystem abstraction layer",
+        custom_defines = nil,
+        dir = "physfs",
+        includes = { 
+            "physfs/src", 
+        },
+        libdirs = { 
+            "physfs", 
+        },
+        links = {
+            --"stdc++",
+            "physfs",
+        },
+        links_internal = {},
+        name = "physfs",
+        url_action = "git",
+        build = build_physfs,
+        url = "https://github.com/icculus/physfs.git",
+    },
+    -- }}}
 
     -- {{{ llama_cpp
     {
