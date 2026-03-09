@@ -1621,7 +1621,20 @@ void koh_window_state_print() {
 void koh_backtrace_print() {
 }
 #else
+
 #include <execinfo.h>
+
+// XXX: Сделать разбор вывода backtrace_symbols_fd() через pipe для addr2line
+//    /home/nagolove/koh-hexia/hexia(+0x184360) [0x5555556d8360]
+//    /home/nagolove/koh-hexia/hexia(+0x8881d) [0x5555555dc81d]
+//    /home/nagolove/koh-hexia/hexia(+0x9a6fa) [0x5555555ee6fa]
+//    /home/nagolove/koh-hexia/hexia(+0x9a3bd) [0x5555555ee3bd]
+//    /home/nagolove/koh-hexia/hexia(+0xc8e30) [0x55555561ce30]
+//    /home/nagolove/koh-hexia/hexia(+0x150813) [0x5555556a4813]
+//    /home/nagolove/koh-hexia/hexia(+0xc1e24) [0x555555615e24]
+//    /home/nagolove/koh-hexia/hexia(+0xc265b) [0x55555561665b]
+//addr2line -f -C -e /home/nagolove/koh-hexia/hexia \                             git:(b2_latest) ✗  
+//  0x184360 0x8881d 0x9a6fa 0x9a3bd 0xc8e30 0x150813 0xc1e24 0xc265b
 void koh_backtrace_print() {
     int num = 100;
     void *traces[num];
