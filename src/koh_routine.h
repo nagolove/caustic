@@ -371,7 +371,24 @@ Rectangle rect_by_texture(Texture2D tex);
 char *concat_iter_to_allocated_str(char **lines);
 bool koh_file_exist(const char *fname);
 
+__attribute_deprecated_msg__("использовать va_sprintf()")
 static inline char *r_sprintf(char* buffer, const char* format, ...) {
+    assert(buffer);
+    assert(format);
+
+    va_list args1;
+    va_start(args1, format);
+    va_list args2;
+    va_copy(args2, args1);
+    va_end(args1);
+    /*vsnprintf(buf, sizeof buf, fmt, args2);*/
+    vsprintf(buffer, format, args2);
+    va_end(args2);
+
+    return buffer;
+}
+
+static inline char *va_sprintf(char* buffer, const char* format, ...) {
     assert(buffer);
     assert(format);
 
@@ -729,3 +746,14 @@ void *ainspector_realloc(AllocInspector *ai, void *ptr, size_t size);
 void *ainspector_malloc(AllocInspector *ai, size_t size);
 void *ainspector_calloc(AllocInspector *ai, size_t nmemb, size_t size);
 void ainspector_free(AllocInspector *ai, void *ptr);
+
+static inline Color color_mul(Color c, f32 val) {
+    return (Color) {
+        .a = c.a,
+        .r = (f32)c.r * val,
+        .g = (f32)c.g * val,
+        .b = (f32)c.b * val,
+    };
+}
+
+

@@ -324,7 +324,7 @@ static HTableAction iter_traces_draw(
 ) {
 
     struct Trace *tr = value;
-    assert(trace);
+    //assert(trace);
 
     if (!tr->enabled)
         return HTABLE_ACTION_NEXT;

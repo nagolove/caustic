@@ -17,4 +17,3 @@ void layered_sprite_init(
     LayeredSprite *ls, lua_State *vm, int ref_tbl, const char *fname
 );
 void layered_sprite_bake(LayeredSprite *ls);
-

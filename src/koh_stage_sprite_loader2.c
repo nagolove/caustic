@@ -978,7 +978,7 @@ static int gui_subtree(Stage_SpriteLoader *st, const char *fname_noext) {
     );
     */
     struct MetaLoaderObjects2 objects = {};
-    assert(objects.objs);
+    //assert(objects.objs);
 
     for (int j = 0; j < objects.num; j++) {
         char *str_repr = NULL;

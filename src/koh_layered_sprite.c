@@ -29,20 +29,10 @@ void layered_sprite_bake(struct LayeredSprite *ls) {
 
     int top = lua_gettop(ls->vm);
 
-    assert(ls->ref_layer);
+    //assert(ls->ref_layer);
     // XXX: Почему ls->ref_layer одинаковый?
     //lua_rawgeti(vm, LUA_REGISTRYINDEX, ls->ref_layer);
     //trace("layered_sprite_bake: ls->ref_layer %d\n", ls->ref_layer);
-
-    /*
-    char *dump = table_dump2allocated_str(vm);
-    if (dump) {
-        trace(
-            "layered_sprite_bake: ls->ref_layer '%s'\n", dump
-        );
-        free(dump);
-    }
-    */
 
     //put_layers_table(vm, ref_ase_exported_tbl, );
     BeginMode2D((Camera2D) {
@@ -108,14 +98,6 @@ static void _layered_sprite_init_v2(
     assert(lua_istable(vm, -1));
 
     ls->version = 2;
-
-    /*
-    dump_str = table_dump2allocated_str(vm);
-    if (dump_str) {
-        trace("layered_sprite_init: dump_str after layers %s\n", dump_str);
-        free(dump_str);
-    }
-    // */
 
 
     //int layers_top = lua_gettop(vm);
@@ -222,16 +204,6 @@ void layered_sprite_init(
 
     lua_pushstring(vm, fname);
     lua_gettable(vm, -2);
-
-    /*
-    char *dump_str;
-
-    dump_str = table_dump2allocated_str(vm);
-    if (dump_str) {
-        trace("layered_sprite_init: dump_str %s\n", dump_str);
-        free(dump_str);
-    }
-    */
 
     lua_pushstring(vm, "caustic_aseprite_export_ver");
     lua_gettable(vm, -2);

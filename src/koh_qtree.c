@@ -212,7 +212,7 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
             printf("qtree_fill: bad root allocation\n");
             koh_fatal();
         }
-        assert(qt->root->nodes);
+        assert(qt->root);
         qt->root->nodes[quadrant] = old_root;
 
         qt->r.x += sx;
