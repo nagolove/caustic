@@ -313,6 +313,12 @@ e_cp_type **e_types_allocated(ecs_t *r, int *num);
 // Опционально в num возвращается количество типов.
 e_cp_type **e_types(ecs_t *r, e_id e, int *num);
 
+// Работает как и e_types(), но удаляет из результирующего массива типы
+// содержащиеся в ex. ex - NULL термированный массив указателей.
+// Сравнение идет по cp_id.
+// ex не должне содержать дубликатов
+e_cp_type **e_types_exclude(ecs_t *r, e_id e, int *types_num, e_cp_type **ex);
+
 extern bool e_verbose;
 
 // Возвращает указатель на статический буфер с Lua таблицей описания типа.
@@ -468,6 +474,7 @@ typedef struct koh_ecs {
     e_cp_type *(*e_types_allocated_search)(ecs_t *r, const char *name);
     e_cp_type **(*types)(ecs_t *r, e_id e, int *num);
     e_cp_type **(*types_allocated)(ecs_t *r, int *num);
+    e_cp_type **(*types_exclude)(ecs_t *r, e_id e, int *types_num, e_cp_type **ex);
     e_each_iter (*each_begin)(ecs_t *r);
     e_id (*build)(uint32_t ord, uint32_t ver);
     e_id (*create)(ecs_t* r);

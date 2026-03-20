@@ -2032,6 +2032,132 @@ MunitResult test_view_single(const MunitParameter params[], void* userdata) {
     return MUNIT_OK;
 }
 
+MunitResult test_types_exclude(const MunitParameter params[], void* userdata) {
+
+    {
+        ecs_t *r = e_new(NULL);
+        e_register(r, &cp_type_one);
+        e_register(r, &cp_type_two);
+        e_register(r, &cp_type_three);
+
+        e_cp_type **types = NULL;
+        int types_num = 0;
+
+        // there is no e_emplace()
+        {
+            e_id e0 = e_create(r);
+            types = e_types_exclude(
+                r, e0, &types_num, 
+                // случайный массив
+                (e_cp_type*[]) {&cp_type_one, NULL}
+            );
+            munit_assert_int(types_num, ==, 0);
+            munit_assert(types[0] == NULL);
+        }
+
+        // there is no e_emplace()
+        {
+            e_id e0 = e_create(r);
+            types = e_types_exclude(r, e0, &types_num, NULL);
+            munit_assert_int(types_num, ==, 0);
+            munit_assert(types[0] == NULL);
+        }
+
+        // прикрепление одного типа
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            types = e_types_exclude(r, e1, &types_num, (e_cp_type*[]) { NULL});
+            //types = e_types(r, e1, &types_num);
+            munit_assert(types_num == 1);
+            munit_assert(types[0] != NULL);
+            munit_assert(types[1] == NULL);
+            //munit_assert(e_cp_type_cmp(*types[0], cp_type_one) == 0);
+            munit_assert(types[0]->priv.cp_id == cp_type_one.priv.cp_id);
+        }
+
+        // прикрепление одного типа
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            types = e_types_exclude(
+                r, e1, &types_num, (e_cp_type*[]) { &cp_type_one, NULL}
+            );
+            printf("test_types_exclude: types_num %d\n", types_num);
+            munit_assert(types_num == 0);
+            munit_assert(types[0] == NULL);
+            //munit_assert(e_cp_type_cmp(*types[0], cp_type_one) == 0);
+            //munit_assert(types[0]->priv.cp_id == cp_type_one.priv.cp_id);
+        }
+
+        // прикрепление трех типов
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            e_emplace(r, e1, cp_type_three);
+            e_emplace(r, e1, cp_type_two);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            munit_assert(e_has(r, e1, cp_type_two) == true);
+            munit_assert(e_has(r, e1, cp_type_three) == true);
+            types = e_types_exclude(
+                r, e1, &types_num, (e_cp_type*[]) { &cp_type_one, NULL }
+            );
+            munit_assert(types_num == 2);
+            munit_assert(types[0] != NULL);
+            munit_assert(types[1] != NULL);
+            munit_assert(types[2] == NULL);
+            //munit_assert(types[3] == NULL);
+
+            enum {
+                NUM = 2,
+            };
+            int taken[NUM] = {};
+            e_cp_type all_types[NUM] = {
+                //cp_type_one,
+                cp_type_two,
+                cp_type_three,
+            };
+            for (int i = 0; i < types_num; i++) {
+                for (int j = 0; j < NUM; j++) {
+                    taken[j] += !e_cp_type_cmp(all_types[j], *types[i]);
+                }
+            }
+            for (int i = 0; i < NUM; i++) {
+                // каждый тип должен быть найден только один раз.
+                // если найден несколь раз, то taken[i] > 1
+                munit_assert(taken[i] == 1);
+            }
+        }
+
+        // прикрепление трех типов c последующим удалением всех трех
+        {
+            e_id e1 = e_create(r);
+            e_emplace(r, e1, cp_type_one);
+            e_emplace(r, e1, cp_type_three);
+            e_emplace(r, e1, cp_type_two);
+            munit_assert(e_has(r, e1, cp_type_one) == true);
+            munit_assert(e_has(r, e1, cp_type_two) == true);
+            munit_assert(e_has(r, e1, cp_type_three) == true);
+            types = e_types_exclude(
+                r, e1, &types_num,
+                (e_cp_type*[]) { &cp_type_three, &cp_type_one, &cp_type_two, NULL, }
+            );
+            munit_assert(types_num == 0);
+            munit_assert(types[0] == NULL);
+            //munit_assert(types[1] != NULL);
+            //munit_assert(types[2] != NULL);
+            //munit_assert(types[3] == NULL);
+
+        }
+
+        e_free(r);
+    }
+
+    return MUNIT_OK;
+}
+
 MunitResult test_types(const MunitParameter params[], void* userdata) {
 
     {
@@ -2869,6 +2995,15 @@ static MunitTest test_e_internal[] = {
     {
       "/types",
       test_types,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
+    {
+      "/types_exclude",
+      test_types_exclude,
       NULL,
       NULL,
       MUNIT_TEST_OPTION_NONE,
@@ -4273,6 +4408,84 @@ e_cp_type **e_types_allocated(ecs_t *r, int *num) {
     return types;
 }
 
+e_cp_type **e_types_exclude(ecs_t *r, e_id e, int *types_num, e_cp_type **ex) {
+    i32 found_num = 0;
+    e_cp_type **types = e_types(r, e, &found_num);
+    i32 ret_num = found_num;
+
+    // {{{ проверка на дубликаты
+    i32 dups[128] = {};
+    i32 dups_num = sizeof(dups) / sizeof(dups[0]);
+    for (i32 i = 0; ex[i]; i++) {
+        size_t id = ex[i]->priv.cp_id;
+        assert(id < dups_num);
+        dups[id]++;
+    }
+
+    for (i32 i = 0; i < dups_num; i++) {
+        assert(dups[i] <= 1);
+    }
+    // }}}
+
+    enum {
+        SLOTS_NUM = 10,
+        TYPES_NUM = 128,
+    };
+
+    static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
+    static int index = 0;
+    e_cp_type **ex_types = slots[index];
+
+    memset(ex_types, 0, sizeof(slots[index]));
+    index = (index + 1) % SLOTS_NUM;
+
+    /*
+    printf("\n\n");
+    for (i32 i = 0; i < found_num; i++) {
+        printf("e_types_exclude: types[%d] = '%s'\n", i, types[i]->name);
+    }
+    printf("e_types_exclude: found_num %d\n", found_num);
+    printf("e_types_exclude: ret_num %d\n", ret_num);
+    // */
+
+    assert(found_num <= TYPES_NUM);
+
+    if (found_num > 0) {
+        for (i32 i = found_num - 1; i >= 0; i--) {
+            //printf("e_types_exclude: i %d\n", i);
+            for (i32 j = 0; ex[j]; j++) {
+                if (types[i]->priv.cp_id == ex[j]->priv.cp_id) {
+                    //printf("e_types_exclude: remove '%s'\n", types[i]->name);
+                    memset(&types[i], 0, sizeof(types[i]));
+                    ret_num--;
+                    break;
+                }
+            }
+        }
+    }
+
+    //printf("e_types_exclude: ret_num %d\n\n\n", ret_num);
+
+    i32 j = 0;
+    for (i32 i = 0; i < found_num; i++) {
+        if (types[i])
+            ex_types[j++] = types[i];
+    }
+
+    //for (i32 i = 0; i < ret_num; i++) {
+    //    printf("e_types_exclude: ex_types[%d] = '%s'\n", i, ex_types[i]->name);
+    //}
+
+    //printf("e_types_exclude: j %d\n", j);
+    assert(j == ret_num);
+
+    if (types_num) {
+        *types_num = ret_num;
+    }
+
+    return ex_types;
+}
+
 e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
     ecs_assert(r);
     assert(e_valid(r, e));
@@ -4604,6 +4817,7 @@ const koh_ecs koh_ecs_get() {
     r.htable_eid_str = htable_eid_str;
     r.is_cp_registered = e_is_cp_registered;
     r.remove_by_type = e_remove_by_type;
+    r.types_exclude = e_types_exclude;
 
     return r;
 }
