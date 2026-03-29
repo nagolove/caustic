@@ -127,6 +127,7 @@ local cache: Cache
 -- TODO: Как-то предохранить каталог caustic с рабочей средой от затирания
 -- при ошибочно выставленной переменной окружения CAUSTIC_PATH
 
+--[[
 local flags_sanitazer = {
 
     -- TODO: Сделать опцию для сборки с проверкой тредов.
@@ -135,14 +136,11 @@ local flags_sanitazer = {
     -- Типа koh make -t
     -- TODO: Сделать сборку всей щелочи под clang
     -- Типа koh make --clang 
-    --[[
-    "-fsanitize=thread,leak",
-    "-fsanitize-address-use-after-scope",
-    --]]
 
     "-fsanitize=undefined,address",
     --"-fsanitize-address-use-after-scope"
 }
+--]]
 
 ut.assert_file(e.cmake_toolchain_win)
 local libcaustic_name = {
@@ -851,6 +849,7 @@ end
 local record Actions
     -- {{{
 
+    ninja: function(Args)
     clean: function(Args)
     cppcheck: function(Args)
     bld_lua: function(Args)
@@ -1020,6 +1019,12 @@ local parser_setup: {string:ParserSetup} = {
         flags = {
             {"-d --debug", "run artifact in gdb",},
             {"--noreset", "no call 'reset' for clearing terminal output"},
+        }
+    },
+
+    ninja = {
+        summary = "create ninja build file",
+        flags = {
         }
     },
 
@@ -2810,7 +2815,7 @@ local function run_parallel_uv(queue: {Task})
     end
 end
 
-local function prepare_make(_args: Args)
+local function remove_cache_file(_args: Args)
     if _args.c then
         ut.push_current_dir()
         chdir('src')
@@ -2820,8 +2825,6 @@ local function prepare_make(_args: Args)
         end
         ut.pop_dir()
     end
-    mkdir("obj_linux")
-    mkdir("obj_wasm")
 end
 
 local function koh_link(objfiles: {string}, _args: Args)
@@ -2872,7 +2875,7 @@ local function make_L(ctx: LinkContext): {string}
     return libsdirs
 end
 
-local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
+local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE)
     --print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
 
     local flags: string = ""
@@ -2894,8 +2897,6 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
         flags = ""
     end
 
-    flags = flags .. " -flto=4 "
-
     local artifact = "../" .. cfg.artifact
     local cc = compiler_c[_args.target]
     assert(cc)
@@ -2903,9 +2904,6 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
     if _args.target == 'wasm' then
         artifact = artifact .. ".html"
     end
-
-    --printc("%{blue}switched to g++%{reset}")
-    --cc = "g++ "
 
     local is_shared = ""
 
@@ -2922,6 +2920,8 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
 
     --print("project_link: cfg.kind", inspect(cfg.kind))
     local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
+    -- использовать быстрый линковщик
+    cmd = cmd .. " -fuse-ld=mold "
 
     -- Добавить какие-то wasm флаги
     if _args.target == 'wasm' then
@@ -2968,7 +2968,22 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args)
 
     printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
-    cmd_do(cmd)
+    if ninja then
+        local f = ninja
+        -- Правило для линковки (добавить рядом с rule cc)
+        f:write("rule link\n")
+        f:write("  command = $COMMAND\n\n")
+
+        -- Build-стейтмент для линковки
+        local link_output = artifact
+        local link_inputs = concat(ctx.objfiles, " ")
+        local link_command = cmd
+
+        f:write(string.format("build %s: link %s\n", link_output, link_inputs))
+        f:write(string.format("  COMMAND = %s\n\n", link_command))
+    else
+        cmd_do(cmd)
+    end
 end
 
 --local json = require "json"
@@ -3343,18 +3358,11 @@ local function dependencies_set_target(target: Target)
 end
 --]]
 
-local type MakeDriver = function(queue: {Task})
-
---[[
-local function sub_make(
-    _args: Args, _: Cfg, _: Target, _: MakeDriver, 
-    push_num?: integer 
-)
---]]
+local type MakeDriver = function(queue: {Task}, ctx?: any)
 
 local sub_make: function(
     _args: Args, cfg: Cfg, target: Target, driver: MakeDriver, 
-    push_num?: integer 
+    push_num?: integer, driver_ctx?: any
 )
 
 local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
@@ -3381,7 +3389,10 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
         local_cfg.debug_define = cfg.debug_define
         --print(tabular(local_cfg))
 
-        prepare_make(_args)
+        remove_cache_file(_args)
+        mkdir("obj_linux")
+        mkdir("obj_wasm")
+
         printc("%{blue}sub_make:%{reset}", lfs.currentdir())
         sub_make(args, local_cfg, _target, run_parallel_uv)
     end
@@ -3398,7 +3409,8 @@ end
 -- Возникает конфликт двух точек входа.
 function sub_make(
     _args: Args, cfg: Cfg, target: Target, driver: MakeDriver, 
-    push_num?: integer 
+    push_num?: integer,
+    driver_ctx?: any
 )
     assert(driver)
     _args.target = target
@@ -3504,16 +3516,14 @@ function sub_make(
         -- }}}
     }
 
-    --[[
     if _args.link then
         if verbose then
             print("using flto")
         end
         table.insert(flags, "-flto=4")
     end
-    --]]
 
-    table.insert(flags, "-flto=4")
+    --table.insert(flags, "-flto=4")
     --]]
 
     local debugs = {}
@@ -3720,10 +3730,10 @@ function sub_make(
     local tasks: {Task} = {}
 
     tasks = gather_tasks("c")
-    driver(tasks)
+    driver(tasks, driver_ctx)
 
     tasks = gather_tasks("cpp")
-    driver(tasks)
+    driver(tasks, driver_ctx)
 
     cache:save()
     cache = nil
@@ -3767,7 +3777,7 @@ function sub_make(
             end
         end
 
-        project_link(ctx, cfg, _args)
+        project_link(ctx, cfg, _args, driver_ctx as FILE)
     else
         -- Сборка библиотеки "Щелочь", в зависимоти от того, откуда 
         -- вызывается скрипт
@@ -3898,15 +3908,119 @@ function actions.make(_args: Args)
         --print(tabular(_args))
         print(inspect(_args))
     end
-
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
     for _, cfg in ipairs(cfgs) do
         if cfg_empty(cfg) then
-            prepare_make(_args)
+            remove_cache_file(_args)
             sub_make(_args, cfg, target, run_parallel_uv, push_num)
         end
     end
+end
+
+-- подъем вверх по каталогу, удаление ../
+local function strip_dotdot(path: string): string
+    return (path:gsub("^%.%./", ""))
+end
+
+-- Извлечь значение аргумента после флага, например после "-o" или "-c"
+local function find_arg_after(args: {string}, flag: string): string
+    for i, a in ipairs(args) do
+        if a == flag then
+            return args[i + 1] or ""
+        end
+    end
+    return ""
+end
+
+local function ninja_footer(f: FILE, c: Cfg)
+    assert(f)
+    --assert(c)
+    --assert(c.artifact)
+    if (c and c.artifact) then
+
+        print("ninja_footer: c.artifact '%s'", c.artifact)
+        os.exit(2)
+
+        f:write(string.format("default ../%s", c.artifact))
+    else
+        print("ninja_footer: no Cfg nor c.artifact")
+    end
+end
+
+local function ninja_header(f: FILE)
+    -- Заголовок
+    f:write("ninja_required_version = 1.13\n\n")
+    -- Одно минимальное правило
+    f:write("rule cc\n")
+    f:write("  command = $COMMAND\n\n")
+end
+
+local function run_ninja_codegen(queue: {Task}, f: FILE)
+    -- ДИАГНОСТИКА
+    print("queue length:", #queue)
+    if #queue == 0 then
+        return
+    end
+
+    assert(f)
+
+    for _, task in ipairs(queue) do
+        --print(inspect(task))
+        print()
+        print()
+
+        -- XXX: Сейчас не работает
+        local up: function(string): string = function(s: string): string
+            return s
+        end
+
+        local output <const> = up(find_arg_after(task.args, "-o"))
+        local input  <const> = up(find_arg_after(task.args, "-c"))
+
+        --print('output', output)
+        --print('input', input)
+
+        -- Полная команда одной строкой
+        local parts: {string} = {task.cmd}
+        for _, a in ipairs(task.args) do
+            --parts[#parts + 1] = a
+            parts[#parts + 1] = up(a)
+        end
+        local command <const> = table.concat(parts, " ")
+
+        --print("command", command)
+
+        -- build-стейтмент
+        f:write(string.format("build %s: cc %s\n", output, input))
+        f:write(string.format("  COMMAND = %s\n\n", command))
+    end
+
+end
+
+function actions.ninja(_args: Args)
+    if verbose then
+        print('make:')
+        --print(tabular(_args))
+        print(inspect(_args))
+    end
+    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    local target = _args.t or "linux"
+
+    local f <const> = assert(io.open("build.ninja", "w"))
+    ninja_header(f)
+
+    for _, cfg in ipairs(cfgs) do
+        if cfg_empty(cfg) then
+            remove_cache_file(_args)
+            sub_make(_args, cfg, target, run_ninja_codegen, push_num, f)
+
+            -- XXX: Только первый конфиг используется
+            ninja_footer(f, cfgs[0])
+        end
+    end
+
+    f:close()
 end
 
 local type XXHash = string
@@ -5350,6 +5464,7 @@ local record Searcher
     query: function(q: string): {string}
 end
 
+--[[
 local function searcher_instance(index_fname: string): Searcher
     local attr_index = lfs.attributes(index_fname)
     if not attr_index then
@@ -5388,7 +5503,6 @@ local function searcher_instance(index_fname: string): Searcher
             print('errmsg', inspect(errmsg))
         end
     end
-        --]]
 
     local t_finish = os.clock()
     print("searcher_instance: searcher loaded for", t_finish - t_start, "sec")
@@ -5433,6 +5547,7 @@ local function searcher_instance(index_fname: string): Searcher
         end,
     }
 end
+--]]
 
 local record Markdown
     feed: function(inp: string): string

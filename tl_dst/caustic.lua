@@ -127,7 +127,6 @@ local cache
 
 
 
-local flags_sanitazer = {
 
 
 
@@ -140,9 +139,8 @@ local flags_sanitazer = {
 
 
 
-   "-fsanitize=undefined,address",
 
-}
+
 
 ut.assert_file(e.cmake_toolchain_win)
 local libcaustic_name = {
@@ -893,6 +891,7 @@ end
 
 
 
+
 local parser_setup = {
 
 
@@ -1021,6 +1020,12 @@ local parser_setup = {
          { "-d --debug", "run artifact in gdb" },
          { "--noreset", "no call 'reset' for clearing terminal output" },
       },
+   },
+
+   ninja = {
+      summary = "create ninja build file",
+      flags = {},
+
    },
 
    make = {
@@ -2810,7 +2815,7 @@ local function run_parallel_uv(queue)
    end
 end
 
-local function prepare_make(_args)
+local function remove_cache_file(_args)
    if _args.c then
       ut.push_current_dir()
       chdir('src')
@@ -2820,8 +2825,6 @@ local function prepare_make(_args)
       end
       ut.pop_dir()
    end
-   mkdir("obj_linux")
-   mkdir("obj_wasm")
 end
 
 local function koh_link(objfiles, _args)
@@ -2872,7 +2875,7 @@ local function make_L(ctx)
    return libsdirs
 end
 
-local function project_link(ctx, cfg, _args)
+local function project_link(ctx, cfg, _args, ninja)
 
 
    local flags = ""
@@ -2894,8 +2897,6 @@ local function project_link(ctx, cfg, _args)
       flags = ""
    end
 
-   flags = flags .. " -flto=4 "
-
    local artifact = "../" .. cfg.artifact
    local cc = compiler_c[_args.target]
    assert(cc)
@@ -2903,9 +2904,6 @@ local function project_link(ctx, cfg, _args)
    if _args.target == 'wasm' then
       artifact = artifact .. ".html"
    end
-
-
-
 
    local is_shared = ""
 
@@ -2922,6 +2920,8 @@ local function project_link(ctx, cfg, _args)
 
 
    local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
+
+   cmd = cmd .. " -fuse-ld=mold "
 
 
    if _args.target == 'wasm' then
@@ -2968,7 +2968,22 @@ local function project_link(ctx, cfg, _args)
 
    printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
-   cmd_do(cmd)
+   if ninja then
+      local f = ninja
+
+      f:write("rule link\n")
+      f:write("  command = $COMMAND\n\n")
+
+
+      local link_output = artifact
+      local link_inputs = concat(ctx.objfiles, " ")
+      local link_command = cmd
+
+      f:write(string.format("build %s: link %s\n", link_output, link_inputs))
+      f:write(string.format("  COMMAND = %s\n\n", link_command))
+   else
+      cmd_do(cmd)
+   end
 end
 
 
@@ -3345,13 +3360,6 @@ end
 
 
 
-
-
-
-
-
-
-
 local sub_make
 
 
@@ -3381,7 +3389,10 @@ local function koh_recompile(_args, cfg, _target)
       local_cfg.debug_define = cfg.debug_define
 
 
-      prepare_make(_args)
+      remove_cache_file(_args)
+      mkdir("obj_linux")
+      mkdir("obj_wasm")
+
       printc("%{blue}sub_make:%{reset}", lfs.currentdir())
       sub_make(args, local_cfg, _target, run_parallel_uv)
    end
@@ -3398,7 +3409,8 @@ end
 
 function sub_make(
    _args, cfg, target, driver,
-   push_num)
+   push_num,
+   driver_ctx)
 
    assert(driver)
    _args.target = target
@@ -3504,16 +3516,14 @@ function sub_make(
 
 
 
+   if _args.link then
+      if verbose then
+         print("using flto")
+      end
+      table.insert(flags, "-flto=4")
+   end
 
 
-
-
-
-
-
-
-
-   table.insert(flags, "-flto=4")
 
 
    local debugs = {}
@@ -3720,10 +3730,10 @@ function sub_make(
    local tasks = {}
 
    tasks = gather_tasks("c")
-   driver(tasks)
+   driver(tasks, driver_ctx)
 
    tasks = gather_tasks("cpp")
-   driver(tasks)
+   driver(tasks, driver_ctx)
 
    cache:save()
    cache = nil
@@ -3767,7 +3777,7 @@ function sub_make(
          end
       end
 
-      project_link(ctx, cfg, _args)
+      project_link(ctx, cfg, _args, driver_ctx)
    else
 
 
@@ -3898,15 +3908,118 @@ function actions.make(_args)
 
       print(inspect(_args))
    end
-
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
    for _, cfg in ipairs(cfgs) do
       if cfg_empty(cfg) then
-         prepare_make(_args)
+         remove_cache_file(_args)
          sub_make(_args, cfg, target, run_parallel_uv, push_num)
       end
    end
+end
+
+
+local function strip_dotdot(path)
+   return (path:gsub("^%.%./", ""))
+end
+
+
+local function find_arg_after(args, flag)
+   for i, a in ipairs(args) do
+      if a == flag then
+         return args[i + 1] or ""
+      end
+   end
+   return ""
+end
+
+local function ninja_footer(f, c)
+   assert(f)
+
+
+   if (c and c.artifact) then
+
+      print("ninja_footer: c.artifact '%s'", c.artifact)
+      os.exit(2)
+
+      f:write(string.format("default ../%s", c.artifact))
+   else
+      print("ninja_footer: no Cfg nor c.artifact")
+   end
+end
+
+local function ninja_header(f)
+
+   f:write("ninja_required_version = 1.13\n\n")
+
+   f:write("rule cc\n")
+   f:write("  command = $COMMAND\n\n")
+end
+
+local function run_ninja_codegen(queue, f)
+
+   print("queue length:", #queue)
+   if #queue == 0 then
+      return
+   end
+
+   assert(f)
+
+   for _, task in ipairs(queue) do
+
+      print()
+      print()
+
+      local up = function(s)
+         return s
+      end
+
+      local output <const> = up(find_arg_after(task.args, "-o"))
+      local input <const> = up(find_arg_after(task.args, "-c"))
+
+
+
+
+
+      local parts = { task.cmd }
+      for _, a in ipairs(task.args) do
+
+         parts[#parts + 1] = up(a)
+      end
+      local command <const> = table.concat(parts, " ")
+
+
+
+
+      f:write(string.format("build %s: cc %s\n", output, input))
+      f:write(string.format("  COMMAND = %s\n\n", command))
+   end
+
+end
+
+function actions.ninja(_args)
+   if verbose then
+      print('make:')
+
+      print(inspect(_args))
+   end
+   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
+   local target = _args.t or "linux"
+
+   local f <const> = assert(io.open("build.ninja", "w"))
+   ninja_header(f)
+
+   for _, cfg in ipairs(cfgs) do
+      if cfg_empty(cfg) then
+         remove_cache_file(_args)
+         sub_make(_args, cfg, target, run_ninja_codegen, push_num, f)
+
+
+         ninja_footer(f, cfgs[0])
+      end
+   end
+
+   f:close()
 end
 
 
@@ -5350,89 +5463,90 @@ end
 
 
 
-local function searcher_instance(index_fname)
-   local attr_index = lfs.attributes(index_fname)
-   if not attr_index then
-      print(format(
-      "searcher_instance: could not open file '%s', aborting", index_fname))
-
-      os.exit(1)
-   end
-
-
-   local hash2chunk = {}
-
-
-   local dim = 1500
-   local ef = 50
-   local searcher = hnswlib.new(100000, dim, ef)
-
-   local Index = require("index")
-   local index = Index.new(index_fname)
-
-   local t_start = os.clock()
-
-   for i = 1, index:chunks_num() do
-      local ok, errmsg = pcall(function()
-         local s = index:chunk_raw(i)
-         local chunk = load(s)()
-         hash2chunk[chunk.id_hash] = chunk
-
-
-
-
-
-         searcher:add(chunk.embedding, chunk.id_hash)
-      end), string
-      if not ok then
-         print('errmsg', inspect(errmsg))
-      end
-   end
-
-
-   local t_finish = os.clock()
-   print("searcher_instance: searcher loaded for", t_finish - t_start, "sec")
-
-
-
-   return {
-      query = function(q)
-         local emb = assist.embedding(llm_embedding_model, q)
-
-         assert(emb[1])
-         assert(#emb[1] == llm_embedding_dim)
-         local nearest = searcher:search_str(emb[1], 10)
-
-
-
-
-
-         local texts = {}
 
 
 
 
 
 
-         for _, id_hash in ipairs(nearest) do
-            local ch = hash2chunk[id_hash]
 
-            if ch then
 
-               local text = concat({
-                  "// file: " .. ch.file .. " , " ..
-                  "line_start " .. ch.line_start .. " , " ..
-                  "line_end " .. ch.line_end .. "\n\n",
-               })
-               text = text .. ch.text
-               table.insert(texts, text)
-            end
-         end
 
-         return texts
-      end,
-   }
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
