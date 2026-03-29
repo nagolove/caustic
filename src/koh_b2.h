@@ -94,6 +94,7 @@ __attribute_deprecated_msg__("use shorter function")
 const char *b2BodyId_id_to_str(b2BodyId id);
 const char *b2BodyId_tostr(b2BodyId id);
 const char *b2BodyId_2str(b2BodyId id);
+//const char *b2BodyId2str(b2BodyId id);
 __attribute_deprecated__
 const char *b2ShapeId_id_to_str(b2ShapeId id);
 const char *b2ShapeId_tostr(b2ShapeId id);
