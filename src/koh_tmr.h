@@ -1,9 +1,8 @@
 // vim: fdm=marker
 #pragma once
 
-#include "raymath.h"
 #include <string.h>
-#include "koh_common.h"
+#include "koh_routine.h"
 #include "raylib.h"
 #include <assert.h>
 #include <stdio.h>
@@ -30,6 +29,9 @@ typedef struct Tmr {
     // --- pause ---
     bool    paused;
     f64     time_paused_at;   // GetTime() в момент постановки на паузу
+
+    bool    use_period_range;
+    f32     period_min, period_max;
 } Tmr;
 
 static inline void tmr_init(Tmr *t);
@@ -42,25 +44,8 @@ static inline void tmr_set_paused(Tmr *t, bool paused);
 static inline bool tmr_is_paused(const Tmr *t);
 static inline void tmr_null(Tmr *t);
 
+static inline void tmr_gui(Tmr *t, const char *label);
 // */
-
-/*
-
-Я бы добавил паузу как “заморозку времени”, чтобы:
-не шёл start_delay
-не тикал period
-не выгорал time_loop
-time_amount оставался на месте
-
-Самый простой и надёжный способ в твоей текущей модели (где всё завязано на GetTime() и
-time_init/time_last) — при resume сдвигать якоря вперёд на длительность паузы.
-
-Почему это хороший вариант
-Не нужно переписывать вычисления start_at/end_at.
-Пауза автоматически корректно работает и для once, и для time_loop, и для периодического режима.
-Можно вызывать pause/resume хоть до старта (start_delay тоже “заморозится”).
-Если хочешь, могу предложить второй вариант (через effective_now = GetTime() - paused_total), он полезен если тебе важно хранить “реальное” time_init без сдвигов, но в твоей текущей структуре сдвиг якорей — самый чистый и простой.
- */
 
 // implementation {{{
 
@@ -210,5 +195,112 @@ static inline void tmr_null(Tmr *t) {
     assert(t);
     memset(t, 0, sizeof(*t));
 }
+
+/*
+static inline void tmr_gui(Tmr *t, const char *label) {
+    static bool slots[10] = {};
+    static i32 index = 0;
+    index = (index + 1) % 10;
+    bool *tree_open = &slots[index];
+    igSetNextItemOpen(*tree_open, ImGuiCond_Once);
+    if (igTreeNode_Str(label)) {
+        igText("time_init %f", t->time_init);
+        igText("time_last %f", t->time_last);
+        igText("period %f", t->period);
+        igText("time_amount %f", t->time_amount);
+        igText("time_loop %f", t->time_loop);
+        igText("time_start_delay %f", t->time_start_delay);
+        igText("expired %s", t->expired ? "true" : "false");
+        igText("once %s", t->once ? "true" : "false");
+        igText("is_inited %s", t->is_inited ? "true" : "false");
+        igText("paused %s", t->paused ? "true" : "false");
+        igText("time_paused_at %f", t->time_paused_at);
+        igTreePop();
+    }
+}
+*/
+
+#define TMR_GUI_ROW(name_str, fmt, value) \
+    igTableNextRow(0, 0); \
+    igTableNextColumn(); igText(name_str); \
+    igTableNextColumn(); igText(fmt, value);
+
+static inline void tmr_gui(Tmr *t, const char *label) {
+    f32 fw = 300.f;
+    const f32 abs_min = 0.01f;
+
+    if (GetScreenWidth() < 1920 * 2)
+        fw = 150.0;
+
+    if (igTreeNode_Str(label)) {
+        // используется внутреннее хранилище imgui
+        ImGuiStorage *storage = igGetStateStorage();
+        ImGuiID id_open = igGetID_Str("##slider_open");
+        ImGuiID id_max  = igGetID_Str("##slider_max");
+
+        if (igBeginTable(label, 3, ImGuiTableFlags_None, (ImVec2){0, 0}, 0.f)) {
+            igTableSetupColumn("name", ImGuiTableColumnFlags_WidthFixed, fw, 0);
+            igTableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 0.f, 0);
+            igTableSetupColumn("action", ImGuiTableColumnFlags_WidthFixed, 40.f, 0);
+
+            TMR_GUI_ROW("time_init",       "%f", t->time_init);
+            igTableNextColumn();
+            TMR_GUI_ROW("time_last",       "%f", t->time_last);
+            igTableNextColumn();
+            TMR_GUI_ROW("period",          "%f", t->period);
+            igTableNextColumn();
+
+            if (igSmallButton("set")) {
+                bool was_open = ImGuiStorage_GetBool(storage, id_open, false);
+                ImGuiStorage_SetBool(storage, id_open, !was_open);
+                if (!was_open) {
+                    f32 max_val = t->period * 4.f;
+
+                    if (t->use_period_range)
+                        max_val = t->period_max;
+
+                    if (max_val < 0.1f) max_val = 0.1f;
+                    ImGuiStorage_SetFloat(storage, id_max, max_val);
+                }
+            }
+
+            TMR_GUI_ROW("time_amount",     "%f", t->time_amount);
+            igTableNextColumn();
+            TMR_GUI_ROW("time_loop",       "%f", t->time_loop);
+            igTableNextColumn();
+            TMR_GUI_ROW("time_start_delay","%f", t->time_start_delay);
+            igTableNextColumn();
+            TMR_GUI_ROW("expired",         "%s", t->expired ? "true" : "false");
+            igTableNextColumn();
+            TMR_GUI_ROW("once",            "%s", t->once ? "true" : "false");
+            igTableNextColumn();
+            TMR_GUI_ROW("is_inited",       "%s", t->is_inited ? "true" : "false");
+            igTableNextColumn();
+            TMR_GUI_ROW("paused",          "%s", t->paused ? "true" : "false");
+            igTableNextColumn();
+            TMR_GUI_ROW("time_paused_at",  "%f", t->time_paused_at);
+            igTableNextColumn();
+
+            igEndTable();
+        }
+
+        if (ImGuiStorage_GetBool(storage, id_open, false)) {
+            f32 max_val = ImGuiStorage_GetFloat(storage, id_max, 1.f);
+            f32 min_val = abs_min;
+
+            if (t->use_period_range)
+                min_val = t->period_min;
+
+            if (min_val <= 0.f)
+                min_val = abs_min;
+
+            igSliderFloat("period", &t->period, min_val, max_val, "%f", 0);
+        }
+
+        igTreePop();
+    }
+}
+
+#undef TMR_GUI_ROW
 
 // }}}
