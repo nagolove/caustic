@@ -528,7 +528,10 @@ NORETURN void koh_fatal();
 
 
 StrBuf Texture2D_2str(const Texture2D *tex);
+// TreeNode вкладка с настройкой камеры
 void camera_gui(Camera2D *cam, const char *cam_label);
+// Записывает камеру из строкового состояния оформленного как Луа таблица.
+// Возвращает истину при успехе
 bool camera_parse_from_buf(const char *buf, Camera2D *out);
 
 static inline Vector2 Im2Vec2(ImVec2 v) {
