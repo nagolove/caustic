@@ -2966,7 +2966,7 @@ local function project_link(ctx, cfg, _args, ninja)
 
 
 
-   printc("project_link: %{blue}" .. cmd .. "%{reset}")
+
 
    if ninja then
       local f = ninja
@@ -3969,6 +3969,7 @@ local function run_ninja_codegen(queue, f)
 
       print()
       print()
+
 
       local up = function(s)
          return s

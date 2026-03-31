@@ -2966,7 +2966,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
     end
         --]]
 
-    printc("project_link: %{blue}" .. cmd .. "%{reset}")
+    --printc("project_link: %{blue}" .. cmd .. "%{reset}")
 
     if ninja then
         local f = ninja
