@@ -456,7 +456,7 @@ void e_remove_by_type(ecs_t *r, e_cp_type type);
 // {{{
 typedef struct koh_ecs {
 
-    bool (*each_valid)(e_each_iter *i);
+    //bool (*each_valid)(e_each_iter *i);
     bool (*has)(ecs_t* r, e_id e, const e_cp_type cp_type);
     bool (*is_cp_registered)(ecs_t *r, const char *cp_type);
     bool (*is_not_null)(e_id e);
@@ -475,10 +475,10 @@ typedef struct koh_ecs {
     e_cp_type **(*types)(ecs_t *r, e_id e, int *num);
     e_cp_type **(*types_allocated)(ecs_t *r, int *num);
     e_cp_type **(*types_exclude)(ecs_t *r, e_id e, int *types_num, e_cp_type **ex);
-    e_each_iter (*each_begin)(ecs_t *r);
+    //e_each_iter (*each_begin)(ecs_t *r);
     e_id (*build)(uint32_t ord, uint32_t ver);
     e_id (*create)(ecs_t* r);
-    e_id (*each_entity)(e_each_iter *i);
+    //e_id (*each_entity)(e_each_iter *i);
     e_id (*from_void)(void *p);
     e_id (*view_entity)(e_view* v);
     e_id *(*entities_alloc)(ecs_t *r, size_t *num);
@@ -492,7 +492,7 @@ typedef struct koh_ecs {
     uint32_t (*id_ver)(e_id e);
     void (*destroy)(ecs_t* r, e_id e);
     void (*each)(ecs_t* r, e_each_function fun, void* udata);
-    void (*each_next)(e_each_iter *i);
+    //void (*each_next)(e_each_iter *i);
     void (*free)(ecs_t *r);
     void (*gui)(ecs_t *r, e_id e);
     void (*gui_buf)(ecs_t *r);

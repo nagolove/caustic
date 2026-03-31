@@ -3834,33 +3834,12 @@ e_view e_view_create_single(ecs_t* r, e_cp_type cp_type) {
 
 e_id e_view_entity(e_view* v) {
     assert(v);
+    assert(v->pool);
+    assert(v->pool->sparse.dense);
     assert(e_view_valid(v));
-
-    /*
-    koh_term_color_set(KOH_TERM_GREEN);
-    printf(
-        "e_view_entity: current_entity_index %zu\n",
-        v->current_entity_index
-    );
-    koh_term_color_reset();
-    */
-
     uint32_t ord = v->pool->sparse.dense[v->current_entity_index];
     return e_build(ord, v->r->entities_ver[ord]);
 }
-
-/*
-static int e_view_get_index_safe(e_view* v, e_cp_type cp_type) {
-    assert(v);
-    assert(e_view_valid(v));
-    for (size_t i = 0; i < v->pool_count; i++) {
-        if (v->to_pool_index[i] == cp_type.priv.cp_id) {
-            return i;
-        }
-    }
-    return -1;
-}
-*/
 
 inline static void* e_storage_get_by_index(e_storage* s, size_t index) {
     assert(s);
@@ -3880,7 +3859,6 @@ inline static void* e_storage_get(e_storage* s, e_id e) {
     assert(s);
     assert(e.id != e_null.id);
     return e_storage_get_by_index(s, s->sparse.sparse[e.ord]);
-    // return e_storage_get_by_index(s, s->sparse.sparse[ e_buil]);
 }
 
 /*
@@ -4802,10 +4780,14 @@ const koh_ecs koh_ecs_get() {
     r.e_types_allocated_search = e_types_allocated_search;
     r.types = e_types;
     r.cp_type_2str = e_cp_type_2str;
+
+    /*
     r.each_begin = e_each_begin;
     r.each_valid = e_each_valid;
     r.each_next = e_each_next;
     r.each_entity = e_each_entity;
+    */
+
     r.cp_type_cmp = e_cp_type_cmp;
     r.id_ver = e_id_ver;
     r.id_ord = e_id_ord;
