@@ -3933,18 +3933,13 @@ local function find_arg_after(args: {string}, flag: string): string
     return ""
 end
 
-local function ninja_footer(f: FILE, c: Cfg)
+local function ninja_footer(f: FILE, c: Cfg, ctx: LinkContext)
     assert(f)
-    --assert(c)
-    --assert(c.artifact)
-    if (c and c.artifact) then
-
-        print("ninja_footer: c.artifact '%s'", c.artifact)
-        os.exit(2)
-
-        f:write(string.format("default ../%s", c.artifact))
-    else
-        print("ninja_footer: no Cfg nor c.artifact")
+    assert(c)
+    assert(ctx)
+    
+    if c.artifact then
+        f:write(string.format("\ndefault %s\n", c.artifact))
     end
 end
 
@@ -4013,10 +4008,15 @@ function actions.ninja(_args: Args)
     for _, cfg in ipairs(cfgs) do
         if cfg_empty(cfg) then
             remove_cache_file(_args)
+            
+            local ctx: LinkContext = {
+                objfiles = {},
+                libsdirs = {},
+                libs = {},
+            }
+            
             sub_make(_args, cfg, target, run_ninja_codegen, push_num, f)
-
-            -- XXX: Только первый конфиг используется
-            ninja_footer(f, cfgs[0])
+            ninja_footer(f, cfg, ctx)
         end
     end
 
