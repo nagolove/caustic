@@ -745,6 +745,7 @@ typedef struct AllocInspector {
 } AllocInspector;
 
 void ainspector_init(AllocInspector *ai, bool use_map);
+void ainspector_shutdown(AllocInspector *ai);
 void *ainspector_realloc(AllocInspector *ai, void *ptr, size_t size);
 void *ainspector_malloc(AllocInspector *ai, size_t size);
 void *ainspector_calloc(AllocInspector *ai, size_t nmemb, size_t size);
