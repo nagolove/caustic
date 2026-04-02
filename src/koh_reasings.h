@@ -88,6 +88,7 @@
 #define REASINGS_H
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define REASINGS_STATIC_INLINE     // NOTE: By default, compile functions as static inline
 
@@ -281,6 +282,9 @@ extern struct EaseTuple easings[];
 extern const char *easings_names[];
 extern size_t easings_names_num;
 ////////////////////////////////////////////////////
+
+// Комбобокс выбора easing-функции. Возвращает true при смене.
+bool reasing_gui(const char *label, EaseFunc *current);
 
 #if defined(__cplusplus)
 }

@@ -5,6 +5,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "cimgui.h"
 
 struct EaseTuple easings[] = {
     // {{{
@@ -92,4 +96,31 @@ int ease_name2index(const char *name) {
         }
     }
     return -1;
+}
+
+bool reasing_gui(const char *label, EaseFunc *current) {
+    assert(current);
+
+    int cur_idx = ease_func2index(*current);
+    const char *preview = cur_idx >= 0
+        ? easings[cur_idx].name : "???";
+
+    bool changed = false;
+    const ImVec2 zero = {};
+
+    if (igBeginCombo(label, preview, 0)) {
+        for (int i = 0; easings[i].func; i++) {
+            bool selected = (i == cur_idx);
+            if (igSelectable_Bool(
+                easings[i].name, selected, 0, zero
+            )) {
+                if (i != cur_idx) {
+                    *current = easings[i].func;
+                    changed = true;
+                }
+            }
+        }
+        igEndCombo();
+    }
+    return changed;
 }
