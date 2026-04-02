@@ -14,9 +14,11 @@
 typedef struct Tmr {
     f64     time_init,
             time_last;      // raylib - GetTime()
-    f32     period,         // период в секундах
+            // как часто обновлять значение
+    f32     period,         
             time_amount,    // 0..1 время работы, только для чтения
-            time_loop,      // сколько секунд таймер будет работать
+            // сколько длиться анимация
+            time_loop,      
             // sec, отсрочка от tmr_init() до первого запуска
             time_start_delay; 
 
