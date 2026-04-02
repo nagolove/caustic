@@ -30,6 +30,9 @@
 #  include <sanitizer/asan_interface.h>
 #endif
 
+// Use hash table for O(1) storage lookup instead of O(n) linear search
+// #define KOH_ECS_STORAGE_HASHTABLE
+
 static inline int asan_can_write(const void *p, size_t n) {
 #ifdef USING_ASAN
     // true, если во всём диапазоне нет «яда»
@@ -115,9 +118,13 @@ typedef struct ecs_t {
     e_storage       *storages; 
                     // количество хранилищ
     int             storages_size, 
-                    // на какое количество хранилищ выделно памяти
+                    // на какое количество хранилищ выделено памяти
                     storages_cap; 
-                                                
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+                    // cp_id -> e_storage* для O(1) поиска
+    HTable          *storages_by_id;
+#endif
+                    
     // количество созданных сущностей
     size_t          entities_num;
 
@@ -352,8 +359,7 @@ static MunitResult test_view_chassis(
             b2BodyId *bid = e_get(r, e, cp_type_body2);
             body[bid->index1]++;
 
-            RenderTexOpts *ropts = e_get(r, e, cp_type_body2);
-            /*RenderTexOpts *ropts = e_view_get(&v, cp_type_RenderTexOpts);*/
+            RenderTexOpts *ropts = e_get(r, e, cp_type_RenderTexOpts);
             printf("ropts->vertex_disp %d\n", ropts->vertex_disp);
             render_tex_opts[ropts->vertex_disp]++;
 
@@ -537,11 +543,13 @@ MunitResult test_each_determ(const MunitParameter params[], void* userdata) {
             .f_hash = koh_hasher_fnv64,
         });
 
-        // создать сущности
+        e_id entities[num];
+
+        // создать сущности и сохранить их ID
         for (int j = 0; j < num; ++j) {
-            e_id e = e_create(r);
+            entities[j] = e_create(r);
             //printf("test_each_determ: e.id %ld\n", e.id);
-            htable_add_i64(set, e.id, NULL, 0);
+            htable_add_i64(set, entities[j].id, NULL, 0);
         }
 
         /*
@@ -550,14 +558,14 @@ MunitResult test_each_determ(const MunitParameter params[], void* userdata) {
         e_print_entities(r);
         */
 
-        const int num_2remove = 3;
+const int num_2remove = 3;
         // индексы для удаления
-        int ids_2remove[] = { 3, 4, 5 };
+        int indices_2remove[] = { 3, 4, 5 };
         for (int i = 0; i < num_2remove; i++) {
-            e_id e = { .ord =  ids_2remove[i], .ver = 0 };
+            e_id e = entities[indices_2remove[i]];
             /*printf("%ld ", e);*/
-            e_destroy(r, e);
-            htable_remove_i64(set, e.id);
+            htable_remove_i64(set, e.id);  // Сначала удалить из set (ver=0)
+            e_destroy(r, e);                // Потом уничтожить
             /*munit_assert(htable_remove_i64(set, ids_2remove[i]) == true);*/
         }
         printf("\n");
@@ -628,10 +636,12 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
             .f_hash = koh_hasher_fnv64,
         });
 
-        // создать сущности
+        e_id entities[num];
+
+        // создать сущности и сохранить их ID
         for (int j = 0; j < num; ++j) {
-            e_id e = e_create(r);
-            htable_add_i64(set, e.id, NULL, 0);
+            entities[j] = e_create(r);
+            htable_add_i64(set, entities[j].id, NULL, 0);
         }
 
         /*
@@ -660,18 +670,18 @@ MunitResult test_each(const MunitParameter params[], void* userdata) {
         */
 
         // индексы для удаления
-        int *ids_2remove = koh_rand_uniq_arr_alloc(num, num_2remove);
+        int *indices_2remove = koh_rand_uniq_arr_alloc(num, num_2remove);
         // удалить случайные
         for (int i = 0; i < num_2remove; i++) {
-            e_id e = { .ord =  ids_2remove[i], .ver = 0 };
+            e_id e = entities[indices_2remove[i]];
             /*printf("%ld ", e);*/
-            e_destroy(r, e);
-            htable_remove_i64(set, e.id);
+            htable_remove_i64(set, e.id);  // Сначала удалить из set (ver=0)
+            e_destroy(r, e);                // Потом уничтожить
             /*munit_assert(htable_remove_i64(set, ids_2remove[i]) == true);*/
         }
         printf("\n");
 
-        free(ids_2remove);
+        free(indices_2remove);
 
         ////////////////////////////////////////
         /*
@@ -3169,11 +3179,16 @@ static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
 static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
     ecs_assert(r);
     cp_type_assert(cp_type);
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+    e_storage **result = htable_get_u64(r->storages_by_id, cp_type.priv.cp_id, NULL);
+    return result ? *result : NULL;
+#else
     for (int i = 0; i < r->storages_size; i++) {
         if (cp_type.priv.cp_id == r->storages[i].cp_id) 
             return &r->storages[i];
     }
     return NULL;
+#endif
 }
 
 // Вернуть указатель(созданный или существующий) на хранилище для данного типа
@@ -3226,6 +3241,10 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
 
         // XXX: Не учитывается в AllocInspector
         s->sparse = ss_alloc(r->max_id);
+
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+        htable_add_u64(r->storages_by_id, cp_type.priv.cp_id, &s, sizeof(e_storage*));
+#endif
     }
 
     // Выделить начальное количество памяти
@@ -3289,6 +3308,10 @@ ecs_t *e_new(e_options *opts) {
     r->storages = ainspector_calloc(&r->alli, r->storages_cap, sizeof(r->storages[0]));
     r->storages_size = 0;
 
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+    r->storages_by_id = htable_new(NULL);
+#endif
+
     r->cp_types = htable_new(NULL);
     r->set_cp_types = htable_new(NULL);
 
@@ -3321,6 +3344,13 @@ void e_free(ecs_t *r) {
         r->storages = NULL;
     }
 
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+    if (r->storages_by_id) {
+        htable_free(r->storages_by_id);
+        r->storages_by_id = NULL;
+    }
+#endif
+
     if (r->cp_types) {
         htable_free(r->cp_types);
         r->cp_types = NULL;
@@ -3350,6 +3380,8 @@ void e_free(ecs_t *r) {
         free(r->selected);
         r->selected = NULL;
     }
+
+    ainspector_shutdown(&r->alli);
 
     free(r);
 }
@@ -3383,7 +3415,10 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     assert(comp);
     assert(strlen(comp->name) >= 1);
     assert(comp->cp_sizeof > 0);
-    assert(comp->initial_cap > 0);
+    
+    if (comp->initial_cap == 0) {
+        comp->initial_cap = 16;
+    }
 
     // Проверка идет только по имени типа
     if (e_is_cp_registered(r, comp->name)) {
@@ -4394,10 +4429,12 @@ e_cp_type **e_types_exclude(ecs_t *r, e_id e, int *types_num, e_cp_type **ex) {
     // {{{ проверка на дубликаты
     i32 dups[128] = {};
     i32 dups_num = sizeof(dups) / sizeof(dups[0]);
-    for (i32 i = 0; ex[i]; i++) {
-        size_t id = ex[i]->priv.cp_id;
-        assert(id < dups_num);
-        dups[id]++;
+    if (ex) {
+        for (i32 i = 0; ex[i]; i++) {
+            size_t id = ex[i]->priv.cp_id;
+            assert(id < dups_num);
+            dups[id]++;
+        }
     }
 
     for (i32 i = 0; i < dups_num; i++) {
@@ -4695,9 +4732,7 @@ bool e_remove_safe(ecs_t* r, e_id e, e_cp_type cp_type) {
 }
 
 int e_cp_type_cmp(e_cp_type a, e_cp_type b) {
-    return 
-        strcmp(a.name, b.name) == 0 &&
-        a.cp_sizeof == b.cp_sizeof;
+    return a.priv.cp_id != b.priv.cp_id;
 }
 
 // Удалить все сущности связанные с данным типом компонента
