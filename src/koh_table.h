@@ -73,9 +73,15 @@ static inline void *htable_add_u64(
 // Доступ к элементам
 void *htable_get(HTable *ht, const void *key, int key_len, int *value_len);
 void *htable_get_s(HTable *ht, const char *key, int *value_len);
-// TODO: htable_get_f32, htable_get_i32, htable_get_i64, htable_get_char,
+// TODO: htable_get_f32, htable_get_i32, htable_get_char,
 // в виде встраиваемых функций.
 void *htable_get_f32(HTable *ht, float key, int *value_len);
+static inline void *htable_get_u64(HTable *ht, u64 key, int *value_len) {
+    return htable_get(ht, &key, sizeof(key), value_len);
+}
+static inline void *htable_get_i64(HTable *ht, int64_t key, int *value_len) {
+    return htable_get(ht, &key, sizeof(key), value_len);
+}
 
 // Существование элемента. Работа в режиме множества.
 bool htable_exist(HTable *ht, const void *key, int key_len);
