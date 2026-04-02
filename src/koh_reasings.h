@@ -266,6 +266,13 @@ EASEDEF float EaseElasticInOut(float t, float b, float c, float d) // Ease: Elas
 
 ////////////////////////////////////////////////////
 
+/*
+*   The four inputs t,b,c,d are defined as follows:
+*   t = current time (in any unit measure, but same unit as duration)
+*   b = starting value to interpolate
+*   c = the total change in value of b that needs to occur
+*   d = total time it should take to complete (duration)
+*/
 typedef float (*EaseFunc)(float t, float b, float c, float d);
 
 struct EaseTuple {
