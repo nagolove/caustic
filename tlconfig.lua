@@ -6,12 +6,22 @@ return {
     gen_target = "5.4",
     source_dir = "tl_src",
     --include_dir = "tl_src",
-    --exclude = {
-        --".*",
-        --".*\\.lua",
-        --"assist.lua",
-        --"*.tl",
-    --},
+    exclude = {
+        "assets/*",
+        "bak/*",
+        "build/*",
+        "cppcheck-cache/*",
+        "koh_src/*",
+        "modules_linux/*",
+        "modules_wasm/*",
+        "modules_windows/*",
+        "obj_linux/*",
+        "obj_wasm/*",
+        "plugins_aseprite/*",
+        "socket/*",
+        "src/*",
+        --]]
+    },
     include_dir = {
         "tl_src",
     },
