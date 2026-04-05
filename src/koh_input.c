@@ -200,6 +200,8 @@ typedef struct InputKbMouseDrawer {
                     // курсор мыши в координатах для рендер текстуры
     Vector2         rel_cursor;
     bool            is_mod_shift_true;
+    bool            has_shift_bind;
+    Btn             *left_shift_btn, *right_shift_btn;
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
@@ -316,6 +318,9 @@ InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
 
     ResList *rl = kbm->reslist = reslist_new();
     kbm->map_keycode2btn = htable_new(NULL);
+    kbm->has_shift_bind = false;
+    kbm->left_shift_btn = NULL;
+    kbm->right_shift_btn = NULL;
 
     b2WorldDef wdef = b2DefaultWorldDef();
     wdef.gravity = b2Vec2_zero;
@@ -430,6 +435,10 @@ static void iter_map(
         &tmp, sizeof(KbStroke), 
         &btn, sizeof(Btn*)
     );
+    if (btn->keycode == KEY_LEFT_SHIFT)
+        kbm->left_shift_btn = btn;
+    if (btn->keycode == KEY_RIGHT_SHIFT)
+        kbm->right_shift_btn = btn;
 }
 
 static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
@@ -455,6 +464,12 @@ static void iter_draw(
 ) {
     InputKbMouseDrawer *kb = user_data;
     DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
+
+    // SHIFT подсвечен GOLD если есть shift-бинды
+    if (kb->has_shift_bind && 
+        (btn == kb->left_shift_btn || btn == kb->right_shift_btn)) {
+        DrawRectangle(x, y, w, btn_width, GOLD);
+    }
 
     // XXX: Нет показа msg если мышь над любой клавишей с биндом
     bool is_under_cursor = btn == kb->btn_under_cursor;
@@ -525,9 +540,17 @@ bool overlap_btn(b2ShapeId shapeId, void* context) {
     return false;
 }
 
+static void iter_check_shift_bind(Btn *btn, int x, int y, int w, int h, int btn_width, void *ud) {
+    InputKbMouseDrawer *kb = ud;
+    if (btn->bind.s.mod_shift)
+        kb->has_shift_bind = true;
+}
+
 void input_kb_update(InputKbMouseDrawer *kb) {
     assert(kb);
     kb_each(0, 0, kb->btn_width, iter_update, kb);
+    kb->has_shift_bind = false;
+    kb_each(0, 0, kb->btn_width, iter_check_shift_bind, kb);
     f32 timestep = 1.0f / GetFPS();
     b2World_Step(kb->w, timestep, 4);
 
