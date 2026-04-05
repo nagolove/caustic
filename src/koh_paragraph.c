@@ -277,6 +277,19 @@ void paragraph_init2(Paragraph *prgh, const ParagraphOpts *_opts) {
 void paragraph_shutdown(Paragraph *prgh) {
     assert(prgh);
 
+    // Освободить данные шрифта (glyphs, recs),
+    // выделенные в init_sdf через LoadFontData/GenImageFontAtlas.
+    // Только для SDF — дефолтный шрифт освобождается в CloseWindow.
+    if (prgh->is_sdf) {
+        if (prgh->fnt.glyphs) {
+            UnloadFontData(
+                prgh->fnt.glyphs,
+                prgh->fnt.glyphCount
+            );
+        }
+        free(prgh->fnt.recs);
+    }
+
     if (prgh->tex_sdf.id != 0) {
         UnloadTexture(prgh->tex_sdf);
     }
