@@ -3,6 +3,7 @@
 
 #include "koh_common.h"
 #include "raylib.h"
+#include "rlgl.h"
 #include "sdf.fs.h"
 #include <assert.h>
 #include <ctype.h>
@@ -513,10 +514,24 @@ void paragraph_build(Paragraph *prgh) {
     i32 new_w = prgh->measure.x,
         new_h = prgh->b_tlines.num * prgh->fnt.baseSize;
 
+    // LoadRenderTexture() внутри вызывает rlDisableFramebuffer(),
+    // который сбрасывает GL framebuffer на экран (id=0).
+    // Если paragraph_build() вызван внутри чужого
+    // BeginTextureMode(), это ломает текущий render target и
+    // вызывает вспышку — часть кадра рисуется на экран.
+    // Сохраняем и восстанавливаем активный framebuffer.
+    unsigned int prev_fbo = rlGetActiveFramebuffer();
+
     if (!prgh->rt_cache.id) {
-        printf("paragraph_build: create rt texture %dx%d\n", new_w, new_h);
+        printf(
+            "paragraph_build: create rt texture %dx%d\n",
+            new_w, new_h
+        );
         prgh->rt_cache = LoadRenderTexture(new_w, new_h);
-        SetTextureFilter(prgh->rt_cache.texture, TEXTURE_FILTER_BILINEAR);
+        SetTextureFilter(
+            prgh->rt_cache.texture,
+            TEXTURE_FILTER_BILINEAR
+        );
     }
 
     if (prgh->rt_cache.id) {
@@ -527,9 +542,13 @@ void paragraph_build(Paragraph *prgh) {
         // кеш текстура только увеличивается в размере
         if (new_w > cur_w || new_h > cur_h) {
             UnloadRenderTexture(prgh->rt_cache);
-            prgh->rt_cache = LoadRenderTexture(new_w, new_h);
+            prgh->rt_cache = LoadRenderTexture(
+                new_w, new_h
+            );
         }
     }
+
+    rlEnableFramebuffer(prev_fbo);
 
     prgh->is_builded = true;
 }
