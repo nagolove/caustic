@@ -5,6 +5,7 @@
 #include <stdatomic.h>
 #include "koh_common.h"
 #include "koh_logger.h"
+#include "koh_routine.h"
 #include "raylib.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -21,12 +22,15 @@ typedef struct R {
 } R;
 
 struct ResList {
-    // уникальное имя для подписи в reslist_gui() 
-    char label[256]; 
+    // уникальное имя для подписи в reslist_gui()
+    char label[256];
     R    *arr;
     int  arr_num, arr_cap;
     //u32  filter;
     bool is_minipreview;
+    // drag-and-drop перезагрузка текстур
+    char dropped_path[256];
+    bool drop_pending;
 };
 
 Resource *res_add(
@@ -388,10 +392,26 @@ Shader reslist_load_shader(ResList *l, const char *fname) {
 Texture reslist_load_texture(ResList *l, const char *fname) {
     assert(l);
     assert(fname);
-    Texture t = LoadTexture(fname);
+
+    // Проверить overlay
+    const char *basename = GetFileName(fname);
+    char overlay_path[256];
+    snprintf(
+        overlay_path, sizeof(overlay_path),
+        "assets/overlay/%s", basename
+    );
+
+    const char *load_path = fname;
+    if (FileExists(overlay_path)) {
+        load_path = overlay_path;
+        printf("reslist: overlay %s\n", overlay_path);
+    }
+
+    Texture t = LoadTexture(load_path);
     R *r = reslist_add(l);
     r->type = RT_TEXTURE;
     assert(strlen(fname) < sizeof(r->fname));
+    // Оригинальный путь для корректной перезаписи overlay
     strncpy(r->fname, fname, sizeof(r->fname));
     r->raylib_object = copy_alloc(&t, sizeof(t));
     return t;
@@ -585,13 +605,119 @@ void reslist_label_set(ResList *l, const char *label) {
     snprintf(l->label, sizeof(l->label), "reslist - %s", label);
 }
 
-void reslist_dragndrop_gui(ResList *l) {
-    if (!IsFileDropped())
-        return;
+// Перезагрузить текстуру по индексу из внешнего файла
+static void reslist_reload_tex_from(
+    ResList *l, int index, const char *new_path
+) {
+    R *r = &l->arr[index];
+    assert(r->type == RT_TEXTURE && r->raylib_object);
+    Texture2D *t = r->raylib_object;
 
-    FilePathList files = LoadDroppedFiles(); 
-    for (i32 i = 0; i < files.count; ++i) {
-        printf("reslist_dragdrop_gui: %s\n", files.paths[i]);
+    Image img = LoadImage(new_path);
+    if (!img.data) {
+        printf(
+            "reslist_reload: не удалось загрузить %s\n",
+            new_path
+        );
+        return;
     }
-    UnloadDroppedFiles(files);                
+
+    // Масштабировать если размеры не совпадают
+    if (img.width != t->width || img.height != t->height) {
+        printf(
+            "reslist_reload: resize %dx%d -> %dx%d\n",
+            img.width, img.height, t->width, t->height
+        );
+        ImageResize(&img, t->width, t->height);
+    }
+
+    // Конвертировать формат под текстуру
+    ImageFormat(&img, t->format);
+
+    UpdateTexture(*t, img.data);
+    UnloadImage(img);
+
+    // Сохранить изменённую текстуру в overlay
+    {
+        const char *basename = GetFileName(r->fname);
+        char overlay_path[256];
+        snprintf(
+            overlay_path, sizeof(overlay_path),
+            "assets/overlay/%s", basename
+        );
+        MakeDirectory("assets/overlay");
+        texture_save(*t, overlay_path);
+        printf(
+            "reslist_reload: saved overlay %s\n",
+            overlay_path
+        );
+    }
+
+    printf(
+        "reslist_reload: [%s] <- %s\n",
+        r->fname, new_path
+    );
+}
+
+void reslist_dragndrop_gui(ResList *l) {
+    // Захватить дроп
+    if (IsFileDropped()) {
+        FilePathList files = LoadDroppedFiles();
+        if (files.count > 0) {
+            strncpy(
+                l->dropped_path, files.paths[0],
+                sizeof(l->dropped_path)
+            );
+            l->drop_pending = true;
+            igOpenPopup_Str("tex_reload", 0);
+        }
+        UnloadDroppedFiles(files);
+    }
+
+    if (!l->drop_pending) return;
+
+    // Модальное окно выбора текстуры
+    ImVec2 sz = {500, 400};
+    igSetNextWindowSize(sz, ImGuiCond_Once);
+    if (igBeginPopupModal("tex_reload", NULL, 0)) {
+        igText("Drop: %s", l->dropped_path);
+        igSeparator();
+
+        ImVec2 child_sz = {0, -30};
+        if (igBeginChild_Str(
+            "tex_list", child_sz, true, 0
+        )) {
+            for (i32 i = 0; i < l->arr_num; i++) {
+                R *r = &l->arr[i];
+                if (r->type != RT_TEXTURE)
+                    continue;
+                if (!r->raylib_object)
+                    continue;
+
+                Texture2D *t = r->raylib_object;
+                igPushID_Int(i);
+                rlImGuiImageSizeV(
+                    t, preview_minisize
+                );
+                igSameLine(0, 10);
+                ImVec2 btn_sz = {0, 0};
+                if (igButton(r->fname, btn_sz)) {
+                    reslist_reload_tex_from(
+                        l, i, l->dropped_path
+                    );
+                    l->drop_pending = false;
+                    igCloseCurrentPopup();
+                }
+                igPopID();
+            }
+        }
+        igEndChild();
+
+        ImVec2 cancel_sz = {0, 0};
+        if (igButton("Отмена", cancel_sz)) {
+            l->drop_pending = false;
+            igCloseCurrentPopup();
+        }
+        igEndPopup();
+    }
 }
