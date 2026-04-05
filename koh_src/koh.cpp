@@ -859,7 +859,7 @@ extern "C" int luaopen_caustic_index(lua_State *L) {
 
 
 extern "C" int luaopen_koh(lua_State *L){
-    printf("luaopen_koh:\n");
+    //printf("luaopen_koh:\n");
 
     lua_getglobal(L,"package");
     lua_getfield(L,-1,"preload");
