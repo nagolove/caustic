@@ -20,6 +20,11 @@ static const char *log_fname = "/tmp/causticlog";
 static FILE *log_stream = NULL;
 static u64 base_time = 0;
 
+static const char *ignored_warnings[] = {
+    "size is bigger than expected font size",
+    NULL
+};
+
 void time_init() {
     struct timespec now = { 0 };
 
@@ -155,6 +160,14 @@ void koh_log_custom(int logLevel, const char *text, va_list args) {
 */
 
 void koh_log_custom(int logLevel, const char *text, va_list args) {
+    if (logLevel == LOG_WARNING) {
+        for (int i = 0; ignored_warnings[i] != NULL; i++) {
+            if (strstr(text, ignored_warnings[i])) {
+                return;
+            }
+        }
+    }
+
     printf("[%.4f] ", time_get());
 
     switch (logLevel) {
