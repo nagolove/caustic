@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-void koh_fpsmeter_init();
+void koh_fpsmeter_init(int screen_width);
 void koh_fpsmeter_shutdown();
 void koh_fpsmeter_frame_begin();
 void koh_fpsmeter_frame_end();

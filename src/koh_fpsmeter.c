@@ -58,8 +58,8 @@ static void fpsmeter_register() {
     );
 }
 
-void koh_fpsmeter_init() {
-    ctx.cap = GetScreenWidth() / dx - dx * 4; // Чуть меньше ширины экрана
+void koh_fpsmeter_init(int screen_width) {
+    ctx.cap = screen_width / dx - dx * 4;
     ctx.len = 0;
     ctx.i = 0;
     ctx.meters = calloc(ctx.cap, sizeof(struct Meter));
