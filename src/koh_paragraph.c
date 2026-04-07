@@ -2,6 +2,7 @@
 #include "koh_paragraph.h"
 
 #include "koh_common.h"
+#include "koh_raylib_api.h"
 #include "raylib.h"
 #include "rlgl.h"
 #include "sdf.fs.h"
@@ -16,6 +17,7 @@
 #include "koh_routine.h"
 //#include "koh_console.h"
 
+static raylib_api R = {};
 static const Vector2 z = {};
 Color paragraph_default_color_background = (Color){
     255 / 2 + 10,
@@ -191,6 +193,7 @@ void parse_line_commands(const char *line) {
 static void _paragraph_init(Paragraph *prgh) {
     assert(prgh);
     memset(prgh, 0, sizeof(Paragraph));
+    R = raylib_api_get();
     prgh->color_text = paragraph_default_color_text;
     prgh->color_background = paragraph_default_color_background;
     prgh->is_visible = true;
@@ -214,35 +217,52 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     assert(opts.base_size >= 0);
     assert(opts.ttf_fname);
 
+    // В dummy-режиме шрифты не загружаются
+    if (raylib_api_is_dummy()) {
+        prgh->is_sdf = true;
+        prgh->fnt.baseSize = opts.base_size;
+        prgh->fnt.glyphCount = 0;
+        prgh->use_cache = opts.use_caching;
+        prgh->flags = opts.flags;
+        return;
+    }
+
     if (!cmn->font_chars) {
-        printf("paragraph_init2: use koh_common_init() before loading font\n");
+        printf(
+            "paragraph_init2: "
+            "use koh_common_init() before loading font\n"
+        );
         koh_fatal();
     }
 
     i32 fileSize = 0;
-    u8  *fileData = LoadFileData(opts.ttf_fname, &fileSize);
+    u8  *fileData = R.LoadFileData(
+        opts.ttf_fname, &fileSize
+    );
     assert(fileData);
 
-    // SDF font generation from TTF font
-    // Parameters > font size: 16, no glyphs array provided (0), glyphs count: 0 (defaults to 95)
-    prgh->fnt.glyphs = LoadFontData(
+    i32 glyph_count = 0;
+    prgh->fnt.glyphs = R.LoadFontData(
         fileData, fileSize, opts.base_size,
-        cmn->font_chars, cmn->font_chars_num, FONT_SDF
+        cmn->font_chars, cmn->font_chars_num, FONT_SDF,
+        &glyph_count
     );
 
-    // Parameters > glyphs count: 95, font size: opts.base_size, glyphs padding in image: 0 px, pack method: 1 (Skyline algorythm)
-    Image atlas = GenImageFontAtlas(
+    Image atlas = R.GenImageFontAtlas(
         prgh->fnt.glyphs, &prgh->fnt.recs,
         cmn->font_chars_num, opts.base_size, 0, 1
     );
-    prgh->tex_sdf = LoadTextureFromImage(atlas);
-    UnloadImage(atlas);
+    prgh->tex_sdf = R.LoadTextureFromImage(atlas);
+    R.UnloadImage(atlas);
 
-    UnloadFileData(fileData);      // Free memory from loaded file
+    R.UnloadFileData(fileData);
 
-    prgh->sh_sdf = LoadShaderFromMemory(NULL, fs_code_sdf);
-    // Required for SDF font
-    SetTextureFilter(prgh->tex_sdf, TEXTURE_FILTER_BILINEAR);    
+    prgh->sh_sdf = R.LoadShaderFromMemory(
+        NULL, fs_code_sdf
+    );
+    R.SetTextureFilter(
+        prgh->tex_sdf, TEXTURE_FILTER_BILINEAR
+    );
 
     prgh->is_sdf = true;
     prgh->fnt.texture = prgh->tex_sdf;
@@ -282,7 +302,7 @@ void paragraph_shutdown(Paragraph *prgh) {
     // Только для SDF — дефолтный шрифт освобождается в CloseWindow.
     if (prgh->is_sdf) {
         if (prgh->fnt.glyphs) {
-            UnloadFontData(
+            R.UnloadFontData(
                 prgh->fnt.glyphs,
                 prgh->fnt.glyphCount
             );
@@ -291,13 +311,13 @@ void paragraph_shutdown(Paragraph *prgh) {
     }
 
     if (prgh->tex_sdf.id != 0) {
-        UnloadTexture(prgh->tex_sdf);
+        R.UnloadTexture(prgh->tex_sdf);
     }
     if (prgh->sh_sdf.id != 0) {
-        UnloadShader(prgh->sh_sdf);
+        R.UnloadShader(prgh->sh_sdf);
     }
     if (prgh->rt_cache.id != 0) {
-        UnloadRenderTexture(prgh->rt_cache);
+        R.UnloadRenderTexture(prgh->rt_cache);
     }
 
     strbuf_shutdown(&prgh->b_lines);
@@ -520,7 +540,9 @@ void paragraph_build(Paragraph *prgh) {
         const char *cur_line = prgh->b_tlines.s[0];
         if (cur_line) {
             i32 base_size = prgh->fnt.baseSize;
-            prgh->measure = MeasureTextEx( prgh->fnt, cur_line, base_size, 0);
+            prgh->measure = R.MeasureTextEx(
+                prgh->fnt, cur_line, base_size, 0
+            );
         }
     }
 
@@ -533,15 +555,17 @@ void paragraph_build(Paragraph *prgh) {
     // BeginTextureMode(), это ломает текущий render target и
     // вызывает вспышку — часть кадра рисуется на экран.
     // Сохраняем и восстанавливаем активный framebuffer.
-    unsigned int prev_fbo = rlGetActiveFramebuffer();
+    unsigned int prev_fbo = R.rlGetActiveFramebuffer();
 
     if (!prgh->rt_cache.id) {
         printf(
             "paragraph_build: create rt texture %dx%d\n",
             new_w, new_h
         );
-        prgh->rt_cache = LoadRenderTexture(new_w, new_h);
-        SetTextureFilter(
+        prgh->rt_cache = R.LoadRenderTexture(
+            new_w, new_h
+        );
+        R.SetTextureFilter(
             prgh->rt_cache.texture,
             TEXTURE_FILTER_BILINEAR
         );
@@ -551,17 +575,15 @@ void paragraph_build(Paragraph *prgh) {
         i32 cur_w = prgh->rt_cache.texture.width,
             cur_h = prgh->rt_cache.texture.height;
 
-        // текстура увеличилась, надо пересоздавать
-        // кеш текстура только увеличивается в размере
         if (new_w > cur_w || new_h > cur_h) {
-            UnloadRenderTexture(prgh->rt_cache);
-            prgh->rt_cache = LoadRenderTexture(
+            R.UnloadRenderTexture(prgh->rt_cache);
+            prgh->rt_cache = R.LoadRenderTexture(
                 new_w, new_h
             );
         }
     }
 
-    rlEnableFramebuffer(prev_fbo);
+    R.rlEnableFramebuffer(prev_fbo);
 
     prgh->is_builded = true;
 }
@@ -574,47 +596,38 @@ static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
     };
 
     float angle = 0.f;
-    DrawRectanglePro(background, z, angle, prgh->color_background);
+    R.DrawRectanglePro(
+        background, z, angle, prgh->color_background
+    );
 
     Vector2 p = pos;
-        // сколько символов пройдено
-    i32 cnt = 0, 
-        // позиция в color_positions
+    i32 cnt = 0,
         cpos = 0;
     for(int i = 0; i < prgh->b_tlines.num; ++i) {
         const char *line = prgh->b_tlines.s[i];
 
-        // на непредвиденный случай
         if (!line)
             continue;
 
-        //printf("_paragraph_draw2: line %s\n", line);
-
         size_t line_len = strlen(line);
 
-        if (prgh->is_sdf) 
-            BeginShaderMode(prgh->sh_sdf);
+        if (prgh->is_sdf)
+            R.BeginShaderMode(prgh->sh_sdf);
         i32 bs = prgh->fnt.baseSize;
 
-        ///*
         Color color_text = prgh->color_text;
-//#warning "не рисует"
-        //printf("_paragraph_draw2: p %s\n", Vector2_tostr(p));
-        DrawTextPro(prgh->fnt, line, p, z, angle, bs, 0, color_text);
-        // */
-
-        //Color color_text = prgh->colors[cpos];
-        //i32 pos = prgh->positions[cpos];
-        //const char *slice = line;
+        R.DrawTextPro(
+            prgh->fnt, line, p, z,
+            angle, bs, 0, color_text
+        );
 
         for (i32 j = 0; j < line_len; ++j) {
             if (prgh->positions[cpos]) {
             }
-            //DrawTextPro(prgh->fnt, slice, p, z, angle, bs, 0, color_text);
         }
 
         if (prgh->is_sdf)
-            EndShaderMode();            
+            R.EndShaderMode();            
 
         p.y += prgh->fnt.baseSize;
         cnt += line_len;
@@ -650,24 +663,27 @@ void paragraph_draw2(Paragraph *prgh, Vector2 pos) {
         if (!prgh->is_cached) {
             prgh->is_cached = true;
 
-            BeginTextureMode(prgh->rt_cache);
-            BeginMode2D((Camera2D) { .zoom = 1.f, });
-            ClearBackground(BLANK);
+            R.BeginTextureMode(prgh->rt_cache);
+            R.BeginMode2D(
+                (Camera2D) { .zoom = 1.f, }
+            );
+            R.ClearBackground(BLANK);
             _paragraph_draw2(prgh, (Vector2) {});
-            EndMode2D();
-            EndTextureMode();
+            R.EndMode2D();
+            R.EndTextureMode();
         }
-        //texture_save(prgh->rt_cache.texture, "analiz.paragraph.png");
 
         Texture2D tex = prgh->rt_cache.texture;
         Rectangle src = {
             0, 0, tex.width, -tex.height,
         }, dst = {
-            pos.x, pos.y, 
-            tex.width, 
+            pos.x, pos.y,
+            tex.width,
             tex.height,
         };
-        DrawTexturePro(tex, src, dst, z, 0.f, WHITE);
+        R.DrawTexturePro(
+            tex, src, dst, z, 0.f, WHITE
+        );
     } else {
         //DrawCircleV(pos, 400, RED);
         _paragraph_draw2(prgh, pos);
@@ -682,7 +698,8 @@ void paragraph_draw(Paragraph *prgh, Vector2 pos) {
 Vector2 paragraph_align_center(Paragraph *prgh) {
     assert(prgh);
     assert(prgh->is_builded);
-    int w = GetScreenWidth(), h = GetScreenHeight();
+    int w = R.GetScreenWidth();
+    int h = R.GetScreenHeight();
     return (Vector2) {
         .x = (w - prgh->measure.x) / 2.,
         .y = (h - prgh->b_tlines.num * prgh->fnt.baseSize) / 2.,
@@ -757,8 +774,8 @@ void paragraph_draw_center(Paragraph *prgh) {
     assert(prgh);
     Vector2 sz = paragraph_get_size(prgh);
     Vector2 pos = {
-        .x = (GetScreenWidth() - sz.x) / 2.,
-        .y = (GetScreenHeight() - sz.y) / 2.,
+        .x = (R.GetScreenWidth() - sz.x) / 2.,
+        .y = (R.GetScreenHeight() - sz.y) / 2.,
     };
     paragraph_draw(prgh, pos);
 }
