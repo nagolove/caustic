@@ -298,6 +298,7 @@ static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
         .flags = PARAGRAPH_BORDER_NONE,
         //.use_caching = true,
     });
+    kbm->pr_msg.use_cache = false;
     //kbm->pr_msg.color_background = RAYWHITE;
     kbm->pr_msg.color_background = color_bind;
 
