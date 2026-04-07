@@ -75,37 +75,6 @@ void strbuf_add(StrBuf *s, const char *str) {
 
 }
 
-/*
-void strbuf_addf(StrBuf *s, const char *fmt, ...) {
-    assert(s);
-
-    if (!fmt)
-        return;
-
-    if (s->num + 1 >= s->cap) {
-        strbuf_realloc(s, 1.5);
-    }
-
-    va_list args;
-    va_start(args, fmt);
-    // Получить длину необходимого буфера
-    int require_len = vsnprintf(NULL, 0, fmt, args);
-    va_end(args);
-
-    //trace("strbuf_addf: len %d\n", require_len);
-
-    char *str = calloc(require_len + 1, sizeof(str[0]));
-
-    va_start(args, fmt);
-    vsnprintf(str, require_len + 1, fmt, args);
-    va_end(args);
-
-    s->s[s->num] = str;
-    s->s[s->num + 1] = NULL;
-    s->num++;
-}
-*/
-
 char *strbuf_concat_alloc(const StrBuf *s, const char *sep) {
     size_t required_len = 0, 
            sep_len = sep ? strlen(sep) : 0;

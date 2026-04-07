@@ -4404,7 +4404,7 @@ e_cp_type **e_types_allocated(ecs_t *r, int *num) {
     assert(TYPES_NUM > r->storages_size);
 
     static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
-    printf("e_types_allocated: sizeof(slots) %zu\n", sizeof(slots));
+    //printf("e_types_allocated: sizeof(slots) %zu\n", sizeof(slots));
     static int index = 0;
     e_cp_type **types = slots[index];
 
