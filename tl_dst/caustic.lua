@@ -11,17 +11,6 @@ local remove_last_backslash = ut.remove_last_backslash
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 local lua_ver = "5.4"
 local e = glob.env_instance()
 assert(e.path_caustic)
@@ -44,8 +33,6 @@ e.path_caustic .. "/lib?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?.so;" ..
 home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" ..
 package.cpath
-
-
 
 
 
@@ -76,14 +63,11 @@ local printc = ut.printc
 local cmd_do = ut.cmd_do
 local Cache = require("cache")
 local uv = require("luv")
-
 local readline = linenoise.readline
 local format = string.format
 local match = string.match
-
 local zlib = require('zlib')
 local hash32 = require('xxhash').hash32
-local hash64 = require('xxhash').hash64
 local serpent = require('serpent')
 local assist = require("assist")
 local git = require('git')
@@ -94,30 +78,9 @@ if string.match(lfs.currentdir(), "tl_dst") then
    chdir("..")
 end
 
-
-
-
-local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
-
 local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 
-
-
-
 local llm_embedding_dim = 4096
-
-
-
-
-
-
-
-local system_prompt =
-"Ты ассистент в разработке игрового фреймворка и игр." ..
-"Если недостаточно данных в исходном коде, то молча укажи маркер " ..
-"::QUERY:: в конце ответа."
-
-
 
 
 
@@ -127,37 +90,12 @@ local cache
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ut.assert_file(e.cmake_toolchain_win)
 local libcaustic_name = {
    ["linux"] = "caustic_linux",
    ["wasm"] = "caustic_wasm",
    ["win"] = "caustic_win",
 }
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -375,165 +313,7 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local _dependecy_init
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -865,33 +645,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local parser_setup = {
 
 
@@ -903,45 +656,13 @@ local parser_setup = {
       summary = [[run cppcheck on current project directory]],
    },
 
-   mmap = {
-      summary = [[testing mmap library for chunks.index.copy]],
-   },
-
    bld_lua = {
       summary = [[write example of bld.lua file in current directory]],
-   },
-
-   sha256 = {
-      summary = [[testing sha2.lua]],
-   },
-
-   embeddings = {
-      summary = [[make embeddings vectors for tags.json]],
-   },
-
-   xxhash = {
-      summary = [[testing xxhash32 and xxhash64 in lua]],
-   },
-
-   chunks_open = {
-      summary = [[function for testing chunks splitting system]],
-   },
-
-   ai = {
-      summary = [[connect to ai assist]],
    },
 
    dist = {
       options = {},
       summary = [[build binary distribution]],
-   },
-
-   load_index = {
-      summary = [[load index from binary file to hnsw lib instance]],
-   },
-
-   files_koh = {
-      summary = [[get list of caustic files for chunking = modules + src]],
    },
 
    ctags = {
@@ -962,14 +683,6 @@ local parser_setup = {
       options = { "-n --name" },
       summary = [[Create unit test directory in home directory]],
    },
-
-
-
-
-
-
-
-
 
    update = {
 
@@ -1002,12 +715,6 @@ local parser_setup = {
          { "-f --full", "full nodes info" },
       },
    },
-
-
-
-
-
-
 
    init = {
       summary = "download modules from network",
@@ -1074,11 +781,6 @@ with -g option just call 'git status' for each entry
          { "-g --git", "run `git status` instead of lazygit" },
       },
    },
-
-
-
-
-
    projects_make = {
       summary = "make projects from projects.lua",
    },
@@ -1769,17 +1471,6 @@ Stage *stage_$stage$_new();
    ut.pop_dir()
 end
 
-function actions.rmdirs(_args)
-   print('not implemented')
-
-
-
-
-
-
-
-end
-
 
 local function pre_init(_args)
    local deps = {}
@@ -2019,106 +1710,6 @@ function actions.test(_args)
       sub_test(_args, cfg)
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 local function has_files_in_dir(files)
@@ -2533,31 +2124,31 @@ local function make_l(list)
 end
 
 
+local function split_libs_by_linkage(libs)
+   local static_libs = {}
+   local dynamic_libs = {}
 
 
+   local system_libs = {
+      ["m"] = true,
+      ["stdc++"] = true,
+      ["c"] = true,
+      ["pthread"] = true,
+      ["dl"] = true,
+      ["rt"] = true,
+   }
 
+   for _, lib in ipairs(libs) do
+      local libname = lib:match("%-l(.+)") or lib
+      if system_libs[libname] then
+         table.insert(dynamic_libs, lib)
+      else
+         table.insert(static_libs, lib)
+      end
+   end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   return static_libs, dynamic_libs
+end
 
 local function _build(dep)
    print("_build:", dep.name)
@@ -2945,6 +2536,12 @@ local function project_link(ctx, cfg, _args, ninja)
    local libsdirs = make_L(ctx)
    local libs = make_l(ctx.libs)
 
+
+   local static_libs, dynamic_libs = split_libs_by_linkage(libs)
+
+
+
+
    if not _args.noasan then
       cmd = cmd .. " -fsanitize=address "
    end
@@ -2955,9 +2552,17 @@ local function project_link(ctx, cfg, _args, ninja)
    concat(libsdirs, " ") ..
    " " ..
    flags ..
-   " " ..
-   concat(libs, " ")
+   " "
 
+
+   if #static_libs > 0 then
+      cmd = cmd .. "-Wl,-Bstatic " .. concat(static_libs, " ") .. " -Wl,-Bdynamic "
+   end
+
+
+   if #dynamic_libs > 0 then
+      cmd = cmd .. concat(dynamic_libs, " ") .. " "
+   end
 
 
 
@@ -2982,69 +2587,10 @@ local function project_link(ctx, cfg, _args, ninja)
       f:write(string.format("build %s: link %s\n", link_output, link_inputs))
       f:write(string.format("  COMMAND = %s\n\n", link_command))
    else
+      print('project_link:', cmd)
       cmd_do(cmd)
    end
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function _update(dep)
    ut.push_current_dir()
@@ -3091,87 +2637,6 @@ function actions.update(_args)
 
 
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function codegen(cg)
 
@@ -3348,15 +2813,6 @@ local function print_sorted_string(objfiles)
    end)
    print(tabular(objfiles_sorted))
 end
-
-
-
-
-
-
-
-
-
 
 
 
@@ -3607,7 +3063,7 @@ function sub_make(
    local libsdirs = gather_libdirs_abs(cfg, mods.modules())
 
    if target == 'linux' then
-      table.insert(libsdirs, "/usr/lib")
+
    end
 
    local libs = ut.merge_tables(
@@ -3919,11 +3375,6 @@ function actions.make(_args)
 end
 
 
-local function strip_dotdot(path)
-   return (path:gsub("^%.%./", ""))
-end
-
-
 local function find_arg_after(args, flag)
    for i, a in ipairs(args) do
       if a == flag then
@@ -4055,119 +3506,6 @@ local zlib_min_len = 128
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local function _fd_code_in_cwd(extensions_t)
    local result = {}
    local extensions = concat(extensions_t, "|")
@@ -4231,16 +3569,6 @@ local function _fd_code_in_modules()
    return result
 end
 
-
-
-
-
-
-
-
-
-
-
 local function shannon_entropy(str)
    local freq = {}
    local len = #str
@@ -4271,28 +3599,6 @@ end
 
 local function lms_instanse()
    local self = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
    self.is_up = function()
       local code = os.execute('lms ps')
@@ -4432,60 +3738,6 @@ end
 
 
 
-function actions.xxhash(_)
-   local str = "Hello, mister Den!"
-   print('str', str)
-
-   print("xxhash32", hash32(str))
-   print("xxhash64", hash64(str))
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local hnswlib = require('hnswlib')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -4522,57 +3774,6 @@ function actions.clean(_)
 
    os.execute("rm ./obj_linux/*")
    os.execute("rm ./obj_wasm/*")
-end
-
-function actions.mmap(_)
-   local Index = require("index")
-   local index = Index.new("./chunks.bin")
-   for i = 1, index:chunks_num() do
-
-
-
-
-
-
-
-
-      local ok, errmsg = pcall(function()
-         local s = index:chunk_raw(i)
-         local chunk = load(s)()
-         chunk.embedding = nil
-         printc("%{blue}" .. inspect(chunk) .. "%{reset}")
-
-         local text = index:chunk_text(i)
-         local text_zlib = index:chunk_text_zlib(i)
-         local embedding = index:chunk_embedding(i)
-         local chunk_id = index:chunk_id(i)
-         local chunk_id_hash = index:chunk_id_hash(i)
-         local chunk_file = index:chunk_file(i)
-
-         print(
-         "text",
-         text,
-         "text_zlib",
-         text_zlib,
-         "embedding",
-         embedding,
-         "chunk_id",
-         chunk_id,
-         "chunk_id_hash",
-         chunk_id_hash,
-         "chunk_file",
-         chunk_file)
-
-
-
-      end), string
-      if not ok then
-         print('errmsg', inspect(errmsg))
-      end
-
-
-
-   end
 end
 
 function actions.cppcheck(_args)
@@ -4640,38 +3841,6 @@ function actions.cppcheck(_args)
    cmd = cmd .. concat(files, " ")
 
    cmd_do(cmd)
-end
-
-function actions.sha256(_)
-
-
-
-
-   local f = io.open("chunks.zlib")
-   assert(f)
-   local buf_sz = 1024 * 1024 * 4
-
-   local buf = ""
-   local eof = false
-
-   local append = sha2.blake3()
-
-   while not eof do
-      buf = f:read(buf_sz)
-      append = append(buf)
-      if #buf < buf_sz then
-         eof = true
-      end
-      print(#buf)
-   end
-
-   local hash_val = append()
-
-   local hash_ref_blake3 = "bfb4b90586d7a67f6b433dbd6f1b4106fe3cd4b4440e7b68f5472cd1b3b97cbe"
-
-   assert(hash_val == hash_ref_blake3)
-
-   print("hash_val", hash_val)
 end
 
 
@@ -4852,53 +4021,6 @@ local function w_header_v3(fd, o)
 
    return written, data_offset
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 local function chunks_write_binary(
    chunks_fname, o, chunks)
@@ -5228,596 +4350,6 @@ local function tags2chunks(o)
    return chunks
 
 
-end
-
-function actions.embeddings(_)
-   local o = {
-      zlib_window = 15,
-      zlib_level = 6,
-      tags_fname = 'tags.json',
-   }
-
-   local chunks = tags2chunks(o)
-   if chunks_write_binary("chunks.bin", o, chunks) then
-      print("chunks were written succesfully")
-   end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function markdown_instance()
-   linenoise.save_history("history.txt")
-   local in_code = false
-
-
-   local markdown_f = io.open("markdown.txt", "a")
-   assert(markdown_f)
-
-
-   local tok_buf = {}
-   local tok_buf_size = 5
-   for i = 1, tok_buf_size do
-      tok_buf[i] = ""
-   end
-   local tok_i = 1
-
-   return {
-      feed = function(_inp)
-         tok_i = (tok_i + 1) % tok_buf_size
-         tok_buf[tok_i] = _inp
-
-         local inp = concat(tok_buf)
-
-         markdown_f:write("inp:", inp .. "\n")
-
-         local out = ""
-
-         if in_code then
-            out = "\27[7m" .. _inp .. "\27[0m"
-         else
-            out = _inp
-         end
-
-         if not in_code then
-            local c, _ = string.match(inp, "```")
-            if c then
-               in_code = true
-
-               if in_code then
-
-                  local C = ansicolors
-                  out = C("%{greenbg}") .. _inp .. C("%{reset}")
-               else
-                  out = _inp
-               end
-            end
-         else
-            local c = string.match(inp, "```")
-            if c then
-               in_code = false
-            end
-         end
-
-         markdown_f:flush()
-         return out
-      end,
-   }
-end
-
-
-
-local mkd = {}
-
-function actions.ai(_args)
-   print("actions.ai")
-
-   if not lms.up() then
-      print("actions.ai: lmstudio could not startup")
-      return
-   end
-
-
-
-
-
-
-
-   local running = true
-   local loop_state = 'main'
-   local return_to_main = false
-
-   local function handle_sigint(_)
-      if loop_state == 'answer' then
-         printc(
-         "\n%{red}handle_sigint: return to main loop state%{reset}\n")
-
-         return_to_main = true
-      else
-         linenoise.save_history("history.txt")
-         print("\n%{red}return to os%{reset}\n")
-         os.exit(1)
-      end
-   end
-
-   local signal = require("posix.signal")
-   signal.signal(signal.SIGINT, handle_sigint)
-
-
-
-   local models = assist.models_list()
-   print(inspect(models))
-
-   local welcome_str_escape = ansicolors("%{green}send message%{green}: ")
-   local inp
-
-
-
-   local base_message = { role = "system", content = system_prompt }
-   local chat = {
-      model = llm_model,
-      stream = true,
-      messages = {
-         base_message,
-
-      },
-   }
-
-
-
-
-   local commands = {
-      quit = function()
-
-         printc("%{green}quit%{reset}")
-         running = false
-      end,
-      exit = function()
-
-         printc("%{green}exit%{reset}")
-         running = false
-      end,
-      ctx_erase = function()
-         chat.messages = {
-            base_message,
-         }
-      end,
-      ctx_view = function()
-         for _, msg in ipairs(chat.messages) do
-            local role = msg.role
-            if role == "user" then
-               io.write(ansicolors("%{yellow}"))
-            elseif role == "assistant" then
-               io.write(ansicolors("%{blue}"))
-            end
-            io.write(inspect(msg) .. "\n%{reset}")
-
-         end
-      end,
-      help = function()
-
-         local h = {
-            'quit, exit - выйти на хрен',
-            'help       - смотреть этот текст',
-            'ctx_reset  - очистить историю, сбросить контекст',
-            'ctx_view   - посмотреть содержимое истории',
-            'query      - векторный поиск по коду',
-         }
-
-         for _, line in ipairs(h) do
-            print(line)
-         end
-      end,
-      query = function(carg)
-         print("::query", carg)
-
-
-      end,
-
-
-      load = function()
-
-      end,
-   }
-
-
-   local function eval_commands(s)
-
-
-      local cmd, carg = string.match(s, "^::(%S+)(.*)")
-      if not cmd then
-         return
-      end
-
-
-      for k, func in pairs(commands) do
-
-         if cmd == k then
-            func(carg)
-            return true
-         end
-      end
-      return false
-   end
-
-   linenoise.set_multiline(true)
-   local markdown = markdown_instance()
-
-
-   linenoise.load_history("history.txt")
-
-   print("actions.ai: mainloop enter")
-
-   while running do
-      inp = linenoise.readline(welcome_str_escape)
-
-      linenoise.add_history(inp)
-
-      if eval_commands(inp) then
-         goto continue
-      end
-
-
-
-
-      local texts = ""
-
-      local f_tmp = io.open("contex.txt", "w")
-      f_tmp:write(texts)
-      f_tmp:close()
-
-      if inp == "exit" or inp == "quit" then
-         break
-      end
-
-      table.insert(chat.messages, {
-         role = 'user',
-         content = "Контекста кода : " .. texts ..
-         "\n Вопрос пользователя :" .. inp,
-
-
-      })
-
-      return_to_main = false
-      local send2llm = assist.send2llm
-
-      local function on_chunk(responce_chunk)
-         table.insert(mkd, responce_chunk)
-         local formated = markdown.feed(responce_chunk)
-         io.write(formated)
-         loop_state = 'answer'
-         if return_to_main then
-            return true
-         end
-         return false
-      end
-
-      local responce = send2llm(chat, on_chunk)
-
-
-
-
-
-      table.insert(chat.messages, {
-         role = 'assistant',
-         content = responce,
-      })
-
-
-      ::continue::
-   end
-
-   linenoise.save_history("history.txt")
-
-   local w = io.open("mkd_chunks.lua", "w")
-   w:write(serpent.dump(mkd))
 end
 
 function actions.snapshot(_)

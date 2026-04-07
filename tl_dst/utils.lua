@@ -428,8 +428,10 @@ local cmd_do = cmd_do_execute
 
 
 local function find_and_remove_cmake_cache()
-   local args = ' -HI "CMakeCache\\.txt" -x rm {}'
-   cmd_do('fd ' .. args)
+   local args = 'fd -HI "CMakeCache\\.txt"'
+   local add_args = ' -x rm {}'
+   print('find_and_remove_cmake_cache:', cmd_do(args))
+   cmd_do(args .. add_args)
 
 end
 

@@ -9,19 +9,8 @@ local glob = require "global"
 local ut         = require "utils"
 local remove_last_backslash = ut.remove_last_backslash
 
---[[
--- каталог для библиотек x86_64 собранных в релизном режиме
-local path_rel_third_party_release = remove_last_backslash(
-    getenv("3rd_party_release") or "3rd_party_release"
-)
--- каталог для библиотек wasm, собранных в релизном режиме
-local path_wasm_third_party_release = remove_last_backslash(
-    getenv("wasm_3rd_party_release") or "wasm_3rd_party_release"
-)
---]]
 -- }}}
 
---local lua_ver = "5.1"
 local lua_ver = "5.4"
 local e = glob.env_instance()
 assert(e.path_caustic)
@@ -45,8 +34,6 @@ package.cpath =
         home .. "/.luarocks/lib/lua/" .. lua_ver .. "/?/init.so;" .. -- XXX: init.so?
         package.cpath
 -- }}}
-
---print('package.cpath', package.cpath)
 
 -- INFO: Загружает xxhash, hnswlib, linenoise
 require 'koh'
@@ -76,14 +63,11 @@ local printc     = ut.printc
 local cmd_do     = ut.cmd_do
 local Cache      = require "cache"
 local uv         = require "luv"
---local rl         = require "readline"
 local readline   = linenoise.readline
 local format     = string.format
 local match      = string.match
---local ceil       = math.ceil
 local zlib       = require 'zlib'
 local hash32     = require 'xxhash'.hash32
-local hash64     = require 'xxhash'.hash64
 local serpent    = require 'serpent'
 local assist     = require "assist"
 local git        = require 'git'
@@ -94,53 +78,17 @@ if string.match(lfs.currentdir(), "tl_dst") then
     chdir("..")
 end
 
---local llm_model = "google/gemma-3-12b"
---local llm_model = "mistral-7b-instruct-v0.1"
--- XXX: Сделать выбор и показ текущей модели в чате
-local llm_model = "deepseek/deepseek-r1-0528-qwen3-8b"
-
 local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
---local llm_embedding_model = "oasis-code-embedding-1.5b"
---local llm_embedding_model = "oasis-code-embedding-1.5b"
---local                         "oasis-code-embedding-1.5b"
 
 local llm_embedding_dim = 4096
 
 -- globals {{{
-
--- Идея в том, что составить такой промпт который будет в разных ситуациях
--- давать разные маркеры в конце ответа.
-
---content = "Ты ассистент в разработке игрового фреймворка и игр. Отвечай строго lua таблицами.",
-local system_prompt = 
-    "Ты ассистент в разработке игрового фреймворка и игр." .. 
-    "Если недостаточно данных в исходном коде, то молча укажи маркер " .. 
-    "::QUERY:: в конце ответа."
-
--- Если видишь просьбу компилировать или собрать проект, то поставь маркер ::MAKE:: в конце ответа
-
---content = "Если недостаточно данных в исходном коде, то укажи в формате имя_файла:строка .. "
 
 local site_repo = "nagolove.github.io"
 local cache_name    = "cache.lua"
 local cache: Cache
 -- TODO: Как-то предохранить каталог caustic с рабочей средой от затирания
 -- при ошибочно выставленной переменной окружения CAUSTIC_PATH
-
---[[
-local flags_sanitazer = {
-
-    -- TODO: Сделать опцию для сборки с проверкой тредов.
-    -- Как будет выглядеть такая опция? 
-    -- К каким командам она будет применяться?
-    -- Типа koh make -t
-    -- TODO: Сделать сборку всей щелочи под clang
-    -- Типа koh make --clang 
-
-    "-fsanitize=undefined,address",
-    --"-fsanitize-address-use-after-scope"
-}
---]]
 
 ut.assert_file(e.cmake_toolchain_win)
 local libcaustic_name = {
@@ -156,16 +104,6 @@ local record LinkContext
     libsdirs: {string}
     libs: {string}
 end
-
--- Добавить разные уровни многословности?
---[[
-local enum VerboseMode
-    "all"
-    "error"
-end
---]]
-
---local verbose = common.verbose
 
 local M = require 'modules'
 local mods = M.modules_instance(e)
@@ -373,167 +311,9 @@ local enum Kind
     "static"
 end
 
---local modules: {Dependency}
-
--- {{{ functions 
-
---[[
-local function build_with_cmake_w(dep: Dependency)
-    print('build_with_cmake_w: current dir', lfs.currentdir())
-    print('build_with_cmake_w: dep', inspect(dep))
-    cmd_do("emcmake cmake .")
-    cmd_do("emmake make")
-end
---]]
-
---[[
-local function sunvox_after_init()
-    print('sunvox_after_init:', lfs.currentdir())
-    cmd_do("cp sunvox/sunvox_lib/js/lib/sunvox.wasm sunvox/sunvox_lib/js/lib/sunvox.o")
-end
---]]
-
---[[
-local function gennann_after_build(dep: Dependency)
-    print('linking genann to static library', dep.dir)
-    ut.push_current_dir()
-    print("dep.dir", dep.dir)
-    chdir(dep.dir)
-    cmd_do("ar rcs libgenann.a genann.o")
-    ut.pop_dir()
-end
---]]
-
---]]
-
--- Вставляет содержимое файла src_fname в dst_fname
--- Если передается корутина, то она используется для текста заградителей 
--- заголовочных файлов.
-
---[[
-local function build_cimgui_w(dep: Dependency)
-    print('build_cimgui:', inspect(dep))
-
-    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
-
-    print("current dir", lfs.currentdir())
-    cmd_do("emmake make clean")
-    cmd_do("emmake make CFLAGS=\"-g3\"")
-end
---]]
-
---[[
-local function freetype_after_init(_: Dependency)
-    cmd_do({
-        "git submodule update --init --force --recursive --depth 1",
-        "cmake -E remove CMakeCache.txt",
-        "cmake -E remove_directory CMakeFiles",
-        "cmake -E make_directory build",
-        "cmake -E chdir build cmake ..",
-    })
-
-    -- Отключение модулей 
-	--     cmake -B build -D FT_REQUIRE_ZLIB=TRUE  -D FT_REQUIRE_BZIP2=TRUE  -D FT_REQUIRE_PNG=TRUE  -D FT_REQUIRE_HARFBUZZ=TRUE  -D FT_REQUIRE_BROTLI=TRUE
-
-    push_current_dir()
-    chdir("build")
-    cmd_do("make -j")
-    pop_dir()
-end
---]]
-
---[[
-local function build_lfs(_: Dependency)
-    print('lfs_custom_build', lfs.currentdir())
-    -- XXX: Путь для включаемых файлов должен быть из таблицы dependencies?
-    cmd_do("gcc -c src/lfs.c -I/usr/include/lua5.1")
-    cmd_do("ar rcs liblfs.a lfs.o")
-end
---]]
-
---[[
-local function build_rlwr_common(dep: Dependency)
-    print("build_rlwr_common:", lfs.currentdir(), dep.target)
-    cmd_do("sh build.sh target=" .. dep.target)
-end
---]]
-
--- TODO: Сделать общую функцию
-
---[[
-local function defines_luafun(_: Dependency): {string}
-end
---]]
-
---[[
-local function lualibrary_install_luafun(
-    abs_project_root_dir: string, to_dir: string
-)
-    ut.push_current_dir()
-    chdir(to_dir)
-    mkdir('luafun')
-    ut.pop_dir()
-    print('lualibrary_install_luafun:', lfs.currentdir())
-    print('lualibrary_install_luafun:', to_dir)
-    cmd_do(format("cp fun.lua %s/luafun", to_dir))
-
-    chdir(abs_project_root_dir)
-    chdir("src")
-
-    local header = io.open("package_path.h", "w")
-    --]]
---    header:write([[
---#ifndef KOH_PACKAGE_PATH_
---#define KOH_PACKAGE_PATH_
---    extern char **koh_packages_path;
---#endif
---]])
---[[
-    header:close()
-
-    local source = io.open("package_path.h", "w")
---]]
---    source:write([[
---    Тут полная лажа
---    ]])
---    source:close()
---end
-
---[[
-local function build_resvg(_: Dependency)
-    print('build_resvg')
-    ut.push_current_dir()
-    cmd_do("cargo build --release")
-    chdir("crates/c-api")
-    cmd_do("cargo build --release")
-    ut.pop_dir()
-end
---]]
+-- {{{ functions
 
 local _dependecy_init: function(dep: Dependency)
-
---[[
-local function update_default(_: Dependency) 
-    print("update_default")
-    print("current directory", lfs.currentdir())
-    local cmd = "git pull origin master"
-    cmd_do(cmd)
-    -- XXX: Не работает переинициализация
-    --_dependecy_init(dep)
-end
---]]
-
-
---[[
-local function build_remotery(_: Dependency) 
-    print('build_remotery', lfs.currentdir())
-    ut.push_current_dir()
-    chdir("lib")
-    cmd_do("gcc -c Remotery.c  -I lib -pthread -lm")
-    cmd_do("ar -rcs  \"libremotery.a\" Remotery.o")
-    ut.pop_dir()
-end
---]]
 
 -- }}}
 
@@ -828,22 +608,6 @@ local function _dependency_init(dep: Dependency): any
     ut.pop_dir()
 end
 
---[[
-local function wait_threads(threads: {lanes.Thread})
-    local waiting = true
-    while waiting do
-        waiting = false
-        for _, thread in ipairs(threads) do
-            if thread.status == 'running' then
-                waiting = true
-                break
-            end
-        end
-        sleep(0.01 as integer)
-    end
-end
---]]
-
 -- }}} 
 
 local record Actions
@@ -853,14 +617,7 @@ local record Actions
     clean: function(Args)
     cppcheck: function(Args)
     bld_lua: function(Args)
-    mmap: function(Args)
-    sha256: function(Args)
-    embeddings: function(Args)
     snapshot: function(Args)
-    xxhash: function(Args)
-    --anim_convert: function(Args)
-    --projects_status2: function(Args)
-    ai: function(Args)
     build: function(Args)
     compile_flags: function(Args)
     compile_commands: function(Args)
@@ -868,8 +625,6 @@ local record Actions
     dependencies: function(Args)
     deps: function(Args)
     dist: function(Args)
-    --files_koh: function(Args)
-    load_index: function(Args)
     init: function(Args)
     make: function(Args)
     project: function(Args)
@@ -877,7 +632,6 @@ local record Actions
     projects_status: function(Args)
     publish: function(Args)
     remove: function(Args)
-    rmdirs: function(Args)
     run: function(Args)
     selftest: function(Args)
     selftest_lg: function(Args)
@@ -887,7 +641,6 @@ local record Actions
     test: function(Args)
     unit: function(Args)
     update: function(Args)
-    chunks_open: function(Args)
 
     -- }}}
 end
@@ -903,45 +656,13 @@ local parser_setup: {string:ParserSetup} = {
         summary = [[run cppcheck on current project directory]],
     },
 
-    mmap = {
-        summary = [[testing mmap library for chunks.index.copy]]
-    },
-
     bld_lua = {
         summary = [[write example of bld.lua file in current directory]]
-    },
-
-    sha256 = {
-        summary = [[testing sha2.lua]],
-    },
-
-    embeddings = {
-        summary = [[make embeddings vectors for tags.json]]
-    },
-
-    xxhash = {
-        summary = [[testing xxhash32 and xxhash64 in lua]]
-    },
-
-    chunks_open = {
-        summary = [[function for testing chunks splitting system]]
-    },
-
-    ai = {
-        summary = [[connect to ai assist]]
     },
 
     dist = {
         options = {},
         summary = [[build binary distribution]],
-    },
-
-    load_index = {
-        summary = [[load index from binary file to hnsw lib instance]],
-    },
-
-    files_koh = {
-        summary = [[get list of caustic files for chunking = modules + src]],
     },
 
     ctags = {
@@ -962,14 +683,6 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-n --name", },
         summary = [[Create unit test directory in home directory]]
     },
-
-    --[[
-    updates_check = {
-        --summary = "call update() function to get latest git version of source",
-        summary = "print new avaible sources versions for all dependencies",
-        options = { "-n --name", },
-    },
-    --]]
 
     update = {
         --summary = "call update() function to get latest git version of source",
@@ -1002,12 +715,6 @@ local parser_setup: {string:ParserSetup} = {
             { "-f --full", "full nodes info" },
         },
     },
-
-    --[[
-    rmdirs = {
-        summary = "remove empty directories in path_third_party",
-    },
-    --]]
 
     init = {
         summary = "download modules from network",
@@ -1074,11 +781,6 @@ with -g option just call 'git status' for each entry
             { "-g --git", "run `git status` instead of lazygit" },
         }
     },
-    --[[
-    projects_status = {
-        summary = "print git status for projects.lua entries",
-    },
-    --]]
     projects_make = {
         summary = "make projects from projects.lua",
     },
@@ -1769,17 +1471,6 @@ Stage *stage_$stage$_new();
     ut.pop_dir()
 end
 
-function actions.rmdirs(_args: Args)
-    print('not implemented')
-    --[[
-    for _, dep in ipairs(dependencies) do
-        if dep.dir then
-            cmd_do("rmdir " .. path_rel_third_party .. "/" .. dep.dir)
-        end
-    end
-    --]]
-end
-
 -- Проверяет аргументы и создает список модулей
 local function pre_init(_args: Args): {Dependency}
     local deps = {}
@@ -2019,106 +1710,6 @@ function actions.test(_args: Args)
         sub_test(_args, cfg)
     end
 end
-
---[[
-local function update_links_table(_links: {string}, artifact: string)
-    local found = false
-    for _, line in ipairs(_links) do
-        if string.match(line, artifact) then
-            found = true
-            break
-        end
-    end
-    if not found then
-        local ptrn = '<a href="https://nagolove.github.io/%s/"><strong>%s</strong></a>'
-        table.insert(_links, format(ptrn, artifact, artifact))
-    end
-end
---]]
-
-
---[[
-local function update_links(artifact: string)
-    local site_repo_tmp = gsub(site_repo_index, "~", os.getenv("HOME"))
-    local file = io.open(site_repo_tmp, "r")
-    if not file then
-        print(format("Could not load '%s' file", site_repo_tmp));
-        os.exit(1)
-    end
-
-    local begin_section = "begin_links_section"
-    local end_section = "end_links_section"
-
-    local links_lines: {string} = {}
-    local put = false
-    local line_counter = 0
-    local other_lines: {string} = {}
-    for line in file:lines() do
-        local begin = false
-        if string.match(line, begin_section) then
-            put = true
-            begin = true
-            goto continue
-        end
-        if string.match(line, end_section) then
-            put = false
-            goto continue
-        end
-        line_counter = line_counter + 1
-        if put then
-            table.insert(links_lines, line)
-        end
-        :: continue ::
-        if (not put) or begin then
-            table.insert(other_lines, line)
-        end
-    end
-
-    if verbose then
-        print('link_lines before update')
-        print(tabular(links_lines))
-    end
-
-    update_links_table(links_lines, artifact)
-
-    if verbose then
-        print('link_lines after update')
-        print(tabular(links_lines))
-    end
-
-    local new_lines: {string} = {}
-    for _, line in ipairs(other_lines) do
-        if string.match(line, begin_section) then
-            table.insert(new_lines, line)
-            for _, link_line in ipairs(links_lines) do
-                table.insert(new_lines, link_line)
-            end
-            goto continue
-        end
-        table.insert(new_lines, line)
-            :: continue ::
-    end
-
-    print('new_lines')
-    print(tabular(new_lines))
-
-    file = io.open(site_repo_tmp .. ".tmp", "w")
-    for _, line in ipairs(new_lines) do
-        file:write(line .. "\n")
-    end
-    file:close()
-
-    -- FIXME: файл index.html затирается
-    local cmd1 = "mv " .. site_repo_tmp .. " " .. site_repo_tmp .. ".bak"
-    local cmd2 = "mv " .. site_repo_tmp .. ".tmp " .. site_repo_tmp
-
-    print(cmd1)
-    print(cmd2)
-
-    --cmd_do(cmd1)
-    --cmd_do(cmd2)
-end
---]]
 
 -- files - пути к файлам относительно текущего каталога
 local function has_files_in_dir(files: {string}): boolean
@@ -2532,32 +2123,32 @@ local function make_l(list: {string}): {string}
     return ret
 end
 
---[[
--- {{{ Специфические опции
-#warning: Link with `-sLLD_REPORT_UNDEFINED` to get more information on undefined symbols
-#warning: To disable errors for undefined symbols use `-sERROR_ON_UNDEFINED_SYMBOLS=0`
-
-#emcc -sEVAL_CTORS
-#For example, calls to imports stop this optimization, and so if you have a
-#game engine that creates a GL context and then does some pure computation to
-#set up unrelated data structures in memory, then you could reverse that order.
-#Then the pure computation could run first, and be evalled away, and the GL
-#context creation call to an import would not prevent that. 
--- }}}
-
-    local flags = {
-        "-s USE_GLFW=3",
-        "-s MAXIMUM_MEMORY=4294967296",
-        "-s ALLOW_MEMORY_GROWTH=1",
-        "-s EMULATE_FUNCTION_POINTER_CASTS",
-        "-s LLD_REPORT_UNDEFINED",
-        --"-o index.html src/main.c",
-        "--preload-file assets",
-        "-Wall -flto -g3 -DPLATFORM_WEB",
-        main_fname or '',
+-- Разделяет библиотеки на статические (локальные из modules/) и динамические (системные)
+local function split_libs_by_linkage(libs: {string}): {string}, {string}
+    local static_libs = {}
+    local dynamic_libs = {}
+    
+    -- Список системных библиотек для динамической линковки
+    local system_libs: {string: boolean} = {
+        ["m"] = true,
+        ["stdc++"] = true,
+        ["c"] = true,
+        ["pthread"] = true,
+        ["dl"] = true,
+        ["rt"] = true,
     }
-
---]]
+    
+    for _, lib in ipairs(libs) do
+        local libname = lib:match("%-l(.+)") or lib
+        if system_libs[libname] then
+            table.insert(dynamic_libs, lib)
+        else
+            table.insert(static_libs, lib)
+        end
+    end
+    
+    return static_libs, dynamic_libs
+end
 
 local function _build(dep: Dependency)
     print("_build:", dep.name)
@@ -2944,6 +2535,12 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
 
     local libsdirs = make_L(ctx)
     local libs = make_l(ctx.libs)
+    
+    -- Разделить библиотеки на статические (локальные) и динамические (системные)
+    local static_libs, dynamic_libs = split_libs_by_linkage(libs)
+
+    --print('static_libs', inspect(static_libs))
+    --print('dynamic_libs', inspect(dynamic_libs))
 
     if not _args.noasan then
         cmd = cmd .. " -fsanitize=address "
@@ -2954,10 +2551,18 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         .. " " 
         .. concat(libsdirs, " ") 
         .. " " 
-        .. flags 
-        .. " " 
-        .. concat(libs, " ") 
-        --.. " -error-limit=0"
+        .. flags
+        .. " "
+    
+    -- Статические библиотеки (из modules_linux/)
+    if #static_libs > 0 then
+        cmd = cmd .. "-Wl,-Bstatic " .. concat(static_libs, " ") .. " -Wl,-Bdynamic "
+    end
+    
+    -- Динамические библиотеки (системные: libm, libstdc++, ...)
+    if #dynamic_libs > 0 then
+        cmd = cmd .. concat(dynamic_libs, " ") .. " "
+    end
 
         --[[
     if verbose then
@@ -2982,69 +2587,10 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         f:write(string.format("build %s: link %s\n", link_output, link_inputs))
         f:write(string.format("  COMMAND = %s\n\n", link_command))
     else
+        print('project_link:', cmd)
         cmd_do(cmd)
     end
 end
-
---local json = require "json"
-
---[[
-local record Aseprite 
-    record Meta
-        record Size
-            w: integer
-            h: integer
-        end
-        image: string
-        size: Size
-
-        app: string
-        frameTags: string
-        layers: string
-        slices: string
-        version: string
-        scale: string
-        format: string
-    end
-    record Frame
-        record _Frame
-            x: number
-            y: number
-            w: number
-            h: number
-        end
-        frame: _Frame
-        num: number -- Дополнительное поле для сортировки
-    end
-    frames: {Frame}
-    meta: Meta
-end
---]]
-
-
---[[
-local enum Answer
-    "yes"
-    "no"
-end
-
-local function yes_or_no(input: string): Answer
-    local yes = { "yes", "y", }
-    local no = { "no", "n" }
-    for _, v in ipairs(yes) do
-        if input:lower() == v then
-            return "yes"
-        end
-    end
-    for _, v in ipairs(no) do
-        if input:lower() == v then
-            return "no"
-        end
-    end
-    print("yes_or_no: bad value", input)
-    os.exit(1)
-end
---]]
 
 local function _update(dep: Dependency)
     ut.push_current_dir()
@@ -3091,87 +2637,6 @@ function actions.update(_args: Args)
     end
     --]]
 end
-
---[[
-function actions.updates(_args: Args)
-    print("updates")
-    for _, dep in ipairs(dependencies) do
-        if dep.url and string.match(dep.url, "%.git$") then
-            if dep.dir then
-                print('dep.dir', dep.dir)
-                ut.push_current_dir()
-                chdir(path_rel_third_party .. "/" .. dep.dir)
-                cmd_do({ 
-                    "git fetch",
-                    "git status",
-                })
-                ut.pop_dir()
-            end
-        end
-    end
-end
---]]
-
--- json->lua конвертация из aseprite
---[[ TODO: Сделать конвертацию данных на основе bld.lua
-    Для этого создать специальную секцию в bld.lua, со списком файлов для
-    обработки. Эта секция обрабатывается при запуске команды caustic make
---]]
---[[
-function actions.anim_convert(_args: Args)
-    print('anim_convert', inspect(_args))
-    if not _args.name then
-        print("There is no json file path in argument")
-        os.exit(1)
-    end
-    
-    local data = io.open(_args.name, "r"):read("*a")
-    --print('data', data)
-
-    local js = json.decode(data) as Aseprite
-    if not js then
-        print("parsing error")
-        os.exit(1)
-    end
-
-    local frames: {Aseprite.Frame} = {}
-    -- TODO: Сделать рабочий экспорт для режима hash и режима array в aseprite
-    for k, v in pairs(js.frames as {string:any}) do
-        --print(k, inspect(v))
-        local frame = v as Aseprite.Frame
-        frame.num = tonumber(string.match(k, "(%d*)%.aseprite"))
-        table.insert(frames, frame)
-    end
-
-    table.sort(frames, function(a: Aseprite.Frame, b: Aseprite.Frame): boolean
-        return a.num < b.num 
-    end)
-
-    --print('frames', inspect(frames))
-    local res: Aseprite = {}
-    res.meta = js.meta
-    res.meta.app = nil
-    res.meta.frameTags = nil
-    res.meta.layers = nil
-    res.meta.slices = nil
-    res.meta.version = nil
-    res.meta.scale = nil
-    res.meta.format = nil
-    res.frames = {}
-    for _, frame in ipairs(frames) do
-        table.insert(res.frames, {
-            x = frame.frame.x,
-            y = frame.frame.y,
-            w = frame.frame.w,
-            h = frame.frame.h,
-        })
-    end
-
-    local new_fname = gsub(_args.name, "%.json$", ".lua")
-    --print('new_fname', new_fname)
-    io.open(new_fname, "w"):write(serpent.dump(res))
-end
---]]
 
 local function codegen(cg: Cfg.Codegen)
     --print("codegen", inspect(cg))
@@ -3348,15 +2813,6 @@ local function print_sorted_string(objfiles: {string})
     end)
     print(tabular(objfiles_sorted))
 end
-
--- XXX: Что делает эта функция? Зачем?
---[[
-local function dependencies_set_target(target: Target)
-    for _, dep in ipairs(modules) do
-        dep.target = target
-    end
-end
---]]
 
 local type MakeDriver = function(queue: {Task}, ctx?: any)
 
@@ -3607,7 +3063,7 @@ function sub_make(
     local libsdirs = gather_libdirs_abs(cfg, mods.modules())
 
     if target == 'linux' then
-        table.insert(libsdirs, "/usr/lib")
+        --table.insert(libsdirs, "/usr/lib")
     end
 
     local libs = ut.merge_tables(
@@ -3918,11 +3374,6 @@ function actions.make(_args: Args)
     end
 end
 
--- подъем вверх по каталогу, удаление ../
-local function strip_dotdot(path: string): string
-    return (path:gsub("^%.%./", ""))
-end
-
 -- Извлечь значение аргумента после флага, например после "-o" или "-c"
 local function find_arg_after(args: {string}, flag: string): string
     for i, a in ipairs(args) do
@@ -4053,119 +3504,6 @@ local record Chunk
     embedding: string|{number} -- llm_embedding_dim 
 end
 
---local chunk_lines_num = 40
---local chunk_lines_overlap = 5
-
---[[
-local record Chunker
-    step: function(line: string)
-    stop: function(): {Chunk}
-end
---]]
-
---[[
--- id           строка для вывода в отладку, идентификатор объекта
--- chunk_size   размер чанка в строках
--- start_from   номер строки, с которой начинается сбор
--- gap          количество строк зазора между чанками. 
---              если == 0, то обработка идет последовательно
-local function make_chunker(
-    _: string, chunk_size: integer, start_from: integer, gap: integer
-): Chunker
-    assert(chunk_size > 0)
-    assert(start_from >= 0)
-    assert(gap >= 0)
-
-    local chunks, chunk: {Chunk}, {string} = {}, {}
-    local sz = 0          -- размер текущего чанка
-    local i = 0           -- сквозная нумерация строк
-
-    local coro = coroutine.create(function()
-        for _ = 1, start_from do
-            coroutine.yield()
-            i = i + 1
-        end
-
-        while true do
-            sz = chunk_size
-            while true do
-                local inp = coroutine.yield() as string
-                i = i + 1
-                sz = sz - 1
-                table.insert(chunk, inp)
-                if sz <= 0 then
-                    break
-                end
-            end
-
-            table.insert(chunks, {
-                text = concat(chunk, "\n"),
-                line_start = i,
-                line_end = i + chunk_size,
-            })
-            chunk = {}
-
-            for _ = 1, gap, 1 do
-                coroutine.yield()
-                i = i + 1
-            end
-        end
-
-    end)
-
-    -- Съедаю строку что-бы началь заполнение таблиц с первого элемента, а не
-    -- второго
-    coroutine.resume(coro, "")
-
-    return {
-        step = function(line)
-            assert(line)
-            coroutine.resume(coro, line)
-        end,
-        stop = function(): {Chunk}
-            if #chunk ~= 0 then
-                table.insert(chunks, {
-                    text = concat(chunk, "\n"),
-                    line_start = i,
-                    line_end = i + #chunk,
-                })
-            end
-            return chunks
-        end,
-    }
-end
---]]
-
-
---[[
-local function split2chunks(
-    fname: string, chunk_size: integer, overlap: integer
-): {Chunk}
-    assert(#fname > 0)
-    assert(chunk_size > 0)
-    assert(overlap >= 0)
-    assert(chunk_size > overlap)
-    local gap = chunk_size - overlap * 2
-    local m1, m2 = make_chunker("id1", chunk_size, 0, gap),
-                   make_chunker("id2", chunk_size, chunk_size - overlap, gap)
-
-    local f = io.open(fname, "r")
-    for line in f:lines() do
-        m1.step(line)
-        m2.step(line)
-    end
-
-    local final_chunks = {}
-    for _, ch in ipairs(m1.stop()) do
-        table.insert(final_chunks, ch)
-    end
-    for _, ch in ipairs(m2.stop()) do
-        table.insert(final_chunks, ch)
-    end
-    return final_chunks
-end
---]]
-
 -- Возвращает список путей к файла на основе поиска fd
 -- На входе - таблица регулярок которые комбинируются с |
 local function _fd_code_in_cwd(extensions_t: {string}): {string}
@@ -4231,16 +3569,6 @@ local function _fd_code_in_modules(): {string}
     return result
 end
 
---[[
-local function format_size(bytes: integer): string
-    if bytes < 1024 * 1024 then
-        return string.format("%.2f KB", bytes / 1024)
-    else
-        return string.format("%.2f MB", bytes / (1024 * 1024))
-    end
-end
---]]
-
 local function shannon_entropy(str: string): number
     local freq: {string: number} = {}
     local len = #str
@@ -4271,28 +3599,6 @@ end
 
 local function lms_instanse(): LMSInstanse
     local self: LMSInstanse = {}
-
---[[ {{{
--- XXX: С чем лучше сравнивать llm_model в is_loaded()?
-if not lms.is_loaded(llm_model) then
-    lms.load(llm_model)
-    os.execute("sleep 2")
-    local i = 0
-    while not lms.is_loaded(llm_model) do
-        os.execute("sleep 1")
-        i = i + 1
-        if i > 20 then
-            printc(
-                "Could not load %{blue}" .. 
-                llm_model .. 
-                "%{reset} model"
-            )
-            return
-        end
-    end
-end
---]] -- }}}
-
 
     self.is_up = function(): boolean
             local code = os.execute('lms ps')
@@ -4424,60 +3730,6 @@ local function chunks_calculate_vectors(chunks: {Chunk})
     end
 end
 
---[[
-local enum ChunkEntropy
-    "simple"
-    "medium"
-    "complex"
-end
---]]
-
-function actions.xxhash(_: Args)
-    local str = "Hello, mister Den!"
-    print('str', str)
-
-    print("xxhash32", hash32(str))
-    print("xxhash64", hash64(str))
-end
-
---[[
-local function load_chunks2string(fname: string): string
-    local window_bits = 15 -- должен соответствовать тому, что использовался при deflate(3, 15)
-    local stream = zlib.inflate(window_bits)
-
-    local infile = assert(io.open(fname, "rb"))
-    local chunk_size = 1024 * 128
-    local eof = false
-    local decompressed = {}
-
-    while not eof do
-        --print("loop")
-        local chunk = infile:read(chunk_size)
-        if not chunk then break end
-
-        local out, finished = stream(chunk)
-        table.insert(decompressed, out or "")
-
-        if finished then
-            eof = true
-        end
-    end
-
-    infile:close()
-    return concat(decompressed)
-end
---]]
-
-local hnswlib = require 'hnswlib'
-
---[[
-local function bin_to_hex(str: string): string
-    return (str:gsub('.', function(byte: string): string
-        return string.format('%02X', string.byte(byte))
-    end))
-end
---]]
-
 local record CTag 
     -- {{{
     enum Tag
@@ -4522,57 +3774,6 @@ function actions.clean(_: Args)
 
     os.execute("rm ./obj_linux/*")
     os.execute("rm ./obj_wasm/*")
-end
-
-function actions.mmap(_: Args)
-    local Index = require "index"
-    local index = Index.new("./chunks.bin")
-    for i = 1, index:chunks_num() do
-
-        --[[
-        if i + 5 >= index:chunks_num() then
-            local s: string = index:chunk_raw(i)
-            print(string.sub(s, 1, 100))
-        end
-        --]]
-
-        local ok, errmsg = pcall(function()
-            local s: string = index:chunk_raw(i)
-            local chunk: Chunk = load(s)() as Chunk
-            chunk.embedding = nil
-            printc("%{blue}" .. inspect(chunk) .. "%{reset}")
-
-            local text = index:chunk_text(i)
-            local text_zlib = index:chunk_text_zlib(i)
-            local embedding = index:chunk_embedding(i)
-            local chunk_id = index:chunk_id(i)
-            local chunk_id_hash = index:chunk_id_hash(i)
-            local chunk_file = index:chunk_file(i)
-
-            print(
-                "text",
-                text,
-                "text_zlib",
-                text_zlib,
-                "embedding",
-                embedding,
-                "chunk_id",
-                chunk_id,
-                "chunk_id_hash",
-                chunk_id_hash,
-                "chunk_file",
-                chunk_file
-            )
-
-
-        end) as boolean, string
-        if not ok then
-            print('errmsg', inspect(errmsg))
-        end
-
-        --]]
-
-    end
 end
 
 function actions.cppcheck(_args: Args)
@@ -4640,38 +3841,6 @@ function actions.cppcheck(_args: Args)
     cmd = cmd .. concat(files, " ")
     --print('cmd', cmd)
     cmd_do(cmd)
-end
-
-function actions.sha256(_: Args)
---[[
-➜  caustic git:(master) ✗ sha256sum chunks.zlib
-8a8bc95c8bf0fe6486057439ad02fceb51167c474327c63fa3016b34c583d2e7  chunks.zlib
---]]
-    local f = io.open("chunks.zlib")
-    assert(f)
-    local buf_sz = 1024 * 1024 * 4
-
-    local buf = ""
-    local eof = false
-
-    local append = sha2.blake3() as sha2.Partial
-
-    while not eof do
-        buf = f:read(buf_sz)
-        append = append(buf)
-        if #buf < buf_sz then
-            eof = true
-        end
-        print(#buf)
-    end
-
-    local hash_val = append() as string
-
-    local hash_ref_blake3 = "bfb4b90586d7a67f6b433dbd6f1b4106fe3cd4b4440e7b68f5472cd1b3b97cbe"
-    --local hash_ref_sha256 = "8a8bc95c8bf0fe6486057439ad02fceb51167c474327c63fa3016b34c583d2e7"
-    assert(hash_val == hash_ref_blake3)
-
-    print("hash_val", hash_val)
 end
 
 local record EmbeddingIndexOpts
@@ -4852,53 +4021,6 @@ local function w_header_v3(fd: FILE, o: EmbeddingIndexOpts): integer, integer
 
     return written, data_offset
 end
-
---[[ 
-local function w_header_v2(fd: FILE, o: EmbeddingIndexOpts): integer, integer
--- {{{
-    local written = 0
-
-    local magic = 'caustic_index\0'
-    local str_size_magic = #magic
-    w_str_fixed(fd, magic, str_size_magic)
-    written = written + #magic
-
-    local endian_mode = "l"
-    fd:write(endian_mode)
-    written = written + #endian_mode
-
-    local format_version = 2
-    fd:write(pack("<I1", format_version))
-    written = written + 1
-
-    local zlib_window = o.zlib_window
-    fd:write(pack("<I1", zlib_window))
-    written = written + 1
-
-    local sha_mode = "blake3\0"
-    --local sha_mode = "sha256"
-    local str_size_hash = 8
-    w_str_fixed(fd, sha_mode, str_size_hash)
-    written = written + str_size_hash
-
-    local embedding_dim = llm_embedding_dim
-    w_u64(fd, embedding_dim)
-    written = written + 8
-
-    local str_size_llm = 64
-    local llm = llm_embedding_model .. "\0"
-    assert(llm and #llm <= 64, "invalid llm_embedding_model")
-    w_str_fixed(fd, llm, str_size_llm)
-    written = written + str_size_llm
-
-    -- смещение где находятся данные
-    local data_offset = fd:seek("cur") + 8
-    w_u64(fd, data_offset)
-    written = written + 8
-
-    return written, data_offset
-end
---]] -- }}}
 
 local function chunks_write_binary(
     chunks_fname: string, o: EmbeddingIndexOpts, chunks: {Chunk}
@@ -5228,596 +4350,6 @@ local function tags2chunks(o: EmbeddingIndexOpts): {Chunk}
     return chunks
     --]]
 
-end
-
-function actions.embeddings(_: Args)
-    local o: EmbeddingIndexOpts = {
-        zlib_window = 15,
-        zlib_level = 6,
-        tags_fname = 'tags.json',
-    }
-
-    local chunks: {Chunk} = tags2chunks(o)
-    if chunks_write_binary("chunks.bin", o, chunks) then
-        print("chunks were written succesfully")
-    end
-end
-
---[[
-function actions.chunks_open(_: Args)
-    local chunks_str = load_chunks2string("chunks_koh.zlib")
-    local chunks_sz = #chunks_str
-    printc("%{blue}" .. format_size(chunks_sz) .. "%{reset}")
-
-    local fn, errmsg = load(chunks_str)
-    if not fn then
-        print('errmsg', errmsg)
-        return
-    end
-
-    local chunks = fn() as {Chunk}
-
-    -- число связей в графе (чем выше, тем точнее, но медленнее и больше памяти)
-    local dim = 1500 
-    local ef = 50
-    local searcher = hnswlib.new(100000, dim, ef)
-
-    local hash2chunk: {string: Chunk} = {}
-
-    for _, ch in ipairs(chunks) do
-        ch.hash = hash32(ch.text)
-        assert(hash2chunk[ch.hash] == nil)
-        hash2chunk[ch.hash] = ch
-    end
-
-    print("hashing was finished")
-
-    local chunks_without_embeddings: {Chunk} = {}
-
-    for _, ch in ipairs(chunks) do
-        if ch.embedding then
-            assert(type(ch.embedding) == 'table')
-            searcher:add(ch.embedding as {number}, ch.hash)
-        else
-            print("no embedding vector for chunk", bin_to_hex(ch.hash))
-            table.insert(chunks_without_embeddings, ch)
-        end
-    end
-
-    for _, ch in ipairs(chunks_without_embeddings) do
-        print(inspect(ch))
-        print()
-    end
-
-    print("embedding were loaded")
-    searcher:save("chunks.index")
-end
---]]
-
---[[
-local record IndexSetup
-    files: {string}         -- абсолютные имена файлов
-    zlib_level: integer     -- уровень сжатия
-    zlib_window: integer    -- размер окна
-    index_fname: string      -- имя файла индекса
-end
---]]
-
---[[
-local function index_create(index_setup: IndexSetup)
-    assert(index_setup)
-
-    -- Создаём поток сжатия
-    -- Уровень сжатия 6 (по умолчанию), окно = 15 бит (максимально эффективно)
-    local level = index_setup.zlib_level or 3
-    local window = index_setup.zlib_window or 15
-    local deflate = zlib.deflate(level, window)
-
-    --local dest_zlib_fname = "chunks_koh.zlib"
-    local attr_index = lfs.attributes(index_setup.index_fname)
-    if attr_index then
-        print(format("index_create: file '%s' exists, aborting"))
-        os.exit(1)
-    end
-
-    local files = index_setup.files
-    assert(type(files) == 'table')
-
-    local dest_zlib_fname = "chunks_koh_tmp.zlib"
-    local f = io.open(dest_zlib_fname, "w")
-    assert(f)
-
-    local chunks: {Chunk} = {}
-    for _, fname in ipairs(files) do
-        local attr = lfs.attributes(fname)
-
-        if not attr then
-            goto _continue
-        end
-
-        if attr.mode ~= 'file' then
-            goto _continue
-        end
-
-        printc(
-            "%{yellow}fname " .. fname .. "%{reset} " .. 
-            "%{blue}size " .. format_size(ceil(attr.size)) .. "%{reset}"
-        )
-
-        local chunks_tmp = split2chunks(
-            fname, chunk_lines_num, chunk_lines_overlap
-        )
-
-        for _, chunk in ipairs(chunks_tmp) do
-            chunk.file = fname
-            chunk.id = fname .. ":" .. chunk.line_start
-        end
-
-        for _, ch in ipairs(chunks_tmp) do
-            table.insert(chunks, ch)
-        end
-
-        ::_continue::
-
-    end
-
-    process_chunks_embedding(chunks)
-
-    -- Весь файл записывается в поток сжатия
-    local dump = serpent.dump(chunks)
-    --print('dump', dump)
-    local compressed, eof_1, bytes_in, bytes_out = deflate(dump, nil)
-    print("eof", eof_1, "bytes_in", bytes_in, "bytes_out", bytes_out)
-    f:write(compressed)
-
-    -- Завершаем сессию потока
-    local final, eof_2, _, _ = deflate("", "finish")
-    print("eof", eof_2)
-    f:write(final)
-
-end
---]]
-
---[[
-function actions.load_index(_: Args)
-    local chunks_str = load_chunks2string("chunks_koh.zlib")
-
-    local fn, errmsg = load(chunks_str)
-    if not fn then
-        print('errmsg', errmsg)
-        return
-    end
-
-    local chunks = fn() as {Chunk}
-    local hash2chunk: {string: Chunk} = {}
-
-    for _, ch in ipairs(chunks) do
-        ch.hash = hash32(ch.text)
-        assert(hash2chunk[ch.hash] == nil)
-        hash2chunk[ch.hash] = ch
-    end
-
-
-    local searcher = hnswlib.load("chunks.index")
-    --searcher:save("chunks.index.copy")
-
-    local inp = readline(ansicolors("%{green}query: %{reset}"))
-
-    local emb = assist.embedding(llm_embedding_model, inp)
-
-    --print('emb', inspect(emb))
-
-    print()
-    print()
-    print()
-
-    assert(emb[1])
-    assert(#emb[1] == llm_embedding_dim)
-    local nearest = searcher:search_str(emb[1], 10)
-    for _, hash in ipairs(nearest) do
-        print(bin_to_hex(hash))
-    end
-
-    for _, hash in ipairs(nearest) do
-        local ch = hash2chunk[hash]
-        if ch then
-            print(ch.text)
-        end
-    end
-end
---]]
-
---[[
-function actions.files_koh(_args: Args)
-    cmd_do("lms server start")
-
-    ut.push_current_dir()
-    chdir("src")
-    cmd_do("ls -l")
-
-    local extensions_t = {
-        ".*\\.c$",
-        ".*\\.cpp$",
-        ".*\\.h$",
-        ".*\\.hpp$",
-        ".*\\.md$",
-        --".*\\.lua$",
-    }
-    local files = _fd_code_in_cwd(extensions_t)
-
-    print('files', inspect(files))
-    ut.pop_dir()
-
-    --print(tabular(files))
-
-    index_create({
-        files = files,
-        zlib_level = 3,
-        zlib_window = 15,
-        index_fname = "chunks_koh_tmp.zlib"
-    })
-
-end
---]]
-
-local record Searcher
-    query: function(q: string): {string}
-end
-
---[[
-local function searcher_instance(index_fname: string): Searcher
-    local attr_index = lfs.attributes(index_fname)
-    if not attr_index then
-        print(format(
-            "searcher_instance: could not open file '%s', aborting", index_fname
-        ))
-        os.exit(1)
-    end
-
-    -- id_hash
-    local hash2chunk: {string: Chunk} = {}
-
-    --local searcher = hnswlib.load("chunks.index")
-    local dim = 1500 
-    local ef = 50
-    local searcher = hnswlib.new(100000, dim, ef)
-
-    local Index = require "index"
-    local index = Index.new(index_fname)
-
-    local t_start = os.clock()
-
-    for i = 1, index:chunks_num() do
-        local ok, errmsg = pcall(function()
-            local s: string = index:chunk_raw(i)
-            local chunk: Chunk = load(s)() as Chunk
-            hash2chunk[chunk.id_hash] = chunk
-            --chunk.embedding = nil
-            --print(inspect(chunk))
-
-            --assert(type(chunk.embedding) == 'table')
-
-            searcher:add(chunk.embedding as {number}, chunk.id_hash)
-        end) as boolean, string
-        if not ok then
-            print('errmsg', inspect(errmsg))
-        end
-    end
-
-    local t_finish = os.clock()
-    print("searcher_instance: searcher loaded for", t_finish - t_start, "sec")
-
-    --searcher:save("chunks.index.copy")
-
-    return {
-        query = function(q: string): {string}
-            local emb = assist.embedding(llm_embedding_model, q)
-
-            assert(emb[1])
-            assert(#emb[1] == llm_embedding_dim)
-            local nearest = searcher:search_str(emb[1], 10)
-
-            --for _, hash in ipairs(nearest) do
-            --    print(bin_to_hex(hash))
-            --end
-
-            local texts: {string} = {}
-
-            -- XXX: Сделать склейку из кода одним куском по file и 
-            -- line_start, 
-            -- line_end
-            -- Сверху писать имя файла
-            -- если есть пробел текста, то указывать /* текст прощен */
-            for _, id_hash in ipairs(nearest) do
-                local ch = hash2chunk[id_hash]
-                -- TODO: Словарь по файлам, потом сортировать по line_start
-                if ch then
-                    --print(ch.text)
-                    local text = concat({
-                        "// file: " .. ch.file .. " , " .. 
-                        "line_start " .. ch.line_start .. " , " ..
-                        "line_end " .. ch.line_end .. "\n\n",
-                    })
-                    text = text .. ch.text
-                    table.insert(texts, text)
-                end
-            end
-
-            return texts
-        end,
-    }
-end
---]]
-
-local record Markdown
-    feed: function(inp: string): string
-end
-
-local function markdown_instance(): Markdown
-    linenoise.save_history("history.txt")
-    local in_code = false
-
-    --print('feed:', lfs.currentdir())
-    local markdown_f = io.open("markdown.txt", "a")
-    assert(markdown_f)
-
-    -- циклический буфер на 3-4 последних токена, искать в нем ``` маркеры
-    local tok_buf: {string} = {}
-    local tok_buf_size = 5
-    for i = 1, tok_buf_size do
-        tok_buf[i] = ""
-    end
-    local tok_i = 1
-
-    return {
-        feed = function(_inp: string): string
-            tok_i = (tok_i + 1) % tok_buf_size
-            tok_buf[tok_i] = _inp
-
-            local inp = concat(tok_buf)
-
-            markdown_f:write("inp:", inp .. "\n")
-
-            local out = ""
-
-            if in_code then
-                out = "\27[7m" .. _inp .. "\27[0m"
-            else
-                out = _inp
-            end
-
-            if not in_code then
-                local c, _ = string.match(inp, "```")
-                if c then
-                    in_code = true
-
-                    if in_code then
-                        --out = "\27[7m" .. _inp .. "\27[0m"
-                        local C = ansicolors
-                        out = C("%{greenbg}") .. _inp .. C("%{reset}")
-                    else
-                        out = _inp
-                    end
-                end
-            else
-                local c = string.match(inp, "```")
-                if c then
-                    in_code = false
-                end
-            end
-
-            markdown_f:flush()
-            return out
-        end,
-    }
-end
-
---local mkd = io.open("mkd_chunks.lua", "w")
--- Строчки токенов полученных из нейронки для проверки разбора markdown
-local mkd: {string} = {}
-
-function actions.ai(_args: Args)
-    print("actions.ai")
-
-    if not lms.up() then
-        print("actions.ai: lmstudio could not startup")
-        return
-    end
-
-    local enum LoopState
-        "main"
-        "answer"
-        "quit"
-    end
-
-    local running = true
-    local loop_state: LoopState = 'main'
-    local return_to_main = false
-
-    local function handle_sigint(_: any)
-        if loop_state == 'answer' then
-            printc(
-                "\n%{red}handle_sigint: return to main loop state%{reset}\n"
-            )
-            return_to_main = true
-        else
-            linenoise.save_history("history.txt")
-            print("\n%{red}return to os%{reset}\n")
-            os.exit(1)
-        end
-    end
-
-    local signal = require("posix.signal")
-    signal.signal(signal.SIGINT, handle_sigint)
-
-    -- TODO: markdown анализатор
-
-    local models = assist.models_list()
-    print(inspect(models))
-    
-    local welcome_str_escape = ansicolors("%{green}send message%{green}: ")
-    local inp: string
-
-    --local relax = 0
-
-    local base_message = { role = "system", content = system_prompt, } 
-    local chat: assist.LLMPayload = {
-        model = llm_model,
-        stream = true,
-        messages = { 
-            base_message,
-            -- сюда добавляются ответы нейронки и вопросы пользователя
-        },
-    }
-
-    --local searcher = searcher_instance("./chunks.bin")
-
-    -- Команды начинаются с префикса ::
-    local commands = {
-        quit = function()
-
-            printc("%{green}quit%{reset}")
-            running = false
-        end,
-        exit = function()
-
-            printc("%{green}exit%{reset}")
-            running = false
-        end,
-        ctx_erase = function()
-            chat.messages = {
-                base_message,
-            }
-        end,
-        ctx_view = function()
-            for _, msg in ipairs(chat.messages) do
-                local role = msg.role
-                if role == "user" then
-                    io.write(ansicolors("%{yellow}"))
-                elseif role == "assistant" then
-                    io.write(ansicolors("%{blue}"))
-                end
-                io.write(inspect(msg) .. "\n%{reset}")
-
-            end
-        end,
-        help = function()
-
-            local h = {
-                'quit, exit - выйти на хрен',
-                'help       - смотреть этот текст',
-                'ctx_reset  - очистить историю, сбросить контекст',
-                'ctx_view   - посмотреть содержимое истории',
-                'query      - векторный поиск по коду',
-            }
-
-            for _, line in ipairs(h) do
-                print(line)
-            end
-        end,
-        query = function(carg: string)
-            print("::query", carg)
-            --local texts = concat(searcher.query(carg), "\n")
-            --printc("%{blue}" .. texts .. "%{reset}")
-        end,
-        -- TODO: Найти парные файлы заголовков и исходников из текущего 
-        -- каталога src. Дать выбор загрузить с дополнением имён
-        load = function()
-
-        end
-    }
-    --]]
-
-    local function eval_commands(s: string): boolean
-        --local cmd, carg = string.match(s, "^::(%S+)%s*(.+)")
-        --local cmd, carg = string.match(s, "^::(%S+)(.*)")
-        local cmd, carg = string.match(s, "^::(%S+)(.*)")
-        if not cmd then
-            return
-        end
-        --print('eval_commands: cmd', cmd)
-
-        for k, func in pairs(commands as {string:function(carg?: string)})  do
-            --print('eval_commands: ', k, v)
-            if cmd == k then
-                func(carg)
-                return true
-            end
-        end
-        return false
-    end
-
-    linenoise.set_multiline(true)
-    local markdown = markdown_instance()
-
-    -- XXX: Как получить доступ к истории во время редактирования?
-    linenoise.load_history("history.txt")
-
-    print("actions.ai: mainloop enter")
-
-    while running do
-        inp = linenoise.readline(welcome_str_escape)
-
-        linenoise.add_history(inp)
-
-        if eval_commands(inp) then
-            goto continue
-        end
-
-        -- XXX: Сделать контекстный поиск отключаемым
-        -- Поиск и составление контекста из токенов сообщения
-        --local texts = concat(searcher.query(inp), "\n")
-        local texts = ""
-
-        local f_tmp = io.open("contex.txt", "w")
-        f_tmp:write(texts)
-        f_tmp:close()
-
-        if inp == "exit" or inp == "quit" then
-            break
-        end
-
-        table.insert(chat.messages, {
-            role = 'user',
-            content = "Контекста кода : " .. texts .. 
-                      "\n Вопрос пользователя :" .. inp,
-
-            --content = inp,
-        })
-
-        return_to_main = false
-        local send2llm = assist.send2llm
-
-        local function on_chunk(responce_chunk: string): boolean
-            table.insert(mkd, responce_chunk)
-            local formated = markdown.feed(responce_chunk)
-            io.write(formated)
-            loop_state = 'answer'
-            if return_to_main then
-                return true
-            end
-            return false
-        end
-
-        local responce = send2llm(chat, on_chunk)
-
-        -- XXX: Не правильно печатается последнее сообщение в чате, выпадает
-        -- после строки welcome_str
-        --local responce = ""
-
-        table.insert(chat.messages, {
-            role = 'assistant',
-            content = responce,
-        })
-        --print('responce', inspect(responce))
-
-        ::continue::
-    end
-
-    linenoise.save_history("history.txt")
-
-    local w = io.open("mkd_chunks.lua", "w")
-    w:write(serpent.dump(mkd))
 end
 
 function actions.snapshot(_: Args)

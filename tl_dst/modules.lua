@@ -321,26 +321,21 @@ end
 local function build_raylib_common(_, dep)
    find_and_remove_cmake_cache()
 
-
-
-
-
-
-
-
-
-
-
-
-
    if dep.target == 'linux' then
+      print("build_raylib_common: lfs.cwd", lfs.currentdir())
+      cmd_do("mv ./raylib/libraylib.a ./raylib/libraylib.a.bak")
+
       local c = {}
-      insert(c, "-DPLATFORM=Desktop ")
-      insert(c, "-DBUILD_EXAMPLES=ON ")
+      insert(c, "-DPLATFORM=Memory ")
 
+      insert(c, "-DGRAPHICS=GRAPHICS_API_OPENGL_SOFTWARE ")
+
+      insert(c, "-DBUILD_EXAMPLES=OFF ")
       insert(c, "-DCMAKE_BUILD_TYPE=Release")
-      cmd_do("cmake " .. table.concat(c, " ") .. " .")
-
+      local a = "cmake " .. table.concat(c, " ") .. " ."
+      print("build_raylib_common: arguments'", a, "'")
+      cmd_do(a)
+      cmd_do("make clean")
       cmd_do("make -j")
 
 
@@ -367,45 +362,7 @@ local function build_raylib_common(_, dep)
       cmd_do("mv libraylib.web.a libraylib.a")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    end
-
-
-
-
-
 
    local raylib_i =
    [[
@@ -417,10 +374,6 @@ local function build_raylib_common(_, dep)
 %include "raylib.h"
 ]]
 
-   local f = io.open("raylib.i", "w")
-   f:write(raylib_i)
-   f = nil
-
    local raylib_wrap_h =
    [[
 #include "lua.h"
@@ -429,23 +382,29 @@ local function build_raylib_common(_, dep)
 extern int luaopen_raylib(lua_State *L);
 ]]
 
-   f = io.open("raylib_wrap.h", "w")
-   f:write(raylib_wrap_h)
-   f = nil
 
-   print('currentdir', lfs.currentdir())
-   local swig_cmd =
-   "swig -lua -I. -D__STDC__=1 -D__STDC_VERSION__=199901L raylib.i"
 
-   print('swig_cmd', swig_cmd)
-   cmd_do(swig_cmd)
 
-   local c = compiler_c[dep.target] ..
-   " -fPIC -g3 -c raylib_wrap.c " ..
-   " -I../../lua -L../../lua -llua"
-   print(c)
-   cmd_do(c)
-   cmd_do(ar[dep.target] .. " rcs libraylib_wrap.a raylib_wrap.o")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end
 
 local function cimgui_after_init(e, dep)
@@ -892,7 +851,7 @@ _modules = {
 
 
    {
-      disabled = false,
+      disabled = true,
       description = "color worms moving on texture",
       custom_defines = nil,
 
@@ -1195,7 +1154,10 @@ _modules = {
       copy_for_wasm = true,
       description = "библиотека для всякого",
       includes = { "raylib/src" },
-      libdirs = { "raylib/src" },
+      libdirs = {
+         "raylib/src",
+         "raylib/raylib",
+      },
 
       links = function(dep)
          if dep.target == 'linux' then
@@ -1203,11 +1165,12 @@ _modules = {
 
                "-Wl,--start-group",
                "raylib",
-               "raylib_wrap",
+
                "-Wl,--end-group",
             }
          elseif dep.target == 'wasm' then
-            return { "raylib", "raylib_wrap" }
+
+            return { "raylib" }
          else
             printc(
             "%{red}bad target in links" .. dep.target .. "%{reset}")
@@ -1458,6 +1421,7 @@ _modules = {
 
 
    {
+      disabled = true,
       dir = "md4c",
       build = build_md4c_common,
       build_w = build_md4c_common,
