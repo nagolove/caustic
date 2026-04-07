@@ -10,9 +10,9 @@
 - Зависимости: modules_linux/, modules_wasm/, modules_windows/
 
 ## Команды для проверки
-- Сборка: `./koh make`
-- Очистка: `make clean`
+- Сборка библиотеки libcaustic: `./koh make`
 - Тесты: `./koh selftest`
+- Сборка caustic.tl через cyan build
 
 ## Структура проекта
 - src/ — исходники фреймворка (C)
