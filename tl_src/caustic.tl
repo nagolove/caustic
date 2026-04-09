@@ -347,7 +347,7 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
-local function gather_links(deps: {Dependency}): {string}
+local function gather_links(deps: {Dependency}, headless?: boolean): {string}
     local links_tbl = {}
     local linkstype = "links"
     for _, dep in ipairs(deps) do
@@ -369,7 +369,11 @@ local function gather_links(deps: {Dependency}): {string}
 
                 if list then
                     for _, link in ipairs(list) do
-                        table.insert(links_tbl, link)
+                        if headless and link == "raylib" then
+                            table.insert(links_tbl, "raylib_headless")
+                        else
+                            table.insert(links_tbl, link)
+                        end
                     end
                 end
             end
@@ -408,9 +412,9 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
     return ready_deps
 end
 
-local function get_ready_l(cfg: Cfg, _: Target): {string}
+local function get_ready_l(cfg: Cfg, _: Target, headless?: boolean): {string}
     local merge_tables = ut.merge_tables
-    return merge_tables({ "stdc++", "m", }, gather_links(get_ready_deps(cfg)))
+    return merge_tables({ "stdc++", "m", }, gather_links(get_ready_deps(cfg), headless))
 end
 
 -- TODO: Убрать эту функцию или сделать зависимой от цели сборки
@@ -726,6 +730,7 @@ local parser_setup: {string:ParserSetup} = {
         flags = {
             {"-d --debug", "run artifact in gdb",},
             {"--noreset", "no call 'reset' for clearing terminal output"},
+            {"-H --headless", "link with headless raylib (no window)"},
         }
     },
 
@@ -738,7 +743,7 @@ local parser_setup: {string:ParserSetup} = {
     make = {
         summary = "build libcaustic or current project",
         --[[
-        arguments = { 
+        arguments = {
             { "make_type", "?" }
         },
         --]]
@@ -750,6 +755,7 @@ local parser_setup: {string:ParserSetup} = {
             { "-a --noasan", "no address sanitazer" },
             --{ "-p --cpp", "use c++ code" },
             { "-l --link", "use linking time optimization" },
+            { "-H --headless", "link with headless raylib (no window)" },
         },
         --]]
     },
@@ -820,6 +826,7 @@ local record Args
     make_type: MakeAction
     link: string        -- оптимизация времени линковки(работает долго)
     full: string        -- XXX: Что значит?
+    headless: string    -- сборка с безголовым рейлибом
     flags: {string}
     -- }}}
 end
@@ -1693,7 +1700,7 @@ function actions.selftest(_args: Args)
             chdir(dir)
             printc("%{green}" .. lfs.currentdir() .. " %{reset}")
             --cmd_do("koh make")
-            cmd_do("koh run --noreset")
+            cmd_do("koh run --noreset --headless")
         end
         ut.pop_dir()
     end)
@@ -2136,6 +2143,7 @@ local function split_libs_by_linkage(libs: {string}): {string}, {string}
         ["pthread"] = true,
         ["dl"] = true,
         ["rt"] = true,
+        ["X11"] = true,
     }
     
     for _, lib in ipairs(libs) do
@@ -2833,6 +2841,7 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
 
     for _, local_cfg in ipairs(local_cfgs) do
         local args = {
+            headless = _args.headless,
             make = true,
             c = _args.c,
             noasan = _args.noasan,
@@ -2992,6 +3001,10 @@ function sub_make(
 
     defines_apply(flags, cfg.common_define)
 
+    if _args.headless then
+        table.insert(flags, "-DKOH_HEADLESS")
+    end
+
     if not _args.release then
         -- DEEEBUUUG
 
@@ -3067,7 +3080,7 @@ function sub_make(
     end
 
     local libs = ut.merge_tables(
-        get_ready_l(cfg, target),
+        get_ready_l(cfg, target, _args.headless ~= nil),
         get_ready_links_linux_only(cfg)
     )
 

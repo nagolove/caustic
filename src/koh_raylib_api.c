@@ -1,5 +1,11 @@
+/* vim: fdm=marker */
+
 #include "koh_raylib_api.h"
 #include "rlgl.h"
+
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "cimgui.h"
+
 #include <assert.h>
 
 static bool is_inited = false;
@@ -45,8 +51,22 @@ static void dummy_BeginTextureMode(RenderTexture2D target) {
 
 static void dummy_EndTextureMode(void) {}
 
-static void dummy_DrawRectangle(int posX, int posY, int width, int height, Color color) {
+static void dummy_DrawRectangle(
+    int posX, int posY, int width, int height, Color color
+) {
     (void)posX; (void)posY; (void)width; (void)height; (void)color;
+}
+
+static void dummy_DrawRectangleV(
+    Vector2 position, Vector2 size, Color color
+) {
+    (void)position; (void)size; (void)color;
+}
+
+static void dummy_DrawRectangleLinesEx(
+    Rectangle rec, float lineThick, Color color
+) {
+    (void)rec; (void)lineThick; (void)color;
 }
 
 static void dummy_DrawCircle(int centerX, int centerY, float radius, Color color) {
@@ -173,45 +193,43 @@ static void dummy_BeginShaderMode(Shader shader) {
 
 static void dummy_EndShaderMode(void) {}
 
-static Vector2 dummy_GetMousePosition(void) {
-    return (Vector2){0};
+// === Dummy ImGui (no-op) ===
+
+static void dummy_rlImGuiSetup(struct igSetupOptions *o) {
+    (void)o;
+}
+static void dummy_rlImGuiBegin(void) {}
+static void dummy_rlImGuiEnd(void) {}
+static void dummy_rlImGuiShutdown(void) {}
+
+static void dummy_rlImGuiImage(const Texture *img) {
+    (void)img;
+}
+static void dummy_rlImGuiImageSize(
+    const Texture *img, int w, int h
+) {
+    (void)img; (void)w; (void)h;
+}
+static void dummy_rlImGuiImageSizeV(
+    const Texture *img, Vector2 sz
+) {
+    (void)img; (void)sz;
+}
+static void dummy_rlImGuiImageRect(
+    const Texture *img, int dw, int dh, Rectangle src
+) {
+    (void)img; (void)dw; (void)dh; (void)src;
+}
+static void dummy_rlImGuiImageRenderTexture(
+    const RenderTexture *img
+) {
+    (void)img;
 }
 
-static Vector2 dummy_GetScreenToWorld2D(Vector2 position, Camera2D camera) {
-    (void)position; (void)camera;
-    return (Vector2){0};
-}
-
-static bool dummy_IsMouseButtonDown(int button) {
-    (void)button;
-    return false;
-}
-
-static bool dummy_IsMouseButtonPressed(int button) {
-    (void)button;
-    return false;
-}
-
-static bool dummy_IsKeyDown(int key) {
-    (void)key;
-    return false;
-}
-
-static bool dummy_IsKeyPressed(int key) {
-    (void)key;
-    return false;
-}
-
-static double dummy_GetTime(void) {
-    return 0.0;
-}
-
-static float dummy_GetFrameTime(void) {
-    return 0.0f;
-}
-
+// Ввод и время в dummy пробрасываются через реальный raylib.
+// FPS — фиксированный из опций.
 static int dummy_GetFPS(void) {
-    return 60;
+    return opts.fps > 0 ? opts.fps : 120;
 }
 
 static int dummy_GetScreenWidth(void) {
@@ -380,14 +398,19 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.SetShaderValueTexture = dummy_SetShaderValueTexture;
         api.BeginShaderMode = dummy_BeginShaderMode;
         api.EndShaderMode = dummy_EndShaderMode;
-        api.GetMousePosition = dummy_GetMousePosition;
-        api.GetScreenToWorld2D = dummy_GetScreenToWorld2D;
-        api.IsMouseButtonDown = dummy_IsMouseButtonDown;
-        api.IsMouseButtonPressed = dummy_IsMouseButtonPressed;
-        api.IsKeyDown = dummy_IsKeyDown;
-        api.IsKeyPressed = dummy_IsKeyPressed;
-        api.GetTime = dummy_GetTime;
-        api.GetFrameTime = dummy_GetFrameTime;
+        // Ввод — пробрасываем реальный raylib
+        api.GetMousePosition = GetMousePosition;
+        api.GetScreenToWorld2D = GetScreenToWorld2D;
+        api.IsMouseButtonDown = IsMouseButtonDown;
+        api.IsMouseButtonPressed = IsMouseButtonPressed;
+        api.IsKeyDown = IsKeyDown;
+        api.IsKeyPressed = IsKeyPressed;
+        api.IsGamepadButtonDown = IsGamepadButtonDown;
+        api.GetGamepadAxisMovement = GetGamepadAxisMovement;
+        // Время — пробрасываем реальный raylib
+        api.GetTime = GetTime;
+        api.GetFrameTime = GetFrameTime;
+        // FPS — фиксированный из опций
         api.GetFPS = dummy_GetFPS;
         api.GetScreenWidth = dummy_GetScreenWidth;
         api.GetScreenHeight = dummy_GetScreenHeight;
@@ -396,6 +419,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.GetCurrentMonitor = dummy_GetCurrentMonitor;
         api.SetTraceLogLevel = dummy_SetTraceLogLevel;
         api.SetTraceLogCallback = dummy_SetTraceLogCallback;
+        api.DrawRectangleV = dummy_DrawRectangleV;
+        api.DrawRectangleLinesEx = dummy_DrawRectangleLinesEx;
         api.DrawRectanglePro = dummy_DrawRectanglePro;
         api.DrawTextPro = dummy_DrawTextPro;
         api.SetTextureFilter = dummy_SetTextureFilter;
@@ -410,6 +435,18 @@ void raylib_api_init(const RayLibOpts *_opts) {
             dummy_rlGetActiveFramebuffer;
         api.rlEnableFramebuffer =
             dummy_rlEnableFramebuffer;
+        // ImGui — no-op в dummy
+        api.rlImGuiSetup = dummy_rlImGuiSetup;
+        api.rlImGuiBegin = dummy_rlImGuiBegin;
+        api.rlImGuiEnd = dummy_rlImGuiEnd;
+        api.rlImGuiShutdown = dummy_rlImGuiShutdown;
+        api.rlImGuiImage = dummy_rlImGuiImage;
+        api.rlImGuiImageSize = dummy_rlImGuiImageSize;
+        api.rlImGuiImageSizeV =
+            dummy_rlImGuiImageSizeV;
+        api.rlImGuiImageRect = dummy_rlImGuiImageRect;
+        api.rlImGuiImageRenderTexture =
+            dummy_rlImGuiImageRenderTexture;
     } else {
         api.InitWindow = InitWindow;
         api.CloseWindow = CloseWindow;
@@ -424,6 +461,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.BeginTextureMode = BeginTextureMode;
         api.EndTextureMode = EndTextureMode;
         api.DrawRectangle = DrawRectangle;
+        api.DrawRectangleV = DrawRectangleV;
+        api.DrawRectangleLinesEx = DrawRectangleLinesEx;
         api.DrawCircle = DrawCircle;
         api.DrawCircleV = DrawCircleV;
         api.DrawLineEx = DrawLineEx;
@@ -460,6 +499,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.IsMouseButtonPressed = IsMouseButtonPressed;
         api.IsKeyDown = IsKeyDown;
         api.IsKeyPressed = IsKeyPressed;
+        api.IsGamepadButtonDown = IsGamepadButtonDown;
+        api.GetGamepadAxisMovement = GetGamepadAxisMovement;
         api.GetTime = GetTime;
         api.GetFrameTime = GetFrameTime;
         api.GetFPS = GetFPS;
@@ -483,6 +524,17 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.rlGetActiveFramebuffer =
             rlGetActiveFramebuffer;
         api.rlEnableFramebuffer = rlEnableFramebuffer;
+        // ImGui
+        api.rlImGuiSetup = rlImGuiSetup;
+        api.rlImGuiBegin = rlImGuiBegin;
+        api.rlImGuiEnd = rlImGuiEnd;
+        api.rlImGuiShutdown = rlImGuiShutdown;
+        api.rlImGuiImage = rlImGuiImage;
+        api.rlImGuiImageSize = rlImGuiImageSize;
+        api.rlImGuiImageSizeV = rlImGuiImageSizeV;
+        api.rlImGuiImageRect = rlImGuiImageRect;
+        api.rlImGuiImageRenderTexture =
+            rlImGuiImageRenderTexture;
     }
 
     is_inited = true;

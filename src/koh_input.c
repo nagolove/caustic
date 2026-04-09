@@ -18,6 +18,10 @@
 #include "box2d/box2d.h"
 #include "koh_b2.h"
 #include "koh_paragraph.h"
+#include "koh_raylib_api.h"
+
+static raylib_api R = {};
+static float (*axis_move)(int gamepad, int axis) = NULL;
 
 typedef struct Btn {
     char *lbl;
@@ -309,9 +313,12 @@ static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
     input_kb_reset_b2(kbm);
 }
 
-InputKbMouseDrawer *input_kb_new(struct InputKbMouseDrawerSetup *setup) {
+InputKbMouseDrawer *input_kb_new(
+    struct InputKbMouseDrawerSetup *setup
+) {
     assert(setup);
     assert(setup->btn_width > 0);
+    R = raylib_api_get();
     InputKbMouseDrawer *kbm = calloc(1, sizeof(*kbm));
     assert(kbm);
 
@@ -425,7 +432,9 @@ static void iter_map(
     InputKbMouseDrawer *kbm = ud;
     assert(kbm);
     assert(kbm->map_keycode2btn);
-    printf("iter_map: htable_add %s\n", kb_stroke2str(btn->bind.s));
+
+    //printf("iter_map: htable_add %s\n", kb_stroke2str(btn->bind.s));
+
     KbStroke tmp = {
         .keycode = btn->keycode,
         .mod_shift = kbm->is_mod_shift_true,
@@ -464,12 +473,12 @@ static void iter_draw(
     struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *user_data
 ) {
     InputKbMouseDrawer *kb = user_data;
-    DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
+    R.DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
 
     // SHIFT подсвечен GOLD если есть shift-бинды
     if (kb->has_shift_bind && 
         (btn == kb->left_shift_btn || btn == kb->right_shift_btn)) {
-        DrawRectangle(x, y, w, btn_width, GOLD);
+        R.DrawRectangle(x, y, w, btn_width, GOLD);
     }
 
     // XXX: Нет показа msg если мышь над любой клавишей с биндом
@@ -477,14 +486,14 @@ static void iter_draw(
     //bool is_under_cursor = !!kb->btn_under_cursor;
 
     if (is_under_cursor) {
-        DrawRectangle(x, y, w, btn_width, YELLOW);
+        R.DrawRectangle(x, y, w, btn_width, YELLOW);
     }
     bool is_keycode = btn->bind.s.keycode == btn->keycode;
-    bool is_keycode_down = IsKeyDown(btn->bind.s.keycode);
-    bool is_mod_shift = IsKeyDown(KEY_LEFT_SHIFT) == btn->bind.s.mod_shift;
+    bool is_keycode_down = R.IsKeyDown(btn->bind.s.keycode);
+    bool is_mod_shift = R.IsKeyDown(KEY_LEFT_SHIFT) == btn->bind.s.mod_shift;
 
     if (is_keycode_down && is_mod_shift) {
-        DrawRectangle(x, y, w, btn_width, kb->color_btn_pressed);
+        R.DrawRectangle(x, y, w, btn_width, kb->color_btn_pressed);
     }
 
     if (is_keycode && is_mod_shift) {
@@ -493,7 +502,7 @@ static void iter_draw(
         const Vector2 v1 = { x + space, y + _h },
               v2 = { x + _w, y + space },
               v3 = { x + _w, y + _h };
-        DrawTriangle(v2, v1, v3, color_bind);
+        R.DrawTriangle(v2, v1, v3, color_bind);
     }
 
     if (is_under_cursor) {
@@ -504,7 +513,7 @@ static void iter_draw(
         draw_msg(kb, btn, x, y);
     }
 
-    DrawRectangleLinesEx((Rectangle) {
+    R.DrawRectangleLinesEx((Rectangle) {
         .x = x,
         .y = y,
         .width = w,
@@ -513,19 +522,19 @@ static void iter_draw(
 
     char msg[32] = {};
     sprintf(msg, "%s", btn->lbl);
-    Vector2 m = MeasureTextEx(GetFontDefault(), msg, kb->font_size, 0.);
+    Vector2 m = R.MeasureTextEx(R.GetFontDefault(), msg, kb->font_size, 0.);
     int dx = (w - m.x) / 2.;
     int dy = (btn_width - m.y) / 2.;
-    DrawText(msg, x + dx, y + dy, kb->font_size, kb->color_text);
+    R.DrawText(msg, x + dx, y + dy, kb->font_size, kb->color_text);
 }
 
 static void iter_update(
     struct Btn *btn ,int x, int y, int w, int h, int btn_width, void *ud
 ) {
-    btn->pressed = IsKeyDown(btn->keycode);
+    btn->pressed = R.IsKeyDown(btn->keycode);
 
     /*
-    // XXX: Сделать обертку над IsKeyDown(), IsKeyPressed() что-бы отправлять
+    // XXX: Сделать обертку над R.IsKeyDown(), R.IsKeyPressed() что-бы отправлять
     // ввод
     bool is_under_cursor = btn == kb->btn_under_cursor;
     if (btn->pressed && is_under_cursor) {
@@ -552,7 +561,7 @@ void input_kb_update(InputKbMouseDrawer *kb) {
     kb_each(0, 0, kb->btn_width, iter_update, kb);
     kb->has_shift_bind = false;
     kb_each(0, 0, kb->btn_width, iter_check_shift_bind, kb);
-    f32 timestep = 1.0f / GetFPS();
+    f32 timestep = 1.0f / R.GetFPS();
     b2World_Step(kb->w, timestep, 4);
 
     b2Vec2 point = {
@@ -577,11 +586,11 @@ void input_kb_update(InputKbMouseDrawer *kb) {
 }
 
 static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
-    BeginTextureMode(kb->rt);
-    BeginMode2D((Camera2D) {
+    R.BeginTextureMode(kb->rt);
+    R.BeginMode2D((Camera2D) {
         .zoom = 1.f,
     });
-    ClearBackground(GRAY);
+    R.ClearBackground(GRAY);
 
     kb->is_draw_paragraph = false;
     kb_each(0, 0, kb->btn_width, iter_draw, kb);
@@ -608,14 +617,14 @@ static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
         kb->kb_size.x - manual_shift,
         (kb->kb_size.y - kb->tex_mouse.height * scale_mouse) / 2.,
     };
-    DrawTextureEx(kb->tex_mouse, pos, 0., scale_mouse, color);
+    R.DrawTextureEx(kb->tex_mouse, pos, 0., scale_mouse, color);
 
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-        DrawTextureEx(kb->tex_mouse_lb, pos, 0., scale_mouse, color);
-    if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
-        DrawTextureEx(kb->tex_mouse_rb, pos, 0., scale_mouse, color);
-    if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
-        DrawTextureEx(kb->tex_mouse_wheel, pos, 0., scale_mouse, color);
+    if (R.IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+        R.DrawTextureEx(kb->tex_mouse_lb, pos, 0., scale_mouse, color);
+    if (R.IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
+        R.DrawTextureEx(kb->tex_mouse_rb, pos, 0., scale_mouse, color);
+    if (R.IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
+        R.DrawTextureEx(kb->tex_mouse_wheel, pos, 0., scale_mouse, color);
 
 
     ImVec2 img_min = {},
@@ -626,7 +635,7 @@ static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
     //printf("input_kb_gui_update_rt: img_min %s\n", ImVec2str(img_min));
     //printf("input_kb_gui_update_rt: img_max %s\n", ImVec2str(img_max));
 
-    Vector2 mp = GetMousePosition();
+    Vector2 mp = R.GetMousePosition();
     ImGuiWindow *wnd = igGetCurrentWindow();
 
     ImVec2 p0 = {};
@@ -668,14 +677,14 @@ static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
             .y = mp.y - img_min.y,
         };
         sprintf(buf, "%f, %f", p.x, p.y);
-        DrawText(buf, mp.x, mp.y, 20, BLACK);
+        R.DrawText(buf, mp.x, mp.y, 20, BLACK);
         //printf("input_kb_gui_update_rt: draw text\n");
     } else {
         //printf("input_kb_gui_update_rt: not in rect\n");
     }
 
-    EndMode2D();
-    EndTextureMode();
+    R.EndMode2D();
+    R.EndTextureMode();
 }
 
 void input_kb_gui_update(InputKbMouseDrawer *kb) {
@@ -688,7 +697,7 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
     // После igBegin() что-бы была доступна информация о позиции и размере окна
     input_kb_gui_update_rt(kb);
 
-    rlImGuiImageRenderTexture(&kb->rt);
+    R.rlImGuiImageRenderTexture(&kb->rt);
 
     if (igIsItemClicked(ImGuiMouseButton_Right))
         kb->is_advanched_mode = !kb->is_advanched_mode;
@@ -711,7 +720,7 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
     igGetItemRectMin(&e->img_min);
     igGetItemRectMax(&e->img_max);
 
-    Vector2 mp = GetMousePosition();
+    Vector2 mp = R.GetMousePosition();
 
     if (mp.x >= e->img_min.x && mp.x <= e->img_max.x && 
             mp.y >= e->img_min.y && mp.y <= e->img_max.y) {
@@ -760,6 +769,8 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
     assert(setup);
     assert(setup->scale > 0.);
     assert(setup->scale < 10.);
+    R = raylib_api_get();
+    axis_move = R.GetGamepadAxisMovement;
 
     struct InputGamepadDrawer *gp = calloc(1, sizeof(*gp));
     assert(gp);
@@ -835,28 +846,27 @@ static const char *gp_axis2name[] = {
     [GAMEPAD_AXIS_RIGHT_TRIGGER] = "AXIS_RIGHT_TRIGGER",
 };
 
-static float (*axis_move)(int gamepad, int axis) = GetGamepadAxisMovement;
 static const f32 fnt_size = 20;
 
 static void draw_triggers(InputGamepadDrawer *gp) {
-    DrawRectangle(170, 30, 15, 70, LIGHTGRAY);
-    DrawRectangle(604, 30, 15, 70, LIGHTGRAY);
+    R.DrawRectangle(170, 30, 15, 70, LIGHTGRAY);
+    R.DrawRectangle(604, 30, 15, 70, LIGHTGRAY);
 
     f32 l = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70,
         r = ((1 + axis_move(gp->active_gp, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70;
 
     Vector2 p1 = {170, 30},
             p2 = {604, 30};
-    DrawRectangleV(p1, (Vector2) {15, l}, RED);
-    DrawRectangleV(p2, (Vector2) {15, r}, RED);
+    R.DrawRectangleV(p1, (Vector2) {15, l}, RED);
+    R.DrawRectangleV(p2, (Vector2) {15, r}, RED);
 
     if (l != 0.)
-        DrawTextEx(
+        R.DrawTextEx(
             gp->fnt, "AXIS_LEFT_TRIGGER", 
             p1, fnt_size, fnt_size / 5., GREEN
     );
     if (r != 0.)
-        DrawTextEx(
+        R.DrawTextEx(
             gp->fnt, "AXIS_RIGHT_TRIGGER", 
             p2, fnt_size, fnt_size / 5., GREEN
         );
@@ -868,7 +878,10 @@ static void draw_text(
 ) {
 
     if (gp->is_draw_labels) 
-        DrawTextEx(gp->fnt, text, position, fontSize, fontSize / 5., tint);
+        R.DrawTextEx(
+            gp->fnt, text, position,
+            fontSize, fontSize / 5., tint
+        );
 }
 
 static void draw_stick(
@@ -877,14 +890,14 @@ static void draw_stick(
     const i32 gamepad = gp->active_gp;
 
     Color color = BLACK;
-    if (IsGamepadButtonDown(gamepad, thumb)) {
+    if (R.IsGamepadButtonDown(gamepad, thumb)) {
         color = RED;
     }
 
     f32 l = axis_move(gamepad, axis_base),
         r = axis_move(gamepad, axis_base + 1);
 
-    DrawCircle(p.x + l * 20, p.y + r * 20, 25, color);
+    R.DrawCircle(p.x + l * 20, p.y + r * 20, 25, color);
 
     if (fabs(l) >= 0.01) {
         const char *lbl = gp_axis2name[axis_base];
@@ -901,16 +914,16 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // {{{
     assert(gp);
 
-    BeginTextureMode(gp->rt);
-    BeginMode2D((Camera2D) {
+    R.BeginTextureMode(gp->rt);
+    R.BeginMode2D((Camera2D) {
         .offset = Vector2Zero(),
         .target = Vector2Zero(),
         .rotation = 0.,
         .zoom = gp->scale,
     });
 
-    ClearBackground(GRAY);
-    DrawTexture(gp->tex_xbox, 0, 0, DARKGRAY);
+    R.ClearBackground(GRAY);
+    R.DrawTexture(gp->tex_xbox, 0, 0, DARKGRAY);
 
     const i32 gamepad = gp->active_gp;
 
@@ -1001,24 +1014,24 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // }}}
 
     // Draw buttons: d-pad
-    DrawRectangle(317, 202, 19, 71, BLACK);
-    DrawRectangle(293, 228, 69, 19, BLACK);
+    R.DrawRectangle(317, 202, 19, 71, BLACK);
+    R.DrawRectangle(293, 228, 69, 19, BLACK);
 
     // левый стик
-    DrawCircle(259, 152, 39, BLACK);
-    DrawCircle(259, 152, 34, LIGHTGRAY);
+    R.DrawCircle(259, 152, 39, BLACK);
+    R.DrawCircle(259, 152, 34, LIGHTGRAY);
     // правый стик
-    DrawCircle(461, 237, 38, BLACK);
-    DrawCircle(461, 237, 33, LIGHTGRAY);
+    R.DrawCircle(461, 237, 38, BLACK);
+    R.DrawCircle(461, 237, 33, LIGHTGRAY);
 
     for (i32 i = 0; i < btns_num; ++i) {
         i32 btn = btns[i];
-        if (IsGamepadButtonDown(gamepad, btn)) {
+        if (R.IsGamepadButtonDown(gamepad, btn)) {
             const Vector2 p = desc[btn].p;
             if (desc[btn].has_wh)
-                DrawRectangleV(p, desc[btn].wh, RED);
+                R.DrawRectangleV(p, desc[btn].wh, RED);
             else
-                DrawCircleV(p, desc[btn].radius, RED);
+                R.DrawCircleV(p, desc[btn].radius, RED);
         }
     }
 
@@ -1036,21 +1049,21 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // Рисовать подписи для активных кнопок
     for (i32 i = 0; i < btns_num; ++i) {
         i32 btn = btns[i];
-        if (IsGamepadButtonDown(gamepad, btn)) {
+        if (R.IsGamepadButtonDown(gamepad, btn)) {
             const char *name = gp_button2name[btn];
             draw_text(gp, name, desc[btn].p, fnt_size, GREEN);
         }
     }
 
-    EndMode2D();
-    EndTextureMode();
+    R.EndMode2D();
+    R.EndTextureMode();
 
     bool wnd = true;
     int flags = ImGuiWindowFlags_AlwaysAutoResize;
     //int flags = ImGuiWindowFlags_NoResize;
     igBegin("input - gamepad", &wnd, flags);
 
-    rlImGuiImageRenderTexture(&gp->rt);
+    R.rlImGuiImageRenderTexture(&gp->rt);
 
     if (igIsItemClicked(ImGuiMouseButton_Right))
         gp->is_advanched_mode = !gp->is_advanched_mode;
@@ -1085,7 +1098,7 @@ char *kb_stroke2str(KbStroke s) {
 
 bool input_kb_is_pressed(KbStroke s) {
     //printf("input_kb_is_pressed: '%s'\n", kb_stroke2str(s));
-    return IsKeyPressed(s.keycode) && IsKeyDown(KEY_LEFT_SHIFT) == s.mod_shift;
+    return R.IsKeyPressed(s.keycode) && R.IsKeyDown(KEY_LEFT_SHIFT) == s.mod_shift;
 }
 
 KbStroke input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {

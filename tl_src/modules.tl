@@ -323,17 +323,29 @@ local function build_raylib_common(_: Env, dep: Dependency)
 
     if dep.target == 'linux' then
         print("build_raylib_common: lfs.cwd", lfs.currentdir())
-        cmd_do("mv ./raylib/libraylib.a ./raylib/libraylib.a.bak")
 
+        -- Headless build (Memory + Software renderer)
+        local ch = {}
+        insert(ch, "-DPLATFORM=Memory ")
+        insert(ch, "-DGRAPHICS=GRAPHICS_API_OPENGL_SOFTWARE ")
+        insert(ch, "-DBUILD_EXAMPLES=OFF ")
+        insert(ch, "-DCMAKE_BUILD_TYPE=Release")
+        local ah = "cmake " .. table.concat(ch, " ") .. " ."
+        print("build_raylib_common: headless arguments'", ah, "'")
+        cmd_do(ah)
+        cmd_do("make clean")
+        cmd_do("make -j")
+        cmd_do("mv ./raylib/libraylib.a ./raylib/libraylib_headless.a")
+
+        find_and_remove_cmake_cache()
+
+        -- Desktop build
         local c = {}
-        insert(c, "-DPLATFORM=Memory ")
-        --insert(c, "-DPLATFORM=DESKTOP ")
-        insert(c, "-DGRAPHICS=GRAPHICS_API_OPENGL_SOFTWARE ")
-
+        insert(c, "-DPLATFORM=Desktop ")
         insert(c, "-DBUILD_EXAMPLES=OFF ")
         insert(c, "-DCMAKE_BUILD_TYPE=Release")
         local a = "cmake " .. table.concat(c, " ") .. " ."
-        print("build_raylib_common: arguments'", a, "'")
+        print("build_raylib_common: desktop arguments'", a, "'")
         cmd_do(a)
         cmd_do("make clean")
         cmd_do("make -j")
@@ -1161,12 +1173,14 @@ _modules = {
 
         links = function(dep: Dependency): {string}
             if dep.target == 'linux' then
-                return { 
+                return {
                     -- Что-бы найти символы надо добавить группу поиска
                     "-Wl,--start-group",
                     "raylib",
                     --"raylib_wrap",
                     "-Wl,--end-group",
+                    "X11",
+                    "dl",
                 }
             elseif dep.target == 'wasm' then
                 --return { "raylib", "raylib_wrap", }

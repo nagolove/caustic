@@ -13,6 +13,9 @@
 #include <threads.h>
 #include "cimgui.h"
 #include "koh_common.h"
+#include "koh_raylib_api.h"
+
+static raylib_api RL = {};
 
 typedef struct R {
     ResourceType type;
@@ -283,6 +286,7 @@ void res_async_loader_pump(ResAsyncLoader *al, Res *res_list) {
 }
 
 ResList *reslist_new() {
+    RL = raylib_api_get();
     ResList *l = calloc(1, sizeof(*l));
     if (!l) {
         printf("reslist_new: allocation failed\n");
@@ -561,18 +565,18 @@ void reslist_gui(ResList *l) {
                     if (t) {
                         w = t->width, h = t->height;
                         if (l->is_minipreview)
-                            rlImGuiImageSizeV(t, preview_minisize);
+                            RL.rlImGuiImageSizeV(t, preview_minisize);
                         else
-                            rlImGuiImage(t);
+                            RL.rlImGuiImage(t);
                     }
                 } else if (type == RT_TEXTURE_RT) {
                     RenderTexture2D *t = r->raylib_object;
                     if (t) {
                         w = t->texture.width, h = t->texture.height;
                         if (l->is_minipreview)
-                            rlImGuiImageSizeV(&t->texture, preview_minisize);
+                            RL.rlImGuiImageSizeV(&t->texture, preview_minisize);
                         else
-                            rlImGuiImage(&t->texture);
+                            RL.rlImGuiImage(&t->texture);
                         //rlImGuiImageRenderTextureFit(t, false);
                     }
                 }
@@ -696,7 +700,7 @@ void reslist_dragndrop_gui(ResList *l) {
 
                 Texture2D *t = r->raylib_object;
                 igPushID_Int(i);
-                rlImGuiImageSizeV(
+                RL.rlImGuiImageSizeV(
                     t, preview_minisize
                 );
                 igSameLine(0, 10);

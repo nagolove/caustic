@@ -24,6 +24,8 @@ typedef struct raylib_api {
     // === Рисование фигур ===
     void (*DrawRectanglePro)(Rectangle rec, Vector2 origin, float rotation, Color color);
     void (*DrawRectangle)(int posX, int posY, int width, int height, Color color);
+    void (*DrawRectangleV)(Vector2 position, Vector2 size, Color color);
+    void (*DrawRectangleLinesEx)(Rectangle rec, float lineThick, Color color);
     void (*DrawCircle)(int centerX, int centerY, float radius, Color color);
     void (*DrawCircleV)(Vector2 center, float radius, Color color);
     void (*DrawLineEx)(Vector2 startPos, Vector2 endPos, float thick, Color color);
@@ -76,6 +78,8 @@ typedef struct raylib_api {
     bool (*IsMouseButtonPressed)(int button);
     bool (*IsKeyDown)(int key);
     bool (*IsKeyPressed)(int key);
+    bool (*IsGamepadButtonDown)(int gamepad, int button);
+    float (*GetGamepadAxisMovement)(int gamepad, int axis);
     
     // === Время и экран ===
     double (*GetTime)(void);
@@ -111,10 +115,32 @@ typedef struct raylib_api {
     // === rlgl ===
     unsigned int (*rlGetActiveFramebuffer)(void);
     void (*rlEnableFramebuffer)(unsigned int id);
+
+    // === ImGui (rlImGui) ===
+    void (*rlImGuiSetup)(struct igSetupOptions *opts);
+    void (*rlImGuiBegin)(void);
+    void (*rlImGuiEnd)(void);
+    void (*rlImGuiShutdown)(void);
+    void (*rlImGuiImage)(const Texture *image);
+    void (*rlImGuiImageSize)(
+        const Texture *image, int width, int height
+    );
+    void (*rlImGuiImageSizeV)(
+        const Texture *image, Vector2 size
+    );
+    void (*rlImGuiImageRect)(
+        const Texture *image,
+        int destWidth, int destHeight,
+        Rectangle sourceRect
+    );
+    void (*rlImGuiImageRenderTexture)(
+        const RenderTexture *image
+    );
 } raylib_api;
 
 typedef struct RayLibOpts {
     i32 screen_w, screen_h;
+    i32 fps;  // фиксированный FPS для dummy (0 → 120)
     bool is_dummy;
 } RayLibOpts;
 

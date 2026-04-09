@@ -8,6 +8,9 @@
 #include "koh_common.h"
 #include "cimgui.h"
 #include "cimgui_impl.h"
+#include "koh_raylib_api.h"
+
+static raylib_api R = {};
 #include "koh_lua.h"
 #include "koh_visual_tools.h"
 #include "lauxlib.h"
@@ -561,6 +564,7 @@ static void stage_sprite_loader_shutdown(struct Stage *s) {
 
 static void stage_sprite_loader_enter(Stage_SpriteLoader *st) {
     trace("stage_sprite_loader_enter:\n");
+    R = raylib_api_get();
 
     search_images(st, regex_pattern_images, regex_pattern_exclude_images);
     search_ase_exported(
@@ -1482,7 +1486,7 @@ static void gui_ase_exported_table(Stage_SpriteLoader *st) {
             assert(ls);
 
             igTableSetColumnIndex(1);
-            rlImGuiImage(&ls->tex_combined.texture);
+            R.rlImGuiImage(&ls->tex_combined.texture);
 
             igTableSetColumnIndex(2);
             igText("%d", ls->version);
@@ -1535,7 +1539,7 @@ static void draw_image(Stage_SpriteLoader *st, int i) {
     /*rlImGuiImage(&st->rt_caption.texture);*/
     /*rlImGuiImageRenderTexture(&st->rt_caption);*/
 
-    rlImGuiImageRenderTexture(&st->rt_textures[i]);
+    R.rlImGuiImageRenderTexture(&st->rt_textures[i]);
 
     /*rlImGuiImage(&st->rt_textures[i].texture);*/
 }

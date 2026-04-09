@@ -206,9 +206,10 @@ static const char *shdr_src =
 "    //gl_FragColor = vec4(1, 1, 1, 0.5);\n"
 "}\n";
 
-static Shader shdr_circle = {0};
-static int loc_pos, loc_radius;
+//static Shader shdr_circle = {0};
+//static int loc_pos, loc_radius;
 
+/*
 void render_circle(Vector2 center, float radius, Color color) {
     float pos[2] = { center.x, center.y };
     SetShaderValue(shdr_circle, loc_pos, pos, SHADER_UNIFORM_VEC2);
@@ -218,15 +219,18 @@ void render_circle(Vector2 center, float radius, Color color) {
     // фрагментой программы?
     EndShaderMode();
 }
+*/
 
 void koh_render_init() {
+    /*
     shdr_circle = LoadShaderFromMemory(NULL, shdr_src);
     loc_pos = GetShaderLocation(shdr_circle, "pos");
     loc_radius = GetShaderLocation(shdr_circle, "radius");
+    */
 }
 
 void koh_render_shutdown() {
-    UnloadShader(shdr_circle);
+    //UnloadShader(shdr_circle);
 }
 
 void render_verts3(Vector2 verts[3], Color tint) {

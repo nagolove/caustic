@@ -22,6 +22,8 @@ static u64 base_time = 0;
 
 static const char *ignored_warnings[] = {
     "size is bigger than expected font size",
+    "Glyph height is bigger than requested font size",
+    "FONT: Failed to package glyph",
     NULL
 };
 

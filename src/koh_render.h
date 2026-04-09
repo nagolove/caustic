@@ -24,7 +24,7 @@ void koh_render_shutdown();
 void koh_render_init();
 
 // Рисует круг фрагментной программой
-void render_circle(Vector2 center, float radius, Color color);
+//void render_circle(Vector2 center, float radius, Color color);
 
 void render_v4_with_tex(
     Texture2D texture, Rectangle source, Vector2 verts[4], Color tint

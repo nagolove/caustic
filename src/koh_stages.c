@@ -381,6 +381,11 @@ static void reinit(Stage *s) {
     }
 }
 
+#ifdef KOH_HEADLESS
+void stages_gui_window(StagesStore *ss) {
+    assert(ss);
+}
+#else
 void stages_gui_window(StagesStore *ss) {
     assert(ss);
     bool opened = true;
@@ -536,6 +541,7 @@ void stages_gui_window(StagesStore *ss) {
     koh_window_post();
     igEnd();
 }
+#endif
 
 void stage_active_gui_render(StagesStore *ss) {
     Stage *st = ss->cur;

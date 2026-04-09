@@ -347,7 +347,7 @@ local function prefix_add(prefix, t)
    return prefixed_t
 end
 
-local function gather_links(deps)
+local function gather_links(deps, headless)
    local links_tbl = {}
    local linkstype = "links"
    for _, dep in ipairs(deps) do
@@ -369,7 +369,11 @@ local function gather_links(deps)
 
             if list then
                for _, link in ipairs(list) do
-                  table.insert(links_tbl, link)
+                  if headless and link == "raylib" then
+                     table.insert(links_tbl, "raylib_headless")
+                  else
+                     table.insert(links_tbl, link)
+                  end
                end
             end
          end
@@ -408,9 +412,9 @@ local function get_ready_deps(cfg)
    return ready_deps
 end
 
-local function get_ready_l(cfg, _)
+local function get_ready_l(cfg, _, headless)
    local merge_tables = ut.merge_tables
-   return merge_tables({ "stdc++", "m" }, gather_links(get_ready_deps(cfg)))
+   return merge_tables({ "stdc++", "m" }, gather_links(get_ready_deps(cfg), headless))
 end
 
 
@@ -726,6 +730,7 @@ local parser_setup = {
       flags = {
          { "-d --debug", "run artifact in gdb" },
          { "--noreset", "no call 'reset' for clearing terminal output" },
+         { "-H --headless", "link with headless raylib (no window)" },
       },
    },
 
@@ -750,6 +755,7 @@ local parser_setup = {
          { "-a --noasan", "no address sanitazer" },
 
          { "-l --link", "use linking time optimization" },
+         { "-H --headless", "link with headless raylib (no window)" },
       },
 
    },
@@ -800,6 +806,7 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
+
 
 
 
@@ -1693,7 +1700,7 @@ function actions.selftest(_args)
          chdir(dir)
          printc("%{green}" .. lfs.currentdir() .. " %{reset}")
 
-         cmd_do("koh run --noreset")
+         cmd_do("koh run --noreset --headless")
       end
       ut.pop_dir()
    end)
@@ -2136,6 +2143,7 @@ local function split_libs_by_linkage(libs)
       ["pthread"] = true,
       ["dl"] = true,
       ["rt"] = true,
+      ["X11"] = true,
    }
 
    for _, lib in ipairs(libs) do
@@ -2833,6 +2841,7 @@ local function koh_recompile(_args, cfg, _target)
 
    for _, local_cfg in ipairs(local_cfgs) do
       local args = {
+         headless = _args.headless,
          make = true,
          c = _args.c,
          noasan = _args.noasan,
@@ -2992,6 +3001,10 @@ function sub_make(
 
    defines_apply(flags, cfg.common_define)
 
+   if _args.headless then
+      table.insert(flags, "-DKOH_HEADLESS")
+   end
+
    if not _args.release then
 
 
@@ -3067,7 +3080,7 @@ function sub_make(
    end
 
    local libs = ut.merge_tables(
-   get_ready_l(cfg, target),
+   get_ready_l(cfg, target, _args.headless ~= nil),
    get_ready_links_linux_only(cfg))
 
 

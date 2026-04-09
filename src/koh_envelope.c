@@ -11,6 +11,9 @@
 #include "cimgui.h"
 #include "cimgui_impl.h"
 #include "koh_timerman.h"
+#include "koh_raylib_api.h"
+
+static raylib_api R = {};
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -583,7 +586,7 @@ void env_draw_gui(Envelope_t e) {
         igText("%s", e->opts.name);
     }
 
-    rlImGuiImage(&e->rt_main.texture);
+    R.rlImGuiImage(&e->rt_main.texture);
 
     igGetItemRectMin(&e->img_min);
     igGetItemRectMax(&e->img_max);
@@ -648,6 +651,7 @@ _fatal:
 }
 
 Envelope_t env_new(EnvelopeOpts opts) {
+    R = raylib_api_get();
     Envelope_t e = calloc(1, sizeof(*e));
 
     if (!e) {

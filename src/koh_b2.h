@@ -209,7 +209,10 @@ void box2d_gui(struct WorldCtx *wctx);
 
 // FIXME: Заменить Camera2D *cam на Camera2D cam
 // Зачем это делать?
-static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
+static inline b2AABB camera2aabb(
+    Camera2D *cam, float gap_radius,
+    int screen_w, int screen_h
+) {
     assert(cam);
 
     if (isnan(cam->zoom)) {
@@ -219,12 +222,15 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
     float zoom = cam->zoom;
 
     if (zoom <= 0.01f) {
-        printf("camera2aabb: zoom reseted from %f to 0.1f\n", zoom);
+        printf(
+            "camera2aabb: zoom reseted from %f to 0.1f\n",
+            zoom
+        );
         zoom = 0.1;
     }
 
     float zoom_inv = 1. / zoom;
-    float w = GetScreenWidth(), h = GetScreenHeight();
+    float w = screen_w, h = screen_h;
     Vector2 offset = cam->offset;
     struct b2AABB aabb;
 
@@ -249,11 +255,12 @@ static inline b2AABB camera2aabb(Camera2D *cam, float gap_radius) {
 
 // FIXME: Заменить Camera2D *cam на Camera2D cam
 static inline bool is_camera2aabb_valid(
-    Camera2D *cam, float gap_radius, b2AABB *ret_aabb
+    Camera2D *cam, float gap_radius, b2AABB *ret_aabb,
+    int screen_w, int screen_h
 ) {
     assert(cam);
     float zoom = 1. / cam->zoom;
-    float w = GetScreenWidth(), h = GetScreenHeight();
+    float w = screen_w, h = screen_h;
     Vector2 offset = cam->offset;
     struct b2AABB aabb;
 
