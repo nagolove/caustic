@@ -267,7 +267,7 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     prgh->is_sdf = true;
     prgh->fnt.texture = prgh->tex_sdf;
     prgh->fnt.baseSize = opts.base_size;
-    prgh->fnt.glyphCount = cmn->font_chars_num;
+    prgh->fnt.glyphCount = glyph_count;
     prgh->use_cache = opts.use_caching;
     prgh->flags = opts.flags;
 }
