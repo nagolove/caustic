@@ -74,6 +74,7 @@ typedef struct raylib_api {
     // === Ввод ===
     Vector2 (*GetMousePosition)(void);
     Vector2 (*GetScreenToWorld2D)(Vector2 position, Camera2D camera);
+    Vector2 (*GetWorldToScreen2D)(Vector2 position, Camera2D camera);
     bool (*IsMouseButtonDown)(int button);
     bool (*IsMouseButtonPressed)(int button);
     bool (*IsKeyDown)(int key);

@@ -401,6 +401,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         // Ввод — пробрасываем реальный raylib
         api.GetMousePosition = GetMousePosition;
         api.GetScreenToWorld2D = GetScreenToWorld2D;
+        api.GetWorldToScreen2D = GetWorldToScreen2D;
         api.IsMouseButtonDown = IsMouseButtonDown;
         api.IsMouseButtonPressed = IsMouseButtonPressed;
         api.IsKeyDown = IsKeyDown;
@@ -495,6 +496,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.EndShaderMode = EndShaderMode;
         api.GetMousePosition = GetMousePosition;
         api.GetScreenToWorld2D = GetScreenToWorld2D;
+        api.GetWorldToScreen2D = GetWorldToScreen2D;
         api.IsMouseButtonDown = IsMouseButtonDown;
         api.IsMouseButtonPressed = IsMouseButtonPressed;
         api.IsKeyDown = IsKeyDown;
