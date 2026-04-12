@@ -29,12 +29,21 @@ void input_kb_update(InputKbMouseDrawer *kb);
 void input_kb_gui_update(InputKbMouseDrawer *kb);
 
 // XXX: Сделать подсветку клавишы с биндом и подсказку
-// XXX: Как быть если должен быть модификатор?
+
+// Модификатор клавиши. На одну кнопку можно повесить
+// до KB_MOD_LAST биндов — по одному на каждый модификатор.
+typedef enum KbMod {
+    KB_MOD_NONE,
+    KB_MOD_SHIFT,
+    KB_MOD_CTRL,
+    KB_MOD_ALT,
+    KB_MOD_LAST,
+} KbMod;
 
 typedef struct KbStroke {
                 // KEY_ESCAPE и тд
     i32        keycode;
-    bool       mod_shift;
+    KbMod      mod;
 } KbStroke;
 
 typedef struct KbBind {

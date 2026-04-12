@@ -33,10 +33,8 @@ typedef struct Btn {
          sx;
     bool pressed;
 
-    // XXX: Биндов на кнопку может быть несколько
-    // простой, left_shitft, left_control и сочетания
-    // Значит надо вынести в отдельную структуру
-    KbBind   bind;
+    // Бинды по модификаторам: NONE, SHIFT, CTRL, ALT
+    KbBind   binds[KB_MOD_LAST];
     b2BodyId bid;
 } Btn;
 
@@ -203,8 +201,7 @@ typedef struct InputKbMouseDrawer {
     Btn             *btn_under_cursor;
                     // курсор мыши в координатах для рендер текстуры
     Vector2         rel_cursor;
-    bool            is_mod_shift_true;
-    bool            has_shift_bind;
+    bool            has_mod_bind;
     Btn             *left_shift_btn, *right_shift_btn;
 } InputKbMouseDrawer;
 
@@ -326,7 +323,7 @@ InputKbMouseDrawer *input_kb_new(
 
     ResList *rl = kbm->reslist = reslist_new();
     kbm->map_keycode2btn = htable_new(NULL);
-    kbm->has_shift_bind = false;
+    kbm->has_mod_bind = false;
     kbm->left_shift_btn = NULL;
     kbm->right_shift_btn = NULL;
 
@@ -367,12 +364,7 @@ InputKbMouseDrawer *input_kb_new(
     } MapCtx;
     */
 
-    // заполнить map_keycode2btn без шифта
-    kbm->is_mod_shift_true = false;
-    kb_each(0, 0, kbm->btn_width, iter_map, kbm);
-
-    // заполнить map_keycode2btn с шифтом
-    kbm->is_mod_shift_true = true;
+    // заполнить map_keycode2btn по keycode
     kb_each(0, 0, kbm->btn_width, iter_map, kbm);
 
 
@@ -433,22 +425,37 @@ static void iter_map(
     assert(kbm);
     assert(kbm->map_keycode2btn);
 
-    //printf("iter_map: htable_add %s\n", kb_stroke2str(btn->bind.s));
-
-    KbStroke tmp = {
-        .keycode = btn->keycode,
-        .mod_shift = kbm->is_mod_shift_true,
-    };
     htable_add(
         kbm->map_keycode2btn,
-        //&btn->bind.s, sizeof(KbStroke), 
-        &tmp, sizeof(KbStroke), 
+        &btn->keycode, sizeof(i32),
         &btn, sizeof(Btn*)
     );
     if (btn->keycode == KEY_LEFT_SHIFT)
         kbm->left_shift_btn = btn;
     if (btn->keycode == KEY_RIGHT_SHIFT)
         kbm->right_shift_btn = btn;
+}
+
+// Текущий активный модификатор
+static KbMod kb_active_mod(void) {
+    if (R.IsKeyDown(KEY_LEFT_SHIFT)
+        || R.IsKeyDown(KEY_RIGHT_SHIFT))
+        return KB_MOD_SHIFT;
+    if (R.IsKeyDown(KEY_LEFT_CONTROL)
+        || R.IsKeyDown(KEY_RIGHT_CONTROL))
+        return KB_MOD_CTRL;
+    if (R.IsKeyDown(KEY_LEFT_ALT)
+        || R.IsKeyDown(KEY_RIGHT_ALT))
+        return KB_MOD_ALT;
+    return KB_MOD_NONE;
+}
+
+// Есть ли бинд для данной кнопки с данным модификатором
+static KbBind *btn_active_bind(Btn *btn, KbMod mod) {
+    KbBind *b = &btn->binds[mod];
+    if (b->msg || b->get_msg)
+        return b;
+    return NULL;
 }
 
 static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
@@ -458,10 +465,16 @@ static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
     Paragraph *pr_msg = &kb->pr_msg;
     paragraph_clear(pr_msg);
 
-    KbBind *bind = &btn->bind;
-    const char *msg = bind->msg ? bind->msg : "";
-    if (bind->get_msg)
-        msg = bind->get_msg(bind->s, bind->udata);
+    KbMod mod = kb_active_mod();
+    KbBind *bind = btn_active_bind(btn, mod);
+    if (!bind)
+        bind = btn_active_bind(btn, KB_MOD_NONE);
+    const char *msg = "";
+    if (bind) {
+        msg = bind->msg ? bind->msg : "";
+        if (bind->get_msg)
+            msg = bind->get_msg(bind->s, bind->udata);
+    }
 
     if (msg) {
         paragraph_add(pr_msg, "%s", msg);
@@ -475,28 +488,40 @@ static void iter_draw(
     InputKbMouseDrawer *kb = user_data;
     R.DrawRectangle(x, y, w, btn_width, kb->color_btn_unpressed);
 
-    // SHIFT подсвечен GOLD если есть shift-бинды
-    if (kb->has_shift_bind && 
-        (btn == kb->left_shift_btn || btn == kb->right_shift_btn)) {
+    // Модификаторы подсвечены GOLD если есть бинды
+    if (kb->has_mod_bind &&
+        (btn == kb->left_shift_btn
+         || btn == kb->right_shift_btn)) {
         R.DrawRectangle(x, y, w, btn_width, GOLD);
     }
 
-    // XXX: Нет показа msg если мышь над любой клавишей с биндом
     bool is_under_cursor = btn == kb->btn_under_cursor;
-    //bool is_under_cursor = !!kb->btn_under_cursor;
 
     if (is_under_cursor) {
         R.DrawRectangle(x, y, w, btn_width, YELLOW);
     }
-    bool is_keycode = btn->bind.s.keycode == btn->keycode;
-    bool is_keycode_down = R.IsKeyDown(btn->bind.s.keycode);
-    bool is_mod_shift = R.IsKeyDown(KEY_LEFT_SHIFT) == btn->bind.s.mod_shift;
 
-    if (is_keycode_down && is_mod_shift) {
-        R.DrawRectangle(x, y, w, btn_width, kb->color_btn_pressed);
+    KbMod mod = kb_active_mod();
+    KbBind *active = btn_active_bind(btn, mod);
+    bool has_bind = false;
+    // Проверить все модификаторы на наличие бинда
+    for (i32 m = 0; m < KB_MOD_LAST; m++) {
+        if (btn_active_bind(btn, m)) {
+            has_bind = true;
+            break;
+        }
     }
 
-    if (is_keycode && is_mod_shift) {
+    bool is_keycode_down = R.IsKeyDown(btn->keycode);
+
+    if (is_keycode_down && active) {
+        R.DrawRectangle(
+            x, y, w, btn_width, kb->color_btn_pressed
+        );
+    }
+
+    // Треугольник-маркер бинда
+    if (has_bind) {
         const i32 _w = w, _h = btn_width;
         const f32 space = w / 2.f;
         const Vector2 v1 = { x + space, y + _h },
@@ -509,7 +534,7 @@ static void iter_draw(
         draw_msg(kb, btn, x, y);
     }
 
-    if (is_keycode_down && is_mod_shift) {
+    if (is_keycode_down && active) {
         draw_msg(kb, btn, x, y);
     }
 
@@ -550,17 +575,24 @@ bool overlap_btn(b2ShapeId shapeId, void* context) {
     return false;
 }
 
-static void iter_check_shift_bind(Btn *btn, int x, int y, int w, int h, int btn_width, void *ud) {
+static void iter_check_mod_bind(
+    Btn *btn, int x, int y, int w, int h,
+    int btn_width, void *ud
+) {
     InputKbMouseDrawer *kb = ud;
-    if (btn->bind.s.mod_shift)
-        kb->has_shift_bind = true;
+    for (i32 m = KB_MOD_SHIFT; m < KB_MOD_LAST; m++) {
+        if (btn_active_bind(btn, m)) {
+            kb->has_mod_bind = true;
+            return;
+        }
+    }
 }
 
 void input_kb_update(InputKbMouseDrawer *kb) {
     assert(kb);
     kb_each(0, 0, kb->btn_width, iter_update, kb);
-    kb->has_shift_bind = false;
-    kb_each(0, 0, kb->btn_width, iter_check_shift_bind, kb);
+    kb->has_mod_bind = false;
+    kb_each(0, 0, kb->btn_width, iter_check_mod_bind, kb);
     f32 timestep = 1.0f / R.GetFPS();
     b2World_Step(kb->w, timestep, 4);
 
@@ -1084,40 +1116,61 @@ void input_gp_update(InputGamepadDrawer *gp) {
     // }}}
 }
 
+static const char *kb_mod2str(KbMod m) {
+    const char *names[] = {
+        [KB_MOD_NONE]  = "",
+        [KB_MOD_SHIFT] = "SHIFT+",
+        [KB_MOD_CTRL]  = "CTRL+",
+        [KB_MOD_ALT]   = "ALT+",
+    };
+    if (m < 0 || m >= KB_MOD_LAST)
+        return "";
+    return names[m];
+}
+
 char *kb_stroke2str(KbStroke s) {
     static char slots[5][128] = {};
     static i32 index = 0;
     index = (index + 1) % 5;
     char *buf = slots[index];
-    sprintf(
-        buf, "%s %s", keycode2str[s.keycode],
-        s.mod_shift ? "KEY_LEFT_SHIFT" : ""
-    );
+    sprintf(buf, "%s%s", kb_mod2str(s.mod),
+        keycode2str[s.keycode]);
     return buf;
 }
 
+// Проверка нажатия клавиши с учётом модификатора.
+// KB_MOD_NONE срабатывает только если ни один модификатор
+// не зажат.
 bool input_kb_is_pressed(KbStroke s) {
-    //printf("input_kb_is_pressed: '%s'\n", kb_stroke2str(s));
-    return R.IsKeyPressed(s.keycode) && R.IsKeyDown(KEY_LEFT_SHIFT) == s.mod_shift;
+    if (!R.IsKeyPressed(s.keycode))
+        return false;
+    return kb_active_mod() == s.mod;
 }
 
+// Привязка действия к клавише. Бинд записывается в слот
+// модификатора b.s.mod — разные модификаторы на одной
+// кнопке не затирают друг друга.
 KbStroke input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {
     assert(kb);
-    assert(b.msg);
+    assert(b.msg || b.get_msg);
 
     i32 len = 0;
-    printf("input_kb_bind: stroke '%s'\n", kb_stroke2str(b.s));
-    Btn **btn = htable_get(kb->map_keycode2btn, &b.s, sizeof(KbStroke), &len);
+    printf("input_kb_bind: stroke '%s'\n",
+        kb_stroke2str(b.s));
+    Btn **btn = htable_get(
+        kb->map_keycode2btn,
+        &b.s.keycode, sizeof(i32), &len
+    );
     if (btn) {
         assert(len == sizeof(void*));
-        (*btn)->bind = b;
+        (*btn)->binds[b.s.mod] = b;
     } else {
         printf("input_kb_bind: not found\n");
         return (KbStroke) {
             .keycode = KEY_NULL,
-            .mod_shift = false,
+            .mod = KB_MOD_NONE,
         };
     }
-    
+
     return b.s;
 }
