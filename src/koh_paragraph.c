@@ -250,7 +250,7 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
 
     Image atlas = R.GenImageFontAtlas(
         prgh->fnt.glyphs, &prgh->fnt.recs,
-        cmn->font_chars_num, opts.base_size, 0, 1
+        glyph_count, opts.base_size, 0, 1
     );
     prgh->tex_sdf = R.LoadTextureFromImage(atlas);
     R.UnloadImage(atlas);
