@@ -100,7 +100,7 @@ static inline double _clamp01(float x) {
     return x;
 }
 
-static inline char *tmr_2str(Tmr *t) {
+static inline char *tmr_2str(const Tmr *t) {
     assert(t);
     static char slots[5][256 + 128] = {};
     static i32 index = 0;
