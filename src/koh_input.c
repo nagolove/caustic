@@ -187,7 +187,7 @@ typedef struct InputKbMouseDrawer {
     Texture2D       tex_mouse, tex_mouse_lb,
                     tex_mouse_rb, tex_mouse_wheel;
 
-    Color           color_text, color_btn_pressed, color_btn_unpressed;
+    Color           color_text, color_btn_pressed, color_btn_pressed_no_bind, color_btn_unpressed;
     int             font_size, line_thick, btn_width;
     Vector2         kb_size;
 
@@ -347,6 +347,7 @@ InputKbMouseDrawer *input_kb_new(
 
     kbm->color_text = BLACK;
     kbm->color_btn_pressed = RED;
+    kbm->color_btn_pressed_no_bind = ORANGE;
     kbm->color_btn_unpressed = BLUE;
 
     kbm->line_thick = 3;
@@ -518,6 +519,10 @@ static void iter_draw(
         R.DrawRectangle(
             x, y, w, btn_width, kb->color_btn_pressed
         );
+    } else if (is_keycode_down) {
+        R.DrawRectangle(
+            x, y, w, btn_width, kb->color_btn_pressed_no_bind
+        );
     }
 
     // Треугольник-маркер бинда
@@ -593,7 +598,8 @@ void input_kb_update(InputKbMouseDrawer *kb) {
     kb_each(0, 0, kb->btn_width, iter_update, kb);
     kb->has_mod_bind = false;
     kb_each(0, 0, kb->btn_width, iter_check_mod_bind, kb);
-    f32 timestep = 1.0f / R.GetFPS();
+    int fps = R.GetFPS();
+    f32 timestep = fps > 0 ? 1.0f / fps : 1.0f / 120.0f;
     b2World_Step(kb->w, timestep, 4);
 
     b2Vec2 point = {

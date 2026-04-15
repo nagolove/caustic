@@ -43,6 +43,7 @@ typedef enum KbMod {
 typedef struct KbStroke {
                 // KEY_ESCAPE и тд
     i32        keycode;
+                // KbMod не сочетаются через |
     KbMod      mod;
 } KbStroke;
 
