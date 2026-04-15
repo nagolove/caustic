@@ -166,6 +166,7 @@ void render_texture_t(
 }
 */
 
+/*
 // Рисует круг
 static const char *shdr_src = 
 "#version 100\n"
@@ -205,6 +206,7 @@ static const char *shdr_src =
 "    gl_FragColor = col;\n"
 "    //gl_FragColor = vec4(1, 1, 1, 0.5);\n"
 "}\n";
+*/
 
 //static Shader shdr_circle = {0};
 //static int loc_pos, loc_radius;
