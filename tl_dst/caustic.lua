@@ -649,6 +649,7 @@ end
 
 
 
+
 local parser_setup = {
 
 
@@ -732,6 +733,12 @@ local parser_setup = {
          { "--noreset", "no call 'reset' for clearing terminal output" },
          { "-H --headless", "link with headless raylib (no window)" },
       },
+   },
+
+   ast = {
+      summary = "dump project AST to stdout",
+      flags = {},
+
    },
 
    ninja = {
@@ -3455,6 +3462,32 @@ local function run_ninja_codegen(queue, f)
       f:write(string.format("  COMMAND = %s\n\n", command))
    end
 
+end
+
+local function run_ast(queue)
+   for _, t in ipairs(queue) do
+
+
+
+
+      local ast_flags = "-fdump-tree-ssa"
+      local cmd = t.cmd ..
+      " " .. ast_flags ..
+      " " .. table.concat(t.args, " ")
+
+      cmd_do(cmd)
+   end
+end
+
+function actions.ast(_args)
+   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
+   local target = _args.t or "linux"
+   for _, cfg in ipairs(cfgs) do
+      if cfg_empty(cfg) then
+         remove_cache_file(_args)
+         sub_make(_args, cfg, target, run_ast, push_num)
+      end
+   end
 end
 
 function actions.ninja(_args)

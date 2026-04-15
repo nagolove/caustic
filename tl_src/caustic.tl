@@ -617,6 +617,7 @@ end
 local record Actions
     -- {{{
 
+    ast: function(Args)
     ninja: function(Args)
     clean: function(Args)
     cppcheck: function(Args)
@@ -731,6 +732,12 @@ local parser_setup: {string:ParserSetup} = {
             {"-d --debug", "run artifact in gdb",},
             {"--noreset", "no call 'reset' for clearing terminal output"},
             {"-H --headless", "link with headless raylib (no window)"},
+        }
+    },
+
+    ast = {
+        summary = "dump project AST to stdout",
+        flags = {
         }
     },
 
@@ -3455,6 +3462,34 @@ local function run_ninja_codegen(queue: {Task}, f: FILE)
         f:write(string.format("  COMMAND = %s\n\n", command))
     end
 
+end
+
+local function run_ast(queue: {Task})
+    for _, t in ipairs(queue) do
+        --print(inspect(t), "\n\n")
+        -- XXX: Все эти флаги дампов - нерабочие или выводят в stderr?
+        --local ast_flags = "-fdump-tree-all=gcc-dump.txt"
+        --local ast_flags = "-fdump-translational-unit=gcc-dump.txt"
+        --local ast_flags = "-fdump-rtl-all=gcc-dump.txt"
+        local ast_flags = "-fdump-tree-ssa"
+
+        local cmd = t.cmd .. 
+                    " " .. ast_flags .. 
+                    " " ..table.concat(t.args, " ")
+        --print(cmd)
+        cmd_do(cmd)
+    end
+end
+
+function actions.ast(_args: Args)
+    local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+    local target = _args.t or "linux"
+    for _, cfg in ipairs(cfgs) do
+        if cfg_empty(cfg) then
+            remove_cache_file(_args)
+            sub_make(_args, cfg, target, run_ast, push_num)
+        end
+    end
 end
 
 function actions.ninja(_args: Args)
