@@ -83,11 +83,13 @@ local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 local llm_embedding_dim = 4096
 
 
-local function time_ms()
-   return uv.hrtime() / 1e6
+local profiling = false
+local time_ms = function()
+   return 0
 end
-local function time_print(label, start)
-   print(format("[TIME] %s: %.1f ms", label, time_ms() - start))
+local time_print = function(
+   _, _)
+
 end
 
 
@@ -743,6 +745,7 @@ local parser_setup = {
          { "-d --debug", "run artifact in gdb" },
          { "--noreset", "no call 'reset' for clearing terminal output" },
          { "-H --headless", "link with headless raylib (no window)" },
+         { "-p --profiling", "print timing profiling info" },
       },
    },
 
@@ -774,6 +777,7 @@ local parser_setup = {
 
          { "-l --link", "use linking time optimization" },
          { "-H --headless", "link with headless raylib (no window)" },
+         { "-p --profiling", "print timing profiling info" },
       },
 
    },
@@ -824,6 +828,7 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
+
 
 
 
@@ -2386,9 +2391,12 @@ end
 
 local function run_parallel_uv(queue)
    local _t0 = time_ms()
-   print(format(
-   "[TIME] run_parallel_uv: начало, задач: %d", #queue))
+   if profiling then
+      print(format(
+      "[TIME] run_parallel_uv: начало, задач: %d",
+      #queue))
 
+   end
 
    local errcode = 0
 
@@ -2405,7 +2413,8 @@ local function run_parallel_uv(queue)
       local _stdout = uv.new_pipe(false)
       local _stderr = uv.new_pipe(false)
 
-      local src = ut.task_get_source(t) or "?"
+      local src = profiling and
+      (ut.task_get_source(t) or "?") or ""
       local t_start = time_ms()
 
       local _, _ = uv.spawn(
@@ -2418,10 +2427,12 @@ local function run_parallel_uv(queue)
          errcode = errcode + code
          _stdout:read_stop()
          _stderr:read_stop()
-         insert(file_times, {
-            name = src,
-            elapsed = time_ms() - t_start,
-         })
+         if profiling then
+            insert(file_times, {
+               name = src,
+               elapsed = time_ms() - t_start,
+            })
+         end
       end)
 
 
@@ -2444,13 +2455,19 @@ local function run_parallel_uv(queue)
 
 
 
-   table.sort(file_times, function(a, b)
-      return a.elapsed > b.elapsed
-   end)
-   for _, ft in ipairs(file_times) do
-      print(format(
-      "[TIME]   файл %s: %.1f ms", ft.name, ft.elapsed))
+   if profiling then
+      table.sort(
+      file_times,
+      function(a, b)
+         return a.elapsed > b.elapsed
+      end)
 
+      for _, ft in ipairs(file_times) do
+         print(format(
+         "[TIME]   файл %s: %.1f ms",
+         ft.name, ft.elapsed))
+
+      end
    end
 
    for _, line in ipairs(buf_out) do
@@ -4680,6 +4697,17 @@ local function main()
    if ok then
       if _args.verbose then
          verbose = true
+      end
+      if _args.profiling then
+         profiling = true
+         time_ms = function()
+            return uv.hrtime() / 1e6
+         end
+         time_print = function(label, start)
+            print(format(
+            "[TIME] %s: %.1f ms", label, time_ms() - start))
+
+         end
       end
 
       if verbose then
