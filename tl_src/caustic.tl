@@ -2394,9 +2394,19 @@ local function run_parallel_uv(queue: {Task})
 
     local buf_err, buf_out = {}, {}
 
+    -- замеры времени каждого файла
+    local record FileTime
+        name: string
+        elapsed: number
+    end
+    local file_times: {FileTime} = {}
+
     for _, t in ipairs(queue) do
         local _stdout = uv.new_pipe(false)
         local _stderr = uv.new_pipe(false)
+
+        local src = ut.task_get_source(t) or "?"
+        local t_start = time_ms()
 
         local _, _ = uv.spawn(
             t.cmd,
@@ -2408,6 +2418,10 @@ local function run_parallel_uv(queue: {Task})
                 errcode = errcode + code
                 _stdout:read_stop()
                 _stderr:read_stop()
+                insert(file_times, {
+                    name = src,
+                    elapsed = time_ms() - t_start,
+                })
             end
         )
 
@@ -2420,7 +2434,6 @@ local function run_parallel_uv(queue: {Task})
         _stderr:read_start( function(err: string, data: string)
             assert(not err, err)
             if data then
-                --insert(buf_err, t.cmd .. " " .. concat(t.args, " "))
                 insert(buf_err, data)
             end
         end)
@@ -2430,14 +2443,22 @@ local function run_parallel_uv(queue: {Task})
     uv.run('default')
     --]]
 
+    -- вывод времени каждого файла, отсортированный
+    table.sort(file_times, function(a: FileTime, b: FileTime): boolean
+        return a.elapsed > b.elapsed
+    end)
+    for _, ft in ipairs(file_times) do
+        print(format(
+            "[TIME]   файл %s: %.1f ms", ft.name, ft.elapsed
+        ))
+    end
+
     for _, line in ipairs(buf_out) do
         io.write(line)
     end
     for _, line in ipairs(buf_err) do
         io.write(line)
     end
-
-    --print('run_parallel_uv: errcode', errcode)
 
     time_print("run_parallel_uv", _t0)
 
