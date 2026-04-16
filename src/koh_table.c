@@ -639,31 +639,32 @@ HTable *htable_new(struct HTableSetup *setup) {
     return ht;
 }
 
-static void rec_shift(HTable *ht, int64_t index, int hashi) {
-    int64_t initial_index = index;
-    index = (index + 1) % ht->cap;
-    for (int64_t i = 0; i < ht->cap; i++) {
-        if (!ht->arr[index]) {
-            break;
+// Сдвиг элементов после удаления в open-addressing
+// таблице с линейным пробированием.
+// Начиная от позиции gap+1, проверяем каждый занятый
+// элемент — если его предпочтительная позиция (k)
+// ближе к gap, переносим его на место gap.
+// Два случая для кольцевого массива:
+//   gap < j:  k <= gap || k > j
+//   gap >= j: k <= gap && k > j
+// Алгоритм заканчивается, когда встречает пустую ячейку
+// (конец кластера коллизий).
+static void backward_shift(HTable *ht, int64_t gap) {
+    int64_t j = (gap + 1) % ht->cap;
+    while (ht->arr[j]) {
+        int64_t k = ht->arr[j]->key_hash % ht->cap;
+        bool should_move;
+        if (gap < j) {
+            should_move = (k <= gap || k > j);
+        } else {
+            should_move = (k <= gap && k > j);
         }
-
-        /*
-        printf(
-            "[%3d] key %10s value %.4d hash_mod %.3u\n",
-            index,
-            (char*)get_key(ht->arr[index]),
-            *(int*)get_value(ht->arr[index]),
-            ht->arr[index]->hash % ht->cap
-        );
-        */
-
-        if (ht->arr[index]->key_hash % ht->cap <= hashi) {
-            ht->arr[initial_index] = ht->arr[index];
-            ht->arr[index] = NULL;
-            rec_shift(ht, index, hashi + 1);
+        if (should_move) {
+            ht->arr[gap] = ht->arr[j];
+            ht->arr[j] = NULL;
+            gap = j;
         }
-
-        index = (index + 1) % ht->cap;
+        j = (j + 1) % ht->cap;
     }
 }
 
@@ -671,10 +672,8 @@ void _htable_remove(HTable *ht, int64_t remove_index) {
     assert(ht);
     assert(remove_index >= 0 && remove_index < ht->cap);
 
-    int hashi = ht->arr[remove_index]->key_hash % ht->cap;
     bucket_free(ht, remove_index);
-
-    rec_shift(ht, remove_index, hashi);
+    backward_shift(ht, remove_index);
 
     ht->taken--;
 }
@@ -760,6 +759,41 @@ HTable *htable_union(HTable *a, HTable *b) {
     }
 
     return u;
+}
+
+// Создаёт полную копию таблицы: выделяет новую таблицу
+// с теми же коллбеками и поочерёдно вставляет все пары
+// ключ-значение из оригинала.
+HTable *htable_clone(HTable *ht) {
+    htable_assert(ht);
+
+    HTableSetup setup = {
+        .f_keycmp = ht->f_keycmp,
+        .f_val2str = ht->f_val2str,
+        .f_key2str = ht->f_key2str,
+        .userdata = ht->userdata,
+        .f_on_remove = ht->f_on_remove,
+    };
+
+    HTable *clone = htable_new(&setup);
+    assert(clone);
+
+    HTableIterator i = htable_iter_new(ht);
+    for (; htable_iter_valid(&i);
+         htable_iter_next(&i)) {
+        int key_len = -1;
+        void *key =
+            htable_iter_key(&i, &key_len);
+        int value_len = -1;
+        void *value =
+            htable_iter_value(&i, &value_len);
+        htable_add(
+            clone, key, key_len,
+            value, value_len
+        );
+    }
+
+    return clone;
 }
 
 static inline void htable_iter_assert(HTableIterator *i) {
