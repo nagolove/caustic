@@ -129,6 +129,10 @@ bool htable_load(HTable *ht, const char *lua_code);
 // функции удаления, указатель на пользовательские данные) берутся из a
 HTable *htable_union(HTable *a, HTable *b);
 
+// Глубокое клонирование таблицы. Копирует все пары
+// ключ-значение и настройки (f_keycmp, f_key2str и др.)
+HTable *htable_clone(HTable *ht);
+
 // Возвращает новую таблицу равную разности a - b
 /*HTable *htable_subtract(HTable *a, HTable *b);*/
 

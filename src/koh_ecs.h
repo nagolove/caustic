@@ -279,8 +279,16 @@ void e_view_next(e_view* v);
 // Выделяет память, возвращает массив сущностей находящихся в системе
 e_id *e_entities_alloc(ecs_t *r, size_t *num);
 
-// XXX: Not implemented
+// Глубокое клонирование ECS. Клон имеет копии всех
+// сущностей, компонент и внутренних структур.
+// НЕ вызывает on_emplace/on_destroy коллбеки.
+// GUI поля (selected, plot_ctx) НЕ клонируются.
+// Возвращает NULL при ошибке.
 ecs_t *e_clone(ecs_t *r);
+
+// Обмен содержимым двух ECS с одинаковым max_id.
+// Не затрагивает GUI поля.
+void e_swap(ecs_t *a, ecs_t *b);
 
 // Печатает содержимое e_entities2table_alloc()
 void e_print_entities(ecs_t *r);

@@ -2872,6 +2872,221 @@ MunitResult test_create_destroy(const MunitParameter params[], void* userdata) {
 
 // }}} 
 
+// {{{ тесты клонирования
+
+typedef struct TestRefCp {
+    e_id ref;
+    int value;
+} TestRefCp;
+
+static e_cp_type cp_type_ref = {
+    .cp_sizeof = sizeof(TestRefCp),
+    .name = "test_ref",
+};
+
+static MunitResult test_clone_basic(
+    const MunitParameter params[], void* data
+) {
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_tmp);
+
+    enum { COUNT = 5 };
+    e_id ids[COUNT];
+
+    for (int i = 0; i < COUNT; i++) {
+        ids[i] = e_create(r);
+        int *c =
+            e_emplace(r, ids[i], cp_type_tmp);
+        *c = i * 10;
+    }
+
+    ecs_t *clone = e_clone(r);
+    munit_assert_not_null(clone);
+
+    munit_assert_size(
+        e_num(clone, cp_type_tmp), ==,
+        e_num(r, cp_type_tmp)
+    );
+
+    for (int i = 0; i < COUNT; i++) {
+        munit_assert(e_valid(clone, ids[i]));
+        int *orig =
+            e_get(r, ids[i], cp_type_tmp);
+        int *copy =
+            e_get(clone, ids[i], cp_type_tmp);
+        munit_assert_not_null(copy);
+        munit_assert_int(*orig, ==, *copy);
+        munit_assert_ptr_not_equal(orig, copy);
+    }
+
+    e_free(clone);
+    e_free(r);
+    return MUNIT_OK;
+}
+
+static MunitResult test_clone_independence(
+    const MunitParameter params[], void* data
+) {
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_tmp);
+
+    e_id e1 = e_create(r);
+    int *c1 = e_emplace(r, e1, cp_type_tmp);
+    *c1 = 42;
+
+    e_id e2 = e_create(r);
+    int *c2 = e_emplace(r, e2, cp_type_tmp);
+    *c2 = 99;
+
+    ecs_t *clone = e_clone(r);
+
+    e_destroy(r, e1);
+    munit_assert(e_valid(clone, e1));
+    int *cc1 =
+        e_get(clone, e1, cp_type_tmp);
+    munit_assert_int(*cc1, ==, 42);
+
+    int *cc2 =
+        e_get(clone, e2, cp_type_tmp);
+    *cc2 = 777;
+    int *oc2 = e_get(r, e2, cp_type_tmp);
+    munit_assert_int(*oc2, ==, 99);
+
+    e_free(clone);
+    e_free(r);
+    return MUNIT_OK;
+}
+
+static MunitResult test_clone_entity_ids(
+    const MunitParameter params[], void* data
+) {
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_tmp);
+
+    e_id e1 = e_create(r);
+    e_emplace(r, e1, cp_type_tmp);
+    e_id e2 = e_create(r);
+    e_emplace(r, e2, cp_type_tmp);
+    e_id e3 = e_create(r);
+    e_emplace(r, e3, cp_type_tmp);
+
+    e_destroy(r, e2);
+
+    ecs_t *clone = e_clone(r);
+    munit_assert(e_valid(clone, e1));
+    munit_assert(!e_valid(clone, e2));
+    munit_assert(e_valid(clone, e3));
+
+    e_free(clone);
+    e_free(r);
+    return MUNIT_OK;
+}
+
+static MunitResult test_clone_empty(
+    const MunitParameter params[], void* data
+) {
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_tmp);
+
+    ecs_t *clone = e_clone(r);
+    munit_assert_not_null(clone);
+    munit_assert_size(
+        e_num(clone, cp_type_tmp), ==, 0
+    );
+
+    e_id e = e_create(clone);
+    int *c = e_emplace(clone, e, cp_type_tmp);
+    *c = 123;
+    munit_assert(e_valid(clone, e));
+
+    e_free(clone);
+    e_free(r);
+    return MUNIT_OK;
+}
+
+static MunitResult test_clone_with_cross_refs(
+    const MunitParameter params[], void* data
+) {
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_ref);
+
+    e_id e1 = e_create(r);
+    e_id e2 = e_create(r);
+
+    TestRefCp *r1 =
+        e_emplace(r, e1, cp_type_ref);
+    r1->ref = e2;
+    r1->value = 111;
+
+    TestRefCp *r2 =
+        e_emplace(r, e2, cp_type_ref);
+    r2->ref = e1;
+    r2->value = 222;
+
+    ecs_t *clone = e_clone(r);
+
+    TestRefCp *c1 =
+        e_get(clone, e1, cp_type_ref);
+    munit_assert_not_null(c1);
+    munit_assert(c1->ref.id == e2.id);
+    munit_assert_int(c1->value, ==, 111);
+
+    TestRefCp *c2 =
+        e_get(clone, e2, cp_type_ref);
+    munit_assert_not_null(c2);
+    munit_assert(c2->ref.id == e1.id);
+    munit_assert_int(c2->value, ==, 222);
+
+    munit_assert(e_valid(clone, c1->ref));
+    munit_assert(e_valid(clone, c2->ref));
+
+    e_free(clone);
+    e_free(r);
+    return MUNIT_OK;
+}
+
+static MunitResult test_swap_basic(
+    const MunitParameter params[], void* data
+) {
+    e_options opts = { .max_id = 1024 };
+    ecs_t *r1 = e_new(&opts);
+    ecs_t *r2 = e_new(&opts);
+
+    e_register(r1, &cp_type_tmp);
+    e_register(r2, &cp_type_tmp);
+
+    for (int i = 0; i < 3; i++) {
+        e_id e = e_create(r1);
+        int *c = e_emplace(
+            r1, e, cp_type_tmp
+        );
+        *c = i;
+    }
+
+    for (int i = 0; i < 5; i++) {
+        e_id e = e_create(r2);
+        int *c = e_emplace(
+            r2, e, cp_type_tmp
+        );
+        *c = i + 100;
+    }
+
+    e_swap(r1, r2);
+
+    munit_assert_size(
+        e_num(r1, cp_type_tmp), ==, 5
+    );
+    munit_assert_size(
+        e_num(r2, cp_type_tmp), ==, 3
+    );
+
+    e_free(r1);
+    e_free(r2);
+    return MUNIT_OK;
+}
+
+// }}} тесты клонирования
+
 // {{{ tests definitions
 static MunitTest test_e_internal[] = {
 
@@ -3095,7 +3310,62 @@ static MunitTest test_e_internal[] = {
     },
 
 
-    { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
+    {
+        .name = "/test_clone_basic",
+        .test = test_clone_basic,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name = "/test_clone_independence",
+        .test = test_clone_independence,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name = "/test_clone_entity_ids",
+        .test = test_clone_entity_ids,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name = "/test_clone_empty",
+        .test = test_clone_empty,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name = "/test_clone_with_cross_refs",
+        .test = test_clone_with_cross_refs,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    {
+        .name = "/test_swap_basic",
+        .test = test_swap_basic,
+        .setup = NULL,
+        .tear_down = NULL,
+        .options = MUNIT_TEST_OPTION_NONE,
+        .parameters = NULL,
+    },
+
+    { NULL, NULL, NULL, NULL,
+        MUNIT_TEST_OPTION_NONE, NULL }
 };
 
 MunitSuite test_e_suite_internal = {
@@ -3945,9 +4215,154 @@ void e_view_next(e_view* v) {
              !e_view_entity_contained(v, v->current_entity));
 }
 
+// Клонирование одного storage
+static void storage_clone(
+    e_storage *dst,
+    const e_storage *src,
+    int64_t max_id
+) {
+    assert(dst);
+    assert(src);
+
+    *dst = *src;
+
+    // глубокая копия cp_data
+    if (src->cp_data && src->cp_data_cap > 0) {
+        size_t bytes =
+            src->cp_data_cap * src->cp_sizeof;
+        dst->cp_data = calloc(1, bytes);
+        assert(dst->cp_data);
+        memcpy(
+            dst->cp_data, src->cp_data,
+            src->cp_data_size * src->cp_sizeof
+        );
+    } else {
+        dst->cp_data = NULL;
+    }
+
+    // глубокая копия sparse set
+    dst->sparse = ss_alloc(max_id);
+    size_t arr_bytes =
+        sizeof(int64_t) * (max_id + 1);
+    memcpy(
+        dst->sparse.sparse,
+        src->sparse.sparse, arr_bytes
+    );
+    memcpy(
+        dst->sparse.dense,
+        src->sparse.dense, arr_bytes
+    );
+    dst->sparse.n = src->sparse.n;
+}
+
 ecs_t *e_clone(ecs_t *r) {
     assert(r);
-    return NULL;
+
+    ecs_t *c = calloc(1, sizeof(*c));
+    assert(c);
+
+    c->max_id = r->max_id;
+    c->entities_num = r->entities_num;
+    c->stack_last = r->stack_last;
+
+    // массив валидности сущностей
+    c->entities =
+        calloc(r->max_id, sizeof(bool));
+    assert(c->entities);
+    memcpy(
+        c->entities, r->entities,
+        r->max_id * sizeof(bool)
+    );
+
+    // массив версий
+    c->entities_ver =
+        calloc(r->max_id, sizeof(uint32_t));
+    assert(c->entities_ver);
+    memcpy(
+        c->entities_ver, r->entities_ver,
+        r->max_id * sizeof(uint32_t)
+    );
+
+    // стек свободных индексов
+    c->stack =
+        calloc(r->max_id, sizeof(uint32_t));
+    assert(c->stack);
+    memcpy(
+        c->stack, r->stack,
+        r->max_id * sizeof(uint32_t)
+    );
+
+    // storages
+    c->storages_cap = r->storages_cap;
+    c->storages_size = r->storages_size;
+    c->storages = calloc(
+        c->storages_cap, sizeof(e_storage)
+    );
+    assert(c->storages);
+
+    for (int i = 0; i < r->storages_size; i++) {
+        storage_clone(
+            &c->storages[i],
+            &r->storages[i],
+            r->max_id
+        );
+    }
+
+    // deep copy хеш-таблиц типов
+    c->cp_types =
+        htable_clone(r->cp_types);
+    c->set_cp_types =
+        htable_clone(r->set_cp_types);
+
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+    c->storages_by_id = htable_new(NULL);
+    for (int i = 0; i < c->storages_size; i++) {
+        e_storage *s = &c->storages[i];
+        htable_add_u64(
+            c->storages_by_id,
+            (u64)s->cp_id,
+            &s, sizeof(e_storage*)
+        );
+    }
+#endif
+
+    // GUI поля — не клонируем
+    c->selected = NULL;
+    c->selected_num = 0;
+    c->ref_filter_func = 0;
+    ainspector_init(&c->alli, true);
+    c->plot_ctx = ImPlot_CreateContext();
+
+    return c;
+}
+
+void e_swap(ecs_t *a, ecs_t *b) {
+    assert(a);
+    assert(b);
+    assert(a->max_id == b->max_id);
+
+#define SWAP_FIELD(field) do { \
+    __typeof__(a->field) _tmp = a->field; \
+    a->field = b->field; \
+    b->field = _tmp; \
+} while(0)
+
+    SWAP_FIELD(entities);
+    SWAP_FIELD(entities_ver);
+    SWAP_FIELD(stack);
+    SWAP_FIELD(stack_last);
+    SWAP_FIELD(entities_num);
+    SWAP_FIELD(storages);
+    SWAP_FIELD(storages_size);
+    SWAP_FIELD(storages_cap);
+    SWAP_FIELD(cp_types);
+    SWAP_FIELD(set_cp_types);
+
+#ifdef KOH_ECS_STORAGE_HASHTABLE
+    SWAP_FIELD(storages_by_id);
+#endif
+
+#undef SWAP_FIELD
 }
 
 char *e_entities2table_alloc2(ecs_t *r) {
