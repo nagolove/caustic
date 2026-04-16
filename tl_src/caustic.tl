@@ -82,6 +82,15 @@ local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 
 local llm_embedding_dim = 4096
 
+-- {{{ timing helpers
+local function time_ms(): number
+    return uv.hrtime() / 1e6
+end
+local function time_print(label: string, start: number)
+    print(format("[TIME] %s: %.1f ms", label, time_ms() - start))
+end
+-- }}}
+
 -- globals {{{
 
 local site_repo = "nagolove.github.io"
@@ -195,6 +204,7 @@ end
 
 -- Возвращает структуры конфига и число - агрумент для pop_dir()
 local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
+    local _t0 = time_ms()
     if verbose then
         print("search_and_load_cfgs_up:", fname, lfs.currentdir())
     end
@@ -288,10 +298,11 @@ local function search_and_load_cfgs_up(fname: string): {Cfg}, integer
         os.exit()
     end
 
+    time_print("search_and_load_cfgs_up", _t0)
     return cfgs, push_num
 end
 
--- }}} 
+-- }}}
 
 local enum MakeAction
     "release"
@@ -975,6 +986,7 @@ end
 
 -- Собирает все проекты из path_caustic/projects.lua
 function actions.projects_make(_args: Args)
+    local _t0 = time_ms()
     local list = loadfile(e.path_caustic .. "/projects.lua")() as {string};
 
     errexit_uv = false
@@ -985,17 +997,21 @@ function actions.projects_make(_args: Args)
         chdir(v)
 
         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+        local _t1 = time_ms()
         local ok, errmsg = pcall(function()
-            --actions.make({})
             actions.make(_args)
         end) as (boolean, string)
         if not ok then
             print('Some problem in make on ' .. v .. ": " .. errmsg)
         end
+        time_print(format(
+            "projects_make: проект[%d] %s", k, v
+        ), _t1)
 
         ut.pop_dir()
     end
     errexit_uv = true
+    time_print("actions.projects_make", _t0)
 end
 
 function actions.project(_args: Args)
@@ -2166,6 +2182,7 @@ local function split_libs_by_linkage(libs: {string}): {string}, {string}
 end
 
 local function _build(dep: Dependency)
+    local _t0 = time_ms()
     print("_build:", dep.name)
     if dep.disabled then
         print(format("%s is disabled", dep.name))
@@ -2272,9 +2289,11 @@ local function _build(dep: Dependency)
     end
 
     ut.pop_dir()
+    time_print("_build: " .. dep.name, _t0)
 end
 
 local function sub_build(_args: Args, path_rel: string, target: Target)
+    local _t0 = time_ms()
     mods = M.modules_instance(e, target)
     ut.push_current_dir()
     local deps = {}
@@ -2324,9 +2343,12 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
     --printc("%{yellow}sub_build:" .. inspect(deps) .. "%{reset}")
 
     local ok, errmsg: boolean, string = pcall(function()
-        for _, dep in ipairs(deps) do
-            --dep.target = target
+        for i, dep in ipairs(deps) do
+            local _t1 = time_ms()
             _build(dep)
+            time_print(format(
+                "sub_build: dep[%d] %s", i, dep.name
+            ), _t1)
         end
     end)
 
@@ -2336,15 +2358,17 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
     end
 
     ut.pop_dir()
+    time_print("sub_build", _t0)
 end
 
 function actions.build(_args: Args)
+    local _t0 = time_ms()
     local target = _args.t or _args.target
     if not target then
         target = 'linux'
     end
-    --print('actions.build: target', target)
     sub_build(_args, e.path_rel_third_party_t[target], target)
+    time_print("actions.build", _t0)
 end
 
 function actions.deps(_args: Args)
@@ -2361,11 +2385,10 @@ end
 
 -- queue - очередь задач в виде строк для запуска компилятора
 local function run_parallel_uv(queue: {Task})
-    --printc("%{cyan}currentdir " .. lfs.currentdir() .. "%{reset}")
-
-    --print(inspect(queue))
-    --print("os.exit(1)")
-    --os.exit(1)
+    local _t0 = time_ms()
+    print(format(
+        "[TIME] run_parallel_uv: начало, задач: %d", #queue
+    ))
 
     local errcode = 0
 
@@ -2416,6 +2439,8 @@ local function run_parallel_uv(queue: {Task})
 
     --print('run_parallel_uv: errcode', errcode)
 
+    time_print("run_parallel_uv", _t0)
+
     if errexit_uv and errcode ~= 0 then
         os.exit(1)
     end
@@ -2434,6 +2459,7 @@ local function remove_cache_file(_args: Args)
 end
 
 local function koh_link(objfiles: {string}, _args: Args)
+    local _t0 = time_ms()
     local target = _args.t or _args.target
     assert(target)
     local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
@@ -2449,6 +2475,7 @@ local function koh_link(objfiles: {string}, _args: Args)
 
     cmd_do(cmd)
     cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
+    time_print("koh_link", _t0)
 end
 
 local wasm_flags = ''
@@ -2482,7 +2509,7 @@ local function make_L(ctx: LinkContext): {string}
 end
 
 local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE)
-    --print('project_link:', inspect(ctx), inspect(cfg), inspect(_args))
+    local _t0 = time_ms()
 
     local flags: string = ""
 
@@ -2605,6 +2632,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         print('project_link:', cmd)
         cmd_do(cmd)
     end
+    time_print("project_link", _t0)
 end
 
 local function _update(dep: Dependency)
@@ -2654,7 +2682,7 @@ function actions.update(_args: Args)
 end
 
 local function codegen(cg: Cfg.Codegen)
-    --print("codegen", inspect(cg))
+    local _t0 = time_ms()
     if not cg.file_in or not cg.file_out then
         --print("codegen: no file_in or file_out, returning")
         return
@@ -2763,6 +2791,7 @@ local function codegen(cg: Cfg.Codegen)
     else
         print(format("Could not open '%s' for writing", cg.file_out))
     end
+    time_print("codegen", _t0)
 end
 
 local function get_ready_deps_defines(cfg: Cfg): {string}
@@ -2837,6 +2866,7 @@ local sub_make: function(
 )
 
 local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
+    local _t0 = time_ms()
     ut.push_current_dir()
     chdir(e.path_caustic)
     if verbose then
@@ -2866,10 +2896,13 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
         mkdir("obj_wasm")
 
         printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+        local _t1 = time_ms()
         sub_make(args, local_cfg, _target, run_parallel_uv)
+        time_print("koh_recompile: sub_make итерация", _t1)
     end
 
     ut.pop_dir()
+    time_print("koh_recompile", _t0)
 end
 
 -- XXX: Идея - файлы описания зависимостей могут лежать вне каустики.
@@ -2880,10 +2913,11 @@ end
 -- TODO: не работает несколько конфигов в одном сборочной файле.
 -- Возникает конфликт двух точек входа.
 function sub_make(
-    _args: Args, cfg: Cfg, target: Target, driver: MakeDriver, 
+    _args: Args, cfg: Cfg, target: Target, driver: MakeDriver,
     push_num?: integer,
     driver_ctx?: any
 )
+    local _t0 = time_ms()
     assert(driver)
     _args.target = target
 
@@ -2921,9 +2955,11 @@ function sub_make(
 
     -- TODO: кэширование генерируемых файлов. Значит нужно проверять время?
     if not _args.nocodegen and cfg.codegen then
+        local _t_cg = time_ms()
         for _, v in ipairs(cfg.codegen) do
             codegen(v)
         end
+        time_print("sub_make: codegen цикл", _t_cg)
     end
 
     -- FIXME: Почему сборка caustic не запускается из каталога caustic_path/src
@@ -3205,11 +3241,19 @@ function sub_make(
 
     local tasks: {Task} = {}
 
+    local _t_gc = time_ms()
     tasks = gather_tasks("c")
+    time_print("sub_make: gather_tasks(c)", _t_gc)
+    local _t_dc = time_ms()
     driver(tasks, driver_ctx)
+    time_print("sub_make: driver(c)", _t_dc)
 
+    local _t_gcpp = time_ms()
     tasks = gather_tasks("cpp")
+    time_print("sub_make: gather_tasks(cpp)", _t_gcpp)
+    local _t_dcpp = time_ms()
     driver(tasks, driver_ctx)
+    time_print("sub_make: driver(cpp)", _t_dcpp)
 
     cache:save()
     cache = nil
@@ -3261,6 +3305,7 @@ function sub_make(
     end
 
     ut.pop_dir(push_num)
+    time_print("sub_make", _t0)
 end
 
 function actions.compile_commands(_args: Args)
@@ -3337,13 +3382,16 @@ r
 end
 
 function actions.run(_args: Args)
+    local _t0 = time_ms()
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
 
     if not _args.noreset then
         cmd_do("reset")
     end
 
+    local _t_make = time_ms()
     actions.make(_args)
+    time_print("actions.run: actions.make", _t_make)
 
     if not cfgs[1] then
         printc("%{red}actions.run:%{reset} no translation unit in bld.lua")
@@ -3358,13 +3406,13 @@ function actions.run(_args: Args)
     if not _args.debug then
         local cmd = "./" .. cfgs[1].artifact
         print('cmd', cmd)
+        time_print("actions.run (до запуска)", _t0)
         cmd_do(cmd)
     else
         put_gdbinit()
-        -- При использовании отладчика всегда добавляется аргумент командной
-        -- строки используемый в тестировании
         local cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork"
         print('cmd', cmd)
+        time_print("actions.run (до запуска)", _t0)
         cmd_do(cmd)
     end
 end
@@ -3377,8 +3425,9 @@ local function cfg_empty(cfg: Cfg): boolean
     return i ~= 0
 end
 
--- TODO: Собирать libcaustic всегда в отладочной и релизной версии 
+-- TODO: Собирать libcaustic всегда в отладочной и релизной версии
 function actions.make(_args: Args)
+    local _t0 = time_ms()
     if verbose then
         print('make:')
         --print(tabular(_args))
@@ -3386,12 +3435,17 @@ function actions.make(_args: Args)
     end
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
-    for _, cfg in ipairs(cfgs) do
+    for i, cfg in ipairs(cfgs) do
         if cfg_empty(cfg) then
+            local _t1 = time_ms()
             remove_cache_file(_args)
             sub_make(_args, cfg, target, run_parallel_uv, push_num)
+            time_print(format(
+                "actions.make: cfg[%d]", i
+            ), _t1)
         end
     end
+    time_print("actions.make", _t0)
 end
 
 -- Извлечь значение аргумента после флага, например после "-o" или "-c"
@@ -3423,7 +3477,7 @@ local function ninja_header(f: FILE)
 end
 
 local function run_ninja_codegen(queue: {Task}, f: FILE)
-    -- ДИАГНОСТИКА
+    local _t0 = time_ms()
     print("queue length:", #queue)
     if #queue == 0 then
         return
@@ -3462,9 +3516,11 @@ local function run_ninja_codegen(queue: {Task}, f: FILE)
         f:write(string.format("  COMMAND = %s\n\n", command))
     end
 
+    time_print("run_ninja_codegen", _t0)
 end
 
 local function run_ast(queue: {Task})
+    local _t0 = time_ms()
     for _, t in ipairs(queue) do
         --print(inspect(t), "\n\n")
         -- XXX: Все эти флаги дампов - нерабочие или выводят в stderr?
@@ -3479,6 +3535,7 @@ local function run_ast(queue: {Task})
         --print(cmd)
         cmd_do(cmd)
     end
+    time_print("run_ast", _t0)
 end
 
 function actions.ast(_args: Args)

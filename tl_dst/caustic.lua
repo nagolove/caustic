@@ -83,6 +83,15 @@ local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
 local llm_embedding_dim = 4096
 
 
+local function time_ms()
+   return uv.hrtime() / 1e6
+end
+local function time_print(label, start)
+   print(format("[TIME] %s: %.1f ms", label, time_ms() - start))
+end
+
+
+
 
 local site_repo = "nagolove.github.io"
 local cache_name = "cache.lua"
@@ -195,6 +204,7 @@ end
 
 
 local function search_and_load_cfgs_up(fname)
+   local _t0 = time_ms()
    if verbose then
       print("search_and_load_cfgs_up:", fname, lfs.currentdir())
    end
@@ -288,6 +298,7 @@ local function search_and_load_cfgs_up(fname)
       os.exit()
    end
 
+   time_print("search_and_load_cfgs_up", _t0)
    return cfgs, push_num
 end
 
@@ -975,6 +986,7 @@ end
 
 
 function actions.projects_make(_args)
+   local _t0 = time_ms()
    local list = loadfile(e.path_caustic .. "/projects.lua")();
 
    errexit_uv = false
@@ -985,17 +997,21 @@ function actions.projects_make(_args)
       chdir(v)
 
       printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+      local _t1 = time_ms()
       local ok, errmsg = pcall(function()
-
          actions.make(_args)
       end)
       if not ok then
          print('Some problem in make on ' .. v .. ": " .. errmsg)
       end
+      time_print(format(
+      "projects_make: проект[%d] %s", k, v),
+      _t1)
 
       ut.pop_dir()
    end
    errexit_uv = true
+   time_print("actions.projects_make", _t0)
 end
 
 function actions.project(_args)
@@ -2166,6 +2182,7 @@ local function split_libs_by_linkage(libs)
 end
 
 local function _build(dep)
+   local _t0 = time_ms()
    print("_build:", dep.name)
    if dep.disabled then
       print(format("%s is disabled", dep.name))
@@ -2272,9 +2289,11 @@ local function _build(dep)
    end
 
    ut.pop_dir()
+   time_print("_build: " .. dep.name, _t0)
 end
 
 local function sub_build(_args, path_rel, target)
+   local _t0 = time_ms()
    mods = M.modules_instance(e, target)
    ut.push_current_dir()
    local deps = {}
@@ -2324,9 +2343,12 @@ local function sub_build(_args, path_rel, target)
 
 
    local ok, errmsg = pcall(function()
-      for _, dep in ipairs(deps) do
-
+      for i, dep in ipairs(deps) do
+         local _t1 = time_ms()
          _build(dep)
+         time_print(format(
+         "sub_build: dep[%d] %s", i, dep.name),
+         _t1)
       end
    end)
 
@@ -2336,15 +2358,17 @@ local function sub_build(_args, path_rel, target)
    end
 
    ut.pop_dir()
+   time_print("sub_build", _t0)
 end
 
 function actions.build(_args)
+   local _t0 = time_ms()
    local target = _args.t or _args.target
    if not target then
       target = 'linux'
    end
-
    sub_build(_args, e.path_rel_third_party_t[target], target)
+   time_print("actions.build", _t0)
 end
 
 function actions.deps(_args)
@@ -2361,10 +2385,9 @@ end
 
 
 local function run_parallel_uv(queue)
-
-
-
-
+   local _t0 = time_ms()
+   print(format(
+   "[TIME] run_parallel_uv: начало, задач: %d", #queue))
 
 
    local errcode = 0
@@ -2416,6 +2439,8 @@ local function run_parallel_uv(queue)
 
 
 
+   time_print("run_parallel_uv", _t0)
+
    if errexit_uv and errcode ~= 0 then
       os.exit(1)
    end
@@ -2434,6 +2459,7 @@ local function remove_cache_file(_args)
 end
 
 local function koh_link(objfiles, _args)
+   local _t0 = time_ms()
    local target = _args.t or _args.target
    assert(target)
    local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
@@ -2449,6 +2475,7 @@ local function koh_link(objfiles, _args)
 
    cmd_do(cmd)
    cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
+   time_print("koh_link", _t0)
 end
 
 local wasm_flags = '' ..
@@ -2482,7 +2509,7 @@ local function make_L(ctx)
 end
 
 local function project_link(ctx, cfg, _args, ninja)
-
+   local _t0 = time_ms()
 
    local flags = ""
 
@@ -2605,6 +2632,7 @@ local function project_link(ctx, cfg, _args, ninja)
       print('project_link:', cmd)
       cmd_do(cmd)
    end
+   time_print("project_link", _t0)
 end
 
 local function _update(dep)
@@ -2654,7 +2682,7 @@ function actions.update(_args)
 end
 
 local function codegen(cg)
-
+   local _t0 = time_ms()
    if not cg.file_in or not cg.file_out then
 
       return
@@ -2763,6 +2791,7 @@ local function codegen(cg)
    else
       print(format("Could not open '%s' for writing", cg.file_out))
    end
+   time_print("codegen", _t0)
 end
 
 local function get_ready_deps_defines(cfg)
@@ -2837,6 +2866,7 @@ local sub_make
 
 
 local function koh_recompile(_args, cfg, _target)
+   local _t0 = time_ms()
    ut.push_current_dir()
    chdir(e.path_caustic)
    if verbose then
@@ -2866,10 +2896,13 @@ local function koh_recompile(_args, cfg, _target)
       mkdir("obj_wasm")
 
       printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+      local _t1 = time_ms()
       sub_make(args, local_cfg, _target, run_parallel_uv)
+      time_print("koh_recompile: sub_make итерация", _t1)
    end
 
    ut.pop_dir()
+   time_print("koh_recompile", _t0)
 end
 
 
@@ -2884,6 +2917,7 @@ function sub_make(
    push_num,
    driver_ctx)
 
+   local _t0 = time_ms()
    assert(driver)
    _args.target = target
 
@@ -2921,9 +2955,11 @@ function sub_make(
 
 
    if not _args.nocodegen and cfg.codegen then
+      local _t_cg = time_ms()
       for _, v in ipairs(cfg.codegen) do
          codegen(v)
       end
+      time_print("sub_make: codegen цикл", _t_cg)
    end
 
 
@@ -3205,11 +3241,19 @@ function sub_make(
 
    local tasks = {}
 
+   local _t_gc = time_ms()
    tasks = gather_tasks("c")
+   time_print("sub_make: gather_tasks(c)", _t_gc)
+   local _t_dc = time_ms()
    driver(tasks, driver_ctx)
+   time_print("sub_make: driver(c)", _t_dc)
 
+   local _t_gcpp = time_ms()
    tasks = gather_tasks("cpp")
+   time_print("sub_make: gather_tasks(cpp)", _t_gcpp)
+   local _t_dcpp = time_ms()
    driver(tasks, driver_ctx)
+   time_print("sub_make: driver(cpp)", _t_dcpp)
 
    cache:save()
    cache = nil
@@ -3261,6 +3305,7 @@ function sub_make(
    end
 
    ut.pop_dir(push_num)
+   time_print("sub_make", _t0)
 end
 
 function actions.compile_commands(_args)
@@ -3337,13 +3382,16 @@ r
 end
 
 function actions.run(_args)
+   local _t0 = time_ms()
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
 
    if not _args.noreset then
       cmd_do("reset")
    end
 
+   local _t_make = time_ms()
    actions.make(_args)
+   time_print("actions.run: actions.make", _t_make)
 
    if not cfgs[1] then
       printc("%{red}actions.run:%{reset} no translation unit in bld.lua")
@@ -3358,13 +3406,13 @@ function actions.run(_args)
    if not _args.debug then
       local cmd = "./" .. cfgs[1].artifact
       print('cmd', cmd)
+      time_print("actions.run (до запуска)", _t0)
       cmd_do(cmd)
    else
       put_gdbinit()
-
-
       local cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork"
       print('cmd', cmd)
+      time_print("actions.run (до запуска)", _t0)
       cmd_do(cmd)
    end
 end
@@ -3379,6 +3427,7 @@ end
 
 
 function actions.make(_args)
+   local _t0 = time_ms()
    if verbose then
       print('make:')
 
@@ -3386,12 +3435,17 @@ function actions.make(_args)
    end
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
-   for _, cfg in ipairs(cfgs) do
+   for i, cfg in ipairs(cfgs) do
       if cfg_empty(cfg) then
+         local _t1 = time_ms()
          remove_cache_file(_args)
          sub_make(_args, cfg, target, run_parallel_uv, push_num)
+         time_print(format(
+         "actions.make: cfg[%d]", i),
+         _t1)
       end
    end
+   time_print("actions.make", _t0)
 end
 
 
@@ -3423,7 +3477,7 @@ local function ninja_header(f)
 end
 
 local function run_ninja_codegen(queue, f)
-
+   local _t0 = time_ms()
    print("queue length:", #queue)
    if #queue == 0 then
       return
@@ -3462,21 +3516,26 @@ local function run_ninja_codegen(queue, f)
       f:write(string.format("  COMMAND = %s\n\n", command))
    end
 
+   time_print("run_ninja_codegen", _t0)
 end
 
 local function run_ast(queue)
+   local _t0 = time_ms()
    for _, t in ipairs(queue) do
 
 
 
 
+
       local ast_flags = "-fdump-tree-ssa"
+
       local cmd = t.cmd ..
       " " .. ast_flags ..
       " " .. table.concat(t.args, " ")
 
       cmd_do(cmd)
    end
+   time_print("run_ast", _t0)
 end
 
 function actions.ast(_args)
