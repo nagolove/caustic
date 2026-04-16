@@ -3264,14 +3264,13 @@ function sub_make(
 
 
 
-         table.insert(tasks, task)
-
-
-
-
-
 
          table.insert(objfiles, _output)
+
+
+         if cache:should_recompile(file, task) then
+            table.insert(tasks, task)
+         end
       end
 
       return tasks

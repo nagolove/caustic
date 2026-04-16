@@ -3264,14 +3264,13 @@ function sub_make(
             --print('task', inspect(task))
             --print(ut.task_get_source(task))
 
-            table.insert(tasks, task)
-
-            -- XXX: Кэширование работает вообще?
-            --if cache:should_recompile(file, task) then
-                --table.insert(repr_queu, file)
-            --end
-
+            -- objfiles всегда нужны для линковки
             table.insert(objfiles, _output)
+
+            -- кэширование: пропускать файлы без изменений
+            if cache:should_recompile(file, task) then
+                table.insert(tasks, task)
+            end
         end
 
         return tasks

@@ -1,8 +1,9 @@
 require("global")
 local serpent = require('serpent')
-local lfs = require('lfs')
+local sha2 = require('sha2')
 
-local Cache = {Data = {}, }
+local Cache = { Data = {} }
+
 
 
 
@@ -24,72 +25,54 @@ local Cache_mt = {
 function Cache.new(storage)
    local self = {}
    local ok, _ = pcall(function()
-      self.cache = loadfile(storage)()
+      self.cache =
+      loadfile(storage)()
    end)
-
+   local lfs = require('lfs')
    self.abs_storage = lfs.currentdir() .. "/" .. storage
-
-   if not ok then
+   if not ok or not self.cache then
       self.cache = {}
-
    end
    return setmetatable(self, Cache_mt)
 end
 
-function Cache:should_recompile(fname, t)
-   local modtime_cur = lfs.attributes(fname, 'modification')
-   if not modtime_cur then
-      print(string.format(
-      'Cache:should_recompile("%s") failed to query attributes', fname))
+function Cache:should_recompile(
+   fname, t)
 
-      os.exit()
-   end
-   local data = self.cache[fname]
-   local modtime_cache = data and data.modtime or 0
-   local should = modtime_cur > modtime_cache
+
+   local f = io.open(fname, "rb")
+   if not f then return true end
+   local content = f:read("*a")
+   f:close()
+   local file_hash = sha2.blake3(content)
+
+
    local cmd = t.cmd .. " " .. table.concat(t.args, " ")
+   local cmd_hash = sha2.blake3(cmd)
 
+   local data = self.cache[fname]
+   if data and
+      data.file_hash == file_hash and
+      data.cmd_hash == cmd_hash then
 
-
-   if should then
-      self.cache[fname] = {
-         modtime = modtime_cur,
-         cmd = cmd,
-      }
+      return false
    end
-   return should
+
+
+   self.cache[fname] = {
+      file_hash = file_hash,
+      cmd_hash = cmd_hash,
+   }
+   return true
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function Cache:save()
-
    local file = io.open(self.abs_storage, "w")
-   local data = serpent.dump(self.cache)
-
-   file:write(data)
+   if file then
+      local data = serpent.dump(self.cache)
+      file:write(data)
+      file:close()
+   end
 end
 
 return Cache
