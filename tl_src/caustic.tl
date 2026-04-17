@@ -2067,6 +2067,8 @@ end
 -- XXX: Работает только с одной, первой сборочной целью. 
 -- Что же делать с остальными?
 -- TODO: Сделать генерацию для wasm сборки
+local get_ready_deps_defines: function(cfg: Cfg): {string}
+
 function actions.compile_flags(_args: Args)
     print(
         "actions.compile_flags: currentdir", lfs.currentdir(),
@@ -2100,6 +2102,10 @@ function actions.compile_flags(_args: Args)
             return
         end
         put("-I" .. EMSDK .. '/upstream/emscripten/cache/sysroot/include')
+    elseif target == 'linux' then
+        put("-DGRAPHICS_API_OPENGL_43")
+        put("-DPLATFORM_DESKTOP")
+        put("-DPLATFORM=PLATFORM_DESKTOP")
     end
 
     if cfgs then
@@ -2110,11 +2116,15 @@ function actions.compile_flags(_args: Args)
             put("-Isrc")
             put("-I.")
 
+            for _, define in ipairs(get_ready_deps_defines(cfg)) do
+                put(define)
+            end
+
             if cfgs[1].debug_define then
                 for define, value in pairs(cfgs[1].debug_define) do
                     assert(type(define) == 'string');
                     assert(type(value) == 'string');
-                    put(format("-D%s=%s", upper(define), upper(value)))
+                    put(format("-D%s=%s", upper(define), value))
                 end
             end
 
@@ -2880,7 +2890,7 @@ local function defines_apply(flags: {string}, defines: {string: string})
             value_str = tostring(value)
         end
         assert(type(value_str) == 'string');
-        local s = format("-D%s=%s", upper(define), upper(value_str));
+        local s = format("-D%s=%s", upper(define), value_str);
         table.insert(flags, s)
     end
 end
@@ -3351,9 +3361,17 @@ function actions.compile_commands(_args: Args)
         "_args", inspect(_args)
     )
 
-    cmd_do("cp compile_commands.json compile_commands.json.bak")
+    local attrib_cc = lfs.attributes("compile_commands.json")
+    if attrib_cc and attrib_cc.mode == 'file' then
+        cmd_do("cp compile_commands.json compile_commands.json.bak")
+    end
 
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+
+    if not cfgs or not cfgs[1] then
+        printc("%{red}could not generate compile_commands.json%{reset}")
+        return
+    end
 
     local target = _args.target or _args.t
     if not target then
@@ -3366,7 +3384,6 @@ function actions.compile_commands(_args: Args)
         directory: string
         command: string
         arguments: {string}
-        output: string
         file: string
     end
 
@@ -3378,9 +3395,6 @@ function actions.compile_commands(_args: Args)
             local jt: JsonTask = {
                 directory = lfs.currentdir(),
                 file = ut.task_get_source(task),
-                output = ut.task_get_output(task),
-                --command = task_no_libs.cmd .. 
-                --          " " .. concat(task_no_libs.args, " "),
                 arguments = task_no_libs.args,
             }
             table.insert(jt.arguments, 1, task_no_libs.cmd)
@@ -3390,10 +3404,6 @@ function actions.compile_commands(_args: Args)
 
     --print(inspect(tasks))
     --print(json.encode(tasks as {string:any}))
-
-    local t = tasks[1]
-    tasks = {}
-    tasks[1] = t
 
     local js = json.encode(tasks as {string:any})
     local f = io.open("compile_commands.json", "w")
