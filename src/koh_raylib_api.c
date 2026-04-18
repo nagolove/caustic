@@ -51,21 +51,15 @@ static void dummy_BeginTextureMode(RenderTexture2D target) {
 
 static void dummy_EndTextureMode(void) {}
 
-static void dummy_DrawRectangle(
-    int posX, int posY, int width, int height, Color color
-) {
+static void dummy_DrawRectangle(int posX, int posY, int width, int height, Color color) {
     (void)posX; (void)posY; (void)width; (void)height; (void)color;
 }
 
-static void dummy_DrawRectangleV(
-    Vector2 position, Vector2 size, Color color
-) {
+static void dummy_DrawRectangleV(Vector2 position, Vector2 size, Color color) {
     (void)position; (void)size; (void)color;
 }
 
-static void dummy_DrawRectangleLinesEx(
-    Rectangle rec, float lineThick, Color color
-) {
+static void dummy_DrawRectangleLinesEx(Rectangle rec, float lineThick, Color color) {
     (void)rec; (void)lineThick; (void)color;
 }
 
@@ -205,24 +199,16 @@ static void dummy_rlImGuiShutdown(void) {}
 static void dummy_rlImGuiImage(const Texture *img) {
     (void)img;
 }
-static void dummy_rlImGuiImageSize(
-    const Texture *img, int w, int h
-) {
+static void dummy_rlImGuiImageSize(const Texture *img, int w, int h) {
     (void)img; (void)w; (void)h;
 }
-static void dummy_rlImGuiImageSizeV(
-    const Texture *img, Vector2 sz
-) {
+static void dummy_rlImGuiImageSizeV(const Texture *img, Vector2 sz) {
     (void)img; (void)sz;
 }
-static void dummy_rlImGuiImageRect(
-    const Texture *img, int dw, int dh, Rectangle src
-) {
+static void dummy_rlImGuiImageRect(const Texture *img, int dw, int dh, Rectangle src) {
     (void)img; (void)dw; (void)dh; (void)src;
 }
-static void dummy_rlImGuiImageRenderTexture(
-    const RenderTexture *img
-) {
+static void dummy_rlImGuiImageRenderTexture(const RenderTexture *img) {
     (void)img;
 }
 
@@ -260,44 +246,30 @@ static void dummy_SetTraceLogCallback(TraceLogCallback callback) {
     (void)callback;
 }
 
-static void dummy_DrawRectanglePro(
-    Rectangle rec, Vector2 origin, float rotation, Color color
-) {
+static void dummy_DrawRectanglePro(Rectangle rec, Vector2 origin, float rotation, Color color) {
     (void)rec; (void)origin; (void)rotation; (void)color;
 }
 
-static void dummy_DrawTextPro(
-    Font font, const char *text, Vector2 position,
-    Vector2 origin, float rotation, float fontSize,
-    float spacing, Color tint
-) {
+static void dummy_DrawTextPro(Font font, const char *text, Vector2 position, Vector2 origin, float rotation, float fontSize, float spacing, Color tint) {
     (void)font; (void)text; (void)position;
     (void)origin; (void)rotation; (void)fontSize;
     (void)spacing; (void)tint;
 }
 
-static void dummy_SetTextureFilter(
-    Texture2D texture, int filter
-) {
+static void dummy_SetTextureFilter(Texture2D texture, int filter) {
     (void)texture; (void)filter;
 }
 
-static RenderTexture2D dummy_LoadRenderTexture(
-    int width, int height
-) {
+static RenderTexture2D dummy_LoadRenderTexture(int width, int height) {
     (void)width; (void)height;
     return (RenderTexture2D){0};
 }
 
-static void dummy_UnloadRenderTexture(
-    RenderTexture2D target
-) {
+static void dummy_UnloadRenderTexture(RenderTexture2D target) {
     (void)target;
 }
 
-static unsigned char *dummy_LoadFileData(
-    const char *fileName, int *dataSize
-) {
+static unsigned char *dummy_LoadFileData(const char *fileName, int *dataSize) {
     (void)fileName;
     if (dataSize) *dataSize = 0;
     return NULL;
@@ -307,28 +279,18 @@ static void dummy_UnloadFileData(unsigned char *data) {
     (void)data;
 }
 
-static GlyphInfo *dummy_LoadFontData(
-    const unsigned char *fileData, int dataSize,
-    int fontSize, const int *codepoints,
-    int codepointCount, int type, int *glyphCount
-) {
+static GlyphInfo *dummy_LoadFontData(const unsigned char *fileData, int dataSize, int fontSize, const int *codepoints, int codepointCount, int type, int *glyphCount) {
     (void)fileData; (void)dataSize; (void)fontSize;
     (void)codepoints; (void)codepointCount; (void)type;
     if (glyphCount) *glyphCount = 0;
     return NULL;
 }
 
-static void dummy_UnloadFontData(
-    GlyphInfo *glyphs, int glyphCount
-) {
+static void dummy_UnloadFontData(GlyphInfo *glyphs, int glyphCount) {
     (void)glyphs; (void)glyphCount;
 }
 
-static Image dummy_GenImageFontAtlas(
-    const GlyphInfo *glyphs, Rectangle **glyphRecs,
-    int glyphCount, int fontSize,
-    int padding, int packMethod
-) {
+static Image dummy_GenImageFontAtlas(const GlyphInfo *glyphs, Rectangle **glyphRecs, int glyphCount, int fontSize, int padding, int packMethod) {
     (void)glyphs; (void)glyphRecs; (void)glyphCount;
     (void)fontSize; (void)padding; (void)packMethod;
     return (Image){0};
@@ -432,10 +394,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.LoadFontData = dummy_LoadFontData;
         api.UnloadFontData = dummy_UnloadFontData;
         api.GenImageFontAtlas = dummy_GenImageFontAtlas;
-        api.rlGetActiveFramebuffer =
-            dummy_rlGetActiveFramebuffer;
-        api.rlEnableFramebuffer =
-            dummy_rlEnableFramebuffer;
+        api.rlGetActiveFramebuffer = dummy_rlGetActiveFramebuffer;
+        api.rlEnableFramebuffer = dummy_rlEnableFramebuffer;
         // ImGui — no-op в dummy
         api.rlImGuiSetup = dummy_rlImGuiSetup;
         api.rlImGuiBegin = dummy_rlImGuiBegin;
@@ -443,11 +403,9 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.rlImGuiShutdown = dummy_rlImGuiShutdown;
         api.rlImGuiImage = dummy_rlImGuiImage;
         api.rlImGuiImageSize = dummy_rlImGuiImageSize;
-        api.rlImGuiImageSizeV =
-            dummy_rlImGuiImageSizeV;
+        api.rlImGuiImageSizeV = dummy_rlImGuiImageSizeV;
         api.rlImGuiImageRect = dummy_rlImGuiImageRect;
-        api.rlImGuiImageRenderTexture =
-            dummy_rlImGuiImageRenderTexture;
+        api.rlImGuiImageRenderTexture = dummy_rlImGuiImageRenderTexture;
     } else {
         api.InitWindow = InitWindow;
         api.CloseWindow = CloseWindow;
@@ -523,8 +481,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.LoadFontData = LoadFontData;
         api.UnloadFontData = UnloadFontData;
         api.GenImageFontAtlas = GenImageFontAtlas;
-        api.rlGetActiveFramebuffer =
-            rlGetActiveFramebuffer;
+        api.rlGetActiveFramebuffer = rlGetActiveFramebuffer;
         api.rlEnableFramebuffer = rlEnableFramebuffer;
         // ImGui
         api.rlImGuiSetup = rlImGuiSetup;
@@ -535,8 +492,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.rlImGuiImageSize = rlImGuiImageSize;
         api.rlImGuiImageSizeV = rlImGuiImageSizeV;
         api.rlImGuiImageRect = rlImGuiImageRect;
-        api.rlImGuiImageRenderTexture =
-            rlImGuiImageRenderTexture;
+        api.rlImGuiImageRenderTexture = rlImGuiImageRenderTexture;
     }
 
     is_inited = true;

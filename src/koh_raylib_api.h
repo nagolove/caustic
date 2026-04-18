@@ -101,17 +101,9 @@ typedef struct raylib_api {
     void (*UnloadFileData)(unsigned char *data);
 
     // === Шрифты (низкоуровневые) ===
-    GlyphInfo *(*LoadFontData)(
-        const unsigned char *fileData, int dataSize,
-        int fontSize, const int *codepoints,
-        int codepointCount, int type, int *glyphCount
-    );
+    GlyphInfo *(*LoadFontData)(const unsigned char *fileData, int dataSize, int fontSize, const int *codepoints, int codepointCount, int type, int *glyphCount);
     void (*UnloadFontData)(GlyphInfo *glyphs, int glyphCount);
-    Image (*GenImageFontAtlas)(
-        const GlyphInfo *glyphs, Rectangle **glyphRecs,
-        int glyphCount, int fontSize,
-        int padding, int packMethod
-    );
+    Image (*GenImageFontAtlas)(const GlyphInfo *glyphs, Rectangle **glyphRecs, int glyphCount, int fontSize, int padding, int packMethod);
 
     // === rlgl ===
     unsigned int (*rlGetActiveFramebuffer)(void);
@@ -123,20 +115,10 @@ typedef struct raylib_api {
     void (*rlImGuiEnd)(void);
     void (*rlImGuiShutdown)(void);
     void (*rlImGuiImage)(const Texture *image);
-    void (*rlImGuiImageSize)(
-        const Texture *image, int width, int height
-    );
-    void (*rlImGuiImageSizeV)(
-        const Texture *image, Vector2 size
-    );
-    void (*rlImGuiImageRect)(
-        const Texture *image,
-        int destWidth, int destHeight,
-        Rectangle sourceRect
-    );
-    void (*rlImGuiImageRenderTexture)(
-        const RenderTexture *image
-    );
+    void (*rlImGuiImageSize)(const Texture *image, int width, int height);
+    void (*rlImGuiImageSizeV)(const Texture *image, Vector2 size);
+    void (*rlImGuiImageRect)(const Texture *image, int destWidth, int destHeight, Rectangle sourceRect);
+    void (*rlImGuiImageRenderTexture)(const RenderTexture *image);
 } raylib_api;
 
 typedef struct RayLibOpts {
