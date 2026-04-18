@@ -425,13 +425,26 @@ local function get_ready_deps(cfg: Cfg): {Dependency}
     return ready_deps
 end
 
-local function get_ready_l(cfg: Cfg, _: Target, headless?: boolean): {string}
+local function get_ready_l(cfg: Cfg, target: Target, headless?: boolean): {string}
     local merge_tables = ut.merge_tables
-    return merge_tables({ "stdc++", "m", }, gather_links(get_ready_deps(cfg), headless))
+    local base: {string}
+    if target == 'win' then
+        base = {
+            "stdc++", "m",
+            "gdi32", "winmm", "opengl32",
+            "ws2_32", "ole32", "setupapi",
+        }
+    else
+        base = { "stdc++", "m" }
+    end
+    return merge_tables(base, gather_links(get_ready_deps(cfg), headless))
 end
 
 -- TODO: Убрать эту функцию или сделать зависимой от цели сборки
-local function get_ready_links_linux_only(cfg: Cfg): {string}
+local function get_ready_links_linux_only(cfg: Cfg, target?: Target): {string}
+    if target == 'win' or target == 'wasm' then
+        return {}
+    end
     --print('get_ready_links_linux_only:', inspect(cfg))
 
     local links_linux_only = {
@@ -2169,10 +2182,10 @@ local function make_l(list: {string}): {string}
 end
 
 -- Разделяет библиотеки на статические (локальные из modules/) и динамические (системные)
-local function split_libs_by_linkage(libs: {string}): {string}, {string}
+local function split_libs_by_linkage(libs: {string}, target?: Target): {string}, {string}
     local static_libs = {}
     local dynamic_libs = {}
-    
+
     -- Список системных библиотек для динамической линковки
     local system_libs: {string: boolean} = {
         ["m"] = true,
@@ -2183,6 +2196,18 @@ local function split_libs_by_linkage(libs: {string}): {string}, {string}
         ["rt"] = true,
         ["X11"] = true,
     }
+
+    if target == 'win' then
+        system_libs["gdi32"] = true
+        system_libs["winmm"] = true
+        system_libs["opengl32"] = true
+        system_libs["ws2_32"] = true
+        system_libs["ole32"] = true
+        system_libs["setupapi"] = true
+        system_libs["dl"] = nil
+        system_libs["rt"] = nil
+        system_libs["X11"] = nil
+    end
     
     for _, lib in ipairs(libs) do
         local libname = lib:match("%-l(.+)") or lib
@@ -2584,6 +2609,8 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
 
     if _args.target == 'wasm' then
         artifact = artifact .. ".html"
+    elseif _args.target == 'win' then
+        artifact = artifact .. ".exe"
     end
 
     local is_shared = ""
@@ -2602,7 +2629,13 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
     --print("project_link: cfg.kind", inspect(cfg.kind))
     local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
     -- использовать быстрый линковщик
-    cmd = cmd .. " -fuse-ld=mold "
+    if _args.target == 'linux' then
+        cmd = cmd .. " -fuse-ld=mold "
+    end
+
+    if _args.target == 'win' then
+        cmd = cmd .. " -static "
+    end
 
     -- Добавить какие-то wasm флаги
     if _args.target == 'wasm' then
@@ -2627,12 +2660,12 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
     local libs = make_l(ctx.libs)
     
     -- Разделить библиотеки на статические (локальные) и динамические (системные)
-    local static_libs, dynamic_libs = split_libs_by_linkage(libs)
+    local static_libs, dynamic_libs = split_libs_by_linkage(libs, _args.target)
 
     --print('static_libs', inspect(static_libs))
     --print('dynamic_libs', inspect(dynamic_libs))
 
-    if not _args.noasan then
+    if not _args.noasan and _args.target ~= 'win' then
         cmd = cmd .. " -fsanitize=address "
     end
 
@@ -3046,6 +3079,11 @@ function sub_make(
         insert(defines, "-DPLATFORM_WEB")
         --insert(defines, "-DGRAPHICS_API_OPENGL_ES2")
         insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
+    elseif target == 'win' then
+        insert(defines, "-DGRAPHICS_API_OPENGL_33")
+        insert(defines, "-DPLATFORM_DESKTOP")
+        insert(defines, "-D_WIN32")
+        insert(defines, "-DWIN32")
     end
 
     -- TODO: Дефайны через bld.lua
@@ -3138,20 +3176,16 @@ function sub_make(
         end
     end
 
-    flags = ut.merge_tables(flags, { 
+    local common_flags = {
         "-Wall",
         "-Wcast-qual",
         "-Wstrict-aliasing",
-
-        -- XXX: в gcc не работает
-        -- всегда делать store/load явно для атомиков
-        --"-Watomic-implicit-seq-cst", 
-
-        --"-Watomics",
-
-        "-fPIC", 
-        "-latomic",
-    })
+    }
+    if target ~= 'win' then
+        table.insert(common_flags, "-fPIC")
+        table.insert(common_flags, "-latomic")
+    end
+    flags = ut.merge_tables(flags, common_flags)
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
 
     if verbose then
@@ -3172,7 +3206,7 @@ function sub_make(
 
     local libs = ut.merge_tables(
         get_ready_l(cfg, target, _args.headless ~= nil),
-        get_ready_links_linux_only(cfg)
+        get_ready_links_linux_only(cfg, target)
     )
 
     if cfg.artifact then
@@ -3199,6 +3233,8 @@ function sub_make(
         output_dir = pre .. "obj_linux"
     elseif target == 'wasm' then
         output_dir = pre .. "obj_wasm"
+    elseif target == 'win' then
+        output_dir = pre .. "obj_win"
     end
 
     local files_processed =  ut.filter_sources(".", exclude)

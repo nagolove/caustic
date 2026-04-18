@@ -63,11 +63,13 @@ local function update_box2c(e: Env, dep: Dependency)
     ut.pop_dir()
 end
 
-local function build_physfs(_: Env, _: Dependency)
+local function build_physfs(_: Env, dep: Dependency)
     find_and_remove_cmake_cache()
     cmd_do("make clean")
-    cmd_do("cmake . -DPHYSFS_BUILD_STATIC=ON -DPHYSFS_BUILD_SHARED=OFF")
-    cmd_do("make -j")
+    cmd_do(cmake[dep.target]
+        .. " -DPHYSFS_BUILD_STATIC=ON"
+        .. " -DPHYSFS_BUILD_SHARED=OFF .")
+    cmd_do(make[dep.target])
 end
 
 local function build_cimplot(_: Env, _: Dependency)
@@ -189,6 +191,9 @@ local function build_cimgui_common(_: Env, dep: Dependency)
         -- для wasm -fPIC не нужен/не применяется
         local flags = "-g3 -DPLATFORM_WEB=1"
         cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+    elseif dep.target == 'win' then
+        local flags = "-g3 -DPLATFORM_DESKTOP"
+        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
     else
         printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
     end
@@ -202,8 +207,8 @@ local function build_pcre2(_: Env, dep: Dependency)
     print("pcre2_custom_build:", lfs.currentdir())
 
     find_and_remove_cmake_cache()
-    cmd_do("cmake .")
-    cmd_do("make -j")
+    cmd_do(cmake[dep.target] .. " .")
+    cmd_do(make[dep.target])
     ut.pop_dir()
 end
 
@@ -265,6 +270,9 @@ local function build_with_make_common(_: Env, dep: Dependency)
     elseif dep.target == 'linux' then
         cmd_do("make clean")
         cmd_do("make -j")
+    elseif dep.target == 'win' then
+        cmd_do("make clean")
+        cmd_do(make[dep.target])
     end
 end
 
@@ -276,7 +284,7 @@ local function build_with_cmake_common(_: Env, dep: Dependency)
     local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=67108864" '
     --local linker_option = ''
 
-    if dep.target == 'linux' then
+    if dep.target == 'linux' or dep.target == 'win' then
         linker_option = ''
     end
 
@@ -306,7 +314,10 @@ local function build_llama(_: Env, _: Dependency)
 end
 
 local function build_munit_common(_: Env, dep: Dependency)
-    local flags = " -std=c11 -fPIC "
+    local flags = " -std=c11 "
+    if dep.target ~= 'win' then
+        flags = flags .. " -fPIC "
+    end
     if dep.target == "wasm" then
         flags = flags .. " -pthread "
     end
@@ -374,6 +385,16 @@ local function build_raylib_common(_: Env, dep: Dependency)
         cmd_do("mv libraylib.web.a libraylib.a")
         --]]
 
+    elseif dep.target == 'win' then
+        local c = {}
+        insert(c, "-DPLATFORM=Desktop ")
+        insert(c, "-DBUILD_EXAMPLES=OFF ")
+        insert(c, "-DCMAKE_BUILD_TYPE=Release")
+        local a = cmake[dep.target]
+            .. table.concat(c, " ") .. " ."
+        cmd_do(a)
+        cmd_do("make clean")
+        cmd_do(make[dep.target])
     end
 
     local raylib_i =
@@ -514,6 +535,8 @@ local function cimgui_after_init(e: Env, dep: Dependency)
         flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
     elseif dep.target == 'wasm' then
         flags = "-g3 -DPLATFORM_WEB=1"
+    elseif dep.target == 'win' then
+        flags = "-g3 -DPLATFORM_DESKTOP"
     else
         printc(
             "%{red}build_cimgui_common:bad target "
@@ -624,6 +647,9 @@ local function build_lua_common(_: Env, dep: Dependency)
     elseif dep.target == 'linux' then
         cmd_do("make clean")
         cmd_do("make -j CFLAGS+=' -fPIC'")
+    elseif dep.target == 'win' then
+        cmd_do("make clean")
+        cmd_do(make[dep.target])
     else
         printc(
             "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}"
@@ -781,6 +807,7 @@ _modules = {
         name = "physfs",
         url_action = "git",
         build = build_physfs,
+        build_win = build_physfs,
         url = "https://github.com/icculus/physfs.git",
     },
     -- }}}
@@ -832,6 +859,7 @@ _modules = {
         name = "xxhash",
         url_action = "git",
         build = build_with_make_common,
+        build_win = build_with_make_common,
         url = "https://github.com/Cyan4973/xxHash.git",
         --update = update_default,
     },
@@ -907,6 +935,7 @@ _modules = {
         copy_for_wasm = true,
         build = build_with_cmake_common,
         build_w = build_with_cmake_common,
+        build_win = build_with_cmake_common,
         description = "svg parsing library",
         dir = "nanosvg",
         includes = { 
@@ -951,6 +980,7 @@ _modules = {
         copy_for_wasm = true,
         build = build_munit_common,
         build_w = build_munit_common,
+        build_win = build_munit_common,
         description = "munit testing framework",
         dir = "munit",
         includes = { "munit" },
@@ -1005,6 +1035,7 @@ _modules = {
         copy_for_wasm = true,
         build = build_with_cmake_common,
         build_w = build_with_cmake_common,
+        build_win = build_with_cmake_common,
         description = "task sheduler, used by box2d",
         dir = "enkits",
         includes = { "enkits/src" },
@@ -1037,6 +1068,7 @@ _modules = {
         disabled = false,
         build = build_pcre2,
         build_w = build_pcre2_w,
+        build_win = build_pcre2,
         description = "регулярные выражения",
         dir = "pcre2",
         includes = { "pcre2/src", "pcre2" },
@@ -1185,6 +1217,13 @@ _modules = {
             elseif dep.target == 'wasm' then
                 --return { "raylib", "raylib_wrap", }
                 return { "raylib" }
+            elseif dep.target == 'win' then
+                return {
+                    "-Wl,--start-group",
+                    "raylib",
+                    "-Wl,--end-group",
+                    "gdi32", "winmm", "opengl32",
+                }
             else
                 printc(
                     "%{red}bad target in links" .. dep.target ..  "%{reset}"
@@ -1200,6 +1239,7 @@ _modules = {
         dir = "raylib",
         build_w = build_raylib_common,
         build = build_raylib_common,
+        build_win = build_raylib_common,
         url_action = "git",
         url = "https://github.com/raysan5/raylib.git",
     },
@@ -1214,6 +1254,7 @@ _modules = {
         -- нужно компилировать
         build = build_cimgui_common,
         build_w = build_cimgui_common,
+        build_win = build_cimgui_common,
         --depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
@@ -1278,6 +1319,7 @@ _modules = {
     {
         build = build_box2c_common,
         build_w = build_box2c_common,
+        build_win = build_box2c_common,
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
@@ -1304,6 +1346,7 @@ _modules = {
         disabled = false,
         copy_for_wasm = true,
         build = build_chipmunk,
+        build_win = build_chipmunk,
         dir = "Chipmunk2D",
         description = "плоский игровой физический движок",
         includes = { "Chipmunk2D/include", },
@@ -1320,6 +1363,7 @@ _modules = {
     {
         build = build_lua_common,
         build_w = build_lua_common,
+        build_win = build_lua_common,
         copy_for_wasm = true,
         description = "lua интерпритатор",
         dir = "lua",
@@ -1374,6 +1418,7 @@ _modules = {
     {
         build = build_with_make_common,
         build_w = build_with_make_common,
+        build_win = build_with_make_common,
         after_build = utf8proc_after_build,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
@@ -1405,6 +1450,7 @@ _modules = {
         dir = "wfc",
         build = build_with_make_common,
         build_w = build_with_make_common,
+        build_win = build_with_make_common,
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
         --depends = {'stb'},

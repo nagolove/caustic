@@ -135,17 +135,20 @@ global errexit_uv    = true
 global cmake = {
     ["linux"] = "cmake ",
     ["wasm"] = "emcmake cmake ",
-    --['win'] = "cmake " .. cmake_toolchain_win,
-    ['win'] = "cmake " -- .. cmake_toolchain_win,
+    ['win'] = 'cmake -DCMAKE_TOOLCHAIN_FILE='
+        .. (os.getenv("CAUSTIC_PATH") or "")
+        .. '/toolchain-mingw64.cmake ',
 }
 
 global make = {
     ["linux"] = "make ",
     ["wasm"] = "emmake make ",
-    ['win'] = 'make CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ ' ..
-              'CFLAGS="-I/usr/x86_64-w64-mingw32/include" ' ..
-              'LDFLAGS="-L/usr/x86_64-w64-mingw32/lib" ' ..
-              '-D_WIN32 -DWIN32 '
+    ['win'] = 'make CC=x86_64-w64-mingw32-gcc '
+        .. 'CXX=x86_64-w64-mingw32-g++ '
+        .. 'AR=x86_64-w64-mingw32-ar '
+        .. 'CFLAGS+="-I/usr/x86_64-w64-mingw32/include '
+        .. '-D_WIN32 -DWIN32" '
+        .. 'LDFLAGS+="-L/usr/x86_64-w64-mingw32/lib" '
 }
 
 global compiler_c = {
