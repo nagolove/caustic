@@ -1534,9 +1534,8 @@ local function pre_init(_args: Args): {Dependency}
         end
     else
         -- или команда применяется ко всем модулям
-        for dep in mods.iter() do
-            table.insert(deps, dep)
-        end
+        -- mods.modules() возвращает сырые (не readonly) модули
+        deps = mods.modules()
     end
     return deps
 end

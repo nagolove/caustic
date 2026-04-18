@@ -1534,9 +1534,8 @@ local function pre_init(_args)
       end
    else
 
-      for dep in mods.iter() do
-         table.insert(deps, dep)
-      end
+
+      deps = mods.modules()
    end
    return deps
 end

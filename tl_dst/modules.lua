@@ -238,21 +238,21 @@ local function build_freetype_common(e, dep)
 
    local cm = cmake[dep.target]
    print("build_freetype_common: cmake", cm)
-   local c1 = cm .. " -E make_directory build " .. e.cmake_toolchain_win_opt
-   local c2 = cm .. " -E chdir build cmake " ..
+   local c1 = "cmake -E make_directory build"
+   local c2 = "cmake -E chdir build " .. cm ..
    "-DFT_DISABLE_HARFBUZZ=ON " ..
    "-DFT_DISABLE_BROTLI=ON " ..
    "-DFT_DISABLE_BZIP2=ON " ..
    "-DFT_DISABLE_ZLIB=ON " ..
    "-DFT_DISABLE_PNG=ON " ..
-   toolchain() ..
    " .."
 
    print("build_freetype_common: c1", c1)
    print("build_freetype_common: c2", c2)
 
 
-   cmd_do({ c1, c2 })
+   cmd_do(c1)
+   cmd_do(c2)
    chdir("build")
 
 
@@ -649,7 +649,10 @@ local function build_lua_common(_, dep)
       cmd_do("make -j CFLAGS+=' -fPIC'")
    elseif dep.target == 'win' then
       cmd_do("make clean")
-      cmd_do(make[dep.target])
+      cmd_do('make CC=x86_64-w64-mingw32-gcc ' ..
+      'AR="x86_64-w64-mingw32-ar rc" ' ..
+      'RANLIB=x86_64-w64-mingw32-ranlib ' ..
+      'MYCFLAGS="-std=c99 -DLUA_USE_WINDOWS"')
    else
       printc(
       "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}")
