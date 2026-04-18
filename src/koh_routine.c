@@ -809,13 +809,9 @@ bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd) {
     assert(cpd->cam);
     /*trace("koh_camera_process_mouse_drag:\n");*/
     if (cpd->cam && IsMouseButtonDown(cpd->mouse_btn)) {
-        float inv_zoom = cpd->cam->zoom;
-        float dzoom = inv_zoom == 1. ? 
-            -(1. / cpd->cam->zoom) : 
-            -log(1. / cpd->cam->zoom);
-        /*trace("koh_camera_process_mouse_drag: dzoom %f\n", dzoom);*/
+        float dzoom = 1.0f / cpd->cam->zoom;
         Vector2 delta = Vector2Scale(GetMouseDelta(), dzoom);
-        cpd->cam->offset = Vector2Add(cpd->cam->offset, Vector2Negate(delta));
+        cpd->cam->offset = Vector2Subtract(cpd->cam->offset, delta);
         return true;
     }
     return false;

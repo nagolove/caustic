@@ -209,12 +209,12 @@ typedef struct CameraProcessScale {
     KeyboardKey modifier_key_down, 
                 // speed * 2.
                 boost_modifier_key_down;
-} CameraProcessScale;
+} CameraProcessScale __attribute__((deprecated("используйте CameraProcessor")));
 
 typedef struct CameraProcessDrag {
     int         mouse_btn;
     Camera2D    *cam;
-} CameraProcessDrag;
+} CameraProcessDrag __attribute__((deprecated("используйте CameraProcessor")));
 
 typedef struct CameraAutomat {
     Camera2D *cam;
@@ -231,8 +231,8 @@ void cam_auto_update(CameraAutomat *ca);
 // TODO: Добавить разные интерполяции
 // TODO: Добавить гуи для изменения параметров
 // TODO: Добавить сохранение в луа строку
-bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd);
-bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps);
+bool koh_camera_process_mouse_drag(struct CameraProcessDrag *cpd) __attribute__((deprecated("используйте camp_update")));
+bool koh_camera_process_mouse_scale_wheel(struct CameraProcessScale *cps) __attribute__((deprecated("используйте camp_update")));
 //bool koh_color_eq(Color c1, Color c2);
 
 struct CameraAxisDrawCtx {
