@@ -3368,12 +3368,15 @@ static MunitTest test_e_internal[] = {
         MUNIT_TEST_OPTION_NONE, NULL }
 };
 
-MunitSuite test_e_suite_internal = {
-    (char*) "e_suite_internal",
-    test_e_internal,
-    NULL,
-    1,
-    MUNIT_SUITE_OPTION_NONE,
+MunitSuite test_e_suite_internal[] = {
+    {
+        (char*) "e_suite_internal",
+        test_e_internal,
+        NULL,
+        1,
+        MUNIT_SUITE_OPTION_NONE,
+    },
+    { NULL, NULL, NULL, 0, MUNIT_SUITE_OPTION_NONE, },
 };
 
 // }}}

@@ -85,7 +85,7 @@ typedef struct e_cp_type {
     size_t      initial_cap;
 } e_cp_type;
 
-extern MunitSuite test_e_suite_internal;
+extern MunitSuite test_e_suite_internal[];
 
 // Инициализация внутренних структур e_cp_type для тестов. Без инициализации
 // поведение test_ecs_t_suite_internal непредсказуемо.

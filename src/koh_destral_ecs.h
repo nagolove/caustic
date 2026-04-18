@@ -338,7 +338,7 @@ bool de_each_valid(de_each_iter *i);
 void de_each_next(de_each_iter *i);
 de_entity de_each_entity(de_each_iter *i);
 
-extern MunitSuite test_de_ecs_suite_internal;
+extern MunitSuite test_de_ecs_suite_internal[];
 // Инициализация внутренних структур de_cp_type для тестов. Без инициализации
 // поведение test_de_ecs_suite_internal непредсказуемо.
 void de_ecs_test_init();

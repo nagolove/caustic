@@ -4497,12 +4497,14 @@ static MunitTest test_de_ecs_internal[] = {
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
-MunitSuite test_de_ecs_suite_internal = {
-
-    (char*) "de_ecs_suite_internal",
-    test_de_ecs_internal,
-    NULL,
-    1,
-    MUNIT_SUITE_OPTION_NONE,
+MunitSuite test_de_ecs_suite_internal[] = {
+    {
+        (char*) "de_ecs_suite_internal",
+        test_de_ecs_internal,
+        NULL,
+        1,
+        MUNIT_SUITE_OPTION_NONE,
+    },
+    { NULL, NULL, NULL, 0, MUNIT_SUITE_OPTION_NONE, },
 };
 

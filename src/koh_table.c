@@ -3054,12 +3054,15 @@ static MunitTest test_htable_internal[] = {
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
-MunitSuite test_htable_suite_internal = {
-    (char*) "htable_suite_internal",
-    test_htable_internal,
-    NULL,
-    1,
-    MUNIT_SUITE_OPTION_NONE,
+MunitSuite test_htable_suite_internal[] = {
+    {
+        (char*) "htable_suite_internal",
+        test_htable_internal,
+        NULL,
+        1,
+        MUNIT_SUITE_OPTION_NONE,
+    },
+    { NULL, NULL, NULL, 0, MUNIT_SUITE_OPTION_NONE, },
 };
 
 // }}}

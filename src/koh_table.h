@@ -175,7 +175,7 @@ KOH_INLINE_ITER void *htable_iter_value(HTableIterator *i, int *value_len);
 #undef KOH_INLINE_ITER
 
 extern bool htable_verbose;
-extern MunitSuite test_htable_suite_internal;
+extern MunitSuite test_htable_suite_internal[];
 
 // {{{ Функции конверторы данных
 
