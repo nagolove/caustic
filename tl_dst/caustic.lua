@@ -3100,6 +3100,8 @@ function sub_make(
       insert(defines, "-DPLATFORM_DESKTOP")
       insert(defines, "-D_WIN32")
       insert(defines, "-DWIN32")
+      insert(defines, "-DPCRE2_STATIC")
+      insert(defines, "-DUTF8PROC_STATIC")
    end
 
 

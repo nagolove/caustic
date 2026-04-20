@@ -3552,7 +3552,10 @@ ecs_t *e_new(e_options *opts) {
 
     ainspector_init(&r->alli, true);
 
+    // XXX: починить cimplot для Windows
+#ifndef _WIN32
     r->plot_ctx = ImPlot_CreateContext();
+#endif
 
     r->entities_num = 0;
     r->entities = ainspector_calloc(&r->alli, r->max_id, sizeof(r->entities[0]));
@@ -3603,10 +3606,13 @@ static void storage_shutdown(e_storage *s) {
 void e_free(ecs_t *r) {
     ecs_assert(r);
 
+    // XXX: починить cimplot для Windows
+#ifndef _WIN32
     if (r->plot_ctx) {
         ImPlot_DestroyContext(r->plot_ctx);
         r->plot_ctx = NULL;
     }
+#endif
 
     if (r->storages) {
         // printf("e_free: storages_size %d\n", r->storages_size);
@@ -4334,7 +4340,10 @@ ecs_t *e_clone(ecs_t *r) {
     c->selected_num = 0;
     c->ref_filter_func = 0;
     ainspector_init(&c->alli, true);
+    // XXX: починить cimplot для Windows
+#ifndef _WIN32
     c->plot_ctx = ImPlot_CreateContext();
+#endif
 
     return c;
 }
@@ -4640,22 +4649,23 @@ static void memory_usage_gui(ecs_t *r) {
     static bool tree_open = false;
     igSetNextItemOpen(tree_open, ImGuiCond_Once);
     if (igTreeNode_Str("memory usage")) {
+        // XXX: починить cimplot для Windows
+#ifndef _WIN32
         ImPlot_SetCurrentContext(r->plot_ctx);
         bool wnd_open = true;
         ImPlot_ShowDemoWindow(&wnd_open);
 
         AllocInspector *ai = &r->alli;
         ImVec2 plot_size = (ImVec2){-1.0f, 400.0f};
-        if (ImPlot_BeginPlot("total allocated", plot_size, 0)) {
+        if (ImPlot_BeginPlot(
+			"total allocated", plot_size, 0
+		)) {
             int count = (int)ai->total_cb_count;
 
-            // offset в ImPlot нужен как раз для кольцевых буферов
-            // чтобы данные шли "по времени" без копирования.
             int offset = 0;
             if (ai->total_cb_count == ai->total_cb_cap)
-                offset = (int)ai->total_cb_head;   // head = начало "самых старых" данных
+                offset = (int)ai->total_cb_head;
 
-            //ImPlot_PlotScatter_U64PtrInt(
             ImPlot_PlotLine_U64PtrInt(
                 "bytes",
                 (const ImU64*)ai->total_cb,
@@ -4669,6 +4679,7 @@ static void memory_usage_gui(ecs_t *r) {
 
             ImPlot_EndPlot();
         }
+#endif
 
         igTreePop();
     }
