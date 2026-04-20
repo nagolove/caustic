@@ -31,11 +31,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#define NOGDI
+#define NOUSER
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <sysinfoapi.h>
+#undef near
+#undef far
+#else
 #include <unistd.h>
+#endif
 
 #ifdef PLATFORM_DESKTOP
 #include <signal.h>
+#ifndef _WIN32
 #include <execinfo.h>
+#endif
 #endif
 
 /*#define ENET_IMPLEMENTATION*/
@@ -990,8 +1002,10 @@ void koh_screenshot_incremental() {
 };
 
 void koh_trap() {
-#ifdef PLATFORM_DESKTOP
+#if defined(PLATFORM_DESKTOP) && !defined(_WIN32)
     raise(SIGTRAP);
+#elif defined(_WIN32)
+    __debugbreak();
 #else
     abort();
 #endif
@@ -1550,8 +1564,17 @@ const char *koh_extract_path(const char *fname) {
 }
 
 int koh_cpu_count() {
-    if (!cmn_internal.cpu_count)
-        cmn_internal.cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    if (!cmn_internal.cpu_count) {
+#ifdef _WIN32
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        cmn_internal.cpu_count = (int)si.dwNumberOfProcessors;
+#else
+        cmn_internal.cpu_count = (int)sysconf(
+			_SC_NPROCESSORS_ONLN
+		);
+#endif
+    }
     return cmn_internal.cpu_count;
 }
 
@@ -1613,8 +1636,11 @@ void koh_window_state_print() {
     );
 }
 
-#ifdef __wasm__
+#if defined(__wasm__) || defined(_WIN32)
 void koh_backtrace_print() {
+}
+const char * koh_backtrace_get() {
+	return NULL;
 }
 #else
 
@@ -2536,6 +2562,12 @@ EM_JS(int, get_hardware_concurrency, (), {
   else
     return 1; // fallback
 });
+#elif defined(_WIN32)
+int get_hardware_concurrency() {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (int)si.dwNumberOfProcessors;
+}
 #else
 int get_hardware_concurrency() {
     return (int)sysconf(_SC_NPROCESSORS_ONLN);

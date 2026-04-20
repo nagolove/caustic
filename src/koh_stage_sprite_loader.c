@@ -1227,9 +1227,9 @@ static void gui_meta_button_new_meta_file(
 ) {
     if (igButton("new meta file", (ImVec2){})) {
         char fname_full[256] = {};
-        strlcat(fname_full, path_meta, sizeof(fname_full) - 1);
-        strlcat(fname_full, "/", sizeof(fname_full) - 1);
-        strlcat(fname_full, meta_fname_new, sizeof(fname_full) - 1);
+        strncat(fname_full, path_meta, sizeof(fname_full) - strlen(fname_full) - 1);
+        strncat(fname_full, "/", sizeof(fname_full) - strlen(fname_full) - 1);
+        strncat(fname_full, meta_fname_new, sizeof(fname_full) - strlen(fname_full) - 1);
         trace("gui_meta: saving '%s'\n", fname_full);
         FILE *newfile = fopen(fname_full, "w");
         if (newfile) {

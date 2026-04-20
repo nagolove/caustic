@@ -35,6 +35,16 @@
 #include <string.h>
 #include "koh_table.h"
 
+// __attribute_deprecated_msg__ отсутствует в MinGW
+#ifndef __attribute_deprecated_msg__
+#if defined(__GNUC__)
+#define __attribute_deprecated_msg__(msg) \
+	__attribute__((__deprecated__(msg)))
+#else
+#define __attribute_deprecated_msg__(msg)
+#endif
+#endif
+
 //////////////////////////// отключить предупреждения при снятии константности
 #if defined(__GNUC__) || defined(__clang__)
 #define DIAG_PUSH_WCASTQUAL_OFF \

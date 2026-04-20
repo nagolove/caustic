@@ -2974,6 +2974,7 @@ local function koh_recompile(_args, cfg, _target)
       remove_cache_file(_args)
       mkdir("obj_linux")
       mkdir("obj_wasm")
+      mkdir("obj_win")
 
       printc("%{blue}sub_make:%{reset}", lfs.currentdir())
       local _t1 = time_ms()
@@ -3062,6 +3063,22 @@ function sub_make(
 
    if cfg.exclude_files then
       for _, v in ipairs(cfg.exclude_files) do
+         table.insert(exclude, v)
+      end
+   end
+
+
+   if target == 'win' then
+      local win_exclude = {
+         "koh_ssimulacra.c",
+         "koh_net.c",
+         "koh_net.h",
+         "koh_das.c",
+         "koh_das_mt.c",
+         "koh_dotool.c",
+         "koh_inotifier.c",
+      }
+      for _, v in ipairs(win_exclude) do
          table.insert(exclude, v)
       end
    end

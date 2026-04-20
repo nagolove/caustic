@@ -29,7 +29,9 @@ do {                                                            \
 #include "koh_menu.h"
 #include "koh_metaloader.h"
 #include "koh_music.h"
+#ifndef _WIN32
 #include "koh_net.h"
+#endif
 #include "koh_outline.h"
 #include "koh_pallete.h"
 #include "koh_paragraph.h"

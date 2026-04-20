@@ -10,7 +10,9 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
 #include <threads.h>
+#endif
 #include "cimgui.h"
 #include "koh_common.h"
 #include "koh_raylib_api.h"
@@ -240,7 +242,9 @@ enum AsyncLoaderState {
 };
 
 struct ResAsyncLoader {
+#ifndef _WIN32
     thrd_t                         thread_worker;
+#endif
     _Atomic(enum AsyncLoaderState) state;
 };
 
@@ -265,7 +269,9 @@ ResAsyncLoader *res_async_loader_new(ResAsyncLoaderOpts *opts) {
     ResAsyncLoader *al = calloc(1, sizeof(*al));
     assert(al);
 
+#ifndef _WIN32
     thrd_create(&al->thread_worker, worker_loader, al);
+#endif
 
     return al;
 }

@@ -28,6 +28,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// box2c API: DrawSegmentFcn переименован в DrawLineFcn
+#ifdef _WIN32
+#define DrawSegmentFcn DrawLineFcn
+#endif
+
 #define STR_LEN 64
 #define STR_NUM 64
 
