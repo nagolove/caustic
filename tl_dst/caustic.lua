@@ -396,7 +396,10 @@ local function gather_links(deps, headless)
 end
 
 
-local function get_ready_deps(cfg)
+
+local function get_ready_deps(
+   cfg, target)
+
    local ready_deps = {}
 
    if cfg and cfg.dependencies then
@@ -422,6 +425,33 @@ local function get_ready_deps(cfg)
       end
    end
 
+
+
+   if target then
+      local filtered = {}
+      for _, dep in ipairs(ready_deps) do
+         local any_build = dep.build ~= nil or
+         dep.build_win ~= nil or
+         dep.build_w ~= nil
+         if not any_build then
+            table.insert(filtered, dep)
+         else
+            local has_build = false
+            if target == 'linux' then
+               has_build = dep.build ~= nil
+            elseif target == 'win' then
+               has_build = dep.build_win ~= nil
+            elseif target == 'wasm' then
+               has_build = dep.build_w ~= nil
+            end
+            if has_build then
+               table.insert(filtered, dep)
+            end
+         end
+      end
+      ready_deps = filtered
+   end
+
    return ready_deps
 end
 
@@ -437,7 +467,7 @@ local function get_ready_l(cfg, target, headless)
    else
       base = { "stdc++", "m" }
    end
-   return merge_tables(base, gather_links(get_ready_deps(cfg), headless))
+   return merge_tables(base, gather_links(get_ready_deps(cfg, target), headless))
 end
 
 
@@ -2054,7 +2084,7 @@ end
 
 
 local function get_ready_includes(cfg, target)
-   local ready_deps = get_ready_deps(cfg)
+   local ready_deps = get_ready_deps(cfg, target)
 
 
    local path = e.path_rel_third_party_t[target]
@@ -2128,7 +2158,7 @@ function actions.compile_flags(_args)
          put("-Isrc")
          put("-I.")
 
-         for _, define in ipairs(get_ready_deps_defines(cfg)) do
+         for _, define in ipairs(get_ready_deps_defines(cfg, target)) do
             put(define)
          end
 
@@ -2881,8 +2911,10 @@ local function codegen(cg)
    time_print("codegen", _t0)
 end
 
-local function get_ready_deps_defines(cfg)
-   local ready_deps = get_ready_deps(cfg)
+local function get_ready_deps_defines(
+   cfg, target)
+
+   local ready_deps = get_ready_deps(cfg, target)
    local map_all_deps = {}
 
 
@@ -3211,7 +3243,7 @@ function sub_make(
       table.insert(common_flags, "-latomic")
    end
    flags = ut.merge_tables(flags, common_flags)
-   flags = ut.merge_tables(flags, get_ready_deps_defines(cfg))
+   flags = ut.merge_tables(flags, get_ready_deps_defines(cfg, target))
 
    if verbose then
       print('flags')

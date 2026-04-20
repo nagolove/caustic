@@ -14,7 +14,9 @@
 #include "koh_common.h"
 #include "koh_routine.h"
 #include "koh_b2.h"
+#ifndef _WIN32
 #include "cimplot.h"
+#endif
 
 #include <stddef.h>
 #if defined(__has_feature)
@@ -160,7 +162,9 @@ typedef struct ecs_t {
     // в ImGui поиска
     int             ref_filter_func;
     AllocInspector  alli;
+#ifndef _WIN32
     ImPlotContext   *plot_ctx;
+#endif
 } ecs_t;
 
 // {{{ tests implementation
