@@ -2206,6 +2206,8 @@ local function split_libs_by_linkage(libs, target)
       system_libs["dl"] = nil
       system_libs["rt"] = nil
       system_libs["X11"] = nil
+      system_libs["pthread"] = nil
+      system_libs["stdc++"] = nil
    end
 
    for _, lib in ipairs(libs) do
@@ -2684,6 +2686,11 @@ local function project_link(ctx, cfg, _args, ninja)
 
    if #dynamic_libs > 0 then
       cmd = cmd .. concat(dynamic_libs, " ") .. " "
+   end
+
+
+   if _args.target == 'win' then
+      cmd = cmd .. " -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic "
    end
 
 
