@@ -388,8 +388,8 @@ static void imgui_update(de_ecs *r, de_cp_type cp_type) {
 
 static de_storage* de_storage_new(size_t cp_size, de_cp_type cp_type) {
     de_trace(
-        "de_storage_new: size %zu, type %s\n",
-        cp_size,
+        "de_storage_new: size %llu, type %s\n",
+        (unsigned long long)cp_size,
         de_cp_type_2str(cp_type)
     );
     de_storage *storage = calloc(1, sizeof(de_storage));
@@ -519,14 +519,14 @@ static void de_storage_remove(de_storage* s, de_entity e) {
 
 
 inline static void* de_storage_get_by_index(de_storage* s, size_t index) {
-    de_trace("de_storage_get_by_index: [%s], index %zu\n", s->name, index);
+    de_trace("de_storage_get_by_index: [%s], index %llu\n", s->name, (unsigned long long)index);
     assert(s);
 
     //assert(index < s->cp_data_size);
     if (index >= s->cp_data_size) {
         printf(
-            "de_storage_get_by_index: index %zu, s->cp_data_size %zu\n",
-            index, s->cp_data_size
+            "de_storage_get_by_index: index %llu, s->cp_data_size %llu\n",
+            (unsigned long long)index, (unsigned long long)s->cp_data_size
         );
         koh_trap();
     }
@@ -562,8 +562,8 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
 
     if (de_ecs_verbose)
         trace(
-            "de_ecs_register: ecs %p, type %s, cp_id %zu\n",
-            r, de_cp_type_2str(comp), comp.cp_id
+            "de_ecs_register: ecs %p, type %s, cp_id %llu\n",
+            r, de_cp_type_2str(comp), (unsigned long long)comp.cp_id
         );
 
     assert(r->set_cp_types);
@@ -590,8 +590,8 @@ void de_ecs_register(de_ecs *r, de_cp_type comp) {
     for (int i = 0; i < r->registry_num; i++) {
         if (r->registry[i].cp_id == comp.cp_id) {
             trace(
-                "de_ecs_register: component '%s' has duplicated cp_id %zu\n",
-                comp.name, comp.cp_id
+                "de_ecs_register: component '%s' has duplicated cp_id %llu\n",
+                comp.name, (unsigned long long)comp.cp_id
             );
             exit(EXIT_FAILURE);
         }
@@ -1315,7 +1315,7 @@ void* de_view_get_by_index(de_view* v, size_t pool_index) {
     assert(v);
     assert(pool_index >= 0 && pool_index < DE_MAX_VIEW_COMPONENTS);
     assert(de_view_valid(v));
-    de_trace("de_view_get_by_index: view %p, pool_index %zu\n", v, pool_index);
+    de_trace("de_view_get_by_index: view %p, pool_index %llu\n", v, (unsigned long long)pool_index);
     return de_storage_get(v->all_pools[pool_index], v->current_entity);
 }
 
@@ -1351,8 +1351,8 @@ de_view de_view_create(de_ecs* r, size_t cp_count, de_cp_type* cp_types) {
         strcat(types_buf, cp_types[i].name);
     }
     de_trace(
-        "de_create_view: ecs %p, count %zu, types %s\n",
-        r, cp_count, types_buf
+        "de_create_view: ecs %p, count %llu, types %s\n",
+        r, (unsigned long long)cp_count, types_buf
     );
 #endif
 

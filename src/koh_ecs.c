@@ -3406,8 +3406,8 @@ static inline void ecs_assert(ecs_t *r) {
     assert(r->entities_num >= 0);
     // проверить на наличие свободных индексов для сущностей
     if (r->stack_last < 0) {
-        printf("ecs_assert: stack_last < 0, %ld\n", r->stack_last);
-        printf("ecs_assert: max_id %ld\n", r->max_id);
+        printf("ecs_assert: stack_last < 0, %lld\n", (long long)r->stack_last);
+        printf("ecs_assert: max_id %lld\n", (long long)r->max_id);
         koh_trap();
     }
     assert(r->stack_last >= 0);

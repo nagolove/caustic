@@ -24,7 +24,9 @@ static inline StrBuf inotifier_list() {
 	return (StrBuf){};
 }
 static inline void inotifier_gui() {}
+#ifdef KOH_INOTIFIER_VERBOSE
 static bool inotifier_verbose = false;
+#endif
 
 #else
 

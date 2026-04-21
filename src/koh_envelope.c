@@ -930,7 +930,7 @@ void env_import(Envelope_t e, const char *lua_str) {
     size_t len = lua_rawlen(l, -1);
 
     env_new_points(e, len);
-    trace("env_import: len %zu\n", len);
+    trace("env_import: len %llu\n", (unsigned long long)len);
 
     trace("env_import: 1 [%s]\n", L_stack_dump(l));
 

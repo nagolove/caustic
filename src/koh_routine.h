@@ -100,7 +100,11 @@
 #define KOH_FORCE_INLINE inline __attribute__((always_inline))
 #define KOH_INLINE inline __attribute__((always_inline))
 #define KOH_ATTR_FORMAT(f, s) __attribute__((__format__(__printf__, f, s))) 
+#ifdef _WIN32
+#define KOH_HIDDEN
+#else
 #define KOH_HIDDEN __attribute__((visibility("hidden")))
+#endif
 #define assume(cond) do { if (!(cond)) __builtin_unreachable(); } while (0)
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
