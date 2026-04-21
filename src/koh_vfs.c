@@ -1,12 +1,38 @@
 #include "koh_vfs.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include "physfs.h"
 #include "koh_routine.h"
 
-void vfs_init(char *argv0) {
-    PHYSFS_init(argv0);
+void vfs_init(
+    int argc, char **argv, const char *archive
+) {
+    PHYSFS_init(argv[0]);
+
+    bool archive_only = false;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i],
+            "--vfs-archive-only") == 0)
+            archive_only = true;
+    }
+
+    if (!archive_only)
+        PHYSFS_mount(".", NULL, 0);
+
+    if (archive) {
+        int append = archive_only ? 0 : 1;
+        if (PHYSFS_mount(archive, NULL, append))
+            printf(
+                "vfs: %s смонтирован\n", archive
+            );
+        else
+            printf(
+                "vfs: ошибка монтирования %s\n",
+                archive
+            );
+    }
 }
 
 void vfs_shutdown() {
