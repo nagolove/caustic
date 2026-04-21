@@ -71,3 +71,51 @@ void *vfs_load(const char *vpath, size_t *out_sz, bool add_null_term) {
     *out_sz = len;
     return data;
 }
+
+void *vfs_try_load(
+    const char *vpath, size_t *out_sz,
+    bool add_null_term
+) {
+    assert(vpath);
+    assert(out_sz);
+    *out_sz = 0;
+
+    if (!PHYSFS_isInit())
+        return NULL;
+    if (!PHYSFS_exists(vpath))
+        return NULL;
+
+    PHYSFS_File *f = PHYSFS_openRead(vpath);
+    if (!f)
+        return NULL;
+
+    PHYSFS_sint64 len64 = PHYSFS_fileLength(f);
+    if (len64 < 0) {
+        PHYSFS_close(f);
+        return NULL;
+    }
+
+    size_t len = (size_t)len64;
+    size_t alloc_sz =
+        len + (add_null_term ? 1 : 0);
+    void *data = malloc(alloc_sz);
+    if (!data) {
+        PHYSFS_close(f);
+        return NULL;
+    }
+
+    PHYSFS_sint64 got =
+        PHYSFS_readBytes(f, data, (PHYSFS_sint64)len);
+    PHYSFS_close(f);
+
+    if (got < 0 || (size_t)got != len) {
+        free(data);
+        return NULL;
+    }
+
+    if (add_null_term)
+        ((char *)data)[len] = 0;
+
+    *out_sz = len;
+    return data;
+}

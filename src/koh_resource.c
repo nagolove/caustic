@@ -6,6 +6,7 @@
 #include "koh_common.h"
 #include "koh_logger.h"
 #include "koh_routine.h"
+#include "koh_vfs.h"
 #include "raylib.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -79,11 +80,24 @@ Resource *res_add(
 }
 // */
 
-Texture2D res_tex_load(Resource *res_list, const char *fname) {
-    Texture2D tex = LoadTexture(fname);
+Texture2D res_tex_load(
+    Resource *res_list, const char *fname
+) {
+    Texture2D tex = {0};
+    size_t sz = 0;
+    void *buf = vfs_try_load(fname, &sz, false);
+    if (buf) {
+        const char *ext = GetFileExtension(fname);
+        Image img = LoadImageFromMemory(ext, buf, sz);
+        tex = LoadTextureFromImage(img);
+        UnloadImage(img);
+        free(buf);
+    } else {
+        tex = LoadTexture(fname);
+    }
     res_add(
-        res_list, RT_TEXTURE, 
-        &tex, sizeof(Texture2D), 
+        res_list, RT_TEXTURE,
+        &tex, sizeof(Texture2D),
         fname, strlen(fname) + 1
     );
     return tex;
@@ -106,27 +120,51 @@ struct FontSource {
     int font_size;
 };
 
-Font res_font_load(Resource *res_list, const char *fname, int font_size) {
-    Font fnt = load_font_unicode(fname, font_size);
-    assert(strlen(fname) < MAX_FNAME);
-    /*
-    if (strlen(fname) >= MAX_FNAME) {
-        printf("fname: %s\n", fname);
-        abort();
+Font res_font_load(
+    Resource *res_list,
+    const char *fname, int font_size
+) {
+    Font fnt;
+    size_t sz = 0;
+    void *buf = vfs_try_load(fname, &sz, false);
+    if (buf) {
+        fnt = load_font_unicode_mem(
+            buf, (int)sz, font_size
+        );
+        free(buf);
+    } else {
+        fnt = load_font_unicode(fname, font_size);
     }
-    */
+    assert(strlen(fname) < MAX_FNAME);
     struct FontSource fnt_source = {0};
     strcpy(fnt_source.fname, fname);
     fnt_source.font_size = font_size;
-    res_add(res_list, RT_FONT, &fnt, sizeof(fnt), &fnt_source, sizeof(fnt_source));
+    res_add(
+        res_list, RT_FONT,
+        &fnt, sizeof(fnt),
+        &fnt_source, sizeof(fnt_source)
+    );
     return fnt;
 }
 
-Shader res_shader_load(Resource *res_list, const char *vertex_fname) {
-    Shader shdr = LoadShader(NULL, vertex_fname);
+Shader res_shader_load(
+    Resource *res_list, const char *vertex_fname
+) {
+    Shader shdr;
+    size_t sz = 0;
+    void *buf = vfs_try_load(
+        vertex_fname, &sz, true
+    );
+    if (buf) {
+        shdr = LoadShaderFromMemory(
+            NULL, (const char *)buf
+        );
+        free(buf);
+    } else {
+        shdr = LoadShader(NULL, vertex_fname);
+    }
     res_add(
-        res_list, 
-        RT_SHADER, 
+        res_list, RT_SHADER,
         &shdr, sizeof(shdr),
         vertex_fname, strlen(vertex_fname) + 1
     );
@@ -387,10 +425,22 @@ static void *copy_alloc(void *ptr, size_t sz) {
     return cp;
 }
 
-Shader reslist_load_shader(ResList *l, const char *fname) {
+Shader reslist_load_shader(
+    ResList *l, const char *fname
+) {
     assert(l);
     assert(fname);
-    Shader s = LoadShader(NULL, fname);
+    Shader s;
+    size_t sz = 0;
+    void *buf = vfs_try_load(fname, &sz, true);
+    if (buf) {
+        s = LoadShaderFromMemory(
+            NULL, (const char *)buf
+        );
+        free(buf);
+    } else {
+        s = LoadShader(NULL, fname);
+    }
     R *r = reslist_add(l);
     r->type = RT_SHADER;
     assert(strlen(fname) < sizeof(r->fname));
@@ -399,7 +449,9 @@ Shader reslist_load_shader(ResList *l, const char *fname) {
     return s;
 }
 
-Texture reslist_load_texture(ResList *l, const char *fname) {
+Texture reslist_load_texture(
+    ResList *l, const char *fname
+) {
     assert(l);
     assert(fname);
 
@@ -417,7 +469,21 @@ Texture reslist_load_texture(ResList *l, const char *fname) {
         printf("reslist: overlay %s\n", overlay_path);
     }
 
-    Texture t = LoadTexture(load_path);
+    Texture t = {0};
+    size_t sz = 0;
+    void *buf = vfs_try_load(load_path, &sz, false);
+    if (buf) {
+        const char *ext =
+            GetFileExtension(load_path);
+        Image img =
+            LoadImageFromMemory(ext, buf, sz);
+        t = LoadTextureFromImage(img);
+        UnloadImage(img);
+        free(buf);
+    } else {
+        t = LoadTexture(load_path);
+    }
+
     R *r = reslist_add(l);
     r->type = RT_TEXTURE;
     assert(strlen(fname) < sizeof(r->fname));
@@ -451,11 +517,23 @@ RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
     return rt;
 }
 
-Font reslist_load_font_unicode(ResList *l, const char *fname, int size) {
+Font reslist_load_font_unicode(
+    ResList *l, const char *fname, int size
+) {
     assert(l);
     assert(fname);
     assert(size > 0);
-    Font f = load_font_unicode(fname, size);
+    Font f;
+    size_t sz = 0;
+    void *buf = vfs_try_load(fname, &sz, false);
+    if (buf) {
+        f = load_font_unicode_mem(
+            buf, (int)sz, size
+        );
+        free(buf);
+    } else {
+        f = load_font_unicode(fname, size);
+    }
     R *r = reslist_add(l);
     r->type = RT_FONT;
     r->fnt_size = size;
@@ -464,12 +542,23 @@ Font reslist_load_font_unicode(ResList *l, const char *fname, int size) {
     return f;
 }
 
-Font reslist_load_font(ResList *l, const char *fname, int size) {
+Font reslist_load_font(
+    ResList *l, const char *fname, int size
+) {
     assert(l);
     assert(fname);
     assert(size > 0);
-    //Font f = LoadFontEx(fname, size, NULL, 0);
-    Font f = load_font_unicode(fname, size);
+    Font f;
+    size_t sz = 0;
+    void *buf = vfs_try_load(fname, &sz, false);
+    if (buf) {
+        f = load_font_unicode_mem(
+            buf, (int)sz, size
+        );
+        free(buf);
+    } else {
+        f = load_font_unicode(fname, size);
+    }
     R *r = reslist_add(l);
     r->type = RT_FONT;
     r->fnt_size = size;

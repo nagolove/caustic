@@ -155,6 +155,11 @@ const char *color2str(Color c);
 const char *Color_to_str(Color c);
 Font load_font_unicode(const char *fname, int size);
 
+// Загрузка шрифта из буфера в памяти (TTF/OTF)
+Font load_font_unicode_mem(
+    const unsigned char *data, int data_size, int size
+);
+
 // -1..1 -> 0..1
 float axis2zerorange(float value);
 

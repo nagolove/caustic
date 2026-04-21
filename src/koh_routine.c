@@ -203,7 +203,41 @@ Font load_font_unicode(const char *fname, int size) {
     assert(size > 0);
     assert(cmn.font_chars);
     assert(cmn.font_chars_num > 0);
-    return LoadFontEx(fname, size, cmn.font_chars, cmn.font_chars_num);
+    return LoadFontEx(
+        fname, size,
+        cmn.font_chars, cmn.font_chars_num
+    );
+}
+
+Font load_font_unicode_mem(
+    const unsigned char *data, int data_size, int size
+) {
+    assert(data);
+    assert(data_size > 0);
+    assert(size > 0);
+    assert(cmn.font_chars);
+    assert(cmn.font_chars_num > 0);
+
+    Font fnt = {0};
+    int glyph_count = 0;
+
+    fnt.glyphs = LoadFontData(
+        data, data_size, size,
+        cmn.font_chars, cmn.font_chars_num,
+        FONT_DEFAULT, &glyph_count
+    );
+    if (!fnt.glyphs) return fnt;
+
+    Image atlas = GenImageFontAtlas(
+        fnt.glyphs, &fnt.recs,
+        glyph_count, size, 0, 1
+    );
+    fnt.texture = LoadTextureFromImage(atlas);
+    UnloadImage(atlas);
+
+    fnt.baseSize = size;
+    fnt.glyphCount = glyph_count;
+    return fnt;
 }
 
 float axis2zerorange(float value) {
