@@ -304,6 +304,14 @@ static void dummy_rlEnableFramebuffer(unsigned int id) {
     (void)id;
 }
 
+static void dummy_SetWindowFocused(void) {
+}
+
+static void dummy_SetWindowSize(int width, int height) {
+    (void)width;
+    (void)height;
+}
+
 // === Получение API ===
 
 static raylib_api cached_api = {0};
@@ -317,6 +325,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
     raylib_api api = {0};
 
     if (is_dummy) {
+        api.SetWindowFocused = dummy_SetWindowFocused;
+        api.SetWindowSize = dummy_SetWindowSize;
         api.InitWindow = dummy_InitWindow;
         api.CloseWindow = dummy_CloseWindow;
         api.WindowShouldClose = dummy_WindowShouldClose;
@@ -483,6 +493,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.GenImageFontAtlas = GenImageFontAtlas;
         api.rlGetActiveFramebuffer = rlGetActiveFramebuffer;
         api.rlEnableFramebuffer = rlEnableFramebuffer;
+        api.SetWindowFocused = SetWindowFocused;
+        api.SetWindowSize = SetWindowSize;
         // ImGui
         api.rlImGuiSetup = rlImGuiSetup;
         api.rlImGuiBegin = rlImGuiBegin;

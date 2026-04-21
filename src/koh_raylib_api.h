@@ -7,6 +7,8 @@
 typedef struct raylib_api {
     // === Инициализация и окно ===
     void (*InitWindow)(int width, int height, const char *title);
+    void (*SetWindowFocused)(void);
+    void (*SetWindowSize)(int width, int height);
     void (*CloseWindow)(void);
     bool (*WindowShouldClose)(void);
     void (*SetConfigFlags)(unsigned int flags);
