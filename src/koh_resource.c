@@ -471,12 +471,31 @@ Texture reslist_load_texture(
 
     Texture t = {0};
     size_t sz = 0;
-    void *buf = vfs_try_load(load_path, &sz, false);
+    bool loaded_dds = false;
+
+    char dds_path[256] = {0};
+    const char *ext = GetFileExtension(load_path);
+    if (strcmp(ext, ".png") == 0) {
+        snprintf(
+            dds_path, sizeof(dds_path),
+            "%.*s.dds",
+            (int)(strlen(load_path) - 4), load_path
+        );
+    }
+
+    void *buf = NULL;
+    if (dds_path[0]) {
+        buf = vfs_try_load(dds_path, &sz, false);
+        if (buf) loaded_dds = true;
+    }
+    if (!buf)
+        buf = vfs_try_load(load_path, &sz, false);
+
     if (buf) {
-        const char *ext =
-            GetFileExtension(load_path);
+        const char *load_ext = loaded_dds
+            ? ".dds" : GetFileExtension(load_path);
         Image img =
-            LoadImageFromMemory(ext, buf, sz);
+            LoadImageFromMemory(load_ext, buf, sz);
         t = LoadTextureFromImage(img);
         UnloadImage(img);
         free(buf);
