@@ -4017,8 +4017,10 @@ function actions.clean(_)
       os.execute("rm " .. cfg.artifact .. ".js")
    end
 
-   os.execute("rm ./obj_linux/*")
-   os.execute("rm ./obj_wasm/*")
+   os.remove("src/" .. cache_name)
+   os.execute("rm ./obj_linux/*.o")
+   os.execute("rm ./obj_win/*.o")
+   os.execute("rm ./obj_wasm/*.o")
 end
 
 function actions.cppcheck(_args)
