@@ -15,6 +15,7 @@ typedef struct raylib_api {
     void (*SetExitKey)(int key);
     void (*SetTargetFPS)(int fps);
     void (*InitAudioDevice)(void);
+    void (*ToggleFullscreen)(void);                                // Toggle window state: fullscreen/windowed, resizes monitor to match window resolution
     
     // === Рендеринг ===
     void (*BeginDrawing)(void);

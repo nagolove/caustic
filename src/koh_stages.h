@@ -12,7 +12,9 @@ TODO: Пока сцена не становится активной, то ее 
 
 struct Stage;
 
-#define MAX_STAGE_NAME  64
+enum {
+    MAX_STAGE_NAME = 64,
+};
 
 typedef void (*Stage_callback)(struct Stage *s);
 /*typedef void (*Stage_data_callback)(struct Stage *s, const char *str);*/

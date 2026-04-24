@@ -545,7 +545,6 @@ const char *uint64_to_str_bin(uint64_t value);
 
 NORETURN void koh_fatal();
 
-
 StrBuf Texture2D_2str(const Texture2D *tex);
 // TreeNode вкладка с настройкой камеры
 void camera_gui(Camera2D *cam, const char *cam_label);

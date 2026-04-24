@@ -1,4 +1,4 @@
-/* vim: fdm=marker */
+/* vim: set fdm=marker */
 
 #include "koh_raylib_api.h"
 #include "rlgl.h"
@@ -312,6 +312,9 @@ static void dummy_SetWindowSize(int width, int height) {
     (void)height;
 }
 
+static void dummy_ToggleFullscreen() {
+}
+
 // === Получение API ===
 
 static raylib_api cached_api = {0};
@@ -406,6 +409,8 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.GenImageFontAtlas = dummy_GenImageFontAtlas;
         api.rlGetActiveFramebuffer = dummy_rlGetActiveFramebuffer;
         api.rlEnableFramebuffer = dummy_rlEnableFramebuffer;
+        api.ToggleFullscreen = dummy_ToggleFullscreen;
+
         // ImGui — no-op в dummy
         api.rlImGuiSetup = dummy_rlImGuiSetup;
         api.rlImGuiBegin = dummy_rlImGuiBegin;
@@ -495,6 +500,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.rlEnableFramebuffer = rlEnableFramebuffer;
         api.SetWindowFocused = SetWindowFocused;
         api.SetWindowSize = SetWindowSize;
+        api.ToggleFullscreen = ToggleFullscreen;                                // Toggle window state: fullscreen/windowed, resizes monitor to match window resolution
         // ImGui
         api.rlImGuiSetup = rlImGuiSetup;
         api.rlImGuiBegin = rlImGuiBegin;

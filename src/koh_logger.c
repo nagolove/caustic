@@ -172,6 +172,7 @@ void koh_log_custom(int logLevel, const char *text, va_list args) {
 
     printf("[%.4f] ", time_get());
 
+#ifndef _WIN32
     switch (logLevel) {
         case LOG_INFO:    printf("[\033[1;32mINFO] : \033[0m"); break;
         case LOG_ERROR:   printf("[\033[1;31mERROR] : \033[0m"); break;
@@ -179,6 +180,7 @@ void koh_log_custom(int logLevel, const char *text, va_list args) {
         case LOG_DEBUG:   printf("[\033[1;34mDEBUG] : \033[0m"); break;
         default: break;
     }
+#endif
 
     if ((logLevel == LOG_WARNING || logLevel == LOG_ERROR) &&
         strstr(text, "SHADER") != NULL)
