@@ -2696,7 +2696,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
     --print('static_libs', inspect(static_libs))
     --print('dynamic_libs', inspect(dynamic_libs))
 
-    if not _args.noasan and _args.target ~= 'win' then
+    if not _args.noasan and _args.target == 'linux' then
         cmd = cmd .. " -fsanitize=address "
     end
 
@@ -3215,16 +3215,9 @@ function sub_make(
         table.insert(defines, define)
     end
 
-    -- TODO: Починить отключание санитайзера
-    --[[
-    if not _args.noasan or _args.target ~= 'wasm' then
-        for _, flag in ipairs(flags_sanitazer) do
-            table.insert(flags, flag)
-        end
-    else
-        printc("%{yellow}sanitazer disabled%{reset}")
+    if not _args.noasan and _args.target == 'linux' then
+        table.insert(flags, "-fsanitize=address")
     end
-    --]]
 
     if cfg.flags and type(cfg.flags) == 'table' then
         for _, flag in ipairs(cfg.flags) do

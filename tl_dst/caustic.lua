@@ -2696,7 +2696,7 @@ local function project_link(ctx, cfg, _args, ninja)
 
 
 
-   if not _args.noasan and _args.target ~= 'win' then
+   if not _args.noasan and _args.target == 'linux' then
       cmd = cmd .. " -fsanitize=address "
    end
 
@@ -3215,16 +3215,9 @@ function sub_make(
       table.insert(defines, define)
    end
 
-
-
-
-
-
-
-
-
-
-
+   if not _args.noasan and _args.target == 'linux' then
+      table.insert(flags, "-fsanitize=address")
+   end
 
    if cfg.flags and type(cfg.flags) == 'table' then
       for _, flag in ipairs(cfg.flags) do
