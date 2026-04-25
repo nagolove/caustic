@@ -326,6 +326,12 @@ end
 
 
 
+
+
+
+
+
+
 local _dependecy_init
 
 
@@ -706,6 +712,7 @@ end
 
 
 
+
 local parser_setup = {
 
 
@@ -867,10 +874,18 @@ with -g option just call 'git status' for each entry
    snapshot = {
       summary = "make revisions and branches snapshot of target modules tree",
    },
+   profile = {
+      summary = "профилирование через AMDuProf, вывод отчёта через tabular",
+      options = { "-c --config" },
+      flags = {
+         { "-f --full", "показать все секции отчёта" },
+      },
+   },
 }
 
 
 local actions = {}
+
 
 
 
@@ -3550,6 +3565,416 @@ function actions.run(_args)
    end
 end
 
+
+local function hex_hash32(s)
+   local raw = hash32(s)
+   local t = {}
+   for i = 1, #raw do
+      insert(t, format("%02x", string.byte(raw, i)))
+   end
+   return concat(t)
+end
+
+
+
+
+
+local function parse_csv_line(line)
+   local fields = {}
+   local i = 1
+   local len = #line
+   while i <= len do
+      if line:sub(i, i) == '"' then
+
+         local j = line:find('"', i + 1, true)
+         while j and j < len and line:sub(j + 1, j + 1) == '"' do
+            j = line:find('"', j + 2, true)
+         end
+         if not j then
+            j = len
+         end
+
+         local quoted = line:sub(i + 1, j - 1):gsub('""', '"')
+         i = j + 1
+
+         local suffix_start = i
+         local comma_pos = line:find(',', i, true)
+         if comma_pos then
+            local suffix = line:sub(suffix_start, comma_pos - 1)
+            insert(fields, (suffix ~= "" and suffix ~= " ") and
+            (quoted .. suffix) or
+            quoted)
+            i = comma_pos + 1
+         else
+            local suffix = line:sub(suffix_start):match("^%s*(.-)%s*$")
+            insert(fields, (suffix ~= "") and
+            (quoted .. " " .. suffix) or
+            quoted)
+            i = len + 1
+         end
+      else
+
+         local next_comma = line:find(',', i, true)
+         if next_comma then
+            insert(fields, line:sub(i, next_comma - 1))
+            i = next_comma + 1
+         else
+            insert(fields, line:sub(i))
+            i = len + 1
+         end
+      end
+   end
+   return fields
+end
+
+
+
+
+
+
+
+
+
+
+local function section_name_from_line(line)
+   local quoted = line:match('^"([^"]+)"%s*$')
+   if quoted then
+      return quoted
+   end
+
+   local upper_name = line:match("^([%u%s]+)$")
+   if upper_name then
+      return upper_name
+   end
+   return nil
+end
+
+
+local function profile_skip_section(sec)
+   if sec.name == "AMD uProf (Version:5.2.606.0)" or
+      sec.name == "PERFORMANCE ANALYSIS REPORT" then
+
+      return true
+   end
+   return false
+end
+
+
+local function parse_amd_csv(text)
+   local sections = {}
+   local lines = {}
+   for line in text:gmatch("[^\n\r]+") do
+      insert(lines, line)
+   end
+
+   local i = 1
+   local current_sec
+
+   while i <= #lines do
+      local line = lines[i]
+
+
+      if line:match("^%s*$") then
+         if current_sec and not profile_skip_section(current_sec) then
+            insert(sections, current_sec)
+         end
+         current_sec = nil
+         i = i + 1
+         goto continue
+      end
+
+      local sec_name = section_name_from_line(line)
+
+
+      if not current_sec then
+         current_sec = {
+            name = sec_name or "",
+            meta = {},
+            header = {},
+            rows = {},
+         }
+         i = i + 1
+         goto continue
+      end
+
+
+      if sec_name then
+
+         if not profile_skip_section(current_sec) then
+            insert(sections, current_sec)
+         end
+         current_sec = {
+            name = sec_name,
+            meta = {},
+            header = {},
+            rows = {},
+         }
+         i = i + 1
+         goto continue
+      end
+
+
+      local fields = parse_csv_line(line)
+
+
+      local first_key = fields[1] and fields[1]:match("^(.*):%s*$")
+      if first_key and #fields >= 2 then
+
+         current_sec.meta[first_key] = fields[2] or ""
+      elseif #current_sec.header == 0 then
+
+         current_sec.header = fields
+      else
+
+         insert(current_sec.rows, fields)
+      end
+
+      i = i + 1
+      ::continue::
+   end
+
+
+   if current_sec and not profile_skip_section(current_sec) then
+      insert(sections, current_sec)
+   end
+
+   return sections
+end
+
+
+local function shorten_path(path)
+   local is_quoted = false
+   if path:sub(1, 1) == '"' and path:sub(-1) == '"' then
+      is_quoted = true
+      path = path:sub(2, -2)
+   end
+
+   local basename = path:match(".*/(.*)") or path
+
+   local so_name = basename:match("^(lib.+%.so)%.%d")
+   if so_name then
+      return is_quoted and ('"' .. so_name .. '"') or so_name
+   end
+
+   local kernel = basename:match("^%[kernel%.")
+   if kernel then
+      return is_quoted and ('"[kernel]"') or "[kernel]"
+   end
+   return is_quoted and ('"' .. basename .. '"') or basename
+end
+
+local function profile_is_meta_section(name)
+   return name == "EXECUTION" or
+   name == "PROFILE DETAILS" or
+   name == "MONITORED EVENTS" or
+   name == "APPLICATION PERFORMANCE SNAPSHOT"
+end
+
+local function profile_print_section(
+   sec, full)
+
+
+   if not full and profile_is_meta_section(sec.name) then
+      return
+   end
+
+   printc(
+   "%{green}─── " ..
+   sec.name ..
+   " ───%{reset}")
+
+
+
+   for key, value in pairs(sec.meta) do
+      print(format("  %-30s %s", key .. ":", value))
+   end
+
+
+   if #sec.header > 0 and #sec.rows > 0 then
+      local module_col
+      for col_idx, h in ipairs(sec.header) do
+         local h_stripped = h:
+         gsub('^"', ''):gsub('"$', ''):
+         match("^%s*(.-)%s*$")
+         if h_stripped == "Module" or
+            h_stripped == "MODULE" then
+
+            module_col = col_idx
+         end
+      end
+
+
+      local tbl = {}
+      for _, row in ipairs(sec.rows) do
+         local row_map = {}
+         for col_idx, h in ipairs(sec.header) do
+            local val = row[col_idx] or ""
+            local h_stripped = h:
+            gsub('^"', ''):gsub('"$', ''):
+            match("^%s*(.-)%s*$")
+
+            if col_idx == module_col then
+               val = shorten_path(val)
+            end
+            row_map[h_stripped] = val:
+            match("^%s*(.-)%s*$")
+         end
+         insert(tbl, row_map)
+      end
+      print(tabular(tbl))
+   end
+
+   print()
+end
+
+
+local profile_configs = {
+   ["tbp"] = "Time-based Sampling — где программа проводит время",
+   ["hotspots"] = "Hotspots — где программа проводит время + callstack",
+   ["memory"] = "Cache Analysis — ложное разделение cache-line (IBS OP)",
+}
+
+function actions.profile(_args)
+   local amd_profiler = getenv("AMD_PROFILER")
+   if not amd_profiler then
+      printc(
+      "%{red}AMD_PROFILER не задана. " ..
+      "Добавьте в ~/.zshrc:%{reset}")
+
+      printc(
+      "  export AMD_PROFILER=~/AMDuProf_Linux_x64_5.2.606/bin/")
+
+      os.exit(1)
+   end
+
+   local config = _args.config or "tbp"
+   if not profile_configs[config] then
+      printc(
+      "%{red}Неизвестный режим профилирования '" ..
+      (config) .. "'. Доступные:%{reset}")
+
+      for k, v in pairs(profile_configs) do
+         print(format("  %-12s %s", k, v))
+      end
+      return
+   end
+
+   printc(
+   "%{cyan}Режим: " .. (config) ..
+   " — " .. profile_configs[config] .. "%{reset}")
+
+
+   local cwd = lfs.currentdir()
+   local cfgs, _ = search_and_load_cfgs_up("bld.lua")
+
+   local artifacts = {}
+   for _, cfg in ipairs(cfgs) do
+      if cfg.artifact then
+         insert(artifacts, cfg.artifact)
+      end
+   end
+
+   if #artifacts == 0 then
+      printc("%{red}Нет artifact в bld.lua%{reset}")
+      return
+   end
+
+   local unique = hex_hash32(cwd)
+   local full = _args.full ~= nil
+
+   for _, artifact in ipairs(artifacts) do
+      local prof_dir = "/tmp/" ..
+      artifact .. "_" .. unique ..
+      "_" .. (config) .. "_prof"
+
+      printc(
+      "%{yellow}Профайлер не пересобирает, " ..
+      "запускает текущий бинарник%{reset}")
+
+
+      local collect_cmd = format(
+      "%s/AMDuProfCLI collect --config %s -o %s ./%s",
+      amd_profiler, config, prof_dir, artifact)
+
+      cmd_do(collect_cmd)
+
+
+      local session_dir
+      for dir in lfs.dir(prof_dir) do
+         if dir ~= "." and dir ~= ".." then
+            local attr = lfs.attributes(
+            prof_dir .. "/" .. dir)
+
+            if attr and attr.mode == "directory" then
+               session_dir = prof_dir .. "/" .. dir
+               break
+            end
+         end
+      end
+
+      if not session_dir then
+         printc(
+         "%{red}Не найден каталог сессии профайлера%{reset}")
+
+         return
+      end
+
+
+      local csv_path = prof_dir .. "/report.csv"
+      local report_cmd = format(
+      "%s/AMDuProfCLI report -i %s --report-output %s",
+      amd_profiler, session_dir, csv_path)
+
+      cmd_do(report_cmd)
+
+
+      local f = io.open(csv_path, "r")
+      if not f then
+         printc("%{red}Не удалось открыть CSV отчёт%{reset}")
+         return
+      end
+      local text = f:read("*a")
+      f:close()
+
+      local sections = parse_amd_csv(text)
+
+
+      printc(
+      "%{cyan}─── koh profile: " ..
+      artifact ..
+      " ───%{reset}")
+
+
+
+      local duration = ""
+      local threads = ""
+      for _, sec in ipairs(sections) do
+         if sec.meta["Profile Duration"] then
+            duration = sec.meta["Profile Duration"]
+         end
+         if sec.meta["Number Of Threads"] then
+            threads = sec.meta["Number Of Threads"]
+         end
+      end
+      if duration ~= "" or threads ~= "" then
+         local parts = {}
+         if duration ~= "" then
+            insert(parts, "Длительность: " .. duration)
+         end
+         if threads ~= "" then
+            insert(parts, "Потоки: " .. threads)
+         end
+         print("  " .. concat(parts, " | "))
+      end
+
+      print()
+
+
+      for _, sec in ipairs(sections) do
+         profile_print_section(sec, full)
+      end
+   end
+end
 local function cfg_empty(cfg)
    local i = 0
    for _, _ in pairs(cfg) do

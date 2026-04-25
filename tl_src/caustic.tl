@@ -317,6 +317,12 @@ local enum TargetBuildFunc
     "build_win"
 end
 
+local enum ProfileConfig
+    "tbp"
+    "hotspots"
+    "memory"
+end
+
 local enum Kind
     "app"
     "shared"
@@ -702,6 +708,7 @@ local record Actions
     test: function(Args)
     unit: function(Args)
     update: function(Args)
+    profile: function(Args)
 
     -- }}}
 end
@@ -867,6 +874,13 @@ with -g option just call 'git status' for each entry
     snapshot = {
         summary = "make revisions and branches snapshot of target modules tree",
     },
+    profile = {
+        summary = "профилирование через AMDuProf, вывод отчёта через tabular",
+        options = { "-c --config" },
+        flags = {
+            { "-f --full", "показать все секции отчёта" },
+        },
+    },
 }
 -- }}}
 
@@ -893,6 +907,7 @@ local record Args
     full: string        -- XXX: Что значит?
     headless: string    -- сборка с безголовым рейлибом
     profiling: string   -- профилировка времени сборки
+    config: ProfileConfig
     flags: {string}
     -- }}}
 end
@@ -3550,6 +3565,416 @@ function actions.run(_args: Args)
     end
 end
 
+-- hash32 возвращает raw 4 байта, нужна hex-строка для путей
+local function hex_hash32(s: string): string
+    local raw = hash32(s)
+    local t: {string} = {}
+    for i = 1, #raw do
+        insert(t, format("%02x", string.byte(raw, i)))
+    end
+    return concat(t)
+end
+
+-- Парсинг CSV с учётом кавычек и суффиксов после них.
+-- AMDuProf генерирует заголовки вида: "CPU_TIME" (seconds)
+-- где (seconds) — суффикс после закрывающей кавычки,
+-- принадлежащий тому же полю.
+local function parse_csv_line(line: string): {string}
+    local fields: {string} = {}
+    local i = 1
+    local len = #line
+    while i <= len do
+        if line:sub(i, i) == '"' then
+            -- Quoted field: найти закрывающую кавычку
+            local j = line:find('"', i + 1, true)
+            while j and j < len and line:sub(j + 1, j + 1) == '"' do
+                j = line:find('"', j + 2, true)
+            end
+            if not j then
+                j = len
+            end
+            -- Содержимое внутри кавычек
+            local quoted = line:sub(i + 1, j - 1):gsub('""', '"')
+            i = j + 1
+            -- Прочитать суффикс после кавычки до запятой или конца
+            local suffix_start = i
+            local comma_pos = line:find(',', i, true)
+            if comma_pos then
+                local suffix = line:sub(suffix_start, comma_pos - 1)
+                insert(fields, (suffix ~= "" and suffix ~= " ")
+                    and (quoted .. suffix)
+                    or quoted)
+                i = comma_pos + 1
+            else
+                local suffix = line:sub(suffix_start):match("^%s*(.-)%s*$")
+                insert(fields, (suffix ~= "")
+                    and (quoted .. " " .. suffix)
+                    or quoted)
+                i = len + 1
+            end
+        else
+            -- Unquoted field
+            local next_comma = line:find(',', i, true)
+            if next_comma then
+                insert(fields, line:sub(i, next_comma - 1))
+                i = next_comma + 1
+            else
+                insert(fields, line:sub(i))
+                i = len + 1
+            end
+        end
+    end
+    return fields
+end
+
+local record ProfileSection
+    name: string
+    meta: {string: string}
+    header: {string}
+    rows: {{string}}
+end
+
+-- Определить имя секции из строки CSV.
+-- Возвращает: "section_name", true если имя найдено, или nil.
+local function section_name_from_line(line: string): string
+    local quoted = line:match('^"([^"]+)"%s*$')
+    if quoted then
+        return quoted
+    end
+    -- EXECUTION, PROFILE DETAILS, MONITORED EVENTS, APPLICATION PERFORMANCE SNAPSHOT
+    local upper_name = line:match("^([%u%s]+)$")
+    if upper_name then
+        return upper_name
+    end
+    return nil
+end
+
+-- Является ли секция мусорной (нет полезных данных)
+local function profile_skip_section(sec: ProfileSection): boolean
+    if sec.name == "AMD uProf (Version:5.2.606.0)"
+        or sec.name == "PERFORMANCE ANALYSIS REPORT"
+    then
+        return true
+    end
+    return false
+end
+
+-- Разбор CSV отчёта AMDuProf на именованные секции
+local function parse_amd_csv(text: string): {ProfileSection}
+    local sections: {ProfileSection} = {}
+    local lines: {string} = {}
+    for line in text:gmatch("[^\n\r]+") do
+        insert(lines, line)
+    end
+
+    local i = 1
+    local current_sec: ProfileSection
+
+    while i <= #lines do
+        local line = lines[i]
+
+        -- Пустая строка — конец секции
+        if line:match("^%s*$") then
+            if current_sec and not profile_skip_section(current_sec) then
+                insert(sections, current_sec)
+            end
+            current_sec = nil
+            i = i + 1
+            goto continue
+        end
+
+        local sec_name = section_name_from_line(line)
+
+        -- Если нет текущей секции — начать новую
+        if not current_sec then
+            current_sec = {
+                name = sec_name or "",
+                meta = {},
+                header = {},
+                rows = {},
+            }
+            i = i + 1
+            goto continue
+        end
+
+        -- Есть текущая секция, новая строка — имя вложенной секции?
+        if sec_name then
+            -- Завершить текущую секцию, начать новую
+            if not profile_skip_section(current_sec) then
+                insert(sections, current_sec)
+            end
+            current_sec = {
+                name = sec_name,
+                meta = {},
+                header = {},
+                rows = {},
+            }
+            i = i + 1
+            goto continue
+        end
+
+        -- Строка внутри секции
+        local fields = parse_csv_line(line)
+
+        -- Строка заголовка таблицы: первое поле не заканчивается на ":"
+        local first_key = fields[1] and fields[1]:match("^(.*):%s*$")
+        if first_key and #fields >= 2 then
+            -- Ключ:значение
+            current_sec.meta[first_key] = fields[2] or ""
+        elseif #current_sec.header == 0 then
+            -- Заголовок таблицы
+            current_sec.header = fields
+        else
+            -- Строка данных таблицы
+            insert(current_sec.rows, fields)
+        end
+
+        i = i + 1
+        ::continue::
+    end
+
+    -- Не забыть последнюю секцию
+    if current_sec and not profile_skip_section(current_sec) then
+        insert(sections, current_sec)
+    end
+
+    return sections
+end
+
+-- Укорачивание путей модулей для табличного вывода
+local function shorten_path(path: string): string
+    local is_quoted = false
+    if path:sub(1, 1) == '"' and path:sub(-1) == '"' then
+        is_quoted = true
+        path = path:sub(2, -2)
+    end
+    -- /home/user/proj/binary → binary
+    local basename = path:match(".*/(.*)") or path
+    -- /usr/lib/libfoo.so.8.0.0 → libfoo.so
+    local so_name = basename:match("^(lib.+%.so)%.%d")
+    if so_name then
+        return is_quoted and ('"' .. so_name .. '"') or so_name
+    end
+    -- [kernel.kallsyms]_text → [kernel]
+    local kernel = basename:match("^%[kernel%.")
+    if kernel then
+        return is_quoted and ('"[kernel]"') or "[kernel]"
+    end
+    return is_quoted and ('"' .. basename .. '"') or basename
+end
+
+local function profile_is_meta_section(name: string): boolean
+    return name == "EXECUTION"
+        or name == "PROFILE DETAILS"
+        or name == "MONITORED EVENTS"
+        or name == "APPLICATION PERFORMANCE SNAPSHOT"
+end
+
+local function profile_print_section(
+    sec: ProfileSection, full: boolean
+)
+    -- Секции с метаданными показываем только в --full
+    if not full and profile_is_meta_section(sec.name) then
+        return
+    end
+
+    printc(
+        "%{green}─── "
+        .. sec.name
+        .. " ───%{reset}"
+    )
+
+    -- Вывод ключ:значение
+    for key, value in pairs(sec.meta) do
+        print(format("  %-30s %s", key .. ":", value))
+    end
+
+    -- Вывод таблицы
+    if #sec.header > 0 and #sec.rows > 0 then
+        local module_col: integer
+        for col_idx, h in ipairs(sec.header) do
+            local h_stripped = h
+                :gsub('^"', ''):gsub('"$', '')
+                :match("^%s*(.-)%s*$")
+            if h_stripped == "Module"
+                or h_stripped == "MODULE"
+            then
+                module_col = col_idx
+            end
+        end
+
+        -- Подготовить данные для tabular
+        local tbl: {{string: string}} = {}
+        for _, row in ipairs(sec.rows) do
+            local row_map: {string: string} = {}
+            for col_idx, h in ipairs(sec.header) do
+                local val = row[col_idx] or ""
+                local h_stripped = h
+                    :gsub('^"', ''):gsub('"$', '')
+                    :match("^%s*(.-)%s*$")
+                -- Укорачивание путей модулей
+                if col_idx == module_col then
+                    val = shorten_path(val)
+                end
+                row_map[h_stripped] = val
+                    :match("^%s*(.-)%s*$")
+            end
+            insert(tbl, row_map)
+        end
+        print(tabular(tbl))
+    end
+
+    print()
+end
+
+-- TODO: Добавить другие конфиги: branch, data_access, assess_ext
+local profile_configs: {ProfileConfig: string} = {
+    ["tbp"] = "Time-based Sampling — где программа проводит время",
+    ["hotspots"] = "Hotspots — где программа проводит время + callstack",
+    ["memory"] = "Cache Analysis — ложное разделение cache-line (IBS OP)",
+}
+
+function actions.profile(_args: Args)
+    local amd_profiler = getenv("AMD_PROFILER")
+    if not amd_profiler then
+        printc(
+            "%{red}AMD_PROFILER не задана. "
+            .. "Добавьте в ~/.zshrc:%{reset}"
+        )
+        printc(
+            "  export AMD_PROFILER=~/AMDuProf_Linux_x64_5.2.606/bin/"
+        )
+        os.exit(1)
+    end
+
+    local config: ProfileConfig = _args.config or "tbp"
+    if not profile_configs[config] then
+        printc(
+            "%{red}Неизвестный режим профилирования '"
+            .. (config as string) .. "'. Доступные:%{reset}"
+        )
+        for k, v in pairs(profile_configs) do
+            print(format("  %-12s %s", k, v))
+        end
+        return
+    end
+
+    printc(
+        "%{cyan}Режим: " .. (config as string)
+        .. " — " .. profile_configs[config] .. "%{reset}"
+    )
+
+    local cwd = lfs.currentdir()
+    local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
+
+    local artifacts: {string} = {}
+    for _, cfg in ipairs(cfgs) do
+        if cfg.artifact then
+            insert(artifacts, cfg.artifact)
+        end
+    end
+
+    if #artifacts == 0 then
+        printc("%{red}Нет artifact в bld.lua%{reset}")
+        return
+    end
+
+    local unique = hex_hash32(cwd)
+    local full = _args.full ~= nil
+
+    for _, artifact in ipairs(artifacts) do
+        local prof_dir = "/tmp/"
+            .. artifact .. "_" .. unique
+            .. "_" .. (config as string) .. "_prof"
+
+        printc(
+            "%{yellow}Профайлер не пересобирает, "
+            .. "запускает текущий бинарник%{reset}"
+        )
+
+        local collect_cmd = format(
+            "%s/AMDuProfCLI collect --config %s -o %s ./%s",
+            amd_profiler, config, prof_dir, artifact
+        )
+        cmd_do(collect_cmd)
+
+        -- Найти подкаталог сессии внутри prof_dir
+        local session_dir: string
+        for dir in lfs.dir(prof_dir) do
+            if dir ~= "." and dir ~= ".." then
+                local attr = lfs.attributes(
+                    prof_dir .. "/" .. dir
+                )
+                if attr and attr.mode == "directory" then
+                    session_dir = prof_dir .. "/" .. dir
+                    break
+                end
+            end
+        end
+
+        if not session_dir then
+            printc(
+                "%{red}Не найден каталог сессии профайлера%{reset}"
+            )
+            return
+        end
+
+        -- Генерация CSV отчёта
+        local csv_path = prof_dir .. "/report.csv"
+        local report_cmd = format(
+            "%s/AMDuProfCLI report -i %s --report-output %s",
+            amd_profiler, session_dir, csv_path
+        )
+        cmd_do(report_cmd)
+
+        -- Чтение CSV и разбор на секции
+        local f = io.open(csv_path, "r")
+        if not f then
+            printc("%{red}Не удалось открыть CSV отчёт%{reset}")
+            return
+        end
+        local text = f:read("*a")
+        f:close()
+
+        local sections = parse_amd_csv(text)
+
+        -- Краткий заголовок
+        printc(
+            "%{cyan}─── koh profile: "
+            .. artifact
+            .. " ───%{reset}"
+        )
+
+        -- Извлечь краткие метаданные
+        local duration = ""
+        local threads = ""
+        for _, sec in ipairs(sections) do
+            if sec.meta["Profile Duration"] then
+                duration = sec.meta["Profile Duration"]
+            end
+            if sec.meta["Number Of Threads"] then
+                threads = sec.meta["Number Of Threads"]
+            end
+        end
+        if duration ~= "" or threads ~= "" then
+            local parts: {string} = {}
+            if duration ~= "" then
+                insert(parts, "Длительность: " .. duration)
+            end
+            if threads ~= "" then
+                insert(parts, "Потоки: " .. threads)
+            end
+            print("  " .. concat(parts, " | "))
+        end
+
+        print()
+
+        -- Вывод секций
+        for _, sec in ipairs(sections) do
+            profile_print_section(sec, full)
+        end
+    end
+end
 local function cfg_empty(cfg: Cfg): boolean
     local i = 0
     for _, _ in pairs(cfg as {string: string}) do
