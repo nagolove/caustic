@@ -30,6 +30,7 @@ end
 
 global record ParserSetup
     summary: string
+    description: string
     options: {string}
     flags: {{string}}
     arguments: {{string|integer}}

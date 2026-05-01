@@ -791,12 +791,17 @@ local parser_setup: {string:ParserSetup} = {
 
     run = {
         summary = "make and run current project",
+        description = "Use -- to pass extra args"
+            .. " to artifact, e.g.: koh run -d -- --dev",
         flags = {
             {"-d --debug", "run artifact in gdb",},
             {"--noreset", "no call 'reset' for clearing terminal output"},
             {"-H --headless", "link with headless raylib (no window)"},
             {"-p --profiling", "print timing profiling info"},
-        }
+        },
+        arguments = {
+            {"args", "*"},
+        },
     },
 
     ast = {
@@ -909,6 +914,7 @@ local record Args
     profiling: string   -- профилировка времени сборки
     config: ProfileConfig
     flags: {string}
+    args: {string}
     -- }}}
 end
 
@@ -2681,6 +2687,9 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
 
     if _args.target == 'win' then
         cmd = cmd .. " -static "
+        if cfg.kind == 'app' then
+            cmd = cmd .. " -mwindows "
+        end
     end
 
     -- Добавить какие-то wasm флаги
@@ -3551,14 +3560,21 @@ function actions.run(_args: Args)
         return
     end
 
+    local extra = ""
+    if _args.args and #_args.args > 0 then
+        extra = " " .. concat(_args.args, " ")
+    end
+
     if not _args.debug then
-        local cmd = "./" .. cfgs[1].artifact
+        local cmd = "./" .. cfgs[1].artifact .. extra
         print('cmd', cmd)
         time_print("actions.run (до запуска)", _t0)
         cmd_do(cmd)
     else
         put_gdbinit()
-        local cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork"
+        local cmd = "gdb --args ./"
+            .. cfgs[1].artifact
+            .. " --no-fork" .. extra
         print('cmd', cmd)
         time_print("actions.run (до запуска)", _t0)
         cmd_do(cmd)

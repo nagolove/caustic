@@ -349,6 +349,9 @@ local function do_parser_setup(
             prnt("add summary", setup_tbl.summary)
             p:summary(setup_tbl.summary)
         end
+        if setup_tbl.description then
+            p:description(setup_tbl.description)
+        end
         if setup_tbl.options then
             for _, option in ipairs(setup_tbl.options) do
                 prnt("add option", option)
@@ -372,7 +375,10 @@ local function do_parser_setup(
                     "add argument",
                     argument_tbl[1], argument_tbl[2]
                 )
-                p:argument(argument_tbl[1] as string):args(argument_tbl[2])
+                local desc = argument_tbl[3] as string
+                p:argument(
+                    argument_tbl[1] as string, desc
+                ):args(argument_tbl[2])
             end
         end
     end

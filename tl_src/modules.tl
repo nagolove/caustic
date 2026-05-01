@@ -1346,7 +1346,7 @@ _modules = {
 
     -- {{{ Chipmunk2D
     {
-        disabled = false,
+        disabled = true,
         copy_for_wasm = true,
         build = build_chipmunk,
         build_win = build_chipmunk,
