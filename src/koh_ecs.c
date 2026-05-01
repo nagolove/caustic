@@ -35,10 +35,10 @@
 // Use hash table for O(1) storage lookup instead of O(n) linear search
 // #define KOH_ECS_STORAGE_HASHTABLE
 
-static inline int asan_can_write(const void *p, size_t n) {
+static inline int asan_can_write(void *p, size_t n) {
 #ifdef USING_ASAN
     // true, если во всём диапазоне нет «яда»
-    return !__asan_region_is_poisoned(p, n);
+    return !__asan_region_is_poisoned((void*)p, n);
 #else
     // без ASan — считаем, что всё ок (или сделайте тут свою политику)
     (void)p; (void)n;
@@ -3928,7 +3928,8 @@ void* e_emplace(ecs_t* r, e_id e, e_cp_type cp_type) {
     if (s->cp_data_size + 1 >= s->cp_data_cap) {
         s->cp_data_cap++;
         size_t prev_cap = s->cp_data_cap;
-        s->cp_data_cap = s->cp_data_cap * 3 / 2;
+        //s->cp_data_cap = s->cp_data_cap * 3 / 2;
+        s->cp_data_cap = s->cp_data_cap * 2;
         //s->cp_data = realloc(s->cp_data, s->cp_data_cap * s->cp_sizeof);
         void *newp = ainspector_realloc(&r->alli, s->cp_data, s->cp_data_cap * s->cp_sizeof);
 

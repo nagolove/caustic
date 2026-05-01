@@ -118,25 +118,46 @@ void camp_update(CameraProcessor *cp) {
         cp->move_elapsed = 0;
     }
 
-    // Применение easing для zoom
+    // Применение easing для zoom.
+    // Когда анимация не активна (elapsed >= time_total) —
+    // не перезаписывать cam->zoom. Иначе внешний код
+    // (например hm_cam_zoom_set) не сможет менять zoom,
+    // потому что camp_update затрёт его значением
+    // zoom_target каждый кадр.
     if (cp->zoom_elapsed < cp->zoom_time_total) {
         cp->zoom_elapsed += dt;
-        float t = fminf(cp->zoom_elapsed, cp->zoom_time_total);
-        cam->zoom = cp->zoom_ease(t, cp->zoom_start, cp->zoom_target - cp->zoom_start, cp->zoom_time_total);
-    } else {
-        cam->zoom = cp->zoom_target;
+        float t = fminf(cp->zoom_elapsed,
+            cp->zoom_time_total);
+        cam->zoom = cp->zoom_ease(
+            t, cp->zoom_start,
+            cp->zoom_target - cp->zoom_start,
+            cp->zoom_time_total);
+        // Финальный кадр — точное значение
+        if (cp->zoom_elapsed >= cp->zoom_time_total)
+            cam->zoom = cp->zoom_target;
     }
 
-    // Применение easing для offset
+    // Применение easing для offset.
+    // Аналогично: не трогать cam->offset когда анимация
+    // завершена, чтобы hm_hex_move2center и другой
+    // внешний код мог свободно двигать камеру.
     if (cp->move_elapsed < cp->move_time_total) {
         cp->move_elapsed += dt;
-        float t = fminf(cp->move_elapsed, cp->move_time_total);
-        float dx = cp->offset_target.x - cp->offset_start.x;
-        float dy = cp->offset_target.y - cp->offset_start.y;
-        cam->offset.x = cp->move_ease(t, cp->offset_start.x, dx, cp->move_time_total);
-        cam->offset.y = cp->move_ease(t, cp->offset_start.y, dy, cp->move_time_total);
-    } else {
-        cam->offset = cp->offset_target;
+        float t = fminf(cp->move_elapsed,
+            cp->move_time_total);
+        float dx = cp->offset_target.x
+            - cp->offset_start.x;
+        float dy = cp->offset_target.y
+            - cp->offset_start.y;
+        cam->offset.x = cp->move_ease(
+            t, cp->offset_start.x, dx,
+            cp->move_time_total);
+        cam->offset.y = cp->move_ease(
+            t, cp->offset_start.y, dy,
+            cp->move_time_total);
+        // Финальный кадр — точное значение
+        if (cp->move_elapsed >= cp->move_time_total)
+            cam->offset = cp->offset_target;
     }
 }
 
