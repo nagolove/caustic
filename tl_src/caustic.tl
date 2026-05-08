@@ -3387,6 +3387,9 @@ function sub_make(
             -- objfiles всегда нужны для линковки
             table.insert(objfiles, _output)
 
+            -- XXX: Правильный (в cache.lua): добавить отслеживание #include зависимостей. Стандартный подход — использовать    
+            --  -MMD флаг GCC, который генерирует .d файлы со списком заголовков. Потом хешировать все зависимости, а не только
+            --   сам .c файл. 
             -- кэширование: пропускать файлы без изменений
             if cache:should_recompile(file, task) then
                 table.insert(tasks, task)
