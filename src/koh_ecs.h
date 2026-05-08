@@ -461,6 +461,14 @@ bool e_is_cp_registered(ecs_t *r, const char *cp_type);
 // Удалить все сущности связанные с данным типом компонента
 void e_remove_by_type(ecs_t *r, e_cp_type type);
 
+// Перенос всех компонентов из e_src в e_dst побайтовым
+// копированием. После переноса src — orphan (без компонентов).
+e_id e_move(ecs_t *r, e_id e_src, e_id e_dst);
+
+// Перенос компонентов с пропуском типов из exclude
+// (NULL-terminated массив указателей на e_cp_type).
+e_id e_move_filtered(ecs_t *r, e_id e_src, e_id e_dst, const e_cp_type **exclude);
+
 // {{{
 typedef struct koh_ecs {
 
@@ -515,6 +523,8 @@ typedef struct koh_ecs {
     void* (*get)(ecs_t* r, e_id e, e_cp_type cp_type);
     void* (*get_fast)(ecs_t* r, e_id e, e_cp_type cp_type);
     void* (*view_get)(e_view *v, e_cp_type cp_type);
+    e_id (*move)(ecs_t *r, e_id e_src, e_id e_dst);
+    e_id (*move_filtered)(ecs_t *r, e_id e_src, e_id e_dst, const e_cp_type **exclude);
 
 } koh_ecs;
 // }}}

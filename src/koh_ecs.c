@@ -5209,6 +5209,64 @@ void e_remove_by_type(ecs_t *r, e_cp_type type) {
 }
 
 
+// Перенос всех компонентов из e_src в e_dst побайтовым
+// копированием. На dst вызывается on_emplace, на src —
+// on_destroy. После переноса src становится orphan
+// (без компонентов). Возвращает e_dst.
+e_id e_move(ecs_t *r, e_id e_src, e_id e_dst) {
+    assert(r);
+    assert(e_valid(r, e_src));
+    assert(e_valid(r, e_dst));
+
+    int num = 0;
+    e_cp_type **types = e_types(r, e_src, &num);
+    for (int i = 0; i < num; i++) {
+        if (!types[i]) continue;
+        void *src = e_get(r, e_src, *types[i]);
+        if (!src) continue;
+        void *dst = e_emplace(r, e_dst, *types[i]);
+        memcpy(dst, src, types[i]->cp_sizeof);
+    }
+    e_remove_all(r, e_src);
+    return e_dst;
+}
+
+// Перенос компонентов из e_src в e_dst с пропуском типов
+// из exclude (NULL-terminated массив указателей).
+// Полезно когда часть компонентов должна остаться на месте
+// (например cmp_hex при переносе между гексами).
+// После переноса src становится orphan.
+e_id e_move_filtered(
+    ecs_t *r, e_id e_src, e_id e_dst,
+    const e_cp_type **exclude
+) {
+    assert(r);
+    assert(e_valid(r, e_src));
+    assert(e_valid(r, e_dst));
+
+    int num = 0;
+    e_cp_type **types = e_types(r, e_src, &num);
+    for (int i = 0; i < num; i++) {
+        if (!types[i]) continue;
+        bool skip = false;
+        if (exclude) {
+            for (int j = 0; exclude[j]; j++) {
+                if (types[i]->priv.cp_id == exclude[j]->priv.cp_id) {
+                    skip = true;
+                    break;
+                }
+            }
+        }
+        if (skip) continue;
+        void *src = e_get(r, e_src, *types[i]);
+        if (!src) continue;
+        void *dst = e_emplace(r, e_dst, *types[i]);
+        memcpy(dst, src, types[i]->cp_sizeof);
+    }
+    e_remove_all(r, e_src);
+    return e_dst;
+}
+
 // TODO: Как сделать что-бы работал только koh_ecs интерфейс?
 // Чего?
 const koh_ecs koh_ecs_get() {
@@ -5269,6 +5327,8 @@ const koh_ecs koh_ecs_get() {
     r.is_cp_registered = e_is_cp_registered;
     r.remove_by_type = e_remove_by_type;
     r.types_exclude = e_types_exclude;
+    r.move = e_move;
+    r.move_filtered = e_move_filtered;
 
     return r;
 }
