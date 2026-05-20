@@ -26,6 +26,7 @@ static raylib_api R = {};
 #include <stdlib.h>
 #include <string.h>
 #include "koh_layered_sprite.h"
+#include "koh_camera.h"
 
 enum LastSelected {
     LAST_SELECTED_NONE       = 0,
@@ -44,6 +45,7 @@ typedef struct Stage_SpriteLoader {
     Stage                       parent;
 
     CameraAutomat               cam_automat;
+    CameraProcessor             cam_processor;
 
     // TODO: Выкинуть на хуй
     // Писать интейфейс для конкретных типов - сау, пехота, строение и т.д.
@@ -156,25 +158,7 @@ static void stage_sprite_loader_update(struct Stage *s) {
     if (!st->active_sprite.id)
         return;
 
-    koh_camera_process_mouse_drag(&(struct CameraProcessDrag) {
-        .mouse_btn = MOUSE_BUTTON_MIDDLE,
-        .cam = &st->cam
-    });
-
-    /*
-    Хорошая перемотка работает с инерцией, как в браузере при листании страниц.
-    При большой скорости вращения колесика - быстрый зум.
-    При небольших изменениях - точное масштабирование.
-    */
-
-    /*
-    koh_camera_process_mouse_scale_wheel(&(struct CameraProcessScale) {
-        .cam = &st->cam,
-        .dscale_value = camera_dscale_value,
-        .modifier_key_down = KEY_LEFT_SHIFT,
-        .boost_modifier_key_down = KEY_LEFT_CONTROL,
-    });
-    */
+    camp_update(&st->cam_processor);
 
     cam_auto_update(&st->cam_automat);
 
@@ -518,6 +502,7 @@ static void stage_sprite_loader_shutdown(struct Stage *s) {
     Stage_SpriteLoader *st = (Stage_SpriteLoader*)s;
 
     cam_auto_shutdown(&st->cam_automat);
+    camp_shutdown(&st->cam_processor);
     visual_tool_shutdown(&st->tool_visual);
     metaloader_write(st->metaloader);
     if (st->metaloader) {
@@ -650,6 +635,10 @@ static void stage_sprite_loader_init(struct Stage *s) {
     */
 
     cam_auto_init(&st->cam_automat, &st->cam);
+    camp_init(&st->cam_processor, (CameraProcessorOpts){
+        .cam = &st->cam,
+        .mouse_btn_move = MOUSE_BUTTON_MIDDLE,
+    });
 }
 
 static int ase_export_version(lua_State *l) {
