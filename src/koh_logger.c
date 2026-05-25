@@ -12,7 +12,15 @@
 #include <time.h>
 
 #ifdef _WIN32
+// raylib определяет Rectangle, CloseWindow, ShowCursor —
+// конфликт с windows.h. Прячем имена на время инклуда.
+#define Rectangle   Win32Rectangle
+#define CloseWindow Win32CloseWindow
+#define ShowCursor  Win32ShowCursor
 #include <windows.h>
+#undef Rectangle
+#undef CloseWindow
+#undef ShowCursor
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
