@@ -2680,10 +2680,11 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
 
     --print("project_link: cfg.kind", inspect(cfg.kind))
     local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
-    -- использовать быстрый линковщик
+    --[[ использовать быстрый линковщик
     if _args.target == 'linux' then
         cmd = cmd .. " -fuse-ld=mold "
     end
+    --]]
 
     if _args.target == 'win' then
         cmd = cmd .. " -static "

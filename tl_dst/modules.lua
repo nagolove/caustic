@@ -313,6 +313,11 @@ local function build_llama(_, _)
    ut.pop_dir()
 end
 
+local function build_tcc(_, dep)
+   cmd_do("./configure")
+   cmd_do(make[dep.target])
+end
+
 local function build_munit_common(_, dep)
    local flags = " -std=c11 "
    if dep.target ~= 'win' then
@@ -1500,6 +1505,21 @@ _modules = {
    },
 
 
+
+   {
+      disabled = false,
+      copy_for_wasm = false,
+      description = "tiny c compiler, runtime compilation",
+      dir = "tinycc",
+      includes = { "tinycc" },
+      libdirs = { "tinycc" },
+      links = { "tcc" },
+      links_internal = { "tcc" },
+      name = "tcc",
+      url_action = "git",
+      build = build_tcc,
+      url = "https://github.com/TinyCC/tinycc.git",
+   },
 
 
 }

@@ -2681,9 +2681,10 @@ local function project_link(ctx, cfg, _args, ninja)
 
    local cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
 
-   if _args.target == 'linux' then
-      cmd = cmd .. " -fuse-ld=mold "
-   end
+
+
+
+
 
    if _args.target == 'win' then
       cmd = cmd .. " -static "
@@ -3386,6 +3387,9 @@ function sub_make(
 
 
          table.insert(objfiles, _output)
+
+
+
 
 
          if cache:should_recompile(file, task) then
