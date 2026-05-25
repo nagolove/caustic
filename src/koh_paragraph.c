@@ -1,7 +1,6 @@
 // vim: fdm=marker
 #include "koh_paragraph.h"
 
-#include "koh_common.h"
 #include "koh_raylib_api.h"
 #include "raylib.h"
 #include "rlgl.h"
@@ -29,39 +28,7 @@ Color paragraph_default_color_text = BLACK;
 
 static void init_cmd(Paragraph *prgh) {
     assert(prgh);
-
     prgh->is_cmd = true;
-
-    /*
-    i32     errnumner = 0;
-    size_t  erroffset = 0;
-    u32     flags = 0;
-
-    const char *pattern_color =
-        "\\\\color\\s*=\\s*\\{"
-        "([0-9]{1,3})\\s*,\\s*"
-        "([0-9]{1,3})\\s*,\\s*"
-        "([0-9]{1,3})\\s*,\\s*"
-        "([0-9]{1,3})"
-        "\\}";
-
-    prgh->rx_color = pcre2_compile(
-            (const u8*)pattern_color, 
-            PCRE2_ZERO_TERMINATED, flags, 
-            &errnumner, &erroffset, 
-            NULL
-            );
-
-    assert(prgh->rx_color);
-    if (!prgh->rx_color) {
-        printf(
-            "paragraph_init: could not compile pattern '%s' with '%s'\n",
-            pattern_color, pcre_code_str(errnumner)
-        );
-        koh_fatal();
-    }
-    */
-
     prgh->color_positions_num = 0;
     prgh->positions[0] = 0;
     prgh->colors[0] = paragraph_default_color_text;
@@ -165,29 +132,102 @@ bool parse_color_command(
     return true;
 }
 
-// Разбирает строку. Выделяет цвета.
-void parse_line_commands(const char *line) {
-    printf("parse_line:\n\n");
+// Парсит команду \@align=left|center|right
+// Возвращает true при успехе, *out_next — после команды
+static bool parse_align_command(
+    const char *s, ParagraphAlign *out_align,
+    const char **out_next
+) {
+    const char *p = s;
+    if (*p != '\\') return false;
+    p++;
+    if (*p != '@') return false;
+    p++;
+    if (strncmp(p, "align=", 6) != 0) return false;
+    p += 6;
 
+    if (strncmp(p, "left", 4) == 0) {
+        *out_align = PARAGRAPH_ALIGN_LEFT;
+        *out_next = p + 4;
+    } else if (strncmp(p, "center", 6) == 0) {
+        *out_align = PARAGRAPH_ALIGN_CENTER;
+        *out_next = p + 6;
+    } else if (strncmp(p, "right", 5) == 0) {
+        *out_align = PARAGRAPH_ALIGN_RIGHT;
+        *out_next = p + 5;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+// Парсит команду \@reset
+static bool parse_reset_command(
+    const char *s, const char **out_next
+) {
+    const char *p = s;
+    if (*p != '\\') return false;
+    p++;
+    if (*p != '@') return false;
+    p++;
+    if (strncmp(p, "reset", 5) != 0) return false;
+    p += 5;
+    *out_next = p;
+    return true;
+}
+
+// Разбирает строку: извлекает команды цвета/align/reset,
+// заполняет positions[]/colors[] в prgh,
+// записывает очищенный текст (без команд) в out_clean.
+// global_pos — глобальная позиция символа в параграфе,
+// обновляется по ходу парсинга.
+// out_align — текущее выравнивание (состояние, перетекает)
+static void parse_line_commands(
+    Paragraph *prgh, const char *line,
+    char *out_clean, i32 *global_pos,
+    ParagraphAlign *out_align
+) {
     const char *p = line;
+    char *dst = out_clean;
+
     while (*p) {
         if (*p == '\\' && p[1] == '@') {
             Color c;
+            ParagraphAlign al;
             const char *next;
+
             if (parse_color_command(p, &c, &next)) {
-                printf("COLOR: %d,%d,%d,%d\n", c.r, c.g, c.b, c.a);
+                i32 n = prgh->color_positions_num;
+                if (n < MAX_PARAGRAPH_COLOR_POSITION) {
+                    prgh->positions[n] = *global_pos;
+                    prgh->colors[n] = c;
+                    prgh->color_positions_num++;
+                }
                 p = next;
                 continue;
             }
-            // если не color, можно пробовать \@align=..., \@reset и т.д.
+            if (parse_reset_command(p, &next)) {
+                i32 n = prgh->color_positions_num;
+                if (n < MAX_PARAGRAPH_COLOR_POSITION) {
+                    prgh->positions[n] = *global_pos;
+                    prgh->colors[n] = prgh->color_text;
+                    prgh->color_positions_num++;
+                }
+                p = next;
+                continue;
+            }
+            if (parse_align_command(p, &al, &next)) {
+                *out_align = al;
+                p = next;
+                continue;
+            }
         }
 
-        // иначе — обычный текст или другой синтаксис
-        putchar(*p);
-        p++;
+        // обычный символ — копируем в очищенный буфер
+        *dst++ = *p++;
+        (*global_pos)++;
     }
-
-    printf("parse_line:\n\n");
+    *dst = '\0';
 }
 
 static void _paragraph_init(Paragraph *prgh) {
@@ -351,190 +391,120 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     strbuf_add(&prgh->b_lines, buf);
 }
 
-/*
-static void process_colors(
-    Paragraph *prgh,
-    const char *cur_line, size_t cur_line_len,
-    char *cur_line_buf
-) {
-    pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(
-        prgh->rx_color, NULL
-    );
-
-    size_t offset = 0;
-    const char *pcur_line = cur_line;
-
-    while (offset < cur_line_len) {
-
-        int rc = pcre2_match(
-            prgh->rx_color, (const u8*)cur_line,
-            cur_line_len,
-            offset,          // start offset
-            0,          // options
-            match_data,
-            NULL
-        );
-
-        printf("paragraph_build: rc %d\n", rc);
-
-        if (rc >= 0) {
-            const size_t *ov = pcre2_get_ovector_pointer(match_data);
-
-            // весь паттерн, нулевой вектор
-            const char *pstart = cur_line + ov[2 * 0],
-                       *pend   = cur_line + ov[2 * 0 + 1];
-
-            //offset = pstart - cur_line;
-            offset = pend - cur_line;
-            printf("process_colors: offset %zu\n", offset);
-
-            printf("process_colors: '%s'\n", cur_line);
-            {
-                char buf[cur_line_len + 1] = {};
-                strcpy(buf, cur_line);
-                buf[ov[2 * 0 + 1]] = '|';
-                printf("process_colors: '%s'\n", buf);
-            }
-            printf(
-                "process_colors: start %zu, end %zu \n",
-                ov[2 * 0], ov[2 * 0 + 1]
-            );
-
-            char *pcur_line_buf = cur_line_buf;
-            while (pcur_line < pstart) {
-                *pcur_line_buf++ = *pcur_line;
-
-                printf("process_colors: *pcur_line '%c'\n", *pcur_line);
-                pcur_line++;
-            }
-
-            printf("paragraph_build: cur_line_buf partial '%s' \n", cur_line_buf);
-            pcur_line = pend;
-            while (*pcur_line) {
-                *pcur_line_buf++ = *pcur_line++;
-            }
-            printf("paragraph_build: cur_line_buf '%s' \n", cur_line_buf);
-
-            // group 1..4 — это r,g,b,a
-            for (int g = 1; g <= 4; ++g) {
-                size_t start = ov[2 * g];
-                size_t end   = ov[2 * g + 1];
-                size_t len   = end - start;
-
-                // ВАЖНО: subject — это исходный буфер, берем оттуда
-                char tmp[4] = {0}; // max "255" + '\0'
-                if (len >= sizeof(tmp)) len = sizeof(tmp) - 1;
-
-                memcpy(tmp, cur_line + start, len);
-                tmp[len] = '\0';
-
-                int value = atoi(tmp);
-                // value — число из группы
-                printf("paragraph_build: value %d\n", value);
-            }
-        } else 
-            break;
-
-
-    }
-
-    pcre2_match_data_free(match_data);
-    printf("process_colors: '%s' \n\n\n", cur_line_buf);
-}
-*/
-
-
-/*
-static void process_colors(
-    Paragraph *prgh,
-    const char *cur_line, size_t cur_line_len,
-    char *cur_line_buf
-) {
-}
-*/
-
 void paragraph_build(Paragraph *prgh) {
     assert(prgh);
 
     strbuf_clear(&prgh->b_tlines);
+    prgh->color_positions_num = 0;
+    memset(prgh->aligns, 0, sizeof(prgh->aligns));
 
-    // поиск длиннейшей строки без учета форматирования
+    i32 num = prgh->b_lines.num;
+
+    // --- Проход 1: парсим команды, получаем очищенные строки ---
+    // Храним очищенные строки во временном StrBuf
+    StrBuf clean = strbuf_init(NULL);
+    ParagraphAlign cur_align = PARAGRAPH_ALIGN_LEFT;
+    i32 global_pos = 0;
     i32 longest = 0;
-    for (i32 i = 0; i < prgh->b_lines.num; i++) {
-        i32 len = u8_codeptlen(prgh->b_lines.s[i]);
-        if (len > longest) longest = len;
+
+    for (i32 i = 0; i < num; i++) {
+        const char *src = prgh->b_lines.s[i];
+        size_t src_len = strlen(src);
+
+        // буфер для очищенной строки (не длиннее оригинала)
+        char buf[src_len + 1];
+        memset(buf, 0, sizeof(buf));
+
+        parse_line_commands(
+            prgh, src, buf, &global_pos, &cur_align
+        );
+
+        strbuf_add(&clean, buf);
+
+        i32 clen = u8_codeptlen(buf);
+        if (clen > longest) longest = clen;
+
+        // сохраняем align для этой строки
+        if (i < MAX_PARAGRAPH_LINES)
+            prgh->aligns[i] = cur_align;
     }
 
-    // нужно найти длиннейшую строку среди cur_line_buf,
-    // но тогда нужна еще одна буферизация для поддержки команды выравнивания
-    //
-    // варианты - использовать еще один StrBuf
-    // как часто вызывается paragraph_build()?
-    /* сделать 
-     strbuf_init((StrBufOpts) {
-        // выделить по памяти как в alloc_buf
-        .alloc_buf = other_buf,
-     });
-     */
+    // --- Проход 2: формируем b_tlines с рамкой и padding ---
+    char dash_line[(longest + 1) * 4];
+    memset(dash_line, 0, sizeof(dash_line));
 
-    char line[(longest + 1) * 4];
-    memset(line, 0, sizeof(line));
-
-    bool has_border = !(prgh->flags & PARAGRAPH_BORDER_NONE);
+    bool has_border =
+        !(prgh->flags & PARAGRAPH_BORDER_NONE);
 
     if (has_border) {
-        const char *dash = "─"; // UTF - 3 chars len
+        const char *dash = "─";
         size_t dash_len = strlen(dash);
-
-        char *pline = line;
-        for(int i = 0; i < longest; i++) {
-            // NOTE: здесь strncpy() только что-бы clang не бухтел
-            strncpy(pline, dash, dash_len);
-            pline += dash_len;
+        char *pd = dash_line;
+        for (int i = 0; i < longest; i++) {
+            strncpy(pd, dash, dash_len);
+            pd += dash_len;
         }
-        strbuf_addf(&prgh->b_tlines, "┌%s┐", line);
+        strbuf_addf(&prgh->b_tlines, "┌%s┐", dash_line);
     }
 
-    for(int i = 0; i < prgh->b_lines.num; i++) {
-        const char *cur_line = prgh->b_lines.s[i];
-        // XXX: Сделать инфраструктуру для обработки нескольких типов \команд
+    for (i32 i = 0; i < num; i++) {
+        const char *cl = clean.s[i];
 
-        //size_t cur_line_len = strlen(cur_line);
-
-        //parse_line_commands(cur_line);
-
-        // в этот буфер полетит строчка очищенная от команд
-        //char cur_line_buf[cur_line_len + 1] = {};
-
-        // нужно найти длиннейшую строку для выравнивания.
-        // тогда сперва надо провести обработку цветов
-
-        //process_colors(prgh, cur_line, cur_line_len, cur_line_buf);
-
-        // "-" - просто строка разрыва
-        if (strcmp(cur_line, "-") == 0) {
+        // "-" — строка-разделитель
+        if (strcmp(cl, "-") == 0) {
             if (has_border)
-                strbuf_addf(&prgh->b_tlines, "├%s┤", line);
+                strbuf_addf(
+                    &prgh->b_tlines, "├%s┤", dash_line
+                );
             else
-                strbuf_addf(&prgh->b_tlines, "%s", line);
-        } else {
-            char spaces[longest + 1];
-            memset(spaces, 0, sizeof(spaces));
-
-            int spacesnum = longest - u8_codeptlen(cur_line);
-            for(int _j = 0; _j < spacesnum; _j++) {
-                spaces[_j] = ' ';
-            }
-
-            if (has_border)
-                strbuf_addf(&prgh->b_tlines, "│%s%s│", cur_line, spaces);
-            else
-                strbuf_addf(&prgh->b_tlines, "%s%s", cur_line, spaces);
+                strbuf_addf(
+                    &prgh->b_tlines, "%s", dash_line
+                );
+            continue;
         }
+
+        i32 text_len = u8_codeptlen(cl);
+        i32 pad_total = longest - text_len;
+        if (pad_total < 0) pad_total = 0;
+
+        // вычисляем padding в зависимости от align
+        i32 pad_left = 0, pad_right = 0;
+        ParagraphAlign al = (i < MAX_PARAGRAPH_LINES)
+            ? prgh->aligns[i] : PARAGRAPH_ALIGN_LEFT;
+
+        switch (al) {
+        case PARAGRAPH_ALIGN_LEFT:
+            pad_right = pad_total;
+            break;
+        case PARAGRAPH_ALIGN_CENTER:
+            pad_left = pad_total / 2;
+            pad_right = pad_total - pad_left;
+            break;
+        case PARAGRAPH_ALIGN_RIGHT:
+            pad_left = pad_total;
+            break;
+        }
+
+        char sl[pad_left + 1], sr[pad_right + 1];
+        memset(sl, ' ', pad_left);  sl[pad_left] = '\0';
+        memset(sr, ' ', pad_right); sr[pad_right] = '\0';
+
+        if (has_border)
+            strbuf_addf(
+                &prgh->b_tlines,
+                "│%s%s%s│", sl, cl, sr
+            );
+        else
+            strbuf_addf(
+                &prgh->b_tlines,
+                "%s%s%s", sl, cl, sr
+            );
     }
+
+    strbuf_shutdown(&clean);
 
     if (has_border)
-        strbuf_addf(&prgh->b_tlines, "└%s┘", line);
+        strbuf_addf(&prgh->b_tlines, "└%s┘", dash_line);
 
     if (prgh->b_tlines.num) {
         const char *cur_line = prgh->b_tlines.s[0];
@@ -588,49 +558,193 @@ void paragraph_build(Paragraph *prgh) {
     prgh->is_builded = true;
 }
 
-static void _paragraph_draw2(Paragraph *prgh, Vector2 pos) {
+// Ищет следующую цветовую позицию >= global_pos.
+// Возвращает индекс в positions[] или -1.
+static i32 find_next_color(
+    Paragraph *prgh, i32 global_pos, i32 hint
+) {
+    for (i32 i = hint; i < prgh->color_positions_num; i++) {
+        if (prgh->positions[i] >= global_pos)
+            return i;
+    }
+    return -1;
+}
+
+// Рисует подстроку content с переключением цвета.
+// global_pos, color_hint, cur_color обновляются.
+static void draw_colored_content(
+    Paragraph *prgh,
+    const char *content, size_t content_len,
+    Vector2 draw_pos, i32 bs,
+    i32 *global_pos, i32 *color_hint, Color *cur_color
+) {
+    size_t drawn = 0;
+    float x_off = 0.f;
+
+    while (drawn < content_len) {
+        i32 ci = find_next_color(
+            prgh, *global_pos, *color_hint
+        );
+
+        size_t chunk;
+        if (ci >= 0) {
+            i32 chars_left =
+                prgh->positions[ci] - *global_pos;
+            if (chars_left <= 0) {
+                *cur_color = prgh->colors[ci];
+                *color_hint = ci + 1;
+                continue;
+            }
+            chunk = (size_t)chars_left;
+            if (chunk > content_len - drawn)
+                chunk = content_len - drawn;
+        } else {
+            chunk = content_len - drawn;
+        }
+
+        char tmp[chunk + 1];
+        memcpy(tmp, content + drawn, chunk);
+        tmp[chunk] = '\0';
+
+        Vector2 dp = { draw_pos.x + x_off, draw_pos.y };
+        R.DrawTextPro(
+            prgh->fnt, tmp, dp, z,
+            0.f, bs, 0, *cur_color
+        );
+
+        Vector2 m = R.MeasureTextEx(
+            prgh->fnt, tmp, bs, 0
+        );
+        x_off += m.x;
+        drawn += chunk;
+        *global_pos += (i32)chunk;
+
+        if (ci >= 0
+            && prgh->positions[ci] == *global_pos) {
+            *cur_color = prgh->colors[ci];
+            *color_hint = ci + 1;
+        }
+    }
+}
+
+// Проверяет, является ли строка рамочной (border).
+// Рамочные строки начинаются с ┌, └, ├.
+static bool is_border_line(const char *line) {
+    // UTF-8: ┌ = E2 94 8C, └ = E2 94 94, ├ = E2 94 9C
+    unsigned char c0 = (unsigned char)line[0];
+    unsigned char c1 = (unsigned char)line[1];
+    if (c0 != 0xE2 || c1 != 0x94) return false;
+    unsigned char c2 = (unsigned char)line[2];
+    return c2 == 0x8C || c2 == 0x94 || c2 == 0x9C;
+}
+
+// Длина UTF-8 символа │ = 3 байта (E2 94 82)
+enum { BORDER_CHAR_BYTES = 3 };
+
+static void _paragraph_draw2(
+    Paragraph *prgh, Vector2 pos
+) {
     Rectangle background = {
         .x = pos.x, .y = pos.y,
         .width = prgh->measure.x,
         .height = prgh->b_tlines.num * prgh->fnt.baseSize,
     };
 
-    float angle = 0.f;
     R.DrawRectanglePro(
-        background, z, angle, prgh->color_background
+        background, z, 0.f, prgh->color_background
     );
 
+    bool has_border =
+        !(prgh->flags & PARAGRAPH_BORDER_NONE);
     Vector2 p = pos;
-    i32 cnt = 0,
-        cpos = 0;
-    for(int i = 0; i < prgh->b_tlines.num; ++i) {
+    i32 bs = prgh->fnt.baseSize;
+    i32 global_pos = 0;
+    i32 color_hint = 0;
+    Color cur_color = prgh->color_text;
+
+    // начальный цвет
+    if (prgh->color_positions_num > 0
+        && prgh->positions[0] == 0) {
+        cur_color = prgh->colors[0];
+        color_hint = 1;
+    }
+
+    for (i32 i = 0; i < prgh->b_tlines.num; ++i) {
         const char *line = prgh->b_tlines.s[i];
-
-        if (!line)
+        if (!line) {
+            p.y += bs;
             continue;
-
-        size_t line_len = strlen(line);
-
-        if (prgh->is_sdf)
-            R.BeginShaderMode(prgh->sh_sdf);
-        i32 bs = prgh->fnt.baseSize;
-
-        Color color_text = prgh->color_text;
-        R.DrawTextPro(
-            prgh->fnt, line, p, z,
-            angle, bs, 0, color_text
-        );
-
-        for (i32 j = 0; j < line_len; ++j) {
-            if (prgh->positions[cpos]) {
-            }
         }
 
         if (prgh->is_sdf)
-            R.EndShaderMode();            
+            R.BeginShaderMode(prgh->sh_sdf);
 
-        p.y += prgh->fnt.baseSize;
-        cnt += line_len;
+        size_t line_len = strlen(line);
+
+        if (has_border && is_border_line(line)) {
+            // рамочная строка — рисуем целиком без
+            // цветовой разметки
+            R.DrawTextPro(
+                prgh->fnt, line, p, z,
+                0.f, bs, 0, prgh->color_text
+            );
+        } else if (has_border && line_len > 2 * BORDER_CHAR_BYTES) {
+            // контентная строка с рамкой: │content│
+            // рисуем левый │
+            char lb[BORDER_CHAR_BYTES + 1];
+            memcpy(lb, line, BORDER_CHAR_BYTES);
+            lb[BORDER_CHAR_BYTES] = '\0';
+            R.DrawTextPro(
+                prgh->fnt, lb, p, z,
+                0.f, bs, 0, prgh->color_text
+            );
+
+            Vector2 lm = R.MeasureTextEx(
+                prgh->fnt, lb, bs, 0
+            );
+
+            // содержимое между │...│
+            const char *content =
+                line + BORDER_CHAR_BYTES;
+            size_t content_len =
+                line_len - 2 * BORDER_CHAR_BYTES;
+
+            Vector2 cp = { p.x + lm.x, p.y };
+            draw_colored_content(
+                prgh, content, content_len, cp, bs,
+                &global_pos, &color_hint, &cur_color
+            );
+
+            // рисуем правый │
+            const char *rb =
+                line + line_len - BORDER_CHAR_BYTES;
+            // измеряем всё до правого │
+            char all_before[line_len - BORDER_CHAR_BYTES + 1];
+            memcpy(
+                all_before, line,
+                line_len - BORDER_CHAR_BYTES
+            );
+            all_before[line_len - BORDER_CHAR_BYTES] = '\0';
+            Vector2 am = R.MeasureTextEx(
+                prgh->fnt, all_before, bs, 0
+            );
+            Vector2 rp = { p.x + am.x, p.y };
+            R.DrawTextPro(
+                prgh->fnt, rb, rp, z,
+                0.f, bs, 0, prgh->color_text
+            );
+        } else {
+            // без рамки — весь текст с цветовой разметкой
+            draw_colored_content(
+                prgh, line, line_len, p, bs,
+                &global_pos, &color_hint, &cur_color
+            );
+        }
+
+        if (prgh->is_sdf)
+            R.EndShaderMode();
+
+        p.y += bs;
     }
 }
 

@@ -18,7 +18,14 @@ typedef struct ParagraphColorPosition {
 
 enum {
     MAX_PARAGRAPH_COLOR_POSITION = 1024,
+    MAX_PARAGRAPH_LINES = 256,
 };
+
+typedef enum ParagraphAlign {
+    PARAGRAPH_ALIGN_LEFT = 0,
+    PARAGRAPH_ALIGN_CENTER,
+    PARAGRAPH_ALIGN_RIGHT,
+} ParagraphAlign;
 
 typedef struct Paragraph {
     // с какой позиции 
@@ -26,6 +33,10 @@ typedef struct Paragraph {
     // какой цвет начинается
     Color   colors[MAX_PARAGRAPH_COLOR_POSITION];
     i32     color_positions_num;
+
+    // выравнивание per-line (индекс — номер строки
+    // в b_tlines, без учёта рамки)
+    ParagraphAlign aligns[MAX_PARAGRAPH_LINES];
 
     StrBuf  b_lines, b_tlines;
     Color   color_text, color_background;
