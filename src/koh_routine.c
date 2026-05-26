@@ -156,8 +156,28 @@ void koh_common_init(void) {
     add_chars_range(pseudo_gr_first, pseudo_gr_last);
     add_chars_range(arrows_first, arrows_last);
 
-    const int number_sign = 2116; // FIXME: Значок №
+    const int number_sign = 2116; // Значок №
     add_chars_range(number_sign - 1, number_sign + 1);
+
+    // Символы для геймпада / UI:
+    // ┌───────────────┬─────────┬──────────────────┐
+    // │   Диапазон    │ Символы │     Для чего     │
+    // ├───────────────┼─────────┼──────────────────┤
+    // │ 0x24B6–0x24E9 │ Ⓐ Ⓑ Ⓧ Ⓨ │ кнопки в кружках │
+    // ├───────────────┼─────────┼──────────────────┤
+    // │ 0x2B00–0x2BFF │ ⬆⬇⬅➡    │ жирные стрелки   │
+    // ├───────────────┼─────────┼──────────────────┤
+    // │ 0x2295–0x2296 │ ⊕ ⊖     │ start/select     │
+    // ├───────────────┼─────────┼──────────────────┤
+    // │ 0x25CE–0x25CF │ ◎ ●     │ стик             │
+    // ├───────────────┼─────────┼──────────────────┤
+    // │ 0x229E–0x22A1 │ ⊞ ⊟ ⊠ ⊡ │ кнопки-квадраты  │
+    // └───────────────┴─────────┴──────────────────┘
+    add_chars_range(0x24B6, 0x24E9); // Ⓐ Ⓑ Ⓧ Ⓨ
+    add_chars_range(0x2B00, 0x2BFF); // ⬆⬇⬅➡
+    add_chars_range(0x2295, 0x2296); // ⊕ ⊖
+    add_chars_range(0x25CE, 0x25CF); // ◎ ●
+    add_chars_range(0x229E, 0x22A1); // ⊞ ⊟ ⊠ ⊡
 
     printf("cmn.font_chars_num %d\n", cmn.font_chars_num);
 }
