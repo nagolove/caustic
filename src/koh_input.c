@@ -203,6 +203,8 @@ typedef struct InputKbMouseDrawer {
     Vector2         rel_cursor;
     bool            has_mod_bind;
     Btn             *left_shift_btn, *right_shift_btn;
+
+    bool            pass_next_update;
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
@@ -595,32 +597,33 @@ static void iter_check_mod_bind(
 
 void input_kb_update(InputKbMouseDrawer *kb) {
     assert(kb);
-    kb_each(0, 0, kb->btn_width, iter_update, kb);
-    kb->has_mod_bind = false;
-    kb_each(0, 0, kb->btn_width, iter_check_mod_bind, kb);
+
+    // ImGui выставляет WantCaptureKeyboard = true когда
+    // текстовое поле (igInputText и др.) в фокусе.
+    // Флаг уже актуален к этому моменту — его вычисляет
+    // NewFrame() из состояния предыдущего кадра.
+    // Без этой проверки хоткеи (T, X, N...) перехватывают
+    // нажатия раньше, чем ImGui получает ввод.
+    ImGuiIO *io = igGetIO_Nil();
+    bool imgui_wants_kb = io && io->WantCaptureKeyboard;
+
+    if (!kb->pass_next_update && !imgui_wants_kb) {
+        kb_each(0, 0, kb->btn_width, iter_update, kb);
+        kb->has_mod_bind = false;
+        kb_each(0, 0, kb->btn_width, iter_check_mod_bind, kb);
+    }
+    kb->pass_next_update = false;
+
     int fps = R.GetFPS();
     f32 timestep = fps > 0 ? 1.0f / fps : 1.0f / 120.0f;
     b2World_Step(kb->w, timestep, 4);
 
-    b2Vec2 point = {
-        .x = kb->rel_cursor.x,
-        .y = kb->rel_cursor.y,
-    };
+    b2Vec2 point = { .x = kb->rel_cursor.x, .y = kb->rel_cursor.y, };
     kb->btn_under_cursor = NULL;
     b2World_OverlapPoint(
         kb->w, point, b2Transform_identity, b2DefaultQueryFilter(), 
         overlap_btn, kb
     );
-
-    /*
-    if (kb->btn_under_cursor) {
-        printf(
-            "input_kb_update: btn_under_cursor '%s'\n",
-            keycode2str[kb->btn_under_cursor->keycode]
-        );
-    }
-    */
-
 }
 
 static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
@@ -1148,6 +1151,11 @@ char *kb_stroke2str(KbStroke s) {
 // KB_MOD_NONE срабатывает только если ни один модификатор
 // не зажат.
 bool input_kb_is_pressed(KbStroke s) {
+    // Не обрабатывать хоткеи когда ImGui захватил
+    // клавиатуру (igInputText в фокусе и т.д.)
+    ImGuiIO *io = igGetIO_Nil();
+    if (io && io->WantCaptureKeyboard)
+        return false;
     if (!R.IsKeyPressed(s.keycode))
         return false;
     return kb_active_mod() == s.mod;
@@ -1179,4 +1187,9 @@ KbStroke input_kb_bind(InputKbMouseDrawer *kb, KbBind b) {
     }
 
     return b.s;
+}
+
+void input_kb_pass_next_frame(InputKbMouseDrawer *kb) {
+    assert(kb);
+    kb->pass_next_update = true;
 }

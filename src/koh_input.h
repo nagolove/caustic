@@ -71,3 +71,5 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup);
 void input_gp_free(InputGamepadDrawer *gp);
 void input_gp_update(InputGamepadDrawer *gp);
 /*void input_gp_gui_update(InputGamepadDrawer *kb);*/
+
+void input_kb_pass_next_frame(InputKbMouseDrawer *kb);
