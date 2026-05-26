@@ -82,6 +82,7 @@ typedef struct raylib_api {
     bool (*IsMouseButtonPressed)(int button);
     bool (*IsKeyDown)(int key);
     bool (*IsKeyPressed)(int key);
+    bool (*IsKeyPressedRepeat)(int key);
     bool (*IsGamepadButtonDown)(int gamepad, int button);
     float (*GetGamepadAxisMovement)(int gamepad, int axis);
     
