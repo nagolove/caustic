@@ -143,18 +143,11 @@ void camp_update(CameraProcessor *cp) {
     // внешний код мог свободно двигать камеру.
     if (cp->move_elapsed < cp->move_time_total) {
         cp->move_elapsed += dt;
-        float t = fminf(cp->move_elapsed,
-            cp->move_time_total);
-        float dx = cp->offset_target.x
-            - cp->offset_start.x;
-        float dy = cp->offset_target.y
-            - cp->offset_start.y;
-        cam->offset.x = cp->move_ease(
-            t, cp->offset_start.x, dx,
-            cp->move_time_total);
-        cam->offset.y = cp->move_ease(
-            t, cp->offset_start.y, dy,
-            cp->move_time_total);
+        float t = fminf(cp->move_elapsed, cp->move_time_total);
+        float dx = cp->offset_target.x - cp->offset_start.x;
+        float dy = cp->offset_target.y - cp->offset_start.y;
+        cam->offset.x = cp->move_ease(t, cp->offset_start.x, dx, cp->move_time_total);
+        cam->offset.y = cp->move_ease(t, cp->offset_start.y, dy, cp->move_time_total);
         // Финальный кадр — точное значение
         if (cp->move_elapsed >= cp->move_time_total)
             cam->offset = cp->offset_target;
