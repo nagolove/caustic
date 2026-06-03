@@ -3478,10 +3478,26 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         }
 
         if (r->storages_size + 1 >= r->storages_cap) {
-            printf(
-                "e_assure: storages_cap %d is not enough\n", r->storages_cap
+            int prev_cap = r->storages_cap;
+            r->storages_cap = r->storages_cap * 2;
+            void *newp = ainspector_realloc(
+                &r->alli, r->storages,
+                r->storages_cap * sizeof(r->storages[0])
             );
-            koh_fatal();
+            if (!newp) {
+                printf("e_assure: realloc для storages не удался\n");
+                koh_fatal();
+            }
+            r->storages = newp;
+            // Обнулить новую память
+            memset(
+                r->storages + prev_cap, 0,
+                (r->storages_cap - prev_cap) * sizeof(r->storages[0])
+            );
+            printf(
+                "e_assure: storages realloc %d -> %d\n",
+                prev_cap, r->storages_cap
+            );
         }
 
         s = &r->storages[r->storages_size++];
