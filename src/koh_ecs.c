@@ -114,13 +114,18 @@ typedef struct e_storage {
 
 enum { cp_data_initial_cap = 100, };
 //const static float cp_data_grow_policy = 1.5;
+enum { ECS_COMPONENTS_MAX = 128, };
 
 typedef struct ecs_t {
-    e_storage       *storages; 
+    e_storage       *storages;
                     // количество хранилищ
-    int             storages_size, 
+    int             storages_size,
                     // на какое количество хранилищ выделено памяти
                     storages_cap;
+    // Прямая индексация хранилищ по cp_id компонента.
+    // storages_by_id[cp_id] — индекс в storages[],
+    // -1 означает что хранилище для данного cp_id не создано.
+    int32_t         storages_by_id[ECS_COMPONENTS_MAX];
                     
     // количество созданных сущностей
     size_t          entities_num;
@@ -3446,16 +3451,14 @@ static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
 #endif
 }
 
-// TODO: Сравнение по идентификатору попробовать заменить поиском
-// в хеш таблице
-static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
+static inline e_storage *storage_find(
+    ecs_t *r, e_cp_type cp_type
+) {
     ecs_assert(r);
     cp_type_assert(cp_type);
-for (int i = 0; i < r->storages_size; i++) {
-        if (cp_type.priv.cp_id == r->storages[i].cp_id) 
-            return &r->storages[i];
-    }
-    return NULL;
+    assert(cp_type.priv.cp_id < ECS_COMPONENTS_MAX);
+    int32_t idx = r->storages_by_id[cp_type.priv.cp_id];
+    return idx >= 0 ? &r->storages[idx] : NULL;
 }
 
 // Вернуть указатель(созданный или существующий) на хранилище для данного типа
@@ -3480,20 +3483,16 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         if (r->storages_size + 1 >= r->storages_cap) {
             int prev_cap = r->storages_cap;
             r->storages_cap = r->storages_cap * 2;
-            void *newp = ainspector_realloc(
-                &r->alli, r->storages,
-                r->storages_cap * sizeof(r->storages[0])
-            );
+            size_t sz = r->storages_cap * sizeof(r->storages[0]);
+            void *newp = ainspector_realloc(&r->alli, r->storages, sz);
             if (!newp) {
                 printf("e_assure: realloc для storages не удался\n");
                 koh_fatal();
             }
             r->storages = newp;
+            size_t new_sz = (r->storages_cap - prev_cap) * sizeof(r->storages[0]);
             // Обнулить новую память
-            memset(
-                r->storages + prev_cap, 0,
-                (r->storages_cap - prev_cap) * sizeof(r->storages[0])
-            );
+            memset(r->storages + prev_cap, 0, new_sz);
             printf(
                 "e_assure: storages realloc %d -> %d\n",
                 prev_cap, r->storages_cap
@@ -3502,6 +3501,8 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
 
         s = &r->storages[r->storages_size++];
         memset(s, 0, sizeof(*s));
+        r->storages_by_id[cp_type.priv.cp_id] =
+            r->storages_size - 1;
 
         // Инициализация хранилища
         s->cp_data_initial_cap = cp_data_initial_cap;
@@ -3587,9 +3588,14 @@ ecs_t *e_new(e_options *opts) {
     // что-бы не было выхода за границы памяти, указывает на последний элемент
     r->stack_last--;
 
-    r->storages_cap = 48;
-    r->storages = ainspector_calloc(&r->alli, r->storages_cap, sizeof(r->storages[0]));
+    r->storages_cap = 32;
+    r->storages = ainspector_calloc(
+        &r->alli, r->storages_cap, sizeof(r->storages[0])
+    );
     r->storages_size = 0;
+    memset(
+        r->storages_by_id, -1, sizeof(r->storages_by_id)
+    );
 
     r->cp_types = htable_new(NULL);
     r->set_cp_types = htable_new(NULL);
@@ -3708,8 +3714,8 @@ e_cp_type e_register(ecs_t *r, e_cp_type *comp) {
     // ecs_t с частично разными наборами компонентов.
     if (!comp->manual_cp_id)
         comp->priv.cp_id = htable_count(r->cp_types);
-    else {
-        assert(comp->priv.cp_id < 128);
+    assert(comp->priv.cp_id < ECS_COMPONENTS_MAX);
+    if (comp->manual_cp_id) {
 
         // Проверка на корректность cp_id, используется ли уже идентификатор
         HTableIterator i = htable_iter_new(r->cp_types);
@@ -4301,9 +4307,7 @@ ecs_t *e_clone(ecs_t *r) {
     // storages
     c->storages_cap = r->storages_cap;
     c->storages_size = r->storages_size;
-    c->storages = calloc(
-        c->storages_cap, sizeof(e_storage)
-    );
+    c->storages = calloc(c->storages_cap, sizeof(e_storage));
     assert(c->storages);
 
     for (int i = 0; i < r->storages_size; i++) {
@@ -4313,6 +4317,10 @@ ecs_t *e_clone(ecs_t *r) {
             r->max_id
         );
     }
+    memcpy(
+        c->storages_by_id, r->storages_by_id,
+        sizeof(r->storages_by_id)
+    );
 
     // deep copy хеш-таблиц типов
     c->cp_types =
@@ -4352,6 +4360,15 @@ void e_swap(ecs_t *a, ecs_t *b) {
     SWAP_FIELD(storages);
     SWAP_FIELD(storages_size);
     SWAP_FIELD(storages_cap);
+    {
+        int32_t tmp[ECS_COMPONENTS_MAX];
+        memcpy(tmp, a->storages_by_id,
+            sizeof(a->storages_by_id));
+        memcpy(a->storages_by_id, b->storages_by_id,
+            sizeof(a->storages_by_id));
+        memcpy(b->storages_by_id, tmp,
+            sizeof(a->storages_by_id));
+    }
     SWAP_FIELD(cp_types);
     SWAP_FIELD(set_cp_types);
 
