@@ -32,8 +32,7 @@
 #  include <sanitizer/asan_interface.h>
 #endif
 
-// Use hash table for O(1) storage lookup instead of O(n) linear search
-// #define KOH_ECS_STORAGE_HASHTABLE
+
 
 static inline int asan_can_write(void *p, size_t n) {
 #ifdef USING_ASAN
@@ -121,11 +120,7 @@ typedef struct ecs_t {
                     // количество хранилищ
     int             storages_size, 
                     // на какое количество хранилищ выделено памяти
-                    storages_cap; 
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-                    // cp_id -> e_storage* для O(1) поиска
-    HTable          *storages_by_id;
-#endif
+                    storages_cap;
                     
     // количество созданных сущностей
     size_t          entities_num;
@@ -3456,16 +3451,11 @@ static inline void cp_is_registered_assert(ecs_t *r, e_cp_type cp_type) {
 static inline e_storage *storage_find(ecs_t *r, e_cp_type cp_type) {
     ecs_assert(r);
     cp_type_assert(cp_type);
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-    e_storage **result = htable_get_u64(r->storages_by_id, cp_type.priv.cp_id, NULL);
-    return result ? *result : NULL;
-#else
-    for (int i = 0; i < r->storages_size; i++) {
+for (int i = 0; i < r->storages_size; i++) {
         if (cp_type.priv.cp_id == r->storages[i].cp_id) 
             return &r->storages[i];
     }
     return NULL;
-#endif
 }
 
 // Вернуть указатель(созданный или существующий) на хранилище для данного типа
@@ -3519,9 +3509,6 @@ e_storage *e_assure(ecs_t *r, e_cp_type cp_type) {
         // XXX: Не учитывается в AllocInspector
         s->sparse = ss_alloc(r->max_id);
 
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-        htable_add_u64(r->storages_by_id, cp_type.priv.cp_id, &s, sizeof(e_storage*));
-#endif
     }
 
     // Выделить начальное количество памяти
@@ -3584,13 +3571,9 @@ ecs_t *e_new(e_options *opts) {
     // что-бы не было выхода за границы памяти, указывает на последний элемент
     r->stack_last--;
 
-    r->storages_cap = 32;
+    r->storages_cap = 48;
     r->storages = ainspector_calloc(&r->alli, r->storages_cap, sizeof(r->storages[0]));
     r->storages_size = 0;
-
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-    r->storages_by_id = htable_new(NULL);
-#endif
 
     r->cp_types = htable_new(NULL);
     r->set_cp_types = htable_new(NULL);
@@ -3626,13 +3609,6 @@ void e_free(ecs_t *r) {
         free(r->storages);
         r->storages = NULL;
     }
-
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-    if (r->storages_by_id) {
-        htable_free(r->storages_by_id);
-        r->storages_by_id = NULL;
-    }
-#endif
 
     if (r->cp_types) {
         htable_free(r->cp_types);
@@ -4328,18 +4304,6 @@ ecs_t *e_clone(ecs_t *r) {
     c->set_cp_types =
         htable_clone(r->set_cp_types);
 
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-    c->storages_by_id = htable_new(NULL);
-    for (int i = 0; i < c->storages_size; i++) {
-        e_storage *s = &c->storages[i];
-        htable_add_u64(
-            c->storages_by_id,
-            (u64)s->cp_id,
-            &s, sizeof(e_storage*)
-        );
-    }
-#endif
-
     // GUI поля — не клонируем
     c->selected = NULL;
     c->selected_num = 0;
@@ -4374,10 +4338,6 @@ void e_swap(ecs_t *a, ecs_t *b) {
     SWAP_FIELD(storages_cap);
     SWAP_FIELD(cp_types);
     SWAP_FIELD(set_cp_types);
-
-#ifdef KOH_ECS_STORAGE_HASHTABLE
-    SWAP_FIELD(storages_by_id);
-#endif
 
 #undef SWAP_FIELD
 }
