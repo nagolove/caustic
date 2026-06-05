@@ -46,8 +46,8 @@ static inline void tmr_set_paused(Tmr *t, bool paused);
 static inline bool tmr_is_paused(const Tmr *t);
 static inline void tmr_null(Tmr *t);
 
+static inline char *tmr_2str(const Tmr *t);
 static inline void tmr_gui(Tmr *t, const char *label);
-// */
 
 // implementation {{{
 

@@ -29,48 +29,6 @@ void camp_init(CameraProcessor *cp, CameraProcessorOpts opts) {
 void camp_shutdown(CameraProcessor *cp) {
 }
 
-/*
-void camp_update(CameraProcessor *cp) {
-    const float zoom_min = 0.01f;
-    const float zoom_max = 100.0f;
-
-    assert(cp);
-    assert(cp->cam);
-
-    float mouse_wheel = GetMouseWheelMove();
-    Camera2D *cam = cp->cam;
-    bool modpressed = IsKeyDown(cp->mod_key_down_scale);
-    bool wheel_in_eps = mouse_wheel > EPSILON || mouse_wheel < -EPSILON;
-    float dscale_value = cp->dscale_value;
-
-    if (!isfinite(cam->zoom)) {
-        cam->zoom = zoom_min;
-    }
-
-    if (cam && modpressed && wheel_in_eps) {
-        const float d = copysignf(dscale_value, mouse_wheel);
-
-        cam->zoom = fminf(fmaxf(cam->zoom + d, zoom_min), zoom_max);
-        //cam->zoom = cam->zoom + d;
-        //
-        if (cam->zoom > EPSILON) {
-            Vector2 delta = Vector2Scale(GetMouseDelta(), -1. / cam->zoom);
-            //cam->target = Vector2Add(cam->target, delta);
-            cam->offset = Vector2Add(cam->offset, Vector2Negate(delta));
-        }
-    }
-
-    if (cp->cam && IsMouseButtonDown(cp->mouse_btn_move)) {
-        float inv_zoom = cp->cam->zoom;
-        float dzoom = inv_zoom == 1. ? 
-            -(1. / cp->cam->zoom) : 
-            -log(1. / cp->cam->zoom);
-        Vector2 delta = Vector2Scale(GetMouseDelta(), dzoom);
-        cp->cam->offset = Vector2Add(cp->cam->offset, Vector2Negate(delta));
-    }
-}
-*/
-
 // TODO: Сделать обработку мыши отлючаемой
 void camp_update(CameraProcessor *cp) {
     const float zoom_min = 0.01f;
@@ -85,6 +43,7 @@ void camp_update(CameraProcessor *cp) {
     bool wheel_in_eps = mouse_wheel > EPSILON || mouse_wheel < -EPSILON;
     float dscale_value = cp->dscale_value;
     float dt = GetFrameTime();
+
 
     // Масштабирование с easing вокруг мыши
     if (modpressed && wheel_in_eps) {
