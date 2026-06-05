@@ -739,7 +739,7 @@ local parser_setup: {string:ParserSetup} = {
 
     project = {
         options = { "-n --name", },
-        summary = [[create project with name in current directory]],
+        summary = [[create project subdirectory with given name]],
     },
 
     stage = {
@@ -1197,7 +1197,6 @@ return {
         artifact = inp
     end
 
-    --bld_tl = gsub(bld_tl, "$(.-)$", artifact)
     bld_tl = gsub(bld_tl, "%$artifact%$", artifact)
 
     local f = io.open("tlconfig.lua", "w")
@@ -1231,6 +1230,7 @@ return {
 #include "cimgui.h"
 #include "cimgui_impl.h"
 #include "koh.h"
+#include "koh_camera.h"
 #include "raylib.h"
 #include <assert.h>
 #include "koh_common.h"
@@ -1243,17 +1243,10 @@ return {
 
 Color color_background_clear = GRAY;
 
-//#define LAPTOP  1
-
 static double last_time = 0.;
 
-#ifdef LAPTOP
-static const int screen_width_desk = 1920 * 1;
-static const int screen_height_desk = 1080 * 1;
-#else
 static const int screen_width_desk = 1920 * 2;
 static const int screen_height_desk = 1080 * 2;
-#endif
 
 #ifdef PLATFORM_WEB
 static const int screen_width_web = 1920;
@@ -1264,6 +1257,7 @@ static StagesStore *ss = NULL;
 static Camera2D cam = {
     .zoom = 1.,
 };
+static CameraProcessor cam_proc;
 
 static void gui_render() {
     rlImGuiBegin();
@@ -1278,15 +1272,7 @@ static void gui_render() {
 }
 
 static void update(void) {
-    koh_camera_process_mouse_drag(&(struct CameraProcessDrag) {
-        .mouse_btn = MOUSE_BUTTON_RIGHT,
-        .cam = &cam,
-    });
-    koh_camera_process_mouse_scale_wheel(&(struct CameraProcessScale) {
-        .dscale_value = 0.1,
-        .cam = &cam,
-        .modifier_key_down = KEY_LEFT_SHIFT,
-    });
+    camp_update(&cam_proc);
 
     koh_fpsmeter_frame_begin();
 
@@ -1323,39 +1309,37 @@ int main(int argc, char **argv) {
     koh_hashers_init();
     logger_init();
 
-    const char *wnd_name = "lapsha";
+    const char *wnd_name = "$artifact$";
 
     SetTraceLogLevel(LOG_WARNING);
 
 #ifdef PLATFORM_WEB
-    SetConfigFlags(FLAG_MSAA_4X_HINT);  // Set MSAA 4X hint before windows creation
-    InitWindow(screenWidth_web, screenHeight_web, wnd_name);
-    SetTraceLogLevel(LOG_ALL);
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    InitWindow(screen_width_web, screen_height_web, wnd_name);
 #else
-    //SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_FULLSCREEN_MODE);  // Set MSAA 4X hint before windows creation
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_UNDECORATED);  // Set MSAA 4X hint before windows creation
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_UNDECORATED);
     InitWindow(screen_width_desk, screen_height_desk, wnd_name);
+#endif
     SetTraceLogLevel(LOG_ALL);
-    // FIXME: Работает только на моей конфигурации, сделать опцией
-    // К примеру отрабатывать только на флаг -DDEV
-#ifndef LAPTOP
-    SetWindowPosition(GetMonitorPosition(1).x, 0);
-#endif
-    //dotool_setup_display(testing_ctx);
-#endif
 
     SetExitKey(KEY_NULL);
 
     sc_init();
     inotifier_init();
 
-    koh_fpsmeter_init();
+    koh_fpsmeter_init(GetScreenWidth());
     sc_init_script();
     koh_common_init();
 
+    camp_init(&cam_proc, (CameraProcessorOpts) {
+        .cam = &cam,
+        .mouse_btn_move = MOUSE_BUTTON_RIGHT,
+        .mod_key_down_scale = KEY_LEFT_SHIFT,
+    });
+
     ss = stage_new(&(struct StageStoreSetup) {
         .stage_store_name = "main",
-        .l = sc_get_state(), // TODO: Зачем передавать Lua состояние?
+        .l = sc_get_state(),
     }, argc, argv);
 
     InitAudioDevice();
@@ -1371,23 +1355,17 @@ int main(int argc, char **argv) {
         .ranges = (ImWchar[]){
             0x0020, 0x00FF, // Basic Latin + Latin Supplement
             0x0400, 0x044F, // Cyrillic
-            // XXX: symbols not displayed
-            // media buttons like record/play etc. Used in dotool_gui()
             0x23CF, 0x23F5,
             0,
         },
     };
     rlImGuiSetup(&opts);
 
-    // stage_init(ss);
-
     last_time = GetTime();
 
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(update, 60, 1);
 #else
-    //dotool_send_signal(testing_ctx);
-
     SetTargetFPS(120 * 3);
     while (!WindowShouldClose()) {
         update();
@@ -1396,8 +1374,9 @@ int main(int argc, char **argv) {
 #endif
 
     stage_free(ss);
-    koh_music_shutdown();       
-    koh_fpsmeter_shutdown(); 
+    camp_shutdown(&cam_proc);
+    koh_music_shutdown();
+    koh_fpsmeter_shutdown();
     koh_render_shutdown();
     koh_common_shutdown();
     sc_shutdown();
@@ -1412,6 +1391,7 @@ int main(int argc, char **argv) {
 ]]
 -- }}}
 
+    main_c = gsub(main_c, "%$artifact%$", artifact)
     f = io.open("src/main.c", "w")
     f:write(main_c)
     f:close()
@@ -1435,6 +1415,7 @@ r
     f:close()
 
     cmd_do(format("cp -r %s/assets .", e.path_caustic))
+    cmd_do(format("cp %s/gdb_remote.py .", e.path_caustic))
     cmd_do("koh compile_flags")
     cmd_do("koh make -c")
 
