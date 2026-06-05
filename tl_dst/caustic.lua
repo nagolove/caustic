@@ -1106,6 +1106,7 @@ function actions.project(_args)
 
    mkdir("src")
    mkdir("assets")
+   mkdir("obj_linux")
 
    local tlconfig_lua =
 
@@ -2917,7 +2918,7 @@ local function codegen(cg)
    time_print("codegen", _t0)
 end
 
-local function get_ready_deps_defines(
+get_ready_deps_defines = function(
    cfg, target)
 
    local ready_deps = get_ready_deps(cfg, target)
