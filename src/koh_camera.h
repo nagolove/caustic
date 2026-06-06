@@ -2,6 +2,10 @@
 
 #include "raylib.h"
 #include "koh_reasings.h"       
+#include "koh_tmr.h"
+
+#define CAMP_INERTIA_FACTOR  5
+#define CAMP_GLIDE_DURATION   0.3f
 
 typedef struct CameraProcessor {
     Camera2D    *cam;
@@ -9,19 +13,24 @@ typedef struct CameraProcessor {
     int         mouse_btn_move;
     float       dscale_value;
 
-    // Easing
+    // Zoom easing
     EaseFunc    zoom_ease;
-    EaseFunc    move_ease;
     float       zoom_time_total;
-    float       move_time_total;
-
-    // Internal easing state
     float       zoom_elapsed;
-    float       move_elapsed;
-
     float       zoom_start;
     float       zoom_target;
 
+    // Move drag + glide
+    EaseFunc    move_ease;
+    bool        is_dragging;
+    Vector2     drag_velocity;
+    Tmr         glide_tmr;
+    Vector2     move_start;
+    Vector2     move_target;
+
+    // Easing для zoom при сдвиге offset
+    float       move_elapsed;
+    float       move_time_total;
     Vector2     offset_start;
     Vector2     offset_target;
 } CameraProcessor;
