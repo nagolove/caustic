@@ -743,7 +743,7 @@ local parser_setup = {
    },
 
    stage = {
-      options = { "-n --name" },
+      options = { "-n --name", "-p --prefix" },
       summary = [[Create stage in project]],
    },
 
@@ -890,6 +890,7 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
+
 
 
 
@@ -1431,28 +1432,52 @@ function actions.stage(_args)
       error("No project bld.lua in current directory")
    end
 
+   local src_dir = cfgs[1].src or "src"
+
    ut.push_current_dir()
-   local ok = chdir("src")
-   if not ok then
-      print("Could not find 'src' directory")
-   end
-
-   local inp = readline(ansicolors("%{green}enter stage name%{reset}"))
-
-   printc("stage name: %{blue}" .. inp .. "%{reset}")
-   if #inp <= 3 then
-      print("Stage name should be more than 3 symbols")
+   if not chdir(src_dir) then
+      printc("%{red}Каталог '" .. src_dir .. "' не найден%{reset}")
       ut.pop_dir()
       return
    end
 
-   local msg = "%{green}enter source file prefix(without _)%{reset}"
-   local prefix = readline(ansicolors(msg))
 
-   chdir('src')
+   local stage = _args.name
+   if not stage then
+      stage = readline(
+      ansicolors("%{green}имя стейджа%{reset}"))
 
-   local stage = inp
-   local Stage = inp:sub(1, 1):upper() .. inp:sub(2, #inp)
+   end
+
+   printc("stage name: %{blue}" .. stage .. "%{reset}")
+
+   if #stage <= 3 then
+      printc("%{red}Имя должно быть длиннее 3 символов%{reset}")
+      ut.pop_dir()
+      return
+   end
+
+   if not stage:match("^[a-z_][a-z0-9_]*$") then
+      printc(
+      "%{red}Имя должно быть допустимым " ..
+      "C-идентификатором: [a-z0-9_], " ..
+      "начинается с буквы или _%{reset}")
+
+      ut.pop_dir()
+      return
+   end
+
+
+   local prefix = _args.prefix
+   if not prefix then
+      local msg =
+      "%{green}префикс " ..
+      "(например 'h' -> h_stage_X.c, " ..
+      "пусто -> stage_X.c)%{reset}"
+      prefix = readline(ansicolors(msg))
+   end
+
+   local Stage = stage:sub(1, 1):upper() .. stage:sub(2, #stage)
 
    local stage_c =
 
@@ -1461,7 +1486,7 @@ function actions.stage(_args)
 
 #include "$prefix$stage_$stage$.h"
 
-#include "koh_stages.h"
+#include <stdlib.h>
 
 typedef struct Stage_$Stage$ {
     Stage               parent;
@@ -1469,7 +1494,7 @@ typedef struct Stage_$Stage$ {
 } Stage_$Stage$;
 
 static void stage_$stage$_init(Stage_$Stage$ *st) {
-    trace("stage_$stage$_new:\n");
+    trace("stage_$stage$_init:\n");
     st->cam.zoom = 1.f;
 }
 
@@ -1481,8 +1506,7 @@ static void stage_$stage$_gui(Stage_$Stage$ *st) {
     trace("stage_$stage$_gui:\n");
 
     ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
-    bool wnd_open = true;
-    igBegin("$stage$", &wnd_open, wnd_flags);
+    igBegin("$stage$", NULL, wnd_flags);
     igEnd();
 }
 
@@ -1504,7 +1528,6 @@ static void stage_$stage$_leave(Stage_$Stage$ *st) {
 }
 
 Stage *stage_$stage$_new() {
-    //assert(hk_store);
     Stage_$Stage$ *st = calloc(1, sizeof(*st));
     if (!st) {
         printf("stage_$stage$_new: bad allocation\n");
@@ -1546,8 +1569,25 @@ Stage *stage_$stage$_new();
 
    stage_h = gsub(stage_h, "%$stage%$", stage)
 
-   ut.write_file_bak(prefix .. "stage_" .. stage .. ".c", stage_c)
-   ut.write_file_bak(prefix .. "stage_" .. stage .. ".h", stage_h)
+   local fname_c = prefix .. "stage_" .. stage .. ".c"
+   local fname_h = prefix .. "stage_" .. stage .. ".h"
+
+   printc(
+   "Будут созданы: %{blue}" .. fname_c ..
+   "%{reset}, %{blue}" .. fname_h .. "%{reset}")
+
+   local ans = readline("Продолжить? (y/n) ")
+   if ans ~= "y" and ans ~= "Y" then
+      printc("%{yellow}Отменено%{reset}")
+      ut.pop_dir()
+      return
+   end
+
+   ut.write_file_bak(fname_c, stage_c)
+   ut.write_file_bak(fname_h, stage_h)
+
+   printc("%{green}Created:%{reset} " .. src_dir .. "/" .. fname_c)
+   printc("%{green}Created:%{reset} " .. src_dir .. "/" .. fname_h)
 
    ut.pop_dir()
 end

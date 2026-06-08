@@ -4,7 +4,7 @@
 #include "koh_reasings.h"       
 #include "koh_tmr.h"
 
-#define CAMP_INERTIA_FACTOR  5
+enum { CAMP_INERTIA_FACTOR = 5, };
 #define CAMP_GLIDE_DURATION   0.3f
 
 typedef struct CameraProcessor {

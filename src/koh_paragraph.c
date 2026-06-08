@@ -1,6 +1,7 @@
 // vim: fdm=marker
 #include "koh_paragraph.h"
 
+#include "koh_logger.h"
 #include "koh_raylib_api.h"
 #include "raylib.h"
 #include "rlgl.h"
@@ -49,7 +50,10 @@ static bool parse_u8_0_255(const char **pp, int *out) {
     int val = 0;
     while (isdigit((unsigned char)*p)) {
         val = val * 10 + (*p - '0');
-        if (val > 255) return false;   // выходим за диапазон
+        if (val > 255) {
+            trace("paragraph: color value > 255\n");
+            return false;
+        }
         p++;
     }
 
@@ -67,12 +71,11 @@ bool parse_color_command(
 ) {
     const char *p = s;
 
-    // 1) Префикс "\@color="
+    // 1) Префикс "\color=" (или "\@color=" для совместимости)
     if (*p != '\\') return false;
     p++;
 
-    if (*p != '@') return false;
-    p++;
+    if (*p == '@') p++;
 
     if (strncmp(p, "color=", 6) != 0)
         return false;
@@ -115,7 +118,10 @@ bool parse_color_command(
     skip_spaces(&p);
 
     // 8) Закрывающая скобка
-    if (*p != '}') return false;
+    if (*p != '}') {
+        trace("paragraph: color bad syntax at '%.20s'\n", p);
+        return false;
+    }
     p++;    // теперь p указывает на символ после '}'
 
     // 9) Успех: заполняем Color и out_next
@@ -141,8 +147,7 @@ static bool parse_align_command(
     const char *p = s;
     if (*p != '\\') return false;
     p++;
-    if (*p != '@') return false;
-    p++;
+    if (*p == '@') p++;
     if (strncmp(p, "align=", 6) != 0) return false;
     p += 6;
 
@@ -168,8 +173,7 @@ static bool parse_reset_command(
     const char *p = s;
     if (*p != '\\') return false;
     p++;
-    if (*p != '@') return false;
-    p++;
+    if (*p == '@') p++;
     if (strncmp(p, "reset", 5) != 0) return false;
     p += 5;
     *out_next = p;
@@ -191,7 +195,7 @@ static void parse_line_commands(
     char *dst = out_clean;
 
     while (*p) {
-        if (*p == '\\' && p[1] == '@') {
+        if (*p == '\\' && p[1] != '\0') {
             Color c;
             ParagraphAlign al;
             const char *next;
@@ -204,6 +208,7 @@ static void parse_line_commands(
                     prgh->color_positions_num++;
                 }
                 p = next;
+                if (*p == '\\') p++;
                 continue;
             }
             if (parse_reset_command(p, &next)) {
@@ -214,13 +219,20 @@ static void parse_line_commands(
                     prgh->color_positions_num++;
                 }
                 p = next;
+                if (*p == '\\') p++;
                 continue;
             }
             if (parse_align_command(p, &al, &next)) {
                 *out_align = al;
                 p = next;
+                if (*p == '\\') p++;
                 continue;
             }
+            // ни одна команда не распознана
+            trace(
+                "paragraph: unknown command at '%.30s'\n",
+                p
+            );
         }
 
         // обычный символ — копируем в очищенный буфер
@@ -391,6 +403,9 @@ void paragraph_add(Paragraph *prgh, const char *fmt, ...) {
     strbuf_add(&prgh->b_lines, buf);
 }
 
+// Длина UTF-8 символа │ = 3 байта (E2 94 82)
+enum { BORDER_CHAR_BYTES = 3 };
+
 void paragraph_build(Paragraph *prgh) {
     assert(prgh);
 
@@ -447,6 +462,10 @@ void paragraph_build(Paragraph *prgh) {
         strbuf_addf(&prgh->b_tlines, "┌%s┐", dash_line);
     }
 
+    // Сдвиг цветовых позиций с учётом padding
+    i32 pad_shift = 0;
+    i32 clean_offset = 0;
+
     for (i32 i = 0; i < num; i++) {
         const char *cl = clean.s[i];
 
@@ -484,6 +503,21 @@ void paragraph_build(Paragraph *prgh) {
             pad_left = pad_total;
             break;
         }
+
+        // сдвигаем цветовые позиции этой строки
+        i32 clean_bytes = (i32)strlen(cl);
+        i32 border_extra = has_border
+            ? 2 * BORDER_CHAR_BYTES : 0;
+        for (i32 j = 0; j < prgh->color_positions_num; j++) {
+            i32 pos = prgh->positions[j];
+            if (pos >= clean_offset
+                && pos < clean_offset + clean_bytes) {
+                prgh->positions[j] +=
+                    pad_shift + pad_left + border_extra;
+            }
+        }
+        pad_shift += pad_left + pad_right + border_extra;
+        clean_offset += clean_bytes;
 
         char sl[pad_left + 1], sr[pad_right + 1];
         memset(sl, ' ', pad_left);  sl[pad_left] = '\0';
@@ -638,8 +672,6 @@ static bool is_border_line(const char *line) {
     return c2 == 0x8C || c2 == 0x94 || c2 == 0x9C;
 }
 
-// Длина UTF-8 символа │ = 3 байта (E2 94 82)
-enum { BORDER_CHAR_BYTES = 3 };
 
 static void _paragraph_draw2(
     Paragraph *prgh, Vector2 pos
