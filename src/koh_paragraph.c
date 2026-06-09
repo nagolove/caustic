@@ -163,6 +163,8 @@ static bool parse_align_command(
     } else {
         return false;
     }
+    // пропускаем пробелы после команды align
+    while (**out_next == ' ') (*out_next)++;
     return true;
 }
 
@@ -465,6 +467,7 @@ void paragraph_build(Paragraph *prgh) {
     // Сдвиг цветовых позиций с учётом padding
     i32 pad_shift = 0;
     i32 clean_offset = 0;
+    bool col_shifted[MAX_PARAGRAPH_COLOR_POSITION] = {};
 
     for (i32 i = 0; i < num; i++) {
         const char *cl = clean.s[i];
@@ -505,18 +508,21 @@ void paragraph_build(Paragraph *prgh) {
         }
 
         // сдвигаем цветовые позиции этой строки
+        // (каждая позиция сдвигается ровно один раз)
+        // border_extra НЕ учитывается: draw_colored_content
+        // получает content без border-символов │
         i32 clean_bytes = (i32)strlen(cl);
-        i32 border_extra = has_border
-            ? 2 * BORDER_CHAR_BYTES : 0;
         for (i32 j = 0; j < prgh->color_positions_num; j++) {
+            if (col_shifted[j]) continue;
             i32 pos = prgh->positions[j];
             if (pos >= clean_offset
                 && pos < clean_offset + clean_bytes) {
                 prgh->positions[j] +=
-                    pad_shift + pad_left + border_extra;
+                    pad_shift + pad_left;
+                col_shifted[j] = true;
             }
         }
-        pad_shift += pad_left + pad_right + border_extra;
+        pad_shift += pad_left + pad_right;
         clean_offset += clean_bytes;
 
         char sl[pad_left + 1], sr[pad_right + 1];
@@ -635,6 +641,12 @@ static void draw_colored_content(
         } else {
             chunk = content_len - drawn;
         }
+
+        // не разрезать UTF-8 символ: откатываем chunk
+        // к границе кодпоинта
+        while (chunk > 0
+            && (content[drawn + chunk] & 0xC0) == 0x80)
+            chunk--;
 
         char tmp[chunk + 1];
         memcpy(tmp, content + drawn, chunk);
