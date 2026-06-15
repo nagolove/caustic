@@ -5,11 +5,17 @@
 #include "koh_lua.h"
 
 #ifdef __wasm__
+// wasm: inotify недоступен — полный набор заглушек по объявлениям из заголовка
 void inotifier_init() { }
 void inotifier_update() { }
 void inotifier_shutdown() { }
-void inotifier_watch(const char *fname, WatchCallback cb, void *data) { };
-void inotifier_remove_watch(const char *fname) { }
+void inotifier_watch(const char *fname, WatchCallback cb, void *data) {
+    (void)fname; (void)cb; (void)data;
+}
+void inotifier_watch_remove(const char *fname) { (void)fname; }
+StrBuf inotifier_list() { return (StrBuf){0}; }
+void inotifier_gui() { }
+bool inotifier_verbose = false;
 #else
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS

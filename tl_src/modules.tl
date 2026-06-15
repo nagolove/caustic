@@ -171,7 +171,7 @@ local function build_cimgui_common(_: Env, dep: Dependency)
 end
 --]]
 
-local function build_cimgui_common(_: Env, dep: Dependency)
+local function build_cimgui_common(e: Env, dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
@@ -189,8 +189,15 @@ local function build_cimgui_common(_: Env, dep: Dependency)
         cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
     elseif dep.target == 'wasm' then
         -- для wasm -fPIC не нужен/не применяется
-        local flags = "-g3 -DPLATFORM_WEB=1"
-        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+        -- цель 'static' собирает объектники и архивирует их в libcimgui.a
+        -- (по умолчанию Makefile делает cimgui.so); AR заменяем на emar
+        -- склейка rlImGui (imgui_impl_raylib.h) тянет raylib.h и imgui.h —
+        -- добавляем -I на raylib и на каталоги cimgui/imgui
+        local rl_inc = "-I" .. e.path_abs_third_party[dep.target] .. "/raylib/src"
+        local flags = "-g3 -DPLATFORM_WEB=1 -I. -Iimgui " .. rl_inc
+        cmd_do(string.format(
+            '%s -j static AR="emar -rc" CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags
+        ))
     elseif dep.target == 'win' then
         local flags = "-g3 -DPLATFORM_DESKTOP"
         cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
@@ -218,7 +225,10 @@ end
 
 local function cimgui_after_build(_: Env, _: Dependency)
     print("cimgui_after_build:", lfs.currentdir())
-    cmd_do("mv cimgui.a libcimgui.a")
+    -- для wasm libcimgui.a уже собран целью 'static'; cimgui.a нет
+    if lfs.attributes("cimgui.a") then
+        cmd_do("mv cimgui.a libcimgui.a")
+    end
 end
 
 
@@ -377,13 +387,13 @@ local function build_raylib_common(_: Env, dep: Dependency)
 
         chdir("src")
         cmd_do("make clean")
-        --insert(c, "-pthread")
-        local ccf = 'CFLAGS="-O2 -g -pthread -matomics -mbulk-memory"'
-        --local cmd = format("make PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", EMSDK)
-        -- TODO: Поддержка атомиков в веб сборке рейлиб'а
+        -- ВАЖНО: CUSTOM_CFLAGS, а не CFLAGS — иначе перетираются внутренние
+        -- флаги Makefile raylib (-DPLATFORM_WEB, выбор платформенного слоя
+        -- rcore_web.c), и платформенные функции (GetTime, InitPlatform…)
+        -- остаются неопределёнными
+        local ccf = 'CUSTOM_CFLAGS="-pthread -matomics -mbulk-memory"'
         local cmd = format(
-            format("make %s PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", ccf),
-            EMSDK
+            "make %s PLATFORM=PLATFORM_WEB EMSDK_PATH=%s", ccf, EMSDK
         )
         print('cmd', cmd)
         cmd_do(cmd)
@@ -815,6 +825,7 @@ _modules = {
         name = "physfs",
         url_action = "git",
         build = build_physfs,
+        build_w = build_physfs,
         build_win = build_physfs,
         url = "https://github.com/icculus/physfs.git",
     },
@@ -867,6 +878,7 @@ _modules = {
         name = "xxhash",
         url_action = "git",
         build = build_with_make_common,
+        build_w = build_with_make_common,
         build_win = build_with_make_common,
         url = "https://github.com/Cyan4973/xxHash.git",
         --update = update_default,

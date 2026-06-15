@@ -2643,6 +2643,10 @@ local wasm_flags = '' ..
 "-s USE_GLFW=3 " ..
 "-s ASSERTIONS " ..
 "--preload-file ../assets " ..
+
+"--exclude-file '*.kra' " ..
+"--exclude-file '*.kra.*' " ..
+"--exclude-file '*~' " ..
 "-flto " ..
 "-s ALLOW_MEMORY_GROWTH=1 " ..
 "-Os "
@@ -2721,7 +2725,10 @@ local function project_link(ctx, cfg, _args, ninja)
 
 
 
-      cmd = wasm_flags ..
+
+
+      cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" " ..
+      wasm_flags ..
 
 
 

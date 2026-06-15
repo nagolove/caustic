@@ -2642,7 +2642,11 @@ local wasm_flags = ''
     .. " -DPLATFORM_WEB " 
     .. "-s USE_GLFW=3 " 
     .. "-s ASSERTIONS "
-    .. "--preload-file ../assets " 
+    .. "--preload-file ../assets "
+    -- исключаем не-runtime файлы из preload: исходники Krita и бэкапы
+    .. "--exclude-file '*.kra' "
+    .. "--exclude-file '*.kra.*' "
+    .. "--exclude-file '*~' "
     .. "-flto "
     .. "-s ALLOW_MEMORY_GROWTH=1 " 
     .. "-Os "
@@ -2721,11 +2725,14 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         -- Этот флаг создает слишком много кода, js машина не справляется
         --.. "-s ASYNCIFY "
 
-        cmd = wasm_flags 
+        -- ВАЖНО: сохраняем префикс компилятора и -o artifact (emcc -o x.html),
+        -- иначе строка начнётся с флага и шелл попытается выполнить '-g'
+        cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
+        .. wasm_flags
         -- TODO: Проверять наличие файла shell.html в каталоге проект.
         -- Если файл есть, то использовать его как шаблон. Если файла нет, то
         -- использовать оболочку по умолчанию.
-        .. "--shell-file " 
+        .. "--shell-file "
         .. shell_path
         .. " "
         --.. path_abs_third_party['wasm'] 
