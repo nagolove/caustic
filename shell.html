@@ -6,7 +6,7 @@
   <title>APPNAME</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="shortcut icon" href="https://www.raylib.com/favicon.ico">
+  <link rel="icon" href="data:,">
 
   <style>
     html, body {
@@ -27,17 +27,6 @@
     }
   </style>
 
-  <script src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"></script>
-  <script>
-    function saveFileFromMEMFSToDisk(memoryFSname, localFSname) {
-        var isSafari = false;
-        var data = FS.readFile(memoryFSname);
-        var blob = new Blob([data.buffer], {
-            type: isSafari ? "application/octet-stream" : "application/octet-binary"
-        });
-        saveAs(blob, localFSname);
-    }
-  </script>
 </head>
 <body>
   <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>

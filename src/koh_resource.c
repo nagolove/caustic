@@ -782,10 +782,7 @@ void reslist_dragndrop_gui(ResList *l) {
     if (IsFileDropped()) {
         FilePathList files = LoadDroppedFiles();
         if (files.count > 0) {
-            strncpy(
-                l->dropped_path, files.paths[0],
-                sizeof(l->dropped_path)
-            );
+            strncpy(l->dropped_path, files.paths[0], sizeof(l->dropped_path));
             l->drop_pending = true;
             igOpenPopup_Str("tex_reload", 0);
         }
