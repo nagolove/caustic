@@ -2648,7 +2648,9 @@ local wasm_flags = ''
     .. "--exclude-file '*.kra.*' "
     .. "--exclude-file '*~' "
     .. "-flto "
-    .. "-s ALLOW_MEMORY_GROWTH=1 " 
+    .. "-s ALLOW_MEMORY_GROWTH=1 "
+    -- стек по умолчанию 64 КБ — мало для инициализации арены, ставим 8 МБ
+    .. "-sSTACK_SIZE=8388608 "
     .. "-Os "
 
 local function make_L(ctx: LinkContext): {string}
@@ -3285,9 +3287,15 @@ function sub_make(
         "-Wcast-qual",
         "-Wstrict-aliasing",
     }
-    if target ~= 'win' then
+    if target == 'win' then
+        -- ничего: win не использует -fPIC и -latomic
+    elseif target == 'linux' then
         table.insert(common_flags, "-fPIC")
         table.insert(common_flags, "-latomic")
+    elseif target == 'wasm' then
+        -- atomics обеспечивают -matomics/-mbulk-memory в линк-флагах,
+        -- отдельная libatomic не нужна (иначе clang ругается на -latomic)
+        table.insert(common_flags, "-fPIC")
     end
     flags = ut.merge_tables(flags, common_flags)
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg, target))

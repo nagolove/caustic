@@ -2649,6 +2649,8 @@ local wasm_flags = '' ..
 "--exclude-file '*~' " ..
 "-flto " ..
 "-s ALLOW_MEMORY_GROWTH=1 " ..
+
+"-sSTACK_SIZE=8388608 " ..
 "-Os "
 
 local function make_L(ctx)
@@ -3285,9 +3287,15 @@ function sub_make(
       "-Wcast-qual",
       "-Wstrict-aliasing",
    }
-   if target ~= 'win' then
+   if target == 'win' then
+
+   elseif target == 'linux' then
       table.insert(common_flags, "-fPIC")
       table.insert(common_flags, "-latomic")
+   elseif target == 'wasm' then
+
+
+      table.insert(common_flags, "-fPIC")
    end
    flags = ut.merge_tables(flags, common_flags)
    flags = ut.merge_tables(flags, get_ready_deps_defines(cfg, target))
