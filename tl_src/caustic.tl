@@ -838,7 +838,12 @@ local parser_setup: {string:ParserSetup} = {
     },
 
     publish = {
-        summary = "publish wasm code to ~/nagolove.github.io repo and push it to web",
+        summary = "собрать каталог проекта в ~/nagolove.github.io и запушить на web",
+        options = { "-n --name" },
+        flags = {
+            { "-b --build", "пересобрать wasm-артефакты перед публикацией" },
+            { "-y --yes", "не спрашивать подтверждения перед push" },
+        },
     },
 
     remove = {
@@ -907,6 +912,8 @@ local record Args
     make: boolean       -- собрать
     c: string           -- clean, полная пересборка
     name: string		-- dependency name
+    build: string       -- пересобрать wasm перед публикацией
+    yes: string         -- не спрашивать подтверждения перед push
     prefix: string      -- префикс для stage-файлов
     make_type: MakeAction
     link: string        -- оптимизация времени линковки(работает долго)
@@ -1845,191 +1852,174 @@ local function has_files_in_dir(files: {string}): boolean
     return true
 end
 
-local function sub_publish(_args: Args, cfg: Cfg)
-    print("sub_publish: currentdir", lfs.currentdir())
+-- Дописывает ссылку в секцию begin_links_section…end_links_section
+-- корневого index.html, сохраняя порядок строк и не плодя дубликаты.
+local function inject_link(lines: {string}, link: string): {string}
+    local before, section, after: {string}, {string}, {string} = {}, {}, {}
+    local phase = 1
+    for _, line in ipairs(lines) do
+        if phase == 1 then
+            table.insert(before, line)
+            if string.match(line, "begin_links_section") then
+                phase = 2
+            end
+        elseif phase == 2 then
+            if string.match(line, "end_links_section") then
+                phase = 3
+                table.insert(after, line)
+            else
+                table.insert(section, line)
+            end
+        else
+            table.insert(after, line)
+        end
+    end
 
+    if phase ~= 3 then
+        printc("%{red}inject_link: секция ссылок не найдена%{reset}")
+        return lines
+    end
+
+    local exists = false
+    for _, l in ipairs(section) do
+        if l == link then
+            exists = true
+            break
+        end
+    end
+    if not exists then
+        table.insert(section, link)
+    end
+
+    local out: {string} = {}
+    for _, l in ipairs(before) do table.insert(out, l) end
+    for _, l in ipairs(section) do table.insert(out, l) end
+    for _, l in ipairs(after) do table.insert(out, l) end
+    return out
+end
+
+local function sub_publish(_args: Args, cfg: Cfg)
     assert(cfg)
     local artifact = cfg.artifact
     assert(artifact)
 
     local files = {
         artifact .. ".data",
-        artifact .. ".html"  ,
-        artifact .. ".js" ,
+        artifact .. ".html",
+        artifact .. ".js",
         artifact .. ".wasm",
     }
 
     if not has_files_in_dir(files) then
-        printc("%{red}Not all wasm files in build directory.%{reset}")
-        return
-    end
-    --]]
-
-    -- TODO: Скопировать файлы из списка files в каталог.
-    -- В каталог с каким именем?
-
-    local dist_dir = string.match(lfs.currentdir(), "%S+/(.*)")
-    print("sub_publish: dist_dir", dist_dir)
-    local src_dir = lfs.currentdir()
-
-    local site_repo_abs = getenv("HOME") .. "/" .. site_repo
-    local ok, errmsg = chdir(site_repo_abs)
-    if not ok then
-        print(
-            "sub_publish: could not chdir() to " 
-            .. site_repo_abs 
-            .. "with " 
-            .. errmsg
+        printc(
+            "%{red}sub_publish: в каталоге проекта нет всех wasm-файлов "
+            .. "(.data/.html/.js/.wasm). "
+            .. "Соберите: koh make -t wasm  (или publish -b)%{reset}"
         )
         return
     end
 
-    print("sub_publish: currentdir", lfs.currentdir())
+    local src_dir = lfs.currentdir()
+    -- имя каталога на сайте: -n или имя каталога проекта
+    local dist_dir = _args.name or string.match(src_dir, "%S+/(.*)")
+    assert(dist_dir)
+
+    local site_repo_abs = getenv("HOME") .. "/" .. site_repo
+    local ok, errmsg = chdir(site_repo_abs)
+    if not ok then
+        printc(
+            "%{red}sub_publish: не удалось chdir('" .. site_repo_abs
+            .. "'): " .. tostring(errmsg) .. "%{reset}"
+        )
+        return
+    end
 
     ut.push_current_dir()
-
     mkdir(dist_dir)
     chdir(dist_dir)
 
-    print("sub_publish: currentdir", lfs.currentdir())
-
+    -- копируем артефакты в каталог сайта
     for _, file in ipairs(files) do
-        local cmd = "cp " .. src_dir .. "/" .. file .. " " .. " . "
-        cmd_do(cmd)
-        print("cmd", cmd)
-
+        cmd_do(format("cp %s/%s .", src_dir, file))
     end
 
-    -- TODO: Добавить переименование скопированных файлов
-    --for file in lfs.dir(".") do
-    for _ in lfs.dir(".") do
-        --local attrs = lfs.attributes(file)
-        --[[
-        if attrs.mode == 'file' then
-            print('file', file)
-            -- XXX: Может не работать если в имени файла есть точки кроме той,
-            -- что перед расширением
-            local new_name = string.gsub(file, "(.*)%.", 'init.')
-            local cmd = "mv ./" .. file .. " " .. new_name
-            print('cmd', cmd)
-            --cmd_do(cmd)
-            --print('new_name', new_name)
+    -- <artifact>.html → index.html (точка входа каталога)
+    cmd_do(format("mv ./%s.html ./index.html", artifact))
 
-        end
-        --print(inspect(attrs))
-        --]]
-    end
-
-    for file in lfs.dir(".") do
-        print("file", file)
-        if file == artifact .. ".html" then
-            local new_name = string.gsub(file, "(.*)%.", 'index.')
-            local cmd = "mv ./" .. file .. " " .. new_name
-            --print('cmd', cmd)
-            cmd_do(cmd)
-        end
-    end
-
-    for file in lfs.dir(".") do
-        local git_cmd = "git add " .. lfs.currentdir() .. "/" .. file
-        print("git_cmd", git_cmd)
-        cmd_do(git_cmd)
+    -- индексируем скопированные файлы
+    for _, file in ipairs(files) do
+        local name = (file == artifact .. ".html") and "index.html" or file
+        cmd_do(format("git add %s/%s", lfs.currentdir(), name))
     end
 
     ut.pop_dir()
 
-    print("sub_publish: currentdir", lfs.currentdir())
+    -- обновляем секцию ссылок в корневом index.html
     local f = io.open("index.html", "r")
     assert(f)
-
-    local lines = {}
+    local lines: {string} = {}
     for line in f:lines() do
         table.insert(lines, line)
     end
     f:close()
 
-    local lines_1, lines_2, lines_3 = {}, {}, {}
-
-    local j = 1
-
-    for i = j, #lines do
-        local line = lines[i]
-        table.insert(lines_1, line)
-        if string.match(line, "begin_links_section") then
-            j = i + 1
-            break
-        end
-    end
-
-    for i = j, #lines do
-        local line = lines[i]
-        if string.match(line, "end_links_section") then
-            table.insert(lines_3, line)
-            j = i + 1
-            break
-        else
-            table.insert(lines_2, line)
-        end
-    end
-
-    for i = j, #lines do
-        local line = lines[i]
-        table.insert(lines_3, line)
-    end
-
-    print(tabular(lines_1))
-    print(tabular(lines_2))
-    print(tabular(lines_3))
-
-    --local new_link = '<a href="/NAME/index.html">' 
-        --.. '<strong>NAME</strong></a>'
-    local new_link = '<a href="/NAME">' 
-        .. '<strong>NAME</strong></a>'
-
-    new_link = string.gsub(new_link, "NAME", dist_dir)
-    print("new_link", new_link)
-
-    local map = {}
-    for _, line in ipairs(lines_2) do
-        map[line] = true
-    end
-    map[new_link] = true
-
-    lines_2 = {}
-    for line, _ in pairs(map) do
-        --print(line)
-        table.insert(lines_2, line)
-    end
-
+    local link = format(
+        '<a href="/%s"><strong>%s</strong></a>', dist_dir, dist_dir
+    )
+    lines = inject_link(lines, link)
 
     f = io.open("index.html", "w")
     assert(f)
-
-    for _, line in ipairs(lines_1) do
+    for _, line in ipairs(lines) do
         f:write(line .. "\n")
     end
-    for _, line in ipairs(lines_2) do
-        f:write(line .. "\n")
-    end
-    for _, line in ipairs(lines_3) do
-        f:write(line .. "\n")
+    f:close()
+
+    cmd_do("git add index.html")
+
+    -- показываем, что попадёт в коммит, и спрашиваем подтверждение
+    printc(
+        "%{green}publish: каталог '" .. dist_dir
+        .. "' готов к публикации%{reset}"
+    )
+    cmd_do("git --no-pager diff --cached --stat")
+
+    if not _args.yes then
+        local ans = readline("Закоммитить и запушить? (y/n) ")
+        if ans ~= "y" and ans ~= "Y" then
+            printc(
+                "%{yellow}publish: отменено "
+                .. "(изменения остались в индексе)%{reset}"
+            )
+            return
+        end
     end
 
-    --cmd_do(format("git add %s", cfg.artifact))
-    cmd_do(format('git commit -am "%s updated"', cfg.artifact))
-    cmd_do('git push origin master')
-    --]]
-
+    cmd_do(format('git commit -m "%s: обновление сайта"', dist_dir))
+    cmd_do("git push origin master")
 end
 
 function actions.publish(_args: Args)
     local cfgs: {Cfg} = search_and_load_cfgs_up("bld.lua")
     if not cfgs then
         printc(
-            "%{red}actions.publish: " 
-            .. "there is no bld.lua in current directory%{reset}"
+            "%{red}actions.publish: нет bld.lua в текущем каталоге%{reset}"
+        )
+        return
+    end
+
+    if _args.build then
+        -- пересобрать wasm-артефакты перед публикацией
+        _args.t = "wasm"
+        actions.make(_args)
+    else
+        printc(
+            "%{yellow}publish: пересборка не выполнялась "
+            .. "(флаг -b/--build для сборки wasm); "
+            .. "публикуются текущие артефакты%{reset}"
         )
     end
+
     for _, cfg in ipairs(cfgs) do
         sub_publish(_args, cfg)
     end
@@ -5259,6 +5249,7 @@ local function main()
     local parser = argparse()
 
     ut.do_parser_setup(parser, parser_setup)
+    parser:command_target("command")   -- имя выбранной команды → _args.command
 
     parser:flag("-v --verbose", "use verbose output")
     parser:flag("-V --KOH_VERBOSE", "use debug verbose")
@@ -5297,12 +5288,10 @@ local function main()
             print("CAUSTIC_PATH", e.path_caustic)
         end
 
-        for k, v in pairs(_args) do
-            local can_call = type(v) == 'boolean' and v == true 
-            local type A = {string:function}
-            if (actions as A)[k] and can_call then
-                (actions as A)[k](_args as Args)
-            end
+        local cmd = (_args as {string:string}).command
+        local type A = {string:function}
+        if cmd and (actions as A)[cmd] then
+            (actions as A)[cmd](_args as Args)
         end
     else
         print("bad args, may be not enough arguments?")
