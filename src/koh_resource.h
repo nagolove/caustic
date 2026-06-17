@@ -37,6 +37,11 @@ RenderTexture2D reslist_load_rt(ResList *l, int w, int h);
 Shader reslist_load_shader(ResList *l, const char *fname);
 Shader reslist_load_shader_str(ResList *l, const char *code);
 
+// Срезает ведущую строку #version в исходнике шейдера и приклеивает
+// заголовок под платформу (300 es для web, 330 core для desktop).
+// Возвращает malloc-буфер — освобождает вызывающий.
+char *koh_shader_fix_version_alloc(const char *src);
+
 void reslist_gui(ResList *l);
 // Установить уникальную надпись для списка ресурсов
 void reslist_label_set(ResList *l, const char *label);

@@ -2630,6 +2630,11 @@ local function get_wasm_flags(_args)
 
    " -DPLATFORM_WEB " ..
    "-s USE_GLFW=3 " ..
+
+
+
+   "-s MIN_WEBGL_VERSION=2 " ..
+   "-s MAX_WEBGL_VERSION=2 " ..
    "--preload-file ../assets " ..
 
    "--exclude-file '*.kra' " ..

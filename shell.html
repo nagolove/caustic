@@ -25,11 +25,43 @@
         height: 100vh;
         background-color: black;
     }
+
+    /* Оверлей загрузки поверх canvas */
+    #loader {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background: black; z-index: 10;
+        font-family: monospace; color: #ccc;
+    }
+    #loader-bar {
+        width: 40vw; max-width: 480px; height: 14px;
+        border: 1px solid #444; border-radius: 7px; overflow: hidden;
+    }
+    #loader-fill {
+        width: 0%; height: 100%;
+        background: #4a9; transition: width .12s linear;
+    }
+    /* indeterminate: бегущая полоса на фазе обработки ассетов */
+    #loader-fill.busy {
+        width: 35% !important; transition: none;
+        animation: slide 1s linear infinite;
+    }
+    @keyframes slide {
+        from { margin-left: -35%; } to { margin-left: 100%; }
+    }
+    #loader-text { margin-top: 14px; font-size: 14px; }
   </style>
 
 </head>
 <body>
   <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+
+  <div id="loader">
+    <div id="loader-bar"><div id="loader-fill"></div></div>
+    <div id="loader-text">Загрузка…</div>
+  </div>
+
   <pre id="output"></pre>
 
   <script>
@@ -44,6 +76,9 @@
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas(); // вызвать при загрузке
 
+    var loaderFill = document.getElementById('loader-fill');
+    var loaderText = document.getElementById('loader-text');
+
     var Module = {
         print: (function () {
             var element = document.getElementById('output');
@@ -55,8 +90,28 @@
                 }
             };
         })(),
-        canvas: canvas
+        canvas: canvas,
+        // Прогресс загрузки. emscripten шлёт строки статуса:
+        //  - "Downloading... (loaded/total)" — фаза скачивания, честные байты
+        //  - "" (пустая) — зависимости догружены, идёт инициализация
+        // Финальное снятие оверлея делает C через EM_ASM после stage_init.
+        setStatus: function (text) {
+            var m = text.match(/\((\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\)/);
+            if (m) {
+                var p = (+m[1] / +m[2]) * 100;
+                loaderFill.classList.remove('busy');
+                loaderFill.style.width = p + '%';
+                loaderText.textContent =
+                    'Загрузка ассетов… ' + p.toFixed(0) + '%';
+            } else if (text) {
+                loaderText.textContent = text;
+            } else {
+                loaderFill.classList.add('busy');
+                loaderText.textContent = 'Инициализация…';
+            }
+        }
     };
+    Module.setStatus('Загрузка…');
   </script>
 
   {{{ SCRIPT }}}

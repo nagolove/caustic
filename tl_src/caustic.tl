@@ -2630,6 +2630,11 @@ local function get_wasm_flags(_args: Args): string
 
         .. " -DPLATFORM_WEB "
         .. "-s USE_GLFW=3 "
+        -- WebGL2-контекст: raylib собран под GRAPHICS_API_OPENGL_ES3,
+        -- шейдеры используют #version 300 es. Без этого emscripten
+        -- создаёт WebGL1 и шейдеры падают с "unsupported shader version".
+        .. "-s MIN_WEBGL_VERSION=2 "
+        .. "-s MAX_WEBGL_VERSION=2 "
         .. "--preload-file ../assets "
         -- исключаем не-runtime файлы из preload: исходники Krita и бэкапы
         .. "--exclude-file '*.kra' "

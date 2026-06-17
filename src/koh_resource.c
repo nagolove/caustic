@@ -156,9 +156,9 @@ Shader res_shader_load(
         vertex_fname, &sz, true
     );
     if (buf) {
-        shdr = LoadShaderFromMemory(
-            NULL, (const char *)buf
-        );
+        char *fixed = koh_shader_fix_version_alloc((const char *)buf);
+        shdr = LoadShaderFromMemory(NULL, fixed);
+        free(fixed);
         free(buf);
     } else {
         shdr = LoadShader(NULL, vertex_fname);
@@ -425,6 +425,47 @@ static void *copy_alloc(void *ptr, size_t sz) {
     return cp;
 }
 
+// Платформенный заголовок шейдера, приклеиваемый вместо #version.
+#if defined(__wasm__) || defined(PLATFORM_WEB)
+// В GLSL ES 3.00 производные (dFdx/fwidth) уже в ядре — расширение
+// GL_OES_standard_derivatives не нужно и вызывает "unsupported shader
+// version", поэтому его не подключаем.
+static const char *shader_header =
+    "#version 300 es\n"
+    "precision mediump float;\n";
+#else
+static const char *shader_header =
+    "#version 330 core\n";
+#endif
+
+char *koh_shader_fix_version_alloc(const char *src) {
+    assert(src);
+
+    // Тело шейдера — всё после строки #version (если она есть).
+    // Всё до #version в GLSL — только комментарии/пробелы, отбрасывается.
+    const char *body = src;
+    const char *v = strstr(src, "#version");
+    if (v) {
+        const char *eol = strchr(v, '\n');
+        body = eol ? eol + 1 : v + strlen(v);
+    }
+
+    size_t hlen = strlen(shader_header);
+    size_t blen = strlen(body);
+    char *out = malloc(hlen + blen + 1);
+    if (!out) {
+        printf(
+            "koh_shader_fix_version_alloc: malloc(%zu) failed\n",
+            hlen + blen + 1
+        );
+        koh_fatal();
+    }
+    memcpy(out, shader_header, hlen);
+    memcpy(out + hlen, body, blen);
+    out[hlen + blen] = '\0';
+    return out;
+}
+
 Shader reslist_load_shader(
     ResList *l, const char *fname
 ) {
@@ -434,9 +475,9 @@ Shader reslist_load_shader(
     size_t sz = 0;
     void *buf = vfs_try_load(fname, &sz, true);
     if (buf) {
-        s = LoadShaderFromMemory(
-            NULL, (const char *)buf
-        );
+        char *fixed = koh_shader_fix_version_alloc((const char *)buf);
+        s = LoadShaderFromMemory(NULL, fixed);
+        free(fixed);
         free(buf);
     } else {
         s = LoadShader(NULL, fname);
@@ -599,7 +640,9 @@ Font reslist_load_font_dlft(ResList *l) {
 Shader reslist_load_shader_str(ResList *l, const char *code) {
     assert(l);
     assert(code);
-    Shader s = LoadShaderFromMemory(NULL, code);
+    char *fixed = koh_shader_fix_version_alloc(code);
+    Shader s = LoadShaderFromMemory(NULL, fixed);
+    free(fixed);
     R *r = reslist_add(l);
     r->type = RT_SHADER;
     //assert(strlen(fname) < sizeof(r->fname));

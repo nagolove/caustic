@@ -3,6 +3,7 @@
 
 #include "koh_logger.h"
 #include "koh_raylib_api.h"
+#include "koh_resource.h"
 #include "raylib.h"
 #include "rlgl.h"
 #include "sdf.fs.h"
@@ -311,9 +312,9 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
 
     R.UnloadFileData(fileData);
 
-    prgh->sh_sdf = R.LoadShaderFromMemory(
-        NULL, fs_code_sdf
-    );
+    char *fixed_sdf = koh_shader_fix_version_alloc(fs_code_sdf);
+    prgh->sh_sdf = R.LoadShaderFromMemory(NULL, fixed_sdf);
+    free(fixed_sdf);
     R.SetTextureFilter(
         prgh->tex_sdf, TEXTURE_FILTER_BILINEAR
     );
