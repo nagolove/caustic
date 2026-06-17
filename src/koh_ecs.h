@@ -27,6 +27,34 @@ TODO: предложения gpt:
 // данного типа
 // XXX: можно ли удалять сущности в процессе цикла по компонентам?
 
+// ECS_ID_32 упаковывает e_id в 32 бита, чтобы идентификатор без потерь
+// помещался в void* на wasm32 (Box2D userData и т.п.). Разбиение 18/14:
+// 18 бит ord покрывают max_id вплоть до 2^18-1 (hexia ставит 2^17), 14 бит
+// ver дают 16384 версии до wrap. Дефайн обязан применяться единообразно ко
+// всей единице линковки — иначе рассинхрон ABI (4 против 8 байт).
+#ifdef ECS_ID_32
+typedef union {
+    struct {
+                 // порядковый номер индекс в массиве
+        uint32_t ord : 18,
+                 // номер версии, используется для проверки на устаревшесть
+                 // идентификаторов
+                 ver : 14;
+    };
+    // поле для сравнения на равенство по значению и хранения в void*
+    uint32_t id;
+} e_idu;
+
+_Static_assert(sizeof(e_idu) == 4, "ECS_ID_32: e_id must be 4 bytes");
+
+enum {
+    E_VER_BITS = 14,
+    E_VER_MAX  = (1u << E_VER_BITS) - 1,   // 16383 — макс. значение ver
+    E_VER_MASK = E_VER_MAX,                // 0x3FFF
+    E_ORD_BITS = 18,
+    E_ORD_MAX  = (1u << E_ORD_BITS) - 1,   // 262143 — макс. значение ord
+};
+#else
 typedef union {
     struct {
                  // порядковый номер индекс в массиве
@@ -40,6 +68,12 @@ typedef union {
 } e_idu;
 
 _Static_assert(sizeof(e_idu) == 8, "only 64bit machines allowed");
+
+enum {
+    // в 64-битном e_id маскирование версии — no-op
+    E_VER_MASK = 0xFFFFFFFFu,
+};
+#endif
 
 typedef e_idu e_id;
 
@@ -367,14 +401,27 @@ static inline uint32_t e_id_ord(e_id e) {
 }
 
 static inline e_id e_from_void(void *p) {
+#ifdef ECS_ID_32
+    // на wasm32 указатель 32-битный — id влезает целиком, без усечения ver
+    return (e_id) { .id = (uint32_t)(uintptr_t)p, };
+#else
     return (e_id) { .id = (intptr_t)p, };
+#endif
 }
 
 static inline e_id e_build(uint32_t ord, uint32_t ver) {
+#ifdef ECS_ID_32
+    // явное маскирование: запись за пределы битового поля — UB
+    e_idu e = {
+        .ord = ord & E_ORD_MAX,
+        .ver = ver & E_VER_MASK,
+    };
+#else
     e_idu e = {
         .ord = ord,
         .ver = ver,
     };
+#endif
     return e;
 }
 

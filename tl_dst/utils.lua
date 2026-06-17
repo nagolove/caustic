@@ -109,15 +109,6 @@ end
 
 local function filter_sources(path, exclude)
 
-
-
-
-
-
-
-
-
-
    local files = {}
    for file in lfs.dir(path) do
       local attrs = lfs.attributes(file)
@@ -129,39 +120,35 @@ local function filter_sources(path, exclude)
 
 
 
+
    local files_processed = {}
-   if exclude then
-      for _, file in ipairs(files) do
-         local found = false
+   for _, file in ipairs(files) do
+      local found = false
+      if exclude then
          for _, pat in ipairs(exclude) do
-            if string.match(file, pat) then
+
+
+
+
+            if file == pat or string.match(file, pat) then
                found = true
                break
             end
          end
-         if not found then
-            table.insert(files_processed, file)
-            if (_G)["KOH_VERBOSE"] then
-               print(format("filter_sources: apply '%s'", file))
-            end
-         else
-            if (_G)["KOH_VERBOSE"] then
-               print(format("filter_sources: decline '%s'", file))
-            end
+      end
+      if not found then
+         table.insert(files_processed, file)
+         if (_G)["KOH_VERBOSE"] then
+            print(format("filter_sources: apply '%s'", file))
+         end
+      else
+         if (_G)["KOH_VERBOSE"] then
+            print(format("filter_sources: decline '%s'", file))
          end
       end
    end
 
    files = files_processed
-
-
-
-
-
-
-
-
-
    return files
 end
 

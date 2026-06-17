@@ -185,9 +185,6 @@ end
 
 
 
-
-
-
 local function filter_sources_c(
    path, cb, exclude)
 
@@ -2171,6 +2168,7 @@ function actions.compile_flags(_args)
    if target == 'wasm' then
       put("-DPLATFORM_WEB")
       put("-D__wasm__")
+      put("-DECS_ID_32")
       local EMSDK = getenv('EMSDK')
       if not EMSDK then
          print('actions.compile_flags: could not get env EMSDK')
@@ -2619,7 +2617,6 @@ local wasm_flags = '' ..
 
 "-g " ..
 "-gsource-map " ..
-"-sDEMANGLE_SUPPORT=1 " ..
 " -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
 
 "-s USE_PTHREADS=1 " ..
@@ -3180,6 +3177,8 @@ function sub_make(
       insert(defines, "-DPLATFORM_WEB")
 
       insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
+
+      insert(defines, "-DECS_ID_32")
    elseif target == 'win' then
       insert(defines, "-DGRAPHICS_API_OPENGL_33")
       insert(defines, "-DPLATFORM_DESKTOP")
@@ -4022,7 +4021,8 @@ function actions.profile(_args)
       end
    end
 end
-local function cfg_empty(cfg)
+
+local function cfg_not_empty(cfg)
    local i = 0
    for _, _ in pairs(cfg) do
       i = i + 1
@@ -4041,7 +4041,7 @@ function actions.make(_args)
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
    for i, cfg in ipairs(cfgs) do
-      if cfg_empty(cfg) then
+      if cfg_not_empty(cfg) then
          local _t1 = time_ms()
          remove_cache_file(_args)
          sub_make(_args, cfg, target, run_parallel_uv, push_num)
@@ -4147,7 +4147,7 @@ function actions.ast(_args)
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
    for _, cfg in ipairs(cfgs) do
-      if cfg_empty(cfg) then
+      if cfg_not_empty(cfg) then
          remove_cache_file(_args)
          sub_make(_args, cfg, target, run_ast, push_num)
       end
@@ -4167,7 +4167,7 @@ function actions.ninja(_args)
    ninja_header(f)
 
    for _, cfg in ipairs(cfgs) do
-      if cfg_empty(cfg) then
+      if cfg_not_empty(cfg) then
          remove_cache_file(_args)
 
          local ctx = {

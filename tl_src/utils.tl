@@ -109,15 +109,6 @@ end
 -- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
 local function filter_sources(path: string, exclude?: {string}): {string}
 
-    --[[
-    printc(
-        "%{green}filter_sources:%{reset}",
-        lfs.currentdir(),
-        "exclude",
-        inspect(exclude)
-    )
-    --]]
-
     local files: {string} = {}
     for file in lfs.dir(path) do
         local attrs = lfs.attributes(file)
@@ -127,41 +118,37 @@ local function filter_sources(path: string, exclude?: {string}): {string}
         end
     end
 
-    --print("filter_sources:", tabular(files))
-
+    -- Наполнение идёт всегда; exclude применяется опционально. Раньше цикл
+    -- был внутри `if exclude`, и при exclude == nil функция возвращала пустой
+    -- список вместо всех файлов.
     local files_processed = {}
-    if exclude then
-        for _, file in ipairs(files) do
-            local found = false
+    for _, file in ipairs(files) do
+        local found = false
+        if exclude then
             for _, pat in ipairs(exclude) do
-                if string.match(file, pat) then
+                -- сперва точное сравнение имени: в литералах с '-'/'.'
+                -- (ecs-test-32.c) спецсимволы Lua-паттерна ломали исключение
+                -- ('-' — ленивый квантификатор). Затем fallback на шаблон,
+                -- чтобы сохранить задокументированную поддержку string.match.
+                if file == pat or string.match(file, pat) then
                     found = true
                     break
                 end
             end
-            if not found then
-                table.insert(files_processed, file)
-                if (_G as {string:boolean})["KOH_VERBOSE"] then
-                    print(format("filter_sources: apply '%s'", file))
-                end
-            else 
-                if (_G as {string:boolean})["KOH_VERBOSE"] then
-                    print(format("filter_sources: decline '%s'", file))
-                end
+        end
+        if not found then
+            table.insert(files_processed, file)
+            if (_G as {string:boolean})["KOH_VERBOSE"] then
+                print(format("filter_sources: apply '%s'", file))
+            end
+        else
+            if (_G as {string:boolean})["KOH_VERBOSE"] then
+                print(format("filter_sources: decline '%s'", file))
             end
         end
     end
 
     files = files_processed
-
-    --[[
-    for _, file in ipairs(files_processed) do
-        if string.match(file, pattern) then
-            cb(file)
-        end
-    end
-    --]]
-
     return files
 end
 

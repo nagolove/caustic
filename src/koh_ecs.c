@@ -3816,6 +3816,15 @@ void e_destroy(ecs_t* r, e_id e) {
     r->entities[e.ord] = false;
 
     // новая сущность по данному индексу будет с увеличенным номером версии
+#ifdef ECS_ID_32
+    // ver — 14-битное поле. Дойдя до E_VER_MAX, следующий инкремент даст
+    // 16384, которое усечётся в e_valid до 0 → ABA-коллизия со свежими id.
+    // Debug-tripwire: ловим момент входа в зону wrap (16384 переиспользований
+    // одного индекса). В release ассерт убирается, маскирование в e_valid
+    // продолжает работать.
+    assert(r->entities_ver[e.ord] < E_VER_MAX &&
+           "ECS_ID_32: переполнение ver, риск коллизии идентификаторов");
+#endif
     r->entities_ver[e.ord]++;
 
     /*
@@ -3841,7 +3850,11 @@ bool e_valid(ecs_t* r, e_id e) {
     entity_assert(r, e);
     // TODO: Думать, как использовать версии
     if (e.id != e_null.id)
-        return r->entities[e.ord] && r->entities_ver[e.ord] == e.ver;
+        // маскирование выравнивает домен свободно растущего счётчика с
+        // (возможно усечённым) полем ver идентификатора; в 64-битной сборке
+        // E_VER_MASK == 0xFFFFFFFF, т.е. no-op
+        return r->entities[e.ord] &&
+            (r->entities_ver[e.ord] & E_VER_MASK) == e.ver;
     else
         return false;
 }
