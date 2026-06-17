@@ -2613,32 +2613,51 @@ local function koh_link(objfiles: {string}, _args: Args)
     time_print("koh_link", _t0)
 end
 
-local wasm_flags = ''
-    -- для отладки
-    .. "-g "
-    .. "-gsource-map "
-    .. " -sERROR_ON_UNDEFINED_SYMBOLS=0 "
+-- Флаги линковки для wasm. В release отключаем отладочную информацию и
+-- санитарные проверки, включаем оптимизацию кода и загрузки.
+local function get_wasm_flags(_args: Args): string
+    local release = _args.release
 
-    .. "-s USE_PTHREADS=1 "
-    .. "-pthread "
-    .. "-matomics " 
-    .. "-mbulk-memory "
+    local f = ''
+        .. " -sERROR_ON_UNDEFINED_SYMBOLS=0 "
 
-    .. "-s PTHREAD_POOL_SIZE=4 "
+        .. "-s USE_PTHREADS=1 "
+        .. "-pthread "
+        .. "-matomics "
+        .. "-mbulk-memory "
 
-    .. " -DPLATFORM_WEB " 
-    .. "-s USE_GLFW=3 " 
-    .. "-s ASSERTIONS "
-    .. "--preload-file ../assets "
-    -- исключаем не-runtime файлы из preload: исходники Krita и бэкапы
-    .. "--exclude-file '*.kra' "
-    .. "--exclude-file '*.kra.*' "
-    .. "--exclude-file '*~' "
-    .. "-flto "
-    .. "-s ALLOW_MEMORY_GROWTH=1 "
-    -- стек по умолчанию 64 КБ — мало для инициализации арены, ставим 8 МБ
-    .. "-sSTACK_SIZE=8388608 "
-    .. "-Os "
+        .. "-s PTHREAD_POOL_SIZE=4 "
+
+        .. " -DPLATFORM_WEB "
+        .. "-s USE_GLFW=3 "
+        .. "--preload-file ../assets "
+        -- исключаем не-runtime файлы из preload: исходники Krita и бэкапы
+        .. "--exclude-file '*.kra' "
+        .. "--exclude-file '*.kra.*' "
+        .. "--exclude-file '*~' "
+        .. "-flto "
+        .. "-s ALLOW_MEMORY_GROWTH=1 "
+        -- стек по умолчанию 64 КБ — мало для инициализации арены, ставим 8 МБ
+        .. "-sSTACK_SIZE=8388608 "
+
+    if release then
+        -- RELEASE: скорость кода, без отладочной информации и проверок
+        f = f
+            .. "-O3 "
+            .. "-DNDEBUG "
+            -- убрать имена функций из .wasm — меньше размер, быстрее загрузка
+            .. "-s ASSERTIONS=0 "
+    else
+        -- DEBUG: отладочная информация и source map
+        f = f
+            .. "-g "
+            .. "-gsource-map "
+            .. "-s ASSERTIONS "
+            .. "-Os "
+    end
+
+    return f
+end
 
 local function make_L(ctx: LinkContext): {string}
     local libsdirs = {}
@@ -2717,7 +2736,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         -- ВАЖНО: сохраняем префикс компилятора и -o artifact (emcc -o x.html),
         -- иначе строка начнётся с флага и шелл попытается выполнить '-g'
         cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" "
-        .. wasm_flags
+        .. get_wasm_flags(_args)
         -- TODO: Проверять наличие файла shell.html в каталоге проект.
         -- Если файл есть, то использовать его как шаблон. Если файла нет, то
         -- использовать оболочку по умолчанию.
@@ -3212,21 +3231,26 @@ function sub_make(
         -- }}}
     }
 
-    if _args.link then
-        if verbose then
-            print("using flto")
-        end
-        table.insert(flags, "-flto=4")
+    -- LTO для лучшего встраивания функций. На wasm (clang/emscripten)
+    -- параметр параллелизма -flto=4 не поддерживается — допустим только
+    -- голый -flto, иначе clang падает с "unsupported argument '4'".
+    local lto_flag = "-flto=4"
+    if target == 'wasm' then
+        lto_flag = "-flto"
     end
 
-    --table.insert(flags, "-flto=4")
-    --]]
+    if _args.link then
+        if verbose then
+            print("using lto: " .. lto_flag)
+        end
+        table.insert(flags, lto_flag)
+    end
 
     local debugs = {}
 
     if target == 'wasm' then
-        insert(flags, "-Os")
-        --insert(flags, "-pthread -matomics -mbulk-memory")
+        -- уровень оптимизации задаётся ниже (debug/release),
+        -- здесь только общий для wasm флаг потоков
         insert(flags, "-pthread")
     end
 
@@ -3239,7 +3263,12 @@ function sub_make(
     if not _args.release then
         -- DEEEBUUUG
 
-        table.insert(flags, "-ggdb3")
+        if target == 'wasm' then
+            -- emscripten понимает -g, без размера по умолчанию -Og
+            table.insert(flags, "-g")
+        else
+            table.insert(flags, "-ggdb3")
+        end
         debugs = { "-DDEBUG", "-g3", "-fno-omit-frame-pointer", }
         defines_apply(flags, cfg.debug_define)
     else
@@ -3249,8 +3278,8 @@ function sub_make(
         table.insert(flags, "-O3")
         -- отключить assert()
         table.insert(flags, "-DNDEBUG")
-        -- для лучшего встраивания функций
-        table.insert(flags, "-flto=4")
+        -- для лучшего встраивания функций (на wasm — без '=4')
+        table.insert(flags, lto_flag)
 
         defines_apply(flags, cfg.release_define)
     end

@@ -2613,32 +2613,51 @@ local function koh_link(objfiles, _args)
    time_print("koh_link", _t0)
 end
 
-local wasm_flags = '' ..
 
-"-g " ..
-"-gsource-map " ..
-" -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
 
-"-s USE_PTHREADS=1 " ..
-"-pthread " ..
-"-matomics " ..
-"-mbulk-memory " ..
+local function get_wasm_flags(_args)
+   local release = _args.release
 
-"-s PTHREAD_POOL_SIZE=4 " ..
+   local f = '' ..
+   " -sERROR_ON_UNDEFINED_SYMBOLS=0 " ..
 
-" -DPLATFORM_WEB " ..
-"-s USE_GLFW=3 " ..
-"-s ASSERTIONS " ..
-"--preload-file ../assets " ..
+   "-s USE_PTHREADS=1 " ..
+   "-pthread " ..
+   "-matomics " ..
+   "-mbulk-memory " ..
 
-"--exclude-file '*.kra' " ..
-"--exclude-file '*.kra.*' " ..
-"--exclude-file '*~' " ..
-"-flto " ..
-"-s ALLOW_MEMORY_GROWTH=1 " ..
+   "-s PTHREAD_POOL_SIZE=4 " ..
 
-"-sSTACK_SIZE=8388608 " ..
-"-Os "
+   " -DPLATFORM_WEB " ..
+   "-s USE_GLFW=3 " ..
+   "--preload-file ../assets " ..
+
+   "--exclude-file '*.kra' " ..
+   "--exclude-file '*.kra.*' " ..
+   "--exclude-file '*~' " ..
+   "-flto " ..
+   "-s ALLOW_MEMORY_GROWTH=1 " ..
+
+   "-sSTACK_SIZE=8388608 "
+
+   if release then
+
+      f = f ..
+      "-O3 " ..
+      "-DNDEBUG " ..
+
+      "-s ASSERTIONS=0 "
+   else
+
+      f = f ..
+      "-g " ..
+      "-gsource-map " ..
+      "-s ASSERTIONS " ..
+      "-Os "
+   end
+
+   return f
+end
 
 local function make_L(ctx)
    local libsdirs = {}
@@ -2717,7 +2736,7 @@ local function project_link(ctx, cfg, _args, ninja)
 
 
       cmd = cc .. is_shared .. " -o \"" .. artifact .. "\" " ..
-      wasm_flags ..
+      get_wasm_flags(_args) ..
 
 
 
@@ -3212,20 +3231,25 @@ function sub_make(
 
 
 
-   if _args.link then
-      if verbose then
-         print("using flto")
-      end
-      table.insert(flags, "-flto=4")
+
+
+
+   local lto_flag = "-flto=4"
+   if target == 'wasm' then
+      lto_flag = "-flto"
    end
 
-
-
+   if _args.link then
+      if verbose then
+         print("using lto: " .. lto_flag)
+      end
+      table.insert(flags, lto_flag)
+   end
 
    local debugs = {}
 
    if target == 'wasm' then
-      insert(flags, "-Os")
+
 
       insert(flags, "-pthread")
    end
@@ -3239,7 +3263,12 @@ function sub_make(
    if not _args.release then
 
 
-      table.insert(flags, "-ggdb3")
+      if target == 'wasm' then
+
+         table.insert(flags, "-g")
+      else
+         table.insert(flags, "-ggdb3")
+      end
       debugs = { "-DDEBUG", "-g3", "-fno-omit-frame-pointer" }
       defines_apply(flags, cfg.debug_define)
    else
@@ -3250,7 +3279,7 @@ function sub_make(
 
       table.insert(flags, "-DNDEBUG")
 
-      table.insert(flags, "-flto=4")
+      table.insert(flags, lto_flag)
 
       defines_apply(flags, cfg.release_define)
    end
