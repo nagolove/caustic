@@ -1671,24 +1671,6 @@ function actions.init(_args: Args)
         _dependency_init(dep)
     end
 
-    --[[
-    require 'compat53'
-    local threads: {lanes.Thread} = {}
-    local opt_tbl = { required = {"lfs", "compat53" }, }
-    local func = lanes.gen("*", opt_tbl, _dependency_init)
-    --]]
-
-    --[[
-	if #threads ~= 0 then
-		print(tabular(threads))
-		wait_threads(threads)
-		for _, thread in ipairs(threads) do
-			local result, errcode = thread:join()
-			print(result, errcode)
-		end
-	end
-    --]]
-
     ut.pop_dir()
 end
 
@@ -2854,8 +2836,8 @@ function actions.update(_args: Args)
         local attr = lfs.attributes(".git")
         if attr and attr.mode == 'directory' then
             --print('attr', inspect(attr))
-            printc("%{blue}" .. dep.name .. "%{reset}") 
-            os.execute("git fetch")
+            printc("%{blue}" .. dep.name .. "%{reset}")
+            ut.cmd_try("git fetch")
             -- XXX: Что делать дальше?
             -- Посмотреть разницу в виде сообщений
         end
@@ -4234,17 +4216,21 @@ function actions.clean(_: Args)
     local cfg = cfgs[1]
     assert(cfg)
     if cfg.artifact then
-        os.execute("rm " .. cfg.artifact)
-        os.execute("rm " .. cfg.artifact .. ".wasm")
-        os.execute("rm " .. cfg.artifact .. ".data")
-        os.execute("rm " .. cfg.artifact .. ".html")
-        os.execute("rm " .. cfg.artifact .. ".js")
+        ut.cmd_try({
+            "rm " .. cfg.artifact,
+            "rm " .. cfg.artifact .. ".wasm",
+            "rm " .. cfg.artifact .. ".data",
+            "rm " .. cfg.artifact .. ".html",
+            "rm " .. cfg.artifact .. ".js",
+        })
     end
 
     os.remove("src/" .. cache_name)
-    os.execute("rm ./obj_linux/*.o")
-    os.execute("rm ./obj_win/*.o")
-    os.execute("rm ./obj_wasm/*.o")
+    ut.cmd_try({
+        "rm ./obj_linux/*.o",
+        "rm ./obj_win/*.o",
+        "rm ./obj_wasm/*.o",
+    })
 end
 
 function actions.cppcheck(_args: Args)

@@ -17,7 +17,7 @@ local function clone_with_checkout(dep)
 
 
    if not ssh_github_active and string.match(dep.url, "git@github.com") then
-      local errcode = not not os.execute("ssh -T git@github.com")
+      local errcode = ut.cmd_try("ssh -T git@github.com")
       print("errcode", errcode)
       if errcode then
          local msg = format(

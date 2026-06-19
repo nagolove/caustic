@@ -416,6 +416,25 @@ end
 local cmd_do = cmd_do_execute
 
 
+
+
+
+local function cmd_try(cmd)
+   if type(cmd) == 'string' then
+      return os.execute(cmd) and true or false
+   elseif type(cmd) == 'table' then
+      local all_ok = true
+      for _, v in ipairs(cmd) do
+         if not os.execute(v) then
+            all_ok = false
+         end
+      end
+      return all_ok
+   end
+   return false
+end
+
+
 local function find_and_remove_cmake_cache()
    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
    cmd_do('fd -HI -t d "CMakeFiles" -x rm -rf {}')
@@ -744,8 +763,7 @@ local function _write_file_bak(
          baks = baks .. ".bak"
       end
       local cmd = format("rm %s", baks)
-      local ok = os.execute(cmd)
-      if not ok then
+      if not cmd_try(cmd) then
          return false
       end
    end
@@ -877,6 +895,7 @@ return {
 
    find_and_remove_cmake_cache = find_and_remove_cmake_cache,
    cmd_do = cmd_do,
+   cmd_try = cmd_try,
    printc = printc,
    ripairs = ripairs,
    filter = filter,

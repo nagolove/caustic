@@ -415,6 +415,25 @@ end
 --------------------------------------------------------------
 local cmd_do: function(cmd: string|{string}) = cmd_do_execute
 
+-- Мягкий запуск команды: возвращает true/false по коду возврата и
+-- никогда не прерывает процесс. Для случаев, где неудача допустима
+-- (удаление возможно отсутствующих файлов, опросные команды).
+-- Принимает строку или список строк (выполняет все, успех — если все ок).
+local function cmd_try(cmd: string|{string}): boolean
+    if type(cmd) == 'string' then
+        return os.execute(cmd as string) and true or false
+    elseif type(cmd) == 'table' then
+        local all_ok = true
+        for _, v in ipairs(cmd as {string}) do
+            if not os.execute(v) then
+                all_ok = false
+            end
+        end
+        return all_ok
+    end
+    return false
+end
+
 -- TODO: Проверка наличия fd
 local function find_and_remove_cmake_cache()
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
@@ -743,9 +762,8 @@ local function _write_file_bak(
         for _ = 1, max_bak do
             baks = baks .. ".bak"
         end
-        local cmd = format("rm %s", baks) 
-        local ok = os.execute(cmd)
-        if not ok then 
+        local cmd = format("rm %s", baks)
+        if not cmd_try(cmd) then
             return false
         end
     end
@@ -877,6 +895,7 @@ return {
     --get_deps_name_map           = get_deps_name_map,
     find_and_remove_cmake_cache = find_and_remove_cmake_cache,
     cmd_do                      = cmd_do,
+    cmd_try                     = cmd_try,
     printc                      = printc,
     ripairs                     = ripairs,
     filter                      = filter,

@@ -1671,24 +1671,6 @@ function actions.init(_args)
       _dependency_init(dep)
    end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    ut.pop_dir()
 end
 
@@ -4234,17 +4216,21 @@ function actions.clean(_)
    local cfg = cfgs[1]
    assert(cfg)
    if cfg.artifact then
-      os.execute("rm " .. cfg.artifact)
-      os.execute("rm " .. cfg.artifact .. ".wasm")
-      os.execute("rm " .. cfg.artifact .. ".data")
-      os.execute("rm " .. cfg.artifact .. ".html")
-      os.execute("rm " .. cfg.artifact .. ".js")
+      ut.cmd_try({
+         "rm " .. cfg.artifact,
+         "rm " .. cfg.artifact .. ".wasm",
+         "rm " .. cfg.artifact .. ".data",
+         "rm " .. cfg.artifact .. ".html",
+         "rm " .. cfg.artifact .. ".js",
+      })
    end
 
    os.remove("src/" .. cache_name)
-   os.execute("rm ./obj_linux/*.o")
-   os.execute("rm ./obj_win/*.o")
-   os.execute("rm ./obj_wasm/*.o")
+   ut.cmd_try({
+      "rm ./obj_linux/*.o",
+      "rm ./obj_win/*.o",
+      "rm ./obj_wasm/*.o",
+   })
 end
 
 function actions.cppcheck(_args)
