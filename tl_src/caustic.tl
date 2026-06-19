@@ -35,7 +35,7 @@ package.cpath =
         package.cpath
 -- }}}
 
--- INFO: Загружает xxhash, hnswlib, linenoise
+-- INFO: регистрирует linenoise в package.preload (см. luaopen_koh)
 require 'koh'
 
 -- {{{  global variables for module
@@ -66,10 +66,7 @@ local uv         = require "luv"
 local readline   = linenoise.readline
 local format     = string.format
 local match      = string.match
-local zlib       = require 'zlib'
-local hash32     = require 'xxhash'.hash32
 local serpent    = require 'serpent'
-local assist     = require "assist"
 local git        = require 'git'
 --- }}}
 
@@ -78,9 +75,6 @@ if string.match(lfs.currentdir(), "tl_dst") then
     chdir("..")
 end
 
-local llm_embedding_model = "text-embedding-qwen3-embedding-8b"
-
-local llm_embedding_dim = 4096
 
 -- {{{ timing helpers (включаются флагом -p --profiling)
 local profiling = false
@@ -159,6 +153,11 @@ local record Cfg
 
     -- шаблоны файлов, которые исключаются из процесса сборки
     exclude_files: {string}
+
+    -- Lua-шаблоны файлов, исключаемых только из cppcheck-анализа.
+    -- Удобно для долго обрабатываемых файлов (генераторы lua-паттернов и т.п.).
+    -- Пример: { "exact_filename.c", "lua_pattern" }
+    cppcheck_excluded: {string}
 
     -- каталоги включаемых файлов
     includes: {string}
@@ -719,6 +718,9 @@ local parser_setup: {string:ParserSetup} = {
 
     cppcheck = {
         summary = [[run cppcheck on current project directory]],
+        -- Lua-шаблон для исключения файлов из анализа,
+        -- например: --exclude "lua_pattern.*%.c"
+        options = { "-e --exclude", },
     },
 
     bld_lua = {
@@ -918,6 +920,8 @@ local record Args
     headless: string    -- сборка с безголовым рейлибом
     profiling: string   -- профилировка времени сборки
     config: ProfileConfig
+    exclude: string     -- Lua-шаблон для исключения файлов из cppcheck
+    all_sources: boolean -- форсить задачи для всех исходников (cppcheck)
     flags: {string}
     args: {string}
     -- }}}
@@ -3451,8 +3455,11 @@ function sub_make(
             -- XXX: Правильный (в cache.lua): добавить отслеживание #include зависимостей. Стандартный подход — использовать    
             --  -MMD флаг GCC, который генерирует .d файлы со списком заголовков. Потом хешировать все зависимости, а не только
             --   сам .c файл. 
-            -- кэширование: пропускать файлы без изменений
-            if cache:should_recompile(file, task) then
+            -- кэширование: пропускать файлы без изменений.
+            -- all_sources форсит задачу для каждого файла — нужно cppcheck,
+            -- которому требуется полный список исходников независимо от кэша
+            -- (без этого второй запуск подряд даёт "no source files").
+            if _args.all_sources or cache:should_recompile(file, task) then
                 table.insert(tasks, task)
             end
         end
@@ -3645,14 +3652,15 @@ function actions.run(_args: Args)
     end
 end
 
--- hash32 возвращает raw 4 байта, нужна hex-строка для путей
+-- FNV-1a 32-бит на чистом Lua: hex-строка пути без зависимости от xxhash.
+-- Используется только для уникального имени каталога профиля.
 local function hex_hash32(s: string): string
-    local raw = hash32(s)
-    local t: {string} = {}
-    for i = 1, #raw do
-        insert(t, format("%02x", string.byte(raw, i)))
+    local hash = 0x811c9dc5
+    for i = 1, #s do
+        hash = (hash ~ string.byte(s, i)) & 0xffffffff
+        hash = (hash * 0x01000193) & 0xffffffff
     end
-    return concat(t)
+    return format("%08x", hash)
 end
 
 -- Парсинг CSV с учётом кавычек и суффиксов после них.
@@ -4218,285 +4226,6 @@ function actions.ninja(_args: Args)
     f:close()
 end
 
-local type XXHash = string
-local zlib_min_len = 128
-
--- XXX: Стоит делать класс на метатаблице?
--- XXX: Делать запись в файл сериализованной таблицы, без бинарных записей, 
--- добавить их потом
-local record Chunk
-    -- XXX: Проверять на уникальность
-    -- пример main.c:main
-    id: string          -- file:line_start:name из ctag
-    id_hash: XXHash
-    file: string        -- abs file name
-    line_start: integer
-    line_end: integer
-
-    -- Кусок кода. Может конфликтовать с другими текстами 
-    -- на простых typedef объявлениях в ctags к примеру
-    text: string
-    -- Если строка > zlib_min_len
-    text_zlib: string
-
-    --  Хеш от текста, считать его заранее
-    -- xxHash32, строка длиной 4, в hnswlib интерпритирую как 
-    --text_hash: XXHash 
-
-    -- При хранении в файле пишется как zlib сжатая строка 
-    -- сперва записанная через serpent
-    embedding: string|{number} -- llm_embedding_dim 
-end
-
--- Возвращает список путей к файла на основе поиска fd
--- На входе - таблица регулярок которые комбинируются с |
-local function _fd_code_in_cwd(extensions_t: {string}): {string}
-    local result: {string} = {}
-    local extensions = concat(extensions_t, "|")
-    local cmd = format([[fd "%s"]], extensions)
-
-    printc(
-        "_fd_code_in_cwd:" .. 
-        "%{blue}" .. lfs.currentdir() .. "%{reset}"
-    ) 
-
-    local pipe = io.popen(cmd)
-    local abs_path = lfs.currentdir() .. "/"
-    for line in pipe:lines() do
-        local result_line = abs_path .. line
-        table.insert(result, result_line)
-    end
-    print()
-
-    return result
-end
-
-local function _fd_code_in_modules(): {string}
-    local result = {}
-    local extensions_t = {
-        ".*\\.c$",
-        ".*\\.cpp$",
-        ".*\\.h$",
-        ".*\\.hpp$",
-        ".*\\.md$",
-        ".*\\.lua$",
-    }
-    local extensions = concat(extensions_t, "|")
-    local cmd = format([[fd "%s"]], extensions)
-
-    --for _, module in ipairs(modules) do
-    for module in mods.iter() do
-        ut.push_current_dir()
-
-        if module.dir then
-            local rel_dir = e.path_rel_third_party .. "/" .. module.dir
-            local ok, msg = chdir(rel_dir)
-            if not ok then
-                print("_fd_code_in_modules", msg)
-            end
-
-            printc("%{blue}" .. lfs.currentdir() .. "%{reset}") 
-
-            local pipe = io.popen(cmd)
-            local abs_path = e.path_caustic .. "/" .. rel_dir .. "/"
-            for line in pipe:lines() do
-                local result_line = abs_path .. line
-                table.insert(result, result_line)
-            end
-            print()
-
-        end
-
-        ut.pop_dir()
-    end
-
-    return result
-end
-
-local function shannon_entropy(str: string): number
-    local freq: {string: number} = {}
-    local len = #str
-    for i = 1, len do
-        local c = string.sub(str, i, i)
-        freq[c] = (freq[c] or 0) + 1
-    end
-    local entropy = 0.
-    for _, count in pairs(freq) do
-        local p = count / len
-        entropy = entropy - p * math.log(p, 2.)
-    end
-    return entropy
-end
-
-local function compression_ratio(data: string): number
-    local def = zlib.deflate(zlib.BEST_SPEED, 8)
-    local compressed = def(data, "finish")
-    return #compressed / #data
-end
-
-local record LMSInstanse
-    is_loaded: function(modelname: string): boolean
-    is_up: function(): boolean
-    load: function(modelname: string)
-    up: function(): boolean
-end
-
-local function lms_instanse(): LMSInstanse
-    local self: LMSInstanse = {}
-
-    self.is_up = function(): boolean
-            local code = os.execute('lms ps')
-            return not not code
-        end
-
-    self.is_loaded = function(modelname: string): boolean
-        local f = io.popen('lms ps --json')
-        local json_data = f:read("*a")
-        local models = json.decode(json_data) as {string}
-
-        for _, info in ipairs(models) do
-            --print(type(info))
-            --print(inspect(info))
-            assert(type(info) == 'string' or type(info) == 'table')
-        end
-
-        print("json_data", inspect(models))
-        f:close()
-        for _, target in ipairs(models) do
-            print('target', inspect(target))
-            if modelname == target then
-                return true
-            end
-        end
-        return false
-    end
-
-    self.load = function(modelname: string): boolean
-        cmd_do('lms load ' .. modelname)
-    end
-
-    self.up = function(): boolean
-        if not self.is_up() then
-
-            -- создаёт новую сессию и отцепляет stdio
-            local cmd = "setsid sh -c " ..
-            "'exec lmstudio </dev/null >/dev/null 2>&1' &"
-            os.execute(cmd)
-
-            local i = 0
-            while not self.is_up() do
-                os.execute("sleep 2")
-                i = i + 1
-                if i > 20 then
-                    print("Could not start lmstudio")
-                    return false
-                end
-            end
-        end
-        return true
-    end
-
-    return self
-end
-
-local lms = lms_instanse()
-
-local function chunks_calculate_vectors(chunks: {Chunk})
-    local chunks_per_request = 17
-    assert(chunks)
-
-    if not chunks or #chunks == 0 then
-        return
-    end
-
-    local chunks_copy = ut.deepcopy(chunks)
-    local id2chunk: {string: Chunk} = {}
-
-    for _, ch in ipairs(chunks) do
-        id2chunk[ch.id] = ch
-    end
-
-    while #chunks_copy ~= 0 do
-        local embeddings_t: {string} = {}
-        local ids: {string} = {}
-
-        local real_chunks_num = math.min(chunks_per_request, #chunks_copy)
-        for _ = 1, real_chunks_num do
-            local chunk: Chunk = table.remove(chunks_copy, #chunks_copy)
-            if not chunk then
-                break
-            else
-                table.insert(ids, chunk.id)
-                local text = chunk.text
-                assert(text)
-
-                local text_t = concat({
-                    "// ", chunk.file,
-                    ":", chunk.line_start, "\n",
-                    text
-                })
-
-                table.insert(embeddings_t, text_t)
-                local sh = shannon_entropy(text)
-                local ratio = compression_ratio(text)
-
-                io.write(
-                    'shannon_entropy: ', sh, ' compression_ratio: ', ratio, " "
-                )
-
-                if sh < 4.25 and ratio < 0.5 then
-                    printc("%{green}simple chunk%{reset}")
-                elseif sh > 4.8 and ratio > 0.8 then
-                    printc("%{red}complex chunk%{reset}")
-                    print("\n" .. inspect(chunk) .. "\n")
-                else
-                    printc("%{yellow}medium chunk%{reset}")
-                end
-            end
-        end
-
-        print("#embeddings_t", #embeddings_t)
-        --print("embeddings_t", inspect(embeddings_t))
-
-        -- XXX: Добавлять в виде комментария имя файла чанк исходного кода 
-        -- и начальную строку 
-        local vectors = assist.embedding(llm_embedding_model, embeddings_t)
-
-        assert(
-            #vectors == #ids,
-            "embedding API returned inconsistent batch size"
-        )
-
-        for i, vector in ipairs(vectors) do
-            local chunk_id = ids[i]
-            id2chunk[chunk_id].embedding = vector
-        end
-    end
-end
-
-local record CTag 
-    -- {{{
-    enum Tag
-        'tag'
-        'ptag'
-    end
-
-    _type: Tag
-    _end: integer
-    file: boolean
-    kind: string
-    line: integer
-    name: string
-    path: string
-    pattern: string
-    scope: string
-    scopeKind: string
-    typeref: string
-    -- }}}
-end
-
-local sha2 = require 'sha2'
-
 function actions.clean(_: Args)
     --print("actions.clean:")
 
@@ -4524,6 +4253,10 @@ end
 
 function actions.cppcheck(_args: Args)
     mkdir("cppcheck-cache")
+
+    -- cppcheck'у нужен полный список исходников, а не только изменённые,
+    -- иначе на «чистом» кэше получаем "no C or C++ source files found"
+    _args.all_sources = true
 
     local cmd = "cppcheck "
         .. " -j6 "
@@ -4583,520 +4316,44 @@ function actions.cppcheck(_args: Args)
     end
     cmd = cmd .. concat(d, " ") .. " "
 
+    -- Сбор шаблонов исключения: из bld.lua (cppcheck_excluded) и из --exclude
+    local excluded: {string} = {}
+    if cfgs[1].cppcheck_excluded then
+        for _, pat in ipairs(cfgs[1].cppcheck_excluded) do
+            insert(excluded, pat)
+        end
+    end
+    if _args.exclude then
+        insert(excluded, _args.exclude)
+    end
+
+    -- Отфильтровать файлы по Lua-шаблонам (string.match по полному пути)
+    if #excluded > 0 then
+        local filtered: {string} = {}
+        for _, f in ipairs(files) do
+            local skip = false
+            for _, pat in ipairs(excluded) do
+                if string.match(f, pat) then
+                    skip = true
+                    print(format(
+                        "cppcheck: исключён %s (шаблон '%s')", f, pat
+                    ))
+                    break
+                end
+            end
+            if not skip then
+                insert(filtered, f)
+            end
+        end
+        files = filtered
+    end
+
     --print('files', inspect(files))
     cmd = cmd .. concat(files, " ")
     --print('cmd', cmd)
     cmd_do(cmd)
 end
 
-local record EmbeddingIndexOpts
-    zlib_window: integer
-    zlib_level: integer
-    tags_fname: string
-end
-
-local function check_zlib_args(o: EmbeddingIndexOpts): boolean
-    assert(o)
-    local ok = o.zlib_window > 8 and
-               o.zlib_window <= 15 and
-               o.zlib_level >= 1 and
-               o.zlib_level <= 9
-   return ok
-end
-
-local function check_chunks(chunks: {Chunk}): boolean
-    assert(chunks)
-    for _, c in ipairs(chunks) do
-        -- {{{
-
-        if not c.id then
-            print("check_chunks: have not 'id' field in chunk")
-            return false
-        end
-
-        if not c.id_hash then
-            print("check_chunks: have not 'id_hash' field in chunk")
-            return false
-        end
-
-        if not c.file then
-            print("check_chunks: have not 'file' field in chunk")
-            return false
-        end
-
-        if not c.line_start then
-            print("check_chunks: have not 'line_start' field in chunk")
-            return false
-        end
-
-        if not c.line_end then
-            print("check_chunks: have not 'line_end' field in chunk")
-            return false
-        end
-
-        if not c.text then
-            print("check_chunks: have not 'text' field in chunk")
-            return false
-        end
-
-        if not c.embedding then
-            print("check_chunks: have not 'embedding' field in chunk")
-            return false
-        end
-
-        --[[
-        if not c.text_hash then
-            print("check_chunks: have not 'hash' field in chunk")
-            return false
-        end
-        --]]
-
-        -- }}}
-    end
-
-    return true
-end
-
-local type Hasher = sha2.Partial
-local pack = string.pack
-
-local function w_u64(fd: FILE, data: any, hasher?: Hasher): Hasher
-    assert(fd)
-    assert(data)
-    assert(type(data) ~= 'table')
-
-    local packed = string.pack("<I8", data)
-    fd:write(packed)
-    if hasher then
-        return hasher(packed)
-    end
-
-    return hasher
-end
-
-local function w_str_fixed(
-    fd: FILE, s: string, n: integer, hasher?: Hasher
-): Hasher
-
-    assert(fd)
-    assert(s)
-    assert(n)
-    assert(#s <= n, ("строка слишком длинная: %d > %d"):format(#s, n))
-
-    fd:write(s)
-    if hasher then
-        hasher = hasher(s)
-    end
-
-    if #s < n then
-        local zeros = string.rep("\0", n - #s)
-        fd:write(zeros) -- паддинг нулями
-        if hasher then
-            hasher = hasher(zeros)
-        end
-    end
-
-    return hasher
-end
-
--- Запись произвольной строки. Сперва пишется длина u64, потом данные, потом \0
-local function w_str(fd: FILE, _s: string, hasher?: Hasher): Hasher
-    assert(fd)
-    --assert(s)
-    local s = _s or ""
-
-    hasher = w_u64(fd, #s, hasher)
-
-    if #s ~= 0 then
-        fd:write(s)
-        if hasher then
-            hasher = hasher(s)
-        end
-    end
-
-    local terminator = '\0'
-    fd:write(terminator)
-    if hasher then
-        hasher = hasher(terminator)
-    end
-
-    return hasher
-end
-
--- TODO: Добавить хеширование для заголовка?
-local function w_header_v3(fd: FILE, o: EmbeddingIndexOpts): integer, integer
-    local written = 0
-
-    local magic = 'caustic_index\0'
-    local str_size_magic = #magic
-    w_str_fixed(fd, magic, str_size_magic)
-    written = written + #magic
-
-    local endian_mode = "l"
-    fd:write(endian_mode)
-    written = written + #endian_mode
-
-    local format_version = 3
-    fd:write(pack("<I1", format_version))
-    written = written + 1
-
-    local zlib_window = o.zlib_window
-    fd:write(pack("<I1", zlib_window))
-    written = written + 1
-
-    local sha_mode = "blake3\0"
-    --local sha_mode = "sha256"
-    local str_size_hash = 8
-    w_str_fixed(fd, sha_mode, str_size_hash)
-    written = written + str_size_hash
-
-    local embedding_dim = llm_embedding_dim
-    w_u64(fd, embedding_dim)
-    written = written + 8
-
-    local str_size_llm = 64
-    local llm = llm_embedding_model .. "\0"
-    assert(llm and #llm <= 64, "invalid llm_embedding_model")
-    w_str_fixed(fd, llm, str_size_llm)
-    written = written + str_size_llm
-
-    -- смещение где находятся данные
-    local data_offset = fd:seek("cur") + 8
-    w_u64(fd, data_offset)
-    written = written + 8
-
-    return written, data_offset
-end
-
-local function chunks_write_binary(
-    chunks_fname: string, o: EmbeddingIndexOpts, chunks: {Chunk}
-): boolean
-
-    assert(chunks_fname)
-    assert(chunks)
-    assert(o)
-    assert(o.tags_fname)
-
-    if not check_zlib_args(o) then
-        return false
-    end
-
-    if not check_chunks(chunks) then
-        return false
-    end
-
-    local f = io.open(chunks_fname .. ".tmp", "wb")
-    if not f then
-        printc(
-            '%{red}chunks_write_binary: could not open file for writing',
-            o.tags_fname,
-            "%{reset}"
-        )
-        return false
-    end
-
-    --local _, _ = w_header_v1(f, o)
-    -- XXX: Добавить запись нулей в строки, это то, что отличает v1 от v2
-    --local _, _ = w_header_v2(f, o)
-    -- XXX: v3 заголовок не отличается от v2, но в v3 данные строк лежат 
-    -- как [длина][данные]
-    local _, _ = w_header_v3(f, o)
-
-    print("chunks_write_binary: header written\n");
-
-    local hasher = sha2.blake3() as sha2.Partial
-
-    print("chunks_write_binary: #chunks", #chunks)
-    -- u64 длина данных, затем данные - lua строка для load()
-    for _, c in ipairs(chunks) do
-
-        -- Удаляю несжатый текст если есть сжатый
-        if c.text_zlib then
-            c.text = nil
-        end
-
-        -- XXX: Стоит-ли записывать serpent.dump()?
-        -- XXX: От чего тогда считать хеш?
-        hasher = w_str(f, c.id, hasher)
-        hasher = w_str(f, c.id_hash, hasher)
-        hasher = w_str(f, c.file, hasher)
-        hasher = w_u64(f, c.line_start, hasher)
-        hasher = w_u64(f, c.line_end, hasher)
-        hasher = w_str(f, c.text, hasher)
-        hasher = w_str(f, c.text_zlib, hasher)
-
-        assert(type(c.embedding) == 'table')
-        -- XXX: Как лучше записывать embedding что-бы не было 
-        -- расжатия из строки и создания таблицы?
-        local embedding = serpent.dump(c.embedding)
-        hasher = w_str(f, embedding, hasher)
-
-        --[[
-        local ser = serpent.dump(c, {
-            sortkeys = true,
-            comment = false,
-        }) .. "\0"
-        append = append(pack("<I8", #ser))
-        append = append(ser)
-        w_u64(f, #ser)
-
-        -- XXX: Использовать для записи строк w_str()
-        f:write(ser)
-        --]]
-    end
-
-    local hash = hasher() as string
-    f:write(hash)
-
-    f:flush()
-    f:close()
-
-    local ok, errmsg = os.rename(chunks_fname .. ".tmp", chunks_fname)
-    if not ok then
-        print("chunks_write_binary: failed to rename file with", errmsg)
-    end
-    -- Привожу к каноническому true|false
-    return not not ok
-end
-
--- Возвращает текст по данному тегу склеенный из строк файла
-local function ctag_to_str(n: CTag, lines: {string}): string
-    local chunks_lines = {}
-    local order = 1 <= n.line and 
-                  n.line <= n._end and 
-                  n._end <= #lines
-
-    if not order then
-        printc(
-            "ctag_to_str: bad order in n.line and n.end", 
-            inspect(n)
-        )
-        return ""
-    end
-
-    for i = n.line, n._end, 1 do
-        table.insert(chunks_lines, lines[i])
-    end
-    return concat(chunks_lines, '\n')
-end
-
-local function ctags_load(tags_fname: string): {CTag}
-    assert(tags_fname)
-    local f_tags = io.open(tags_fname, "r")
-    if not f_tags then
-        print('ctags_load: could not open', tags_fname)
-        return {}
-    end
-
-    local tags: {CTag} = {}
-    for line in f_tags:lines() do
-        local t, pos, err = json.decode(line)
-        if not t then
-            printc(
-                "%{red}ctags_load: json parse error at pos ",
-                tostring(pos),
-                err
-            )
-            goto continue
-        end
-        t['_end'] = t['end']
-        table.insert(tags, t as CTag)
-        ::continue::
-    end
-
-    f_tags:close()
-    return tags
-end
-
-local function load_lines(tags: {CTag}): {string: {string}}
-    assert(tags)
-    local path2lines: {string:{string}} = {}
-    -- гружу в словарь файлы
-    for _, n in ipairs(tags) do
-        if n.path and n.line and n._end then
-            if path2lines[n.path] then
-                goto continue
-            end
-
-            local f_src = io.open(n.path, "r")
-            if not f_src then
-                goto continue
-            end
-
-            local lines: {string} = {}
-            for line in f_src:lines() do
-                table.insert(lines, line)
-            end
-            f_src:close()
-
-            path2lines[n.path] = lines
-        end
-
-        ::continue::
-    end
-    return path2lines
-end
-
--- XXX: Сделать возможным прерывание с последующим восстановлением
-local function tags2chunks(o: EmbeddingIndexOpts): {Chunk}
-    assert(o)
-    assert(o.tags_fname)
-
-    if not check_zlib_args(o) then
-        return {}
-    end
-
-    local attr = lfs.attributes(o.tags_fname)
-
-    if not attr then
-        return {}
-    end
-
-    if attr.mode ~= 'file' then
-        return {}
-    end
-
-    local tags = ctags_load(o.tags_fname)
-    if #tags == 0 then
-        return {}
-    end
-    print("jsonl loaded")
-
-    local path2lines: {string:{string}} = load_lines(tags)
-    print("sources were loaded")
-
-    local sig_break = false
-    local function handle_sigint(_: any)
-        -- TODO: починить интерактив
-        --[[
-        local input = string.lower(linenoise.readline(
-            "Should I save current state in file" .. 
-            "(it helps continue from this point later(Y/n)"
-        ))
-
-        while not sig_break do
-            if input == "y" then
-                sig_break = true
-            elseif input == "n" then
-                sig_break = true
-            else
-                print(format("command %q is unknown"))
-                sig_break = false
-            end
-        end
-        --]]
-        sig_break = true
-    end
-
-    local signal = require("posix.signal")
-    signal.signal(signal.SIGINT, handle_sigint)
-
-    local chunks: {Chunk} = {}
-    -- id_hash -> Chunk
-    local hash2chunk: {XXHash: Chunk} = {}
-
-    local zdeflate = zlib.deflate
-    local tags_num = #tags
-
-    -- теперь достаю куски текста исходных файлов как построчные записи
-    for i, n in ipairs(tags) do
-
-        if sig_break then
-            break
-        end
-
-        if n.path and n.line and n._end then
-            local lines = path2lines[n.path]
-            assert(lines)
-
-            local chunk_text = ctag_to_str(n, lines)
-            if #chunk_text == 0 then
-                goto continue
-            end
-
-            local preview = chunk_text:sub(1, 100)
-            printc("%{green}" .. preview .. "%{reset}")
-            print()
-
-            if sig_break then
-                break
-            end
-
-            local id = n.path .. ":" .. n.line .. ":" .. n.name
-            local id_hash = hash32(id)
-            --local hash = hash32(chunk_text)
-            local chunk: Chunk = {
-                id_hash = id_hash,
-                id = id,
-                file = n.path,
-                line_start = n.line,
-                line_end = n._end,
-            }
-
-            -- XXX: сперва создать chunks, потом только считать вектора
-            local collision_chunk = hash2chunk[id_hash] 
-            --if collision_chunk and collision_chunk.id ~= chunk_text then
-            if collision_chunk then
-                printc(
-                    "%{red}tags2chunks: xxhash32 collision on " .. 
-                    "different id_hash, breaking%{reset}"
-                )
-                printc("%{blue}" .. inspect(chunk_text) .. "%{reset}")
-                printc("%{yellow}" .. inspect(collision_chunk) .. "%{reset}")
-                printc("%{black}%{yellowbg}" .. inspect(chunk) .. "%{reset}")
-            end
-
-            if #chunk_text > zlib_min_len then
-                local compressor_chunk = zdeflate(o.zlib_level, o.zlib_window)
-                local text_compressed = compressor_chunk(chunk_text, "finish")
-                chunk.text_zlib = text_compressed
-            end
-
-            -- Текст оставляю для расчета векторов
-            chunk.text = chunk_text
-
-            table.insert(chunks, chunk)
-            hash2chunk[id_hash] = chunk
-        end
-
-        ::continue::
-        print(format("%d/%d", i, tags_num))
-    end
-
-    local pre_save = io.open(o.tags_fname .. ".pre_save.lua", "w")
-    pre_save:write(serpent.dump(chunks))
-    pre_save:close()
-
-    -- только расчет векторов
-    --[[
-    for i, ch in ipairs(chunks) do
-        -- TODO: Добавить буферизацию, считать по 4-7 векторов сразу
-        local text = ch.text or ch.text_zlib
-        local vector = assist.embedding(llm_embedding_model, text)[1]
-
-        if sig_break then
-            break
-        end
-
-        assert(vector)
-        local dump = serpent.dump(vector)
-        local compressor_vector = zdeflate(o.zlib_level, o.zlib_window)
-        local vector_compressed = compressor_vector(dump, "finish")
-        ch.embedding = vector_compressed
-        printc("%{cyan}" ..  format("%d/%d", i, tags_num) .. "%{reset}")
-    end
-    --]]
-
-    chunks_calculate_vectors(chunks)
-
-    pre_save = io.open(o.tags_fname .. ".pre_save.emb.lua", "w")
-    pre_save:write(serpent.dump(chunks))
-    pre_save:close()
-
-    return chunks
-    --]]
-
-end
 
 function actions.snapshot(_: Args)
     local f = io.open("snapshot.lua", "w")
@@ -5203,78 +4460,9 @@ local function ctags_write(tags_fname: string, target: Target, _args?: Args)
     printc("%{blue}ctags%{reset}")
 end
 
-function actions.ctags(_args: Args) 
-    local chunks_lua = "chunks.lua"
-
-    local enum Mode
-        'load'
-        'rescan'
-    end
-
-    local mode: Mode = 'rescan'
-
-    local attrib = lfs.attributes(chunks_lua)
-    if attrib and attrib.mode == 'file' then
-        local msg = format(
-            "Found file %q. Load it or rescan tags and embeddings?(y/n)",
-            chunks_lua
-        )
-        local inp = string.lower(linenoise.readline(msg))
-        if not inp then
-            print("actions.ctags: inp == nil")
-            return
-        end
-        if inp == 'y' then
-            mode = 'load'
-        elseif inp == 'n' then
-            mode = 'rescan'
-        end
-    end
-
-    local chunks: {Chunk} = nil
-    local o: EmbeddingIndexOpts = {
-        zlib_window = 15,
-        zlib_level = 8,
-        tags_fname = 'tags.jsonl',
-    }
-
-    if mode == 'rescan' then
-        local target = _args.t or "linux"
-        ctags_write(o.tags_fname, target, _args)
-
-        -- стартую lmstudio
-        if not lms.up() then
-            print("actions.ai: lmstudio could not startup")
-            os.exit(1)
-        end
-        chunks = tags2chunks(o)
-
-        local f = io.open(chunks_lua, "w")
-        assert(f)
-        f:write(serpent.dump(chunks))
-        f:close()
-    elseif mode == 'load' then
-        local f = io.open(chunks_lua, "r")
-        assert(f)
-        local str = f:read("*a")
-        local ok, errmsg = pcall(function()
-            local env = {}
-            local bin_or_text = "t"
-            chunks = load(str, "chunks", bin_or_text, env)() as {Chunk}
-        end) as boolean, string
-        if not ok then
-            local msg = format(
-                "actions.ctags: could not load() content of %q with %s",
-                chunks_lua, errmsg
-            )
-            print(msg)
-            return
-        end
-    end
-
-    if chunks_write_binary("chunks.bin", o, chunks) then
-        print("chunks were written successfully")
-    end
+function actions.ctags(_args: Args)
+    local target = _args.t or "linux"
+    ctags_write('tags.jsonl', target, _args)
 end
 
 local function main()
