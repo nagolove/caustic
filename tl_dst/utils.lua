@@ -104,16 +104,12 @@ end
 
 
 
-
-
-
 local function filter_sources(path, exclude)
 
    local files = {}
    for file in lfs.dir(path) do
       local attrs = lfs.attributes(file)
       if attrs and attrs.mode == 'file' then
-
          table.insert(files, file)
       end
    end
@@ -854,7 +850,26 @@ local function task_remove_libs(task)
 end
 
 
+
+
+
+pcall(require, 'koh')
+local ok_ln, linenoise = pcall(require, 'linenoise')
+
+local readline
+local ln_map = linenoise
+if ok_ln and ln_map and ln_map.readline then
+   readline = ln_map.readline
+else
+   readline = function(prompt)
+      io.write(prompt or "")
+      io.flush()
+      return io.read("l")
+   end
+end
+
 return {
+   readline = readline,
    _remove = _remove,
    readonly = readonly,
    header_guard = header_guard,

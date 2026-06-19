@@ -102,9 +102,6 @@ local function cat_file(fname: string)
     end
 end
 
--- TODO: {exclude} may be a map, not a array
--- Как ты себе представляешь exclude: {string: string} ?
-
 -- В таблице исключаемых имен могут быть шаблоны string.match()
 -- XXX: Делает поиск бесконечно глубоко, добавить поддержку глубины
 local function filter_sources(path: string, exclude?: {string}): {string}
@@ -113,7 +110,6 @@ local function filter_sources(path: string, exclude?: {string}): {string}
     for file in lfs.dir(path) do
         local attrs = lfs.attributes(file)
         if attrs and attrs.mode == 'file' then
-            --table.insert(files, lfs.currentdir() .. "/" .. file)
             table.insert(files, file)
         end
     end
@@ -854,7 +850,26 @@ local function task_remove_libs(task: Task): Task
 end
 
 
+-- Чтение строки ввода с приглашением.
+-- Если собран libkoh — берём linenoise (история, редактирование строки),
+-- иначе мягко откатываемся на чистый io.read без внешних зависимостей.
+pcall(require, 'koh')                       -- регистрирует linenoise в preload
+local ok_ln, linenoise = pcall(require, 'linenoise')
+
+local readline: function(string): string
+local ln_map = linenoise as {string: function(string): string}
+if ok_ln and ln_map and ln_map.readline then
+    readline = ln_map.readline
+else
+    readline = function(prompt: string): string
+        io.write(prompt or "")
+        io.flush()
+        return io.read("l")
+    end
+end
+
 return {
+    readline                    = readline,
     _remove                     = _remove,
     readonly                    = readonly,
     header_guard                = header_guard,

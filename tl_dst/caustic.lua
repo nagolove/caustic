@@ -36,9 +36,6 @@ package.cpath
 
 
 
-require('koh')
-
-
 assert(e.path_caustic)
 assert(e.path_rel_third_party)
 assert(e.path_rel_wasm_third_party)
@@ -46,7 +43,6 @@ assert(e.path_rel_win_third_party)
 
 
 
-local linenoise = require('linenoise')
 local json = require("dkjson")
 local gsub = string.gsub
 local insert = table.insert
@@ -63,7 +59,7 @@ local printc = ut.printc
 local cmd_do = ut.cmd_do
 local Cache = require("cache")
 local uv = require("luv")
-local readline = linenoise.readline
+local readline = ut.readline
 local format = string.format
 local match = string.match
 local serpent = require('serpent')
@@ -4376,7 +4372,7 @@ local function ctags_write(tags_fname, target, _args)
       local msg = format(
       "file %q exists, load(Y,L) it or update(N,U)?", tags_fname)
 
-      local inp = string.lower(linenoise.readline(msg))
+      local inp = string.lower(readline(msg))
       if inp == "y" or inp == "l" then
          print("using current tag file")
 
