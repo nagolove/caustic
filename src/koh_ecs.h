@@ -21,8 +21,6 @@ TODO: предложения gpt:
 Ввести понятие "пулов" (опционально) — чтобы хранить однотипные компоненты в непрерывной памяти.
 */
 
-#define RIGHT_NULL
-
 // TODO: Сделать функцию удаления всех сущностей связанных с компонентом
 // данного типа
 // XXX: можно ли удалять сущности в процессе цикла по компонентам?
@@ -43,9 +41,9 @@ typedef union {
     };
     // поле для сравнения на равенство по значению и хранения в void*
     uint32_t id;
-} e_idu;
+} e_id;
 
-_Static_assert(sizeof(e_idu) == 4, "ECS_ID_32: e_id must be 4 bytes");
+_Static_assert(sizeof(e_id) == 4, "ECS_ID_32: e_id must be 4 bytes");
 
 enum {
     E_VER_BITS = 14,
@@ -65,17 +63,15 @@ typedef union {
     };
     // поле для сравнения на равенство по значению
     u64 id;
-} e_idu;
+} e_id;
 
-_Static_assert(sizeof(e_idu) == 8, "only 64bit machines allowed");
+_Static_assert(sizeof(e_id) == 8, "only 64bit machines allowed");
 
 enum {
     // в 64-битном e_id маскирование версии — no-op
     E_VER_MASK = 0xFFFFFFFFu,
 };
 #endif
-
-typedef e_idu e_id;
 
 typedef struct e_cp_type_private {
     // идентифатор, устанавливается внутри e_register()
@@ -384,20 +380,16 @@ e_id e_each_entity(e_each_iter *i);
 int e_cp_type_cmp(e_cp_type a, e_cp_type b);
 
 // Недостижымый элемент, который всегда отсутствует в системе.
-#ifdef RIGHT_NULL
-// Используется дефайн, не переменная. Лучше для применения в инициализаторах
+// Используется дефайн, не переменная. Для применения в инициализаторах
 // статических переменных.
 #define e_null ((e_id) { { 0, 0 } })
-#else
-extern const e_id e_null;
-#endif
 
 static inline uint32_t e_id_ver(e_id e) {
-    return ((e_idu)e).ver;
+    return ((e_id)e).ver;
 }
 
 static inline uint32_t e_id_ord(e_id e) {
-    return ((e_idu)e).ord;
+    return ((e_id)e).ord;
 }
 
 static inline e_id e_from_void(void *p) {
@@ -412,12 +404,12 @@ static inline e_id e_from_void(void *p) {
 static inline e_id e_build(uint32_t ord, uint32_t ver) {
 #ifdef ECS_ID_32
     // явное маскирование: запись за пределы битового поля — UB
-    e_idu e = {
+    e_id e = {
         .ord = ord & E_ORD_MAX,
         .ver = ver & E_VER_MASK,
     };
 #else
-    e_idu e = {
+    e_id e = {
         .ord = ord,
         .ver = ver,
     };
@@ -428,57 +420,6 @@ static inline e_id e_build(uint32_t ord, uint32_t ver) {
 // TODO: Возможность индексировать как Lua массив, возвращая { 1, 10}, 
 // а не хеш-таблицу { ord = 1, ver = 10, }
 const char *e_id2str(e_id e);
-
-/* {{{ 
-
-typedef struct {
-    float x, y, z;
-} pos_t;
-
-e_cp_type cp_type_pos = {
-    .sizeof = sizeof(pos),
-}
-
-e_cp_type cp_type_health = {
-    .sizeof = sizeof(float),
-}
-
-ecs_t *r;
-
-e_id create_hero() {
-    e_id e = e_create(r);
-
-    pos_t *pos = e_emplace(r, e, cp_type_pos);
-    float *health = e_emplace(r, e, cp_type_health);
-
-    pos->x = rand() % 1024;
-    pos->y = rand() % 1024;
-    pos->z = rand() % 1024;
-
-    *health = 1.;
-
-    return e;
-}
-
-void draw() {
-}
-
-int main() {
-    r = e_new();
-    e_free(r);
-
-    for (int i = 0; i < 100; i++) 
-        create_hero();
-
-    while(1) {
-        window_update();
-        draw();
-    }
-
-    return 0;
-}
-
-}}} */
 
 static inline bool e_view_valid(e_view* v) {
     assert(v);

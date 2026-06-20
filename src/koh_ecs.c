@@ -499,11 +499,7 @@ MunitResult test_valid(const MunitParameter params[], void* userdata) {
             munit_assert(e_valid(r, e) == false);
         }
 
-#ifdef RIGHT_NULL
-        munit_assert(e.id == ((e_idu){ .ord = 1, .ver = 9 }).id);
-#else
-        munit_assert(e.id == ((e_idu){ .ord = 0, .ver = 9 }).id);
-#endif
+        munit_assert(e.id == ((e_id){ .ord = 1, .ver = 9 }).id);
 
         e_free(r);
     }
@@ -2313,11 +2309,7 @@ MunitResult test_entities2table_alloc(const MunitParameter prms[], void* ud) {
 
         // проверить по шаблону {..0,..1,2} где точки обозначают любые 
         // пробельные символы
-#ifdef RIGHT_NULL
         const char *pattern = "{\\s*1\\s*,\\s*2\\s*,\\s*3\\s*,\\s*}";
-#else
-        const char *pattern = "{\\s*0\\s*,\\s*1\\s*,\\s*2\\s*,\\s*}";
-#endif
         int match = koh_str_match(s, NULL, pattern);
         munit_assert(match != false);
         /*printf("match %d for pattern '%s'\n", match, pattern);*/
@@ -2494,11 +2486,7 @@ MunitResult test_new_free(
 
 MunitResult test_create(const MunitParameter params[], void* userdata) {
 
-#ifdef RIGHT_NULL
     int base = 1;
-#else
-    int base = 0;
-#endif
 
     // create 0
     {
@@ -3576,11 +3564,7 @@ ecs_t *e_new(e_options *opts) {
     // заполнить стек свободными доступными индексами сущностей
     // первым элементом из доступных будет с индексом 1, так как нуль
     // зарезервирован для e_null
-#ifdef RIGHT_NULL
     for (int64_t i = r->max_id - 1; i >= 1; i--) {
-#else
-    for (int64_t i = r->max_id - 1; i >= 0; i--) {
-#endif
         // часть ver не используется в стеке индексов
         r->stack[r->stack_last++] = i;
     }
@@ -4051,23 +4035,8 @@ void e_each(ecs_t* r, e_each_function fun, void* udata) {
     ecs_assert(r);
     assert(fun);
 
-    /*
-    for (int i = 0; i < r->entities_num + 1;
-          // еденица на случай пробела в заполнении r->entities 
-         i++) {
-        if (r->entities[i]) {
-            if (fun(r, i, udata)) 
-                return;
-        }
-    }
-    */
-
     int num = 0;
-#ifdef RIGHT_NULL
     for (int i = 1; i < r->max_id; i++) {
-#else
-    for (int i = 0; i < r->max_id; i++) {
-#endif
         if (r->entities[i]) {
             num++;
             if (fun(r, (e_id) { .ord = i, .ver = r->entities_ver[i], }, udata)) 
@@ -5102,14 +5071,6 @@ const char *e_id2str(e_id e) {
     sprintf(buf, "{ ord = %u, ver = %u }", e.ord, e.ver);
     return buf;
 }
-
-#ifdef RIGHT_NULL
-// Используется дефайн, не переменная. Лучше для применения в инициализаторах
-// статических переменных.
-//const e_id e_null = { .id = 0, };
-#else
-const e_id e_null = { .id = INT64_MAX, };
-#endif
 
 // }}}
 
