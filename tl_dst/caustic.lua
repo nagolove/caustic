@@ -4365,7 +4365,7 @@ local function ctags_write(tags_fname, target, _args)
       elseif inp == "n" or inp == "u" then
          print("scanning tags")
       else
-         print(format("command %q is unknown"))
+         print(format("command %q is unknown", inp))
          return
       end
    end

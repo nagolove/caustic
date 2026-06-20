@@ -76,7 +76,7 @@ local function build_cimplot(_: Env, _: Dependency)
     print("build_implot:")
 
     cmd_do("git submodule update --init --force --recursive")
-    cmd_do("cmake . -DIMGUI_STATIC=1")
+    cmd_do("cmake . -DIMGUI_STATIC=1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
     cmd_do("make")
     cmd_do("mv cimplot.a libcimplot.a")
 end
@@ -174,6 +174,7 @@ end
 local function build_cimgui_common(e: Env, dep: Dependency)
     print('build_cimgui:', inspect(dep))
 
+    cmd_do("git submodule update --init --recursive --depth=1")
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
     print("current dir", lfs.currentdir())
@@ -298,7 +299,8 @@ local function build_with_cmake_common(_: Env, dep: Dependency)
         linker_option = ''
     end
 
-    local c1 = cmake[dep.target] .. linker_option .. " ."
+    local c1 = cmake[dep.target] .. linker_option
+        .. " -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ."
     local c2 = make[dep.target]
     print("build_with_cmake_common: c1", c1)
     print("build_with_cmake_common: c2", c2)
