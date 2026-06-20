@@ -1418,7 +1418,7 @@ _modules = {
 
    {
       copy_for_wasm = true,
-      disabled = false,
+      disabled = true,
       name = "sol2",
       description = "C++ Lua bindins",
       build = build_sol,
