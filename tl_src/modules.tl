@@ -1033,7 +1033,7 @@ _modules = {
     --[[
     -- {{{ mum-hash
     {
-        disabled = false,
+        disabled = true,
         copy_for_wasm = true,
         build = nil,
         description = "mum hash functions",
@@ -1072,7 +1072,7 @@ _modules = {
     -- {{{ enet
     {
         -- XXX: Не работает с WASM, нужны веб-сокеты
-        disabled = false,
+        disabled = true,
         description = "сетевая библиотека с гарантией доставки поверх UDP",
         dir = "enet",
         includes = { "enet/include" },
@@ -1401,7 +1401,7 @@ _modules = {
     -- {{{ sol2
     {
         copy_for_wasm = true,
-        disabled = false,
+        disabled = true,
         name = "sol2",
         description = "C++ Lua bindins",
         build = build_sol,
@@ -1416,7 +1416,7 @@ _modules = {
     -- {{{ rlwr
     {
         name = 'rlwr',
-        disabled = false,
+        disabled = true,
         build = build_rlwr_common,
         -- TODO: Сперва собрать sol c правильной версией lua
         build_w = build_rlwr_common,
