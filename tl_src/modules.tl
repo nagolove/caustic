@@ -827,6 +827,7 @@ _modules = {
         build = build_physfs,
         build_w = build_physfs,
         build_win = build_physfs,
+        git_commit = "d70c3fcf06814f8608c8327d3e8136063ee0133d",
         url = "https://github.com/icculus/physfs.git",
     },
     -- }}}
@@ -856,6 +857,7 @@ _modules = {
         name = "llama_cpp",
         url_action = "git",
         build = build_llama,
+        git_commit = "e21d2d4ae26d6c5daf1602a1061aa4f8e722ca57",
         url = "https://github.com/ggerganov/llama.cpp",
         --update = update_default,
     },
@@ -880,6 +882,7 @@ _modules = {
         build = build_with_make_common,
         build_w = build_with_make_common,
         build_win = build_with_make_common,
+        git_commit = "1ec193eacfeae3e0da497373d41ccd850ebec9e5",
         url = "https://github.com/Cyan4973/xxHash.git",
         --update = update_default,
     },
@@ -904,6 +907,7 @@ _modules = {
         build = build_freetype_common,
         build_w = build_freetype_common,
         build_win = build_freetype_common,
+        git_commit = "a059b237bb01eb3e4f9f8b1618dda8c117498bab",
         url = "https://github.com/freetype/freetype.git",
         --update = update_default,
     },
@@ -926,6 +930,7 @@ _modules = {
         url_action = "git",
         build = build_with_make_common,
         build_w = build_with_make_common,
+        git_commit = "47e5efd8f85076c1145593934968d35db64ffeb5",
         url = "git@github.com:nagolove/raylib_colorwormseffect.git",
     },
     -- }}}
@@ -966,6 +971,7 @@ _modules = {
         links_internal = {},
         name = "nanosvg",
         url_action = "git",
+        git_commit = "93ce879dc4c04a3ef1758428ec80083c38610b1f",
         url = "https://github.com/memononen/nanosvg.git",
     },
     -- }}}
@@ -1009,6 +1015,7 @@ _modules = {
         links_internal = {},
         name = "munit",
         url_action = "git",
+        git_commit = "82c5f2b23ca6de0bf2e32d5bb13265b468792e36",
         url = "git@github.com:nagolove/munit.git",
     },
     -- }}}
@@ -1018,6 +1025,7 @@ _modules = {
         disabled = false,
         url_action = "git",
         name = "uthash",
+        git_commit = "eeba1961f203869116a865e57c968e9c86e1b8c4",
         url = "https://github.com/troydhanson/uthash.git",
         build = nil,
         description = "C routines(hash containers etc)",
@@ -1064,6 +1072,7 @@ _modules = {
         links_internal = { "libenkiTS.a" },
         name = "enkits",
         url_action = "git",
+        git_commit = "6474b35323af3714207f706bea5f791fd86eedeb",
         url = "https://github.com/dougbinks/enkiTS.git",
     },
     -- }}}
@@ -1098,6 +1107,7 @@ _modules = {
         name = "pcre2",
         copy_for_wasm = true,
         url_action = "git",
+        git_commit = "594abb8687c06216aa313e7a44dc1469dad4d32b",
         url = "https://github.com/PhilipHazel/pcre2.git",
     },
     -- }}}
@@ -1113,6 +1123,7 @@ _modules = {
         },
         dir = "imgui",
         url_action = "git",
+        git_commit = "9638c2839a12602321be73926aa93fcc0bc37480",
         url = "https://github.com/ocornut/imgui.git",
     },
     -- }}}
@@ -1138,6 +1149,7 @@ _modules = {
         name = "implot",
         url_action = "git",
         build = build_implot,
+        git_commit = "3da8bd34299965d3b0ab124df743fe3e076fa222",
         url = "https://github.com/epezent/implot.git"
     },
     -- }}}
@@ -1162,6 +1174,7 @@ _modules = {
         name = "cimplot",
         url_action = "git",
         build = build_cimplot,
+        git_commit = "9981145d7bc916eb9877df6e451543c9134fc061",
         url = "https://github.com/cimgui/cimplot.git"
     },
     -- }}}
@@ -1208,8 +1221,8 @@ _modules = {
         --url = "https://github.com/raylib-extras/rlImGui.git",
         url_action = "git",
         copy_for_wasm = true,
-        -- новая ветка
-        git_branch = "dear_imgui_v1.92.1",
+        -- запинено: ветка dear_imgui_v1.92.1, HEAD на момент пина
+        git_commit = "ad5d52cb7c598a72190b6fe3996d257d9dc794c7",
     },
     -- }}}
 
@@ -1261,6 +1274,7 @@ _modules = {
         build = build_raylib_common,
         build_win = build_raylib_common,
         url_action = "git",
+        git_commit = "c5fc7716229cef1727e7baf325a695a0ac00cf27",
         url = "https://github.com/raysan5/raylib.git",
     },
     -- }}}
@@ -1356,6 +1370,7 @@ _modules = {
         links = { "box2dd" },
         links_internal = { "box2dd" },
         name = 'box2c',
+        git_commit = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
         url = "https://github.com/erincatto/box2d.git",
         url_action = 'git',
     },
@@ -1375,6 +1390,7 @@ _modules = {
         links_internal = { "chipmunk" },
         name = 'chipmunk',
         url_action = 'git',
+        git_commit = "79d9eca29ea0d7094ad81fd2381fed4fde8c6a5a",
         url = "https://github.com/nagolove/Chipmunk2D.git",
     },
     -- }}}
@@ -1393,7 +1409,8 @@ _modules = {
         links_internal = { "lua" },
         name = 'lua',
         url = "https://github.com/lua/lua.git",
-        git_tag = "v5.4.0",
+        -- было git_tag = "v5.4.0", но рабочая копия на master; пиним фактический коммит
+        git_commit = "9fa63a62682c1353eeabd4575152941fa6f3e70f",
         url_action = "git",
     },
     -- }}}
@@ -1407,6 +1424,7 @@ _modules = {
         build = build_sol,
         build_w = build_sol,
         dir = "sol2",
+        git_commit = "c1f95a773c6f8f4fde8ca3efe872e7286afe4444",
         url = "https://github.com/ThePhD/sol2.git",
         url_action = "git",
     },
@@ -1448,6 +1466,7 @@ _modules = {
         links = { "utf8proc" },
         links_internal = { "utf8proc" },
         name = 'utf8proc',
+        git_commit = "1fe43f5a6d9c628f717c5ec8aeaeae4a9adfd167",
         url = "https://github.com/JuliaLang/utf8proc.git",
         url_action = "git",
     },
@@ -1460,6 +1479,7 @@ _modules = {
         dir = "stb",
         includes = { "stb" },
         name = 'stb',
+        git_commit = "ae721c50eaf761660b4f90cc590453cdb0c2acd0",
         url = "https://github.com/nothings/stb.git",
         url_action = "git",
     },
@@ -1477,6 +1497,7 @@ _modules = {
         description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
         name = 'wfc',
         url_action = "git",
+        git_commit = "38b08ab7a276ba0e4266c3b85ef7f32cc59d4bce",
         url = "https://github.com/krychu/wfc.git",
     },
     -- }}}
@@ -1495,6 +1516,7 @@ _modules = {
         description = "разбиение контуров на треугольники",
         name = 'libtess2',
         url_action = "git",
+        git_commit = "9a450cc9e5b4b79c36b89648f8b92fe65b6dd407",
         url = "https://github.com/memononen/libtess2",
     },
     -- }}}
@@ -1513,6 +1535,7 @@ _modules = {
         description = "sax парсер markdown",
         name = 'md4c',
         url_action = "git",
+        git_commit = "481fbfbdf72daab2912380d62bb5f2187d438408",
         url = "https://github.com/mity/md4c.git",
     },
     -- }}}
@@ -1530,6 +1553,7 @@ _modules = {
         name = "tcc",
         url_action = "git",
         build = build_tcc,
+        git_commit = "601a0882148f11575367c5f2e54261cad9b00141",
         url = "https://github.com/TinyCC/tinycc.git",
     },
     -- }}}
