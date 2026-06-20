@@ -47,7 +47,7 @@ sudo apt update
 echo
 echo "=== Tier 1: критичные пакеты (без них caustic не запустится) ==="
 
-# python3  -> python3    (modules.tl:683  utf8proc single.py при koh build)
+# python3  -> python3    (нужен ряду сборок зависимостей при koh build)
 # autoconf -> autoreconf (modules.tl:327  ./configure для physfs и др.)
 # automake, libtool, libtool-bin — сопутствующие autoconf
 
@@ -144,17 +144,6 @@ if ! command -v fd &>/dev/null; then
         sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
     else
         echo "Внимание: fdfind не найден после установки fd-find."
-    fi
-fi
-
-# sol2 build вызывает `python single/single.py` (modules.tl:683),
-# но Debian/Ubuntu ставит только `python3`. Создаём symlink python -> python3.
-if ! command -v python &>/dev/null; then
-    if command -v python3 &>/dev/null; then
-        echo "Создание symlink: /usr/local/bin/python -> $(command -v python3)"
-        sudo ln -sf "$(command -v python3)" /usr/local/bin/python
-    else
-        echo "Внимание: python3 не найден."
     fi
 fi
 
