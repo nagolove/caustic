@@ -31,36 +31,36 @@ local function clone_with_checkout(dep)
       end
    end
 
-   local cmd = "git clone " .. dep.url .. " " .. dep.dir
-   cmd_do(cmd)
-
-   chdir(dep.dir)
-
-
-
-
-
-
-
-
-
-
-
    assert(not (dep.git_branch and dep.git_commit))
 
    if dep.git_branch then
-      local cmd1 = "git fetch " .. dep.git_branch
-      cmd_do(cmd1)
-      local cmd2 = "git checkout " .. dep.git_branch
-      cmd_do(cmd2)
 
-      print(format("%q", cmd1))
-      print(format("%q", cmd2))
-
-
+      cmd_do("git clone " .. dep.url .. " " .. dep.dir)
+      chdir(dep.dir)
+      cmd_do("git fetch " .. dep.git_branch)
+      cmd_do("git checkout " .. dep.git_branch)
    elseif dep.git_commit then
 
-      cmd_do("git checkout " .. dep.git_commit)
+
+      local sha = dep.git_commit
+      cmd_do("git init " .. dep.dir)
+      chdir(dep.dir)
+      cmd_do("git remote add origin " .. dep.url)
+
+      if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
+         cmd_do("git checkout FETCH_HEAD")
+      elseif ut.cmd_try("git fetch origin " .. sha) then
+
+         printc("%{yellow}clone_with_checkout: shallow fetch по sha не " ..
+         "удался, тянем коммит без --depth%{reset}")
+         cmd_do("git checkout FETCH_HEAD")
+      else
+
+         printc("%{yellow}clone_with_checkout: fetch по sha не удался, " ..
+         "фолбэк на полную историю%{reset}")
+         cmd_do("git fetch origin")
+         cmd_do("git checkout " .. sha)
+      end
    end
 end
 

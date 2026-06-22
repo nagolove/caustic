@@ -31,36 +31,36 @@ local function clone_with_checkout(dep: Dependency)
         end
     end
 
-    local cmd = "git clone " .. dep.url .. " " ..dep.dir
-    cmd_do(cmd)
-
-    chdir(dep.dir)
-
-    --[[
-    if (dep.git_branch or dep.git_commit) and 
-       (not (dep.git_branch and dep.git_commit)) then
-        printc("%{red}" .. format(
-            "clone_with_checkout: git_branch '%s', git_commit '%s'",
-            dep.git_branch, dep.git_commit
-        ) .. "%{reset}")
-        os.exit(1)
-    end
-    --]]
     assert(not(dep.git_branch and dep.git_commit))
 
     if dep.git_branch then
-        local cmd1 = "git fetch " .. dep.git_branch
-        cmd_do(cmd1)
-        local cmd2 = "git checkout " .. dep.git_branch
-        cmd_do(cmd2)
-
-        print(format("%q", cmd1))
-        print(format("%q", cmd2))
-        --cmd_do(("git clone --depth=1 --branch %s --single-branch %s %s")
-        --    :format(dep.git_branch, dep.url, dep.dir))
+        -- ветка: полный клон + fetch + checkout (поведение без изменений)
+        cmd_do("git clone " .. dep.url .. " " .. dep.dir)
+        chdir(dep.dir)
+        cmd_do("git fetch " .. dep.git_branch)
+        cmd_do("git checkout " .. dep.git_branch)
     elseif dep.git_commit then
-        --cmd_do("git checkout --detached " .. dep.git_commit)
-        cmd_do("git checkout " .. dep.git_commit)
+        -- запиненный коммит: тянем ровно один коммит на глубину 1, без
+        -- полной истории. Фолбэки на случай хостов без fetch-by-sha.
+        local sha = dep.git_commit
+        cmd_do("git init " .. dep.dir)
+        chdir(dep.dir)
+        cmd_do("git remote add origin " .. dep.url)
+
+        if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
+            cmd_do("git checkout FETCH_HEAD")
+        elseif ut.cmd_try("git fetch origin " .. sha) then
+            -- хост отдаёт коммит по sha, но не на глубину 1
+            printc("%{yellow}clone_with_checkout: shallow fetch по sha не "
+                .. "удался, тянем коммит без --depth%{reset}")
+            cmd_do("git checkout FETCH_HEAD")
+        else
+            -- хост не отдаёт коммит по sha — полная история, затем checkout
+            printc("%{yellow}clone_with_checkout: fetch по sha не удался, "
+                .. "фолбэк на полную историю%{reset}")
+            cmd_do("git fetch origin")
+            cmd_do("git checkout " .. sha)
+        end
     end
 end
 
