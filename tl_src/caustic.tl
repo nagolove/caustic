@@ -1421,7 +1421,7 @@ r
     f:close()
 
     cmd_do(format("cp -r %s/assets .", e.path_caustic))
-    cmd_do(format("cp %s/gdb_remote.py .", e.path_caustic))
+    ut.cmd_try(format("cp %s/gdb_remote.py .", e.path_caustic))
     cmd_do("koh compile_flags")
     cmd_do("koh make -c")
 
