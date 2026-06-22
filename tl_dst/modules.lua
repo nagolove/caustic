@@ -72,12 +72,40 @@ local function build_physfs(_, dep)
    cmd_do(make[dep.target])
 end
 
+local function file_exists(fname)
+   local f = io.open(fname, "r")
+   if f then
+      f:close()
+      return true
+   end
+   return false
+end
+
 local function build_cimplot(_, _)
-   print("build_implot:")
+   print("build_cimplot:")
 
    cmd_do("git submodule update --init --force --recursive")
+
+
+
+
+   local sources = { "implot/implot.cpp", "../cimgui/cimgui.cpp" }
+   for _, src in ipairs(sources) do
+      if not file_exists(src) then
+         printc("%{red}build_cimplot: нет исходника '" .. src ..
+         "' — file(GLOB) собрал бы неполную библиотеку%{reset}")
+         os.exit(1)
+      end
+   end
+
    cmd_do("cmake . -DIMGUI_STATIC=1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
    cmd_do("make")
+
+   if not file_exists("cimplot.a") then
+      printc("%{red}build_cimplot: make не создал cimplot.a%{reset}")
+      os.exit(1)
+   end
+
    cmd_do("mv cimplot.a libcimplot.a")
 end
 
