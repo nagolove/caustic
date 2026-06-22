@@ -2265,6 +2265,51 @@ local function split_libs_by_linkage(libs: {string}, target?: Target): {string},
     return static_libs, dynamic_libs
 end
 
+-- Проверяет, что собранный модуль реально дал заявленные статические
+-- библиотеки. Сейчас только linux: каждый link → lib<link>.a в одном из
+-- libdirs. При отсутствии — громко падаем с именем модуля (fail-fast).
+local function verify_dep_artifacts_linux(dep: Dependency)
+    if dep.target ~= 'linux' then
+        return
+    end
+    if not dep.build or not dep.links or not dep.libdirs then
+        return
+    end
+    local links: {string}
+    if type(dep.links) == 'function' then
+        links = (dep.links as function(Dependency): {string})(dep)
+    else
+        links = dep.links as {string}
+    end
+    -- dep может быть readonly-прокси (см. ut.readonly): inspect() ходит сырым
+    -- next() мимо __pairs и покажет {}. Поэтому список libdirs собираем через
+    -- ipairs, который работает сквозь __index.
+    local libdirs_list = {}
+    for _, libdir in ipairs(dep.libdirs) do
+        table.insert(libdirs_list, libdir)
+    end
+    local base = e.path_abs_third_party[dep.target] .. "/"
+    for _, link in ipairs(links) do
+        local found = false
+        for _, libdir in ipairs(libdirs_list) do
+            local path = base .. libdir .. "/lib" .. link .. ".a"
+            if ut.test_artifact_a_linux(path) then
+                found = true
+                break
+            end
+        end
+        if not found then
+            local msg = format(
+                "verify_dep_artifacts_linux: модуль '%s' не собрал "
+                .. "'lib%s.a' (libdirs: {%s})",
+                dep.name, link, table.concat(libdirs_list, ", ")
+            )
+            printc("%{red}" .. msg .. "%{reset}")
+            os.exit(1)
+        end
+    end
+end
+
 local function _build(dep: Dependency)
     local _t0 = time_ms()
     print("_build:", dep.name)
@@ -2371,6 +2416,8 @@ local function _build(dep: Dependency)
             print(inspect(dep), 'failed with', errmsg)
         end
     end
+
+    verify_dep_artifacts_linux(dep)
 
     ut.pop_dir()
     time_print("_build: " .. dep.name, _t0)
@@ -4060,6 +4107,11 @@ function actions.make(_args: Args)
     end
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
+    -- Каталоги объектников не приходят из клона (gitignore), а sub_make их
+    -- не создаёт — в отличие от koh_recompile. Создаём здесь.
+    mkdir("obj_linux")
+    mkdir("obj_wasm")
+    mkdir("obj_win")
     for i, cfg in ipairs(cfgs) do
         if cfg_not_empty(cfg) then
             local _t1 = time_ms()

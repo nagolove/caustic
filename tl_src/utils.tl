@@ -434,6 +434,12 @@ local function cmd_try(cmd: string|{string}): boolean
     return false
 end
 
+-- Проверяет, что fname — валидный статический архив (.a) под linux.
+-- Используется код возврата `ar t` (binutils), без разбора текстового вывода.
+local function test_artifact_a_linux(fname: string): boolean
+    return os.execute("ar t " .. fname .. " >/dev/null 2>&1") and true or false
+end
+
 -- TODO: Проверка наличия fd
 local function find_and_remove_cmake_cache()
     cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
@@ -896,6 +902,7 @@ return {
     find_and_remove_cmake_cache = find_and_remove_cmake_cache,
     cmd_do                      = cmd_do,
     cmd_try                     = cmd_try,
+    test_artifact_a_linux       = test_artifact_a_linux,
     printc                      = printc,
     ripairs                     = ripairs,
     filter                      = filter,

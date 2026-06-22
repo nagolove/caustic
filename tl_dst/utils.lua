@@ -435,6 +435,12 @@ local function cmd_try(cmd)
 end
 
 
+
+local function test_artifact_a_linux(fname)
+   return os.execute("ar t " .. fname .. " >/dev/null 2>&1") and true or false
+end
+
+
 local function find_and_remove_cmake_cache()
    cmd_do('fd -HI "CMakeCache\\.txt" -x rm {}')
    cmd_do('fd -HI -t d "CMakeFiles" -x rm -rf {}')
@@ -896,6 +902,7 @@ return {
    find_and_remove_cmake_cache = find_and_remove_cmake_cache,
    cmd_do = cmd_do,
    cmd_try = cmd_try,
+   test_artifact_a_linux = test_artifact_a_linux,
    printc = printc,
    ripairs = ripairs,
    filter = filter,

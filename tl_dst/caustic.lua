@@ -2265,6 +2265,51 @@ local function split_libs_by_linkage(libs, target)
    return static_libs, dynamic_libs
 end
 
+
+
+
+local function verify_dep_artifacts_linux(dep)
+   if dep.target ~= 'linux' then
+      return
+   end
+   if not dep.build or not dep.links or not dep.libdirs then
+      return
+   end
+   local links
+   if type(dep.links) == 'function' then
+      links = (dep.links)(dep)
+   else
+      links = dep.links
+   end
+
+
+
+   local libdirs_list = {}
+   for _, libdir in ipairs(dep.libdirs) do
+      table.insert(libdirs_list, libdir)
+   end
+   local base = e.path_abs_third_party[dep.target] .. "/"
+   for _, link in ipairs(links) do
+      local found = false
+      for _, libdir in ipairs(libdirs_list) do
+         local path = base .. libdir .. "/lib" .. link .. ".a"
+         if ut.test_artifact_a_linux(path) then
+            found = true
+            break
+         end
+      end
+      if not found then
+         local msg = format(
+         "verify_dep_artifacts_linux: модуль '%s' не собрал " ..
+         "'lib%s.a' (libdirs: {%s})",
+         dep.name, link, table.concat(libdirs_list, ", "))
+
+         printc("%{red}" .. msg .. "%{reset}")
+         os.exit(1)
+      end
+   end
+end
+
 local function _build(dep)
    local _t0 = time_ms()
    print("_build:", dep.name)
@@ -2371,6 +2416,8 @@ local function _build(dep)
          print(inspect(dep), 'failed with', errmsg)
       end
    end
+
+   verify_dep_artifacts_linux(dep)
 
    ut.pop_dir()
    time_print("_build: " .. dep.name, _t0)
@@ -4060,6 +4107,11 @@ function actions.make(_args)
    end
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
    local target = _args.t or "linux"
+
+
+   mkdir("obj_linux")
+   mkdir("obj_wasm")
+   mkdir("obj_win")
    for i, cfg in ipairs(cfgs) do
       if cfg_not_empty(cfg) then
          local _t1 = time_ms()
