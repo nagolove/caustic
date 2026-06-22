@@ -81,9 +81,27 @@ local function file_exists(fname: string): boolean
     return false
 end
 
-local function build_cimplot(_: Env, _: Dependency)
+local function build_cimplot(e: Env, dep: Dependency)
     print("build_cimplot:")
 
+    -- TODO: сейчас собирается только под linux. На wasm cimplot пока не
+    -- используется (в конфиге модуля copy_for_wasm = false, build_w /
+    -- build_win отсутствуют). Когда понадобится — расширить ветвлением по
+    -- dep.target, симметрично build_cimgui_common (modules.tl:219-252):
+    --   * wasm:  cmake[dep.target] -> "emcmake cmake ", флаг -DPLATFORM_WEB=1
+    --            (вместо -DPLATFORM_DESKTOP), без -fPIC; в конфиг добавить
+    --            copy_for_wasm = true и build_w = build_cimplot; для
+    --            CMake-цели static достаточно -DIMGUI_STATIC=1 (AR="emar -rc"
+    --            как в cimgui make-варианте НЕ нужно — cmake уже прописал
+    --            emar в cache через emcmake).
+    --   * win:   cmake[dep.target] уже несёт -DCMAKE_TOOLCHAIN_FILE=
+    --            .../toolchain-mingw64.cmake; флаг -DPLATFORM_DESKTOP, без
+    --            -fPIC (MinGW PE-COFF не использует/не принимает); make
+    --            вызывать через make[dep.target] (переопределяет CC/CXX/AR
+    --            на x86_64-w64-mingw32-*); в конфиг добавить build_win =
+    --            build_cimplot.
+    --   Общий вид: -DCMAKE_CXX_FLAGS='-I<path>/raylib/src <platform_flags>'
+    --   + cmake[dep.target] + make[dep.target].
     cmd_do("git submodule update --init --force --recursive")
 
     -- file(GLOB) в CMakeLists.txt молча отбрасывает отсутствующие исходники
@@ -98,7 +116,24 @@ local function build_cimplot(_: Env, _: Dependency)
         end
     end
 
-    cmd_do("cmake . -DIMGUI_STATIC=1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
+    -- CMakeLists.txt cimplot компилирует ../cimgui/cimgui.cpp, который
+    -- включает raylib.h и rlgl.h (cimgui.cpp:6382-6383), а cimgui.h
+    -- дополнительно склеен с rlImGui через paste_from_one_to_other
+    -- (build_cimgui_common), что добавляет #include "raylib.h" в
+    -- cimgui.h:5461. CMakeLists cimplot не добавляет include на raylib,
+    -- поэтому пробрасываем его через -DCMAKE_CXX_FLAGS — симметрично с
+    -- build_cimgui_common (modules.tl:547-597). Без этого:
+    --   fatal error: raylib.h: No such file or directory
+    find_and_remove_cmake_cache()
+    local path = e.path_abs_third_party[dep.target]
+    local cxx_flags = format(
+        "-DCMAKE_CXX_FLAGS='-I%s/raylib/src -g3 -DPLATFORM_DESKTOP -fPIC'",
+        path
+    )
+    cmd_do(format(
+        "cmake . -DIMGUI_STATIC=1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 %s",
+        cxx_flags
+    ))
     cmd_do("make")
 
     if not file_exists("cimplot.a") then
@@ -205,33 +240,86 @@ local function build_cimgui_common(e: Env, dep: Dependency)
     cmd_do("git submodule update --init --recursive --depth=1")
     cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
-    print("current dir", lfs.currentdir())
-    local c = make[dep.target]
+    -- file(GLOB) в CMakeLists.txt молча отбрасывает отсутствующие исходники
+    -- и собирает неполную библиотеку (только cimgui.cpp без imgui/*.cpp).
+    -- Проверяем входы ДО cmake: сабмодуль imgui должен быть инициализирован.
+    -- Без этого libcimgui.a содержит только cimgui.cpp.o и линковка падает
+    -- на undefined reference to `ImGui::MemAlloc' и др. — GLOB закэшировал
+    -- список источников когда imgui/ был пуст (до submodule update).
+    local sources = { "cimgui.cpp", "imgui/imgui.cpp", "imgui/imgui_draw.cpp" }
+    for _, src in ipairs(sources) do
+        if not file_exists(src) then
+            printc("%{red}build_cimgui_common: нет исходника '" .. src
+                .. "' — file(GLOB) собрал бы неполную библиотеку%{reset}")
+            os.exit(1)
+        end
+    end
 
-    printc('%{red}c%{reset}', c)
-
-    cmd_do(string.format("%s clean", c))
-
+    -- CMakeLists.txt cimgui использует file(GLOB) для списка исходников.
+    -- Если CMakeCache.txt создан когда imgui/ был пуст (до submodule init),
+    -- GLOB закэшировал только cimgui.cpp и последующий make соберёт
+    -- неполную библиотеку. Чистим кэш и перезапускаем cmake, чтобы GLOB
+    -- переоценил по полному imgui/. Симметрично build_cimplot (modules.tl:109)
+    -- и cimgui_after_init (modules.tl:568).
+    --
+    -- NOTE: CFLAGS/CXXFLAGS в make-вызове НЕ влияют на cmake-сгенерённый
+    -- Makefile — он использует CXX_FLAGS (с подчёркиванием) из flags.make,
+    -- заданный через -DCMAKE_CXX_FLAGS. Поэтому флаги пробрасываем через
+    -- cmake, а make зовём без CFLAGS/CXXFLAGS.
+    find_and_remove_cmake_cache()
+    local path = e.path_abs_third_party[dep.target]
+    local flags: string
     if dep.target == 'linux' then
-        local flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
-        -- ВАЖНО: пробрасываем и CFLAGS, и CXXFLAGS
-        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+        flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
     elseif dep.target == 'wasm' then
-        -- для wasm -fPIC не нужен/не применяется
-        -- цель 'static' собирает объектники и архивирует их в libcimgui.a
-        -- (по умолчанию Makefile делает cimgui.so); AR заменяем на emar
-        -- склейка rlImGui (imgui_impl_raylib.h) тянет raylib.h и imgui.h —
-        -- добавляем -I на raylib и на каталоги cimgui/imgui
-        local rl_inc = "-I" .. e.path_abs_third_party[dep.target] .. "/raylib/src"
-        local flags = "-g3 -DPLATFORM_WEB=1 -I. -Iimgui " .. rl_inc
-        cmd_do(string.format(
-            '%s -j static AR="emar -rc" CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags
-        ))
+        flags = "-g3 -DPLATFORM_WEB=1"
     elseif dep.target == 'win' then
-        local flags = "-g3 -DPLATFORM_DESKTOP"
-        cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+        flags = "-g3 -DPLATFORM_DESKTOP"
     else
         printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
+        os.exit(1)
+    end
+    local cxx_flags = format(
+        "-DCMAKE_CXX_FLAGS='-I%s/raylib/src -I%s/freetype/include %s'",
+        path, path, flags
+    )
+    local cmake_cmd = {
+        cmake[dep.target],
+        "-DIMGUI_STATIC=1",
+        "-DNO_FONT_AWESOME=1",
+        cxx_flags,
+    }
+    if dep.target == 'wasm' then
+        insert(cmake_cmd, "-DPLATFORM_WEB=1")
+    end
+    insert(cmake_cmd, ".")
+    cmd_do(table.concat(cmake_cmd, " "))
+
+    local c = make[dep.target]
+    cmd_do(format("%s clean", c))
+    cmd_do(format("%s -j", c))
+
+    -- Проверка: cimgui.a должна содержать imgui.cpp.o (GLOB нашёл
+    -- сабмодуль). Без этого линковка падает на undefined reference to
+    -- ImGui::MemAlloc и др. — симптомы отравленного GLOBа.
+    -- NOTE: cimgui_after_build переименовывает cimgui.a → libcimgui.a
+    -- ПОСЛЕ build, поэтому здесь проверяем cimgui.a.
+    if not file_exists("cimgui.a") then
+        printc("%{red}build_cimgui_common: make не создал cimgui.a%{reset}")
+        os.exit(1)
+    end
+    local pipe = io.popen("ar t cimgui.a 2>/dev/null")
+    local has_imgui = false
+    for line in pipe:lines() do
+        if line:match("imgui%.cpp%.o") then has_imgui = true break end
+    end
+    pipe:close()
+    if not has_imgui then
+        printc(
+            "%{red}build_cimgui_common: cimgui.a не содержит imgui.cpp.o "
+            .. "— file(GLOB) собрал неполную библиотеку%{reset}"
+        )
+        os.exit(1)
     end
 end
 

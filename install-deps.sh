@@ -8,9 +8,11 @@
 #   Tier 4 — опциональные: кросс-компиляция WASM/Win, ускорение линковки
 #   LuaRocks — отдельный блок после apt
 #
-# Внешние утилиты (premake5, lazygit, AMDuProf, lmstudio, bin2c) НЕ
+# Внешние утилиты (lazygit, AMDuProf, lmstudio, bin2c) НЕ
 # устанавливаются автоматически — они не в apt. См. README.md и финальный
 # блок echo в конце скрипта.
+# premake5 — отдельный опциональный блок в конце скрипта (ставится из
+# GitHub releases, не в apt).
 
 set -euo pipefail
 
@@ -312,6 +314,45 @@ fi
 
 # }}}
 
+# {{{ premake5 — генератор сборки для libtess2 (modules.tl:841)
+
+echo
+echo "=== premake5: генератор сборки для libtess2 ==="
+echo "Установить premake5 из GitHub releases? [y/N] (по умолчанию — пропустить):"
+read -r _install_premake5
+
+if [ "${_install_premake5,,}" = "y" ] || [ "${_install_premake5,,}" = "yes" ]; then
+    if command -v premake5 &>/dev/null; then
+        echo "premake5 уже установлен: $(command -v premake5) — пропуск"
+    elif [ "$(uname -m)" != "x86_64" ]; then
+        echo "Внимание: premake5 на GitHub опубликован только для x86_64."
+        echo "Текущая архитектура: $(uname -m). Ручная установка:"
+        echo "  https://premake.github.io/download/"
+    else
+        _PREMAKE_VERSION="5.0.0-beta8"
+        _PREMAKE_TARBALL="premake-${_PREMAKE_VERSION}-linux.tar.gz"
+        _PREMAKE_URL="https://github.com/premake/premake-core/releases/download/v${_PREMAKE_VERSION}/${_PREMAKE_TARBALL}"
+        _PREMAKE_TMP="$(mktemp -d)"
+
+        echo "Загрузка: $_PREMAKE_URL"
+        if curl -fsSL -o "$_PREMAKE_TMP/$_PREMAKE_TARBALL" "$_PREMAKE_URL"; then
+            tar -xzf "$_PREMAKE_TMP/$_PREMAKE_TARBALL" -C "$_PREMAKE_TMP"
+            sudo install -m755 "$_PREMAKE_TMP/premake5" /usr/local/bin/premake5
+            echo "Установлен: $(premake5 --version 2>&1 | head -1)"
+        else
+            echo "Ошибка: не удалось скачать premake5."
+            echo "Ручная установка: https://premake.github.io/download/"
+        fi
+
+        rm -rf "$_PREMAKE_TMP"
+    fi
+else
+    echo "premake5 пропущен. Нужен для libtess2 при koh build (modules.tl:841)."
+    echo "Ручная установка: https://premake.github.io/download/"
+fi
+
+# }}}
+
 echo
 echo "Установка завершена."
 echo
@@ -325,7 +366,6 @@ echo "  6. ./bootstrap.sh           # первичная сборка libkoh.so 
 echo "  7. koh make                 # сборка libcaustic"
 echo
 echo "Внешние утилиты (не в apt, ставятся вручную при необходимости):"
-echo "  - premake5:  https://premake.github.io/download/  (modules.tl:776 libtess2 при koh build)"
 echo "  - lazygit:   https://github.com/jesseduffield/lazygit/releases"
 echo "  - AMDuProf:  https://www.amd.com/en/developer/amduprof"
 echo "  - lmstudio:  https://lmstudio.ai/"

@@ -81,8 +81,26 @@ local function file_exists(fname)
    return false
 end
 
-local function build_cimplot(_, _)
+local function build_cimplot(e, dep)
    print("build_cimplot:")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
    cmd_do("git submodule update --init --force --recursive")
 
@@ -98,7 +116,24 @@ local function build_cimplot(_, _)
       end
    end
 
-   cmd_do("cmake . -DIMGUI_STATIC=1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
+
+
+
+
+
+
+
+
+   find_and_remove_cmake_cache()
+   local path = e.path_abs_third_party[dep.target]
+   local cxx_flags = format(
+   "-DCMAKE_CXX_FLAGS='-I%s/raylib/src -g3 -DPLATFORM_DESKTOP -fPIC'",
+   path)
+
+   cmd_do(format(
+   "cmake . -DIMGUI_STATIC=1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 %s",
+   cxx_flags))
+
    cmd_do("make")
 
    if not file_exists("cimplot.a") then
@@ -205,33 +240,86 @@ local function build_cimgui_common(e, dep)
    cmd_do("git submodule update --init --recursive --depth=1")
    cmd_do("cp ../rlImGui/imgui_impl_raylib.h .")
 
-   print("current dir", lfs.currentdir())
-   local c = make[dep.target]
 
-   printc('%{red}c%{reset}', c)
 
-   cmd_do(string.format("%s clean", c))
 
+
+
+
+   local sources = { "cimgui.cpp", "imgui/imgui.cpp", "imgui/imgui_draw.cpp" }
+   for _, src in ipairs(sources) do
+      if not file_exists(src) then
+         printc("%{red}build_cimgui_common: нет исходника '" .. src ..
+         "' — file(GLOB) собрал бы неполную библиотеку%{reset}")
+         os.exit(1)
+      end
+   end
+
+
+
+
+
+
+
+
+
+
+
+
+   find_and_remove_cmake_cache()
+   local path = e.path_abs_third_party[dep.target]
+   local flags
    if dep.target == 'linux' then
-      local flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
-
-      cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+      flags = "-g3 -DPLATFORM_DESKTOP -fPIC"
    elseif dep.target == 'wasm' then
-
-
-
-
-
-      local rl_inc = "-I" .. e.path_abs_third_party[dep.target] .. "/raylib/src"
-      local flags = "-g3 -DPLATFORM_WEB=1 -I. -Iimgui " .. rl_inc
-      cmd_do(string.format(
-      '%s -j static AR="emar -rc" CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
-
+      flags = "-g3 -DPLATFORM_WEB=1"
    elseif dep.target == 'win' then
-      local flags = "-g3 -DPLATFORM_DESKTOP"
-      cmd_do(string.format('%s -j CFLAGS="%s" CXXFLAGS="%s"', c, flags, flags))
+      flags = "-g3 -DPLATFORM_DESKTOP"
    else
       printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
+      os.exit(1)
+   end
+   local cxx_flags = format(
+   "-DCMAKE_CXX_FLAGS='-I%s/raylib/src -I%s/freetype/include %s'",
+   path, path, flags)
+
+   local cmake_cmd = {
+      cmake[dep.target],
+      "-DIMGUI_STATIC=1",
+      "-DNO_FONT_AWESOME=1",
+      cxx_flags,
+   }
+   if dep.target == 'wasm' then
+      insert(cmake_cmd, "-DPLATFORM_WEB=1")
+   end
+   insert(cmake_cmd, ".")
+   cmd_do(table.concat(cmake_cmd, " "))
+
+   local c = make[dep.target]
+   cmd_do(format("%s clean", c))
+   cmd_do(format("%s -j", c))
+
+
+
+
+
+
+   if not file_exists("cimgui.a") then
+      printc("%{red}build_cimgui_common: make не создал cimgui.a%{reset}")
+      os.exit(1)
+   end
+   local pipe = io.popen("ar t cimgui.a 2>/dev/null")
+   local has_imgui = false
+   for line in pipe:lines() do
+      if line:match("imgui%.cpp%.o") then has_imgui = true; break end
+   end
+   pipe:close()
+   if not has_imgui then
+      printc(
+      "%{red}build_cimgui_common: cimgui.a не содержит imgui.cpp.o " ..
+      "— file(GLOB) собрал неполную библиотеку%{reset}")
+
+      os.exit(1)
    end
 end
 
