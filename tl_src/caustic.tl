@@ -2281,6 +2281,13 @@ local function verify_dep_artifacts_linux(dep: Dependency)
     else
         links = dep.links as {string}
     end
+    -- В links встречаются флаги линкера (-Wl,...) и системные библиотеки
+    -- (X11, dl, ...), для которых нашего lib<name>.a в дереве модулей нет.
+    -- Их пропускаем — проверяем только собственные статические библиотеки.
+    local system_libs: {string: boolean} = {
+        ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
+        ["dl"] = true, ["rt"] = true, ["X11"] = true,
+    }
     -- dep может быть readonly-прокси (см. ut.readonly): inspect() ходит сырым
     -- next() мимо __pairs и покажет {}. Поэтому список libdirs собираем через
     -- ipairs, который работает сквозь __index.
@@ -2290,22 +2297,24 @@ local function verify_dep_artifacts_linux(dep: Dependency)
     end
     local base = e.path_abs_third_party[dep.target] .. "/"
     for _, link in ipairs(links) do
-        local found = false
-        for _, libdir in ipairs(libdirs_list) do
-            local path = base .. libdir .. "/lib" .. link .. ".a"
-            if ut.test_artifact_a_linux(path) then
-                found = true
-                break
+        if link:sub(1, 1) ~= "-" and not system_libs[link] then
+            local found = false
+            for _, libdir in ipairs(libdirs_list) do
+                local path = base .. libdir .. "/lib" .. link .. ".a"
+                if ut.test_artifact_a_linux(path) then
+                    found = true
+                    break
+                end
             end
-        end
-        if not found then
-            local msg = format(
-                "verify_dep_artifacts_linux: модуль '%s' не собрал "
-                .. "'lib%s.a' (libdirs: {%s})",
-                dep.name, link, table.concat(libdirs_list, ", ")
-            )
-            printc("%{red}" .. msg .. "%{reset}")
-            os.exit(1)
+            if not found then
+                local msg = format(
+                    "verify_dep_artifacts_linux: модуль '%s' не собрал "
+                    .. "'lib%s.a' (libdirs: {%s})",
+                    dep.name, link, table.concat(libdirs_list, ", ")
+                )
+                printc("%{red}" .. msg .. "%{reset}")
+                os.exit(1)
+            end
         end
     end
 end

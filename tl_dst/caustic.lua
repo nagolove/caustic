@@ -2284,28 +2284,37 @@ local function verify_dep_artifacts_linux(dep)
 
 
 
+   local system_libs = {
+      ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
+      ["dl"] = true, ["rt"] = true, ["X11"] = true,
+   }
+
+
+
    local libdirs_list = {}
    for _, libdir in ipairs(dep.libdirs) do
       table.insert(libdirs_list, libdir)
    end
    local base = e.path_abs_third_party[dep.target] .. "/"
    for _, link in ipairs(links) do
-      local found = false
-      for _, libdir in ipairs(libdirs_list) do
-         local path = base .. libdir .. "/lib" .. link .. ".a"
-         if ut.test_artifact_a_linux(path) then
-            found = true
-            break
+      if link:sub(1, 1) ~= "-" and not system_libs[link] then
+         local found = false
+         for _, libdir in ipairs(libdirs_list) do
+            local path = base .. libdir .. "/lib" .. link .. ".a"
+            if ut.test_artifact_a_linux(path) then
+               found = true
+               break
+            end
          end
-      end
-      if not found then
-         local msg = format(
-         "verify_dep_artifacts_linux: модуль '%s' не собрал " ..
-         "'lib%s.a' (libdirs: {%s})",
-         dep.name, link, table.concat(libdirs_list, ", "))
+         if not found then
+            local msg = format(
+            "verify_dep_artifacts_linux: модуль '%s' не собрал " ..
+            "'lib%s.a' (libdirs: {%s})",
+            dep.name, link, table.concat(libdirs_list, ", "))
 
-         printc("%{red}" .. msg .. "%{reset}")
-         os.exit(1)
+            printc("%{red}" .. msg .. "%{reset}")
+            os.exit(1)
+         end
       end
    end
 end
