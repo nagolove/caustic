@@ -736,6 +736,13 @@ local function cimgui_after_init(e: Env, dep: Dependency)
         )
     end
 
+    -- imgui_impl_raylib.h впаивается в cimgui.cpp на init (склейка rlImGui выше);
+    -- кладём сам заголовок здесь же, иначе cimplot (собирается раньше cimgui)
+    -- не найдёт его при компиляции ../cimgui/cimgui.cpp. Абсолютные пути, как у
+    -- paste_from_one_to_other выше; не полагаемся на cwd.
+    local tp = e.path_abs_third_party[dep.target]
+    cmd_do("cp " .. tp .. "/rlImGui/imgui_impl_raylib.h " .. tp .. "/cimgui/")
+
     cmd_do("ls ..")
     cmd_do("cp -r ../rlImGui/extras/ extras")
 
@@ -1272,31 +1279,6 @@ _modules = {
     },
     -- }}}
 
-    -- {{{ cimplot
-    {
-        disabled = false,
-        copy_for_wasm = false,
-        description = "graphs plotting for imgui, C wrappers",
-        custom_defines = nil,
-        dir = "cimplot",
-        includes = { 
-            "cimplot",
-        },
-        libdirs = { 
-            "cimplot", 
-        },
-        links = {
-            "cimplot",
-        },
-        links_internal = {},
-        name = "cimplot",
-        url_action = "git",
-        build = build_cimplot,
-        git_commit = "9981145d7bc916eb9877df6e451543c9134fc061",
-        url = "https://github.com/cimgui/cimplot.git"
-    },
-    -- }}}
-
 	--[[
     -- {{{ json.lua
     {
@@ -1422,6 +1404,33 @@ _modules = {
         --git_branch = "docking_inter",
         --git_commit = "205107640d70aeffc9cd37a1e7a8d240708a55e5", -- старая ветка, все работало
         git_commit = "d61baefa0ce2a9db938ffdeb29e64f90f44cc037"
+    },
+    -- }}}
+
+    -- cimplot ПОСЛЕ cimgui: build_cimplot компилирует ../cimgui/cimgui.cpp,
+    -- сгенерированный в cimgui_after_init. Порядок отражает зависимость.
+    -- {{{ cimplot
+    {
+        disabled = false,
+        copy_for_wasm = false,
+        description = "graphs plotting for imgui, C wrappers",
+        custom_defines = nil,
+        dir = "cimplot",
+        includes = {
+            "cimplot",
+        },
+        libdirs = {
+            "cimplot",
+        },
+        links = {
+            "cimplot",
+        },
+        links_internal = {},
+        name = "cimplot",
+        url_action = "git",
+        build = build_cimplot,
+        git_commit = "9981145d7bc916eb9877df6e451543c9134fc061",
+        url = "https://github.com/cimgui/cimplot.git"
     },
     -- }}}
 
