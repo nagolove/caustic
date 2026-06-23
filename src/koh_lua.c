@@ -1796,9 +1796,11 @@ void L_inspect(lua_State *l, int idx) {
     sprintf(buf_uniq_name, "X_%d_%d", rand() % 100, rand() % 100);
     lua_setglobal(l, buf_uniq_name);
     const char *code = 
+        "local cp = os.getenv('CAUSTIC_PATH')\n"
+        "if cp then package.path = cp .. '/tl_dst/?.lua;' .. package.path end\n"
         "local inspect = require 'inspect'\n"
         "print(inspect(%s))";
-    char buf_code[128 * 2] = {};
+    char buf_code[512] = {};
     sprintf(buf_code, code, buf_uniq_name);
     L_inline(l, buf_code);
 

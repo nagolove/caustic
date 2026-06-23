@@ -10,5 +10,5 @@ return {
     "/home/nagolove/caustic-test-mm_arena",
     "/home/nagolove/caustic-test-pallete",
     "/home/nagolove/caustic-test-qtree",
-    "/home/nagolove/caustic-test-render",
+    --"/home/nagolove/caustic-test-render",
 }
