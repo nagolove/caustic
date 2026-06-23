@@ -37,6 +37,9 @@ jobs:
           echo "CAUSTIC_PATH=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"
           echo "$HOME/.luarocks/bin" >> "$GITHUB_PATH"
+          # часть модулей в modules.tl заданы по SSH (git@github.com:...);
+          # в CI без ключа клонируем их анонимно по HTTPS (репо публичные)
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
 
       - name: Codegen (cyan build)
         run: cyan build
