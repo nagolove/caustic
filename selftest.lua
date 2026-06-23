@@ -4,7 +4,9 @@
 -- dir — только имя; каталог берётся плоско рядом с caustic
 -- (CAUSTIC_PATH/../<dir>), что делает список переносимым между машинами.
 return {
-    { url = "https://github.com/nagolove/caustic-test-b2.git",       dir = "caustic-test-b2" },
+    -- b2 убран: устарел под старый box2c API (b2World_CreateBody,
+    -- b2Body_CreatePolygon, shape.friction, b2World_Step 4 арг.) — мигрировать позже
+    --{ url = "https://github.com/nagolove/caustic-test-b2.git",       dir = "caustic-test-b2" },
     { url = "https://github.com/nagolove/common-test.git",           dir = "caustic-test-common" },
     { url = "https://github.com/nagolove/caustic-test-strbuf.git",   dir = "caustic-test-strbuf" },
     --{ url = "", dir = "caustic-test-ecs-2" },
