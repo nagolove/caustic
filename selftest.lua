@@ -10,7 +10,8 @@ return {
     --{ url = "", dir = "caustic-test-ecs-2" },
     { url = "https://github.com/nagolove/caustic-test-ecs3.git",     dir = "caustic-test-ecs-3" },
     { url = "https://github.com/nagolove/caustic-test-htable.git",   dir = "caustic-test-htable" },
-    { url = "https://github.com/nagolove/lua-tools-test.git",        dir = "caustic-test-lua" },
+    -- lua-tools-test убран: устарел (удалённые koh_lua_tools.h/libsmallregex.h)
+    --{ url = "https://github.com/nagolove/lua-tools-test.git",      dir = "caustic-test-lua" },
     --{ url = "https://github.com/nagolove/metaloader-test.git",     dir = "caustic-test-metaloader" },
     { url = "https://github.com/nagolove/caustic-test-mm_arena.git", dir = "caustic-test-mm_arena" },
     { url = "https://github.com/nagolove/caustic-test-pallete.git",  dir = "caustic-test-pallete" },
