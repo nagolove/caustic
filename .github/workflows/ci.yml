@@ -15,6 +15,7 @@ on:
       - 'bld.lua'
       - 'bin2c.lua'
       - 'install-deps.sh'
+      - 'selftest.lua'
       - '.github/workflows/**'
   pull_request:
     branches: [master]
