@@ -2061,7 +2061,7 @@ const char *koh_str_gen_aA(size_t len) {
     char *pbuf = buf;
     size_t buf_len = sizeof(buf) / sizeof(buf[0]);
 
-    if (buf_len >= len)
+    if (buf_len < len)
         return NULL;
 
     for (size_t i = 0; i < len; i++)
@@ -2151,7 +2151,7 @@ const char *koh_bin2hex(const void *data, size_t data_len) {
     static char buf[1024] = {};
     char *pbuf = buf;
     memset(buf, 0, sizeof(buf));
-    const char *tmp = data;
+    const unsigned char *tmp = data;
     const char x[] = {
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
         'A', 'B', 'C', 'D', 'E', 'F',
