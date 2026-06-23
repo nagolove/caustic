@@ -106,6 +106,17 @@ local libcaustic_name = {
 
 
 
+
+
+
+
+
+
+
+local function load_test_nodes(fname)
+   return loadfile(fname)()
+end
+
 local M = require('modules')
 local mods = M.modules_instance(e)
 
@@ -1718,11 +1729,11 @@ function actions.selftest_lg(_args)
 
    local selftest_fname = e.path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
-      local test_dirs = loadfile(selftest_fname)()
+      local nodes = load_test_nodes(selftest_fname)
 
       ut.push_current_dir()
-      for _, dir in ipairs(test_dirs) do
-         chdir(dir)
+      for _, node in ipairs(nodes) do
+         chdir(node.dir)
          printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
          if not ut.git_is_repo_clean(".") then
             cmd_do("lazygit")
@@ -1741,11 +1752,11 @@ function actions.selftest_push(_args)
 
    local selftest_fname = e.path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
-      local test_dirs = loadfile(selftest_fname)()
+      local nodes = load_test_nodes(selftest_fname)
 
       ut.push_current_dir()
-      for _, dir in ipairs(test_dirs) do
-         chdir(dir)
+      for _, node in ipairs(nodes) do
+         chdir(node.dir)
          printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
          cmd_do("git push")
       end
@@ -1757,21 +1768,25 @@ function actions.selftest_push(_args)
    end
 end
 
+local function git_status_dirs(dirs, _args)
+   ut.push_current_dir()
+   for _, dir in ipairs(dirs) do
+      chdir(dir)
+
+      printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
+      if _args.g then
+         cmd_do("git status")
+      else
+         cmd_do("lazygit")
+      end
+   end
+   ut.pop_dir()
+end
+
 local function git_status2(dirlist_fname, _args)
    local ok, errmsg = pcall(function()
       local test_dirs = loadfile(dirlist_fname)()
-      ut.push_current_dir()
-      for _, dir in ipairs(test_dirs) do
-         chdir(dir)
-
-         printc("%{blue}" .. lfs.currentdir() .. "%{reset}")
-         if _args.g then
-            cmd_do("git status")
-         else
-            cmd_do("lazygit")
-         end
-      end
-      ut.pop_dir()
+      git_status_dirs(test_dirs, _args)
    end)
    if not ok then
       print(format("Could not load %s with %s", dirlist_fname, errmsg))
@@ -1784,19 +1799,35 @@ function actions.projects_status(_args)
 end
 
 function actions.selftest_status(_args)
-   git_status2(e.path_caustic .. "/selftest.lua", _args)
+   local selftest_fname = e.path_caustic .. "/selftest.lua"
+   local ok, errmsg = pcall(function()
+      local nodes = load_test_nodes(selftest_fname)
+      local dirs = {}
+      for _, node in ipairs(nodes) do
+         dirs[#dirs + 1] = node.dir
+      end
+      git_status_dirs(dirs, _args)
+   end)
+   if not ok then
+      print(format("Could not load %s with %s", selftest_fname, errmsg))
+      os.exit(1)
+   end
 end
 
 function actions.selftest(_args)
 
    local selftest_fname = e.path_caustic .. "/selftest.lua"
    local ok, errmsg = pcall(function()
-      local test_dirs = loadfile(selftest_fname)()
+      local nodes = load_test_nodes(selftest_fname)
 
       ut.push_current_dir()
-      for _, dir in ipairs(test_dirs) do
-         assert(type(dir) == "string")
-         chdir(dir)
+      for _, node in ipairs(nodes) do
+
+         if not lfs.attributes(node.dir) and node.url and node.url ~= "" then
+            printc("%{yellow}clone " .. node.url .. " -> " .. node.dir .. "%{reset}")
+            cmd_do(format("git clone %s %s", node.url, node.dir))
+         end
+         chdir(node.dir)
          printc("%{green}" .. lfs.currentdir() .. " %{reset}")
 
          cmd_do("koh run --noreset --headless")
