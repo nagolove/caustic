@@ -33,10 +33,10 @@ void qtree_node_split(struct QTreeNode *node) {
     trace("qtree_node_split:\n");
     assert(node);
 
-    node->nodes[0]->value =  node->value;
-    node->nodes[1]->value =  node->value;
-    node->nodes[2]->value =  node->value;
-    node->nodes[3]->value =  node->value;
+    for (int i = 0; i < 4; i++) {
+        node->nodes[i] = calloc(1, sizeof(QTreeNode));
+        node->nodes[i]->value = node->value;
+    }
     node->value = NULL;
 }
 
@@ -52,32 +52,19 @@ int qtree_node_num(struct QTreeNode *node) {
 // TODO: Сделать слияние опциональным
 bool qtree_node_canmerge(struct QTreeNode *node) {
     assert(node);
-
-    return false;
-
     trace("qtree_node_canmerge:\n");
-    bool has_nodes = (node->nodes[0] && qtree_node_num(node->nodes[0]) == 0) &&
-                     (node->nodes[1] && qtree_node_num(node->nodes[1]) == 0) &&
-                     (node->nodes[2] && qtree_node_num(node->nodes[2]) == 0) &&
-                     (node->nodes[3] && qtree_node_num(node->nodes[3]) == 0);
 
-    // XXX: Что делать в случае ложного значения has_nodes?
-    bool has_same_value = false;
-    /*
-            node->nodes[0] &&
-            node->nodes[1] &&
-            node->nodes[2] &&
-            node->nodes[3];
-            */
+    if (qtree_node_num(node) != 4)
+        return false;
 
-    if (has_nodes)
-        has_same_value = 
-            node->nodes[0]->value == node->nodes[1]->value &&
+    for (int i = 0; i < 4; i++) {
+        if (qtree_node_num(node->nodes[i]) != 0)
+            return false;
+    }
+
+    return  node->nodes[0]->value == node->nodes[1]->value &&
             node->nodes[1]->value == node->nodes[2]->value &&
-            node->nodes[2]->value == node->nodes[3]->value &&
-            node->nodes[3]->value == node->nodes[0]->value; 
-
-    return has_same_value;
+            node->nodes[2]->value == node->nodes[3]->value;
 }
 
 static float min(float a, float b) {
@@ -109,6 +96,8 @@ static void qtree_rec_fill(
     struct QTree *qt, struct QTreeState state, struct QTreeNode *node, 
     float x, float y, float size
 ) {
+    if (!node)
+        return;
     assert(node);
     trace(
         "qtree_rec_fill: state %s, x %f, y %f, size %f\n",
@@ -127,8 +116,8 @@ static void qtree_rec_fill(
 
     // TODO: Использовать сравнения разности с эпсилон для чисел с 
     // плавающией запятой
-    if (i.x - size <= FLT_EPSILON && 
-        i.y - size <= FLT_EPSILON) {
+    if (fabsf(i.x - size) <= FLT_EPSILON && 
+        fabsf(i.y - size) <= FLT_EPSILON) {
         // full
         qtree_node_clear(node);
         node->value = state.value;
@@ -142,7 +131,7 @@ static void qtree_rec_fill(
         qtree_rec_fill(qt, state, node->nodes[3], x + hsize, y + hsize, hsize);
 
         if (qtree_node_canmerge(node)) {
-            void *value = node[0].value;
+            void *value = node->nodes[0]->value;
             qtree_node_clear(node);
             node->value = value;
         }
@@ -157,10 +146,10 @@ void qtree_init(struct QTree *qt) {
 
 void qtree_shutdown(struct QTree *qt) {
     assert(qt);
-    if (qt->root) 
-        for (int i = 0; i < 4; i++) {
-            qtree_node_clear(qt->root->nodes[i]);
-        }
+    if (qt->root) {
+        qtree_node_clear(qt->root);
+        free(qt->root);
+    }
     memset(qt, 0, sizeof(*qt));
     trace("qtree_shutdown:\n");
 }
@@ -214,6 +203,10 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
         }
         assert(qt->root);
         qt->root->nodes[quadrant] = old_root;
+        for (int j = 0; j < 4; j++) {
+            if (j != quadrant && !qt->root->nodes[j])
+                qt->root->nodes[j] = calloc(1, sizeof(QTreeNode));
+        }
 
         qt->r.x += sx;
         qt->r.y += sy;
@@ -228,7 +221,7 @@ void qtree_fill(struct QTree *qt, Rectangle r, void *value) {
 
     // fill
     struct QTreeState state = { .r = r, .value = value };
-    qtree_rec_fill(qt, state, qt->root, r.x, r.y, qt->size);
+    qtree_rec_fill(qt, state, qt->root, qt->r.x, qt->r.y, qt->size);
 }
 
 // Check if a root node is useless (3/4 children are empty).
@@ -240,9 +233,8 @@ int qtree_node_canshrink(struct QTreeNode *node) {
         return index;
     // count non-empty children
     for (int i = 0; i < 4; i++) {
-        // TODO:Возможно стоит кроме значения хранить флаг empty 
-        // в node->nodes[i]->value)
-        if (qtree_node_num(node->nodes[i]) != 0 || node->nodes[i]->value) {
+        if (node->nodes[i] &&
+            (qtree_node_num(node->nodes[i]) != 0 || node->nodes[i]->value)) {
             count++;
             index = i;
         }
@@ -301,6 +293,8 @@ static const char *qtree_query2str(struct QTreeQuery q) {
 static void qtree_query_rec(
     struct QTreeQuery state, QTreeNode *node, float x, float y, float size
 ) {
+    if (!node)
+        return;
     //trace("qtree_query_rec: %s\n", qtree_query2str(state));
     state.depth++;
 
