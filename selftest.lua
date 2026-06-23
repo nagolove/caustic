@@ -1,17 +1,19 @@
 -- Список тестовых проектов фреймворка.
--- Формат записи: { url = <git remote>, dir = <локальный каталог> }
--- url используется для авто-клонирования при отсутствии dir.
+-- Формат записи: { url = <git remote>, dir = <имя каталога> }
+-- url (HTTPS) используется для авто-клонирования при отсутствии каталога.
+-- dir — только имя; каталог берётся плоско рядом с caustic
+-- (CAUSTIC_PATH/../<dir>), что делает список переносимым между машинами.
 return {
-    { url = "git@github.com:nagolove/caustic-test-b2.git",      dir = "/home/nagolove/caustic-test-b2" },
-    { url = "git@github.com:nagolove/common-test.git",          dir = "/home/nagolove/caustic-test-common" },
-    { url = "git@github.com:nagolove/caustic-test-strbuf.git",  dir = "/home/nagolove/caustic-test-strbuf" },
-    --{ url = "", dir = "/home/nagolove/caustic-test-ecs-2" },
-    { url = "git@github.com:nagolove/caustic-test-ecs3.git",    dir = "/home/nagolove/caustic-test-ecs-3" },
-    { url = "git@github.com:nagolove/caustic-test-htable.git",  dir = "/home/nagolove/caustic-test-htable" },
-    { url = "git@github.com:nagolove/lua-tools-test.git",       dir = "/home/nagolove/caustic-test-lua" },
-    --{ url = "git@github.com:nagolove/metaloader-test.git",      dir = "/home/nagolove/caustic-test-metaloader" },
-    { url = "git@github.com:nagolove/caustic-test-mm_arena.git", dir = "/home/nagolove/caustic-test-mm_arena" },
-    { url = "git@github.com:nagolove/caustic-test-pallete.git", dir = "/home/nagolove/caustic-test-pallete" },
-    { url = "git@github.com:nagolove/caustic-test-qtree.git",   dir = "/home/nagolove/caustic-test-qtree" },
-    --{ url = "", dir = "/home/nagolove/caustic-test-render" },
+    { url = "https://github.com/nagolove/caustic-test-b2.git",       dir = "caustic-test-b2" },
+    { url = "https://github.com/nagolove/common-test.git",           dir = "caustic-test-common" },
+    { url = "https://github.com/nagolove/caustic-test-strbuf.git",   dir = "caustic-test-strbuf" },
+    --{ url = "", dir = "caustic-test-ecs-2" },
+    { url = "https://github.com/nagolove/caustic-test-ecs3.git",     dir = "caustic-test-ecs-3" },
+    { url = "https://github.com/nagolove/caustic-test-htable.git",   dir = "caustic-test-htable" },
+    { url = "https://github.com/nagolove/lua-tools-test.git",        dir = "caustic-test-lua" },
+    --{ url = "https://github.com/nagolove/metaloader-test.git",     dir = "caustic-test-metaloader" },
+    { url = "https://github.com/nagolove/caustic-test-mm_arena.git", dir = "caustic-test-mm_arena" },
+    { url = "https://github.com/nagolove/caustic-test-pallete.git",  dir = "caustic-test-pallete" },
+    { url = "https://github.com/nagolove/caustic-test-qtree.git",    dir = "caustic-test-qtree" },
+    --{ url = "", dir = "caustic-test-render" },
 }

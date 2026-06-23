@@ -57,6 +57,7 @@ local inspect    = require 'inspect'
 local argparse   = require 'argparse'
 local printc     = ut.printc
 local cmd_do     = ut.cmd_do
+local cmd_try    = ut.cmd_try
 local Cache      = require "cache"
 local uv         = require "luv"
 local readline   = ut.readline
@@ -110,6 +111,13 @@ end
 local record TestNode
     url: string
     dir: string
+end
+
+-- Результат прогона одного теста в actions.selftest
+local record SelftestResult
+    name: string
+    ok: boolean
+    stage: string
 end
 
 -- Загрузка списка тестовых проектов в новом формате
@@ -862,6 +870,7 @@ local parser_setup: {string:ParserSetup} = {
     },
     selftest = {
         summary = "build and run tests from selftest.lua",
+        options = { "--timeout" },
     },
     selftest_status = {
         summary = "print git status for selftest.lua entries",
@@ -925,6 +934,7 @@ local record Args
     link: string        -- оптимизация времени линковки(работает долго)
     full: string        -- XXX: Что значит?
     headless: string    -- сборка с безголовым рейлибом
+    timeout: string     -- таймаут (сек) на запуск одного теста в selftest
     profiling: string   -- профилировка времени сборки
     config: ProfileConfig
     exclude: string     -- Lua-шаблон для исключения файлов из cppcheck
@@ -1815,24 +1825,69 @@ function actions.selftest_status(_args: Args)
 end
 
 function actions.selftest(_args: Args)
-    --print('selftest')
     local selftest_fname = e.path_caustic .. "/selftest.lua"
+    local timeout_s = tonumber(_args.timeout) or 120
+    -- Тесты лежат плоско рядом с каталогом caustic; путь собираем из
+    -- CAUSTIC_PATH + "..". Это делает selftest.lua переносимым: работает
+    -- локально, на CI и у любого пользователя с его CAUSTIC_PATH.
+    local base = e.path_caustic .. "/.."
+
     local ok, errmsg: boolean, string = pcall(function()
         local nodes = load_test_nodes(selftest_fname)
-        --print('nodes', inspect(nodes))
+        local results: {SelftestResult} = {}
         ut.push_current_dir()
         for _, node in ipairs(nodes) do
-            -- авто-клон при отсутствии каталога
-            if not lfs.attributes(node.dir) and node.url and node.url ~= "" then
-                printc("%{yellow}clone " .. node.url .. " -> " .. node.dir .. "%{reset}")
-                cmd_do(format("git clone %s %s", node.url, node.dir))
+            local dir = base .. "/" .. node.dir
+            local pass, stage = true, "ok"
+
+            -- 1) клон при отсутствии каталога
+            if not lfs.attributes(dir) and node.url and node.url ~= "" then
+                printc("%{yellow}clone " .. node.url .. " -> " .. dir .. "%{reset}")
+                if not cmd_try(format("git clone %s %s", node.url, dir)) then
+                    pass, stage = false, "clone"
+                end
             end
-            chdir(node.dir)
-            printc("%{green}" .. lfs.currentdir() .. " %{reset}")
-            --cmd_do("koh make")
-            cmd_do("koh run --noreset --headless")
+
+            -- 2) сборка + прямой запуск артефакта под timeout.
+            -- Запускаем артефакт напрямую (а не через `koh run`), т.к. тот
+            -- теряет код возврата теста. timeout страхует от зависания.
+            if pass then
+                chdir(dir)
+                printc("%{green}" .. lfs.currentdir() .. "%{reset}")
+                if not cmd_try("koh make") then
+                    pass, stage = false, "build"
+                else
+                    local cfgs = search_and_load_cfgs_up("bld.lua")
+                    local artifact = cfgs[1] and cfgs[1].artifact
+                    if not artifact then
+                        pass, stage = false, "no-artifact"
+                    elseif not cmd_try(
+                        format("timeout %d ./%s", timeout_s, artifact)
+                    ) then
+                        pass, stage = false, "run"
+                    end
+                end
+            end
+
+            table.insert(results, { name = node.dir, ok = pass, stage = stage })
         end
         ut.pop_dir()
+
+        -- сводка + код возврата
+        local failed = 0
+        printc("%{blue}=== selftest summary ===%{reset}")
+        for _, r in ipairs(results) do
+            if r.ok then
+                printc("%{green}PASS%{reset} " .. r.name)
+            else
+                printc("%{red}FAIL%{reset} " .. r.name .. " (" .. r.stage .. ")")
+                failed = failed + 1
+            end
+        end
+        printc(format("selftest: %d/%d passed", #results - failed, #results))
+        if failed > 0 then
+            os.exit(1)
+        end
     end)
     if not ok then
         print(format("Could not load %s with %s", selftest_fname, errmsg))
