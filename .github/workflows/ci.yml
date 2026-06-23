@@ -1,0 +1,61 @@
+name: CI
+
+# Триггеры пересборки:
+#   push в master    — основная валидация (фильтр путей: только то, что влияет
+#                      на сборку, чтобы не жечь прогоны на правках доков)
+#   pull_request     — проверка PR
+#   workflow_dispatch — ручной запуск кнопкой
+#   schedule         — еженедельно: ловит дрейф внешних зависимостей koh init
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'tl_src/**'
+      - 'bld.lua'
+      - 'bin2c.lua'
+      - 'install-deps.sh'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: ./install-deps.sh --yes
+
+      - name: Setup environment
+        run: |
+          echo "CAUSTIC_PATH=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"
+          echo "$HOME/.luarocks/bin" >> "$GITHUB_PATH"
+
+      - name: Codegen (cyan build)
+        run: cyan build
+
+      - name: Fetch module dependencies
+        run: koh init -t linux
+
+      - name: Build module dependencies
+        run: koh build -t linux
+
+      - name: Build libcaustic (debug)
+        run: ./koh make
+
+      - name: Build libcaustic (release)
+        run: ./koh make -r
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libcaustic-linux
+          path: libcaustic_linux.a
+          if-no-files-found: warn

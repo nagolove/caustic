@@ -14,8 +14,14 @@ return {
         },
         codegen = { {
             external = function()
+                -- codegen использует bin2c.lua (чистый Lua) из корня caustic
+                -- вместо внешней утилиты bin2c; cwd здесь = src/, путь к
+                -- скрипту берём из CAUSTIC_PATH
+                local caustic = os.getenv("CAUSTIC_PATH")
+                assert(caustic, "CAUSTIC_PATH не задан")
                 os.execute(
-                    "bin2c -t -d koh_lua_tabular.h " ..
+                    "lua5.4 " .. caustic .. "/bin2c.lua " ..
+                    "-t -d koh_lua_tabular.h " ..
                     "-o koh_lua_tabular.c ../tl_dst/tabular.lua"
                 )
 

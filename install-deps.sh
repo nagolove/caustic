@@ -8,9 +8,11 @@
 #   Tier 4 — опциональные: кросс-компиляция WASM/Win, ускорение линковки
 #   LuaRocks — отдельный блок после apt
 #
-# Внешние утилиты (lazygit, AMDuProf, lmstudio, bin2c) НЕ
+# Внешние утилиты (lazygit, AMDuProf, lmstudio) НЕ
 # устанавливаются автоматически — они не в apt. См. README.md и финальный
 # блок echo в конце скрипта.
+# Codegen bld.lua использует bin2c.lua (чистый Lua) из корня caustic —
+# внешняя утилита bin2c не требуется.
 # premake5 — отдельный опциональный блок в конце скрипта (ставится из
 # GitHub releases, не в apt).
 
@@ -18,6 +20,22 @@ set -euo pipefail
 
 # Печатать выполняемую команду оболочки
 #set -x
+
+# Разбор аргументов:
+#   --yes/-y      — неинтерактивный режим (для CI): не задавать вопросов
+#   --with-cross  — дополнительно ставить Tier 4 (кросс-компиляция WASM/Win)
+ASSUME_YES=0
+WITH_CROSS=0
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes)     ASSUME_YES=1 ;;
+        --with-cross) WITH_CROSS=1 ;;
+        -h|--help)    echo "Usage: install-deps.sh [--yes] [--with-cross]"; exit 0 ;;
+        *) echo "Неизвестный аргумент: $arg"; exit 1 ;;
+    esac
+done
+# apt без интерактивных промптов (выбор раскладки, конфиги и т.п.)
+export DEBIAN_FRONTEND=noninteractive
 
 echo "Определение дистрибутива..."
 
@@ -155,8 +173,14 @@ fi
 
 echo
 echo "=== Tier 4: опциональные пакеты (кросс-компиляция WASM/Win, mold) ==="
-echo "Установить? [y/N] (по умолчанию — пропустить):"
-read -r _install_tier4
+if [ "$ASSUME_YES" = 1 ]; then
+    # в неинтерактивном режиме: ставим только при --with-cross, иначе пропуск
+    _install_tier4=$([ "$WITH_CROSS" = 1 ] && echo y || echo n)
+    echo "Неинтерактивно: Tier 4 = $_install_tier4"
+else
+    echo "Установить? [y/N] (по умолчанию — пропустить):"
+    read -r _install_tier4
+fi
 
 if [ "${_install_tier4,,}" = "y" ] || [ "${_install_tier4,,}" = "yes" ]; then
     # mold — быстрый линковщик (упомянут в caustic.tl:2703 в комментарии,
@@ -318,8 +342,14 @@ fi
 
 echo
 echo "=== premake5: генератор сборки для libtess2 ==="
-echo "Установить premake5 из GitHub releases? [y/N] (по умолчанию — пропустить):"
-read -r _install_premake5
+if [ "$ASSUME_YES" = 1 ]; then
+    # premake5 нужен для libtess2 при koh build — в CI ставим без вопроса
+    _install_premake5=y
+    echo "Неинтерактивно: premake5 = y"
+else
+    echo "Установить premake5 из GitHub releases? [y/N] (по умолчанию — пропустить):"
+    read -r _install_premake5
+fi
 
 if [ "${_install_premake5,,}" = "y" ] || [ "${_install_premake5,,}" = "yes" ]; then
     if command -v premake5 &>/dev/null; then
@@ -362,11 +392,12 @@ echo "  2. cd \$CAUSTIC_PATH"
 echo "  3. cyan build               # компиляция tl_src/*.tl -> tl_dst/*.lua"
 echo "  4. koh init -t linux        # скачать зависимости (raylib, cimgui, ...)"
 echo "  5. koh build -t linux       # собрать зависимости"
-echo "  6. ./bootstrap.sh           # первичная сборка libkoh.so + caustic"
-echo "  7. koh make                 # сборка libcaustic"
+echo "  6. koh make                 # сборка libcaustic"
+echo
+echo "Codegen bld.lua использует bin2c.lua (чистый Lua) из корня caustic —"
+echo "внешняя утилита bin2c больше не нужна."
 echo
 echo "Внешние утилиты (не в apt, ставятся вручную при необходимости):"
 echo "  - lazygit:   https://github.com/jesseduffield/lazygit/releases"
 echo "  - AMDuProf:  https://www.amd.com/en/developer/amduprof"
 echo "  - lmstudio:  https://lmstudio.ai/"
-echo "  - bin2c:     github.com/TheNerdlessIdiot/bin2c (для bld.lua codegen)"
