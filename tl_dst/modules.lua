@@ -603,7 +603,9 @@ local function cimgui_after_init(e, dep)
 
    local use_freetype = false
 
-   cmd_do('git submodule update --init --recursive --depth=1')
+
+
+   cmd_do('git submodule update --init --recursive')
    ut.push_current_dir()
    chdir('generator')
 

@@ -603,7 +603,9 @@ local function cimgui_after_init(e: Env, dep: Dependency)
 
     local use_freetype = false
 
-    cmd_do('git submodule update --init --recursive --depth=1')
+    -- без --depth=1: cimgui пинит imgui на старый коммit (44aa9a4b), shallow
+    -- тянет только верхушку docking и не находит запиненный sha
+    cmd_do('git submodule update --init --recursive')
     ut.push_current_dir()
     chdir('generator')
 
