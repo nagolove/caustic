@@ -18,5 +18,6 @@ return {
     { url = "https://github.com/nagolove/caustic-test-mm_arena.git", dir = "caustic-test-mm_arena" },
     { url = "https://github.com/nagolove/caustic-test-pallete.git",  dir = "caustic-test-pallete" },
     { url = "https://github.com/nagolove/caustic-test-qtree.git",    dir = "caustic-test-qtree" },
+    { url = "https://github.com/nagolove/caustic-test-tmr.git",     dir = "caustic-test-tmr" },
     --{ url = "", dir = "caustic-test-render" },
 }

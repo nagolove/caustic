@@ -4,6 +4,18 @@
 #include <string.h>
 #include "koh_routine.h"
 #include "raylib.h"
+
+#ifdef KOH_TMR_TEST
+#include <time.h>
+static inline double tmr_now(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+#else
+#define tmr_now() GetTime()
+#endif
+
 #include <assert.h>
 #include <stdio.h>
 
@@ -13,7 +25,7 @@
 // * Нормализованное 0..1 время для вычислений
 typedef struct Tmr {
     f64     time_init,
-            time_last;      // raylib - GetTime()
+            time_last;      // raylib - tmr_now()
             // как часто обновлять значение
     f32     period,         
             time_amount,    // 0..1 время работы, только для чтения
@@ -30,7 +42,7 @@ typedef struct Tmr {
 
     // --- pause ---
     bool    paused;
-    f64     time_paused_at;   // GetTime() в момент постановки на паузу
+    f64     time_paused_at;   // tmr_now() в момент постановки на паузу
 
     bool    use_period_range;
     f32     period_min, period_max;
@@ -59,14 +71,14 @@ static inline void tmr_pause(Tmr *t) {
     if (!t || !t->is_inited || t->expired) return;
     if (t->paused) return;
     t->paused = true;
-    t->time_paused_at = GetTime();
+    t->time_paused_at = tmr_now();
 }
 
 static inline void tmr_resume(Tmr *t) {
     if (!t || !t->is_inited || t->expired) return;
     if (!t->paused) return;
 
-    const double now = GetTime();
+    const double now = tmr_now();
     const double dt  = now - t->time_paused_at; // сколько стояли на паузе
 
     // “замораживаем время”: сдвигаем якоря вперёд
@@ -86,7 +98,7 @@ static inline void tmr_init(Tmr *t) {
     assert(t);
     assert(t->period > 0.f);
 
-    double now = GetTime();
+    double now = tmr_now();
     t->time_init = now;
     t->time_last = now + t->time_start_delay - t->period;
     t->expired = false;
@@ -132,7 +144,7 @@ static inline bool tmr_begin(Tmr *t) {
 
     if (t->paused)        return false;  // <- важно
 
-    const double now      = GetTime();
+    const double now      = tmr_now();
     const double start_at = t->time_init + t->time_start_delay;
 
     // --- once: одно срабатывание в момент старта ---
@@ -184,7 +196,7 @@ static inline void tmr_end(Tmr *t) {
     if (!t->is_inited || t->expired) return;
     if (t->paused) return;              // <- важно
 
-    const double now      = GetTime();
+    const double now      = tmr_now();
     const double start_at = t->time_init + t->time_start_delay;
 
     // до момента старта не сбиваем якорь
