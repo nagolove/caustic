@@ -44,7 +44,6 @@ do {                                                            \
 #include "koh_sfx.h"
 #include "koh_stages.h"
 #include "koh_stages.h"
-#include "koh_strset.h"
 #include "koh_table.h"
 #include "koh_team.h"
 #include "koh_visual_tools.h"
