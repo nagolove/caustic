@@ -1,5 +1,6 @@
 #pragma once
 
+// AI: ex.src
 #include "koh_rand.h"
 
 #define MAX_TEAMS   8

@@ -31,6 +31,7 @@ int dev_draw_traces_get_num();
 void dev_draw_traces_get(struct TracesNames *names);
 void dev_draw_traces_clear();
 
+// AI: ex.src
 void dev_draw_draw(void);
 bool dev_draw_is_enabled(void);
 void dev_draw_enable(bool state);

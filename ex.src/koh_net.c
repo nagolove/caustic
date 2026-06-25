@@ -1,6 +1,7 @@
 // vim: fdm=marker
 #include "koh_net.h"
 
+// AI: ex.src
 #include "koh.h"
 #include <string.h>
 #include <arpa/inet.h>

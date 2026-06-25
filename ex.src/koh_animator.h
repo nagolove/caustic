@@ -2,6 +2,7 @@
 
 #include "raylib.h"
 
+// AI: ex.src
 typedef struct koh_Animator koh_Animator;
 
 typedef struct koh_Animator_Def {

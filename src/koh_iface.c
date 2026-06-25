@@ -1,6 +1,5 @@
 #include "koh_iface.h"
 
-#include "koh_dev_draw.h"
 /*#include "koh_input.h"*/
 #include "koh_logger.h"
 #include "raylib.h"
@@ -423,29 +422,11 @@ void vcontainer_build(VContainer *c) {
     c->is_builded = true;
 }
 
-typedef struct xxx_vcontainer_ctx {
-    Vector2 mousep, pos;
-} xxx_vcontainer_ctx;
-
-static void xxx_draw(void *p) {
-    xxx_vcontainer_ctx *ctx = p;
-    float radius = 15.;
-    DrawCircleV(ctx->pos, radius + 3, VIOLET);
-    DrawCircleV(ctx->mousep, radius, BLUE);
-}
-
 void vcontainer_open(VContainer *c, Vector2 pos) {
     assert(c);
     printf("vcontainer_open '%s'\n", c->name);
     c->is_mnu_open = true;
     c->mousep = c->pos = pos;
-
-    xxx_vcontainer_ctx ctx = {
-        .mousep = pos,
-        .pos = pos,
-    };
-
-    dev_draw_push(xxx_draw, &ctx, sizeof(ctx));
 }
 
 void vcontainers_init() {
