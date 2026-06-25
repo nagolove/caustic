@@ -709,6 +709,7 @@ local record Actions
     projects_make: function(Args)
     projects_status: function(Args)
     publish: function(Args)
+    itch: function(Args)
     remove: function(Args)
     run: function(Args)
     selftest: function(Args)
@@ -763,7 +764,7 @@ local parser_setup: {string:ParserSetup} = {
 
     unit = {
         options = { "-n --name", },
-        summary = [[Create unit test directory in home directory]]
+        summary = [[создать тестовый каталог caustic-test-<name> (munit)]]
     },
 
     update = {
@@ -860,6 +861,14 @@ local parser_setup: {string:ParserSetup} = {
         },
     },
 
+    itch = {
+        summary = "собрать дистрибутив <имякаталога>.zip для загрузки на itch.io",
+        options = { "-n --name" },
+        flags = {
+            { "-b --build", "пересобрать wasm-артефакты перед упаковкой" },
+        },
+    },
+
     remove = {
         summary = "remove module by name and target from source tree",
         options = { "-n --name", "-t --target" },
@@ -945,53 +954,97 @@ local record Args
 end
 
 -- Создает каталог с тестами. На вход дается имя проекта.
-function actions.unit(_args: Args) 
-    print("actions.unit: _args", inspect(_args));
+-- Дописать тест в selftest.lua (идемпотентно: не дублировать запись).
+local function unit_register_selftest(dir: string)
+    local fname = e.path_caustic .. "/selftest.lua"
+    local sf = io.open(fname, "r")
+    if not sf then
+        printc("%{yellow}selftest.lua не найден, пропускаю регистрацию%{reset}")
+        return
+    end
+    local content = sf:read("*a")
+    sf:close()
 
-    --local inp = readline(ansicolors("%{green}enter stage name%{reset}"))
-    chdir(home)
+    if content:find('dir = "' .. dir .. '"', 1, true) then
+        printc("%{yellow}уже зарегистрирован в selftest.lua%{reset}")
+        return
+    end
+
+    -- Вставляем новую запись перед последней закрывающей скобкой таблицы.
+    local body, tail = content:match("^(.*)(}%s*)$")
+    if not body then
+        printc("%{red}не разобрал selftest.lua, пропускаю регистрацию%{reset}")
+        return
+    end
+    local entry = '    { url = "", dir = "' .. dir .. '" },\n'
+    local out = io.open(fname, "w")
+    out:write(body .. entry .. tail)
+    out:close()
+    printc("%{green}зарегистрирован в selftest.lua%{reset}")
+end
+
+function actions.unit(_args: Args)
     if not _args.name then
-        printc("%{red}name is not specified%{reset}")
+        printc("%{red}имя не задано (-n <name>)%{reset}")
         return
     end
 
-    if lfs.attributes(home .. "/" .. _args.name) then
-        printc("%{red}directory exists%{reset}")
+    -- Имя без префикса; каталог всегда caustic-test-<short>.
+    local short = (gsub(_args.name, "^caustic%-test%-", ""))
+    local dir = "caustic-test-" .. short
+    local artifact = dir
+    local main_name = short .. "-test.c"
+
+    -- Тестовые каталоги — сиблинги caustic (CAUSTIC_PATH/../<dir>).
+    local base = e.path_caustic .. "/.."
+    local test_dir = base .. "/" .. dir
+
+    if lfs.attributes(test_dir) then
+        printc("%{red}каталог уже существует: " .. dir .. "%{reset}")
         return
     end
 
-    local main_c = 
+    local main_c =
     -- {{{
 [[// vim: set colorcolumn=85
 // vim: fdm=marker
 
 // {{{ include
-
 #include "munit.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+// Для инициализации фреймворка раскомментируй нужное:
+// #include "koh_common.h"
 // }}}
 
 static bool verbose = false;
 
-static MunitResult test_1(const MunitParameter params[], void* data) {
+static MunitResult test_smoke(const MunitParameter params[], void* data) {
+    munit_assert_true(true);
     return MUNIT_OK;
 }
 
-static MunitTest t_suite_common[] = {
+// Пример теста с setup/tear_down: setup() возвращает data, который
+// прилетает в тест вторым аргументом; tear_down() вызывается после.
+// В простых тестах не нужен — инициализируй прямо в тесте или один раз
+// в main(). Чтобы задействовать — заполни .setup/.tear_down в записи теста.
+// static void *setup(const MunitParameter params[], void *user_data) {
+//     return NULL;
+// }
+// static void tear_down(void *fixture) {
+// }
 
+static MunitTest t_suite[] = {
     {
-        .name =  "/test_1",
-        .test = test_1,
+        .name =  "/smoke",
+        .test = test_smoke,
         .setup = NULL,
         .tear_down = NULL,
         .options = MUNIT_TEST_OPTION_NONE,
         .parameters = NULL,
     },
-
     {
         .name =  NULL,
         .test = NULL,
@@ -1000,12 +1053,21 @@ static MunitTest t_suite_common[] = {
         .options = MUNIT_TEST_OPTION_NONE,
         .parameters = NULL,
     },
-
 };
 
+// Вложенный сьют (опционально): объяви вторую группу тестов и подключи
+// её через .suites у suite_root вместо NULL.
+// static MunitTest t_suite_extra[] = {
+//     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL },
+// };
+// static MunitSuite suite_nested[] = {
+//     { "extra", t_suite_extra, NULL, 1, MUNIT_SUITE_OPTION_NONE },
+//     { NULL, NULL, NULL, 0, MUNIT_SUITE_OPTION_NONE },
+// };
+
 static const MunitSuite suite_root = {
-    .prefix = "$NAME",
-    .tests =  t_suite_common,
+    .prefix = "$PREFIX",
+    .tests =  t_suite,
     .suites = NULL,
     .iterations = 1,
     .options = MUNIT_SUITE_OPTION_NONE,
@@ -1013,13 +1075,14 @@ static const MunitSuite suite_root = {
 };
 
 int main(int argc, char **argv) {
+    // Инициализация фреймворка перед тестами — раскомментируй при нужде:
+    // koh_hashers_init();
     return munit_suite_main(&suite_root, (void*) "µnit", argc, argv);
 }
-
 ]]
 -- }}}
 
-    local bld_lua = [[
+    local bld_tl = [[
 return {
     {
         not_dependencies = {
@@ -1027,44 +1090,69 @@ return {
             "rlwr",
             "resvg",
         },
-        artifact = "$NAME",
+        artifact = "$ARTIFACT",
         kind = 'app',
-        main = "$NAME.c",
+        main = "$MAIN",
         src = "src",
     },
 }
 ]]
 
-    local short_name = _args.name
-    for i = 1, #short_name do
-        local c = string.sub(short_name, i, i)
-        if (c == '-') then
-            printc("%{red}please do not use dashes in project name%{reset}")
-        end
-    end
+    local tlconfig_lua = [[
+return {
+}
+]]
 
-    mkdir(_args.name)
-    chdir(_args.name)
+    local gdbinit = "set confirm off\nr\n"
 
+    mkdir(test_dir)
+    ut.push_current_dir()
+    chdir(test_dir)
     mkdir("src")
 
-    local f = io.open("src/main.c", "w")
-    f:write(gsub(main_c, "$NAME", short_name))
+    local f = io.open("src/" .. main_name, "w")
+    f:write((gsub(main_c, "$PREFIX", short)))
     f:close()
 
-    f = io.open("bld.lua", "w")
-    f:write(gsub(bld_lua, "$NAME", short_name))
+    f = io.open("bld.tl", "w")
+    local bld = gsub(bld_tl, "$ARTIFACT", artifact)
+    bld = gsub(bld, "$MAIN", main_name)
+    f:write(bld)
     f:close()
 
-    --cmd_do("mkdir " .. _args.name)
-    --chdir(_args.name)
+    f = io.open("tlconfig.lua", "w")
+    f:write(tlconfig_lua)
+    f:close()
 
-    --[[
-    local selftest_fname = path_caustic .. "/selftest.lua"
-    local ok, errmsg: boolean, string = pcall(function()
-        local test_dirs = loadfile(selftest_fname)() as {string}
-    end)
-    --]]
+    f = io.open(".gdbinit", "w")
+    f:write(gdbinit)
+    f:close()
+
+    printc("%{green}создан каталог " .. test_dir .. "%{reset}")
+
+    -- Кодоген bld.tl -> bld.lua, флаги для clangd, сборка и запуск теста.
+    local ok_cyan = cmd_try("cyan build")
+    if not ok_cyan then
+        printc("%{red}cyan build завершился ошибкой%{reset}")
+        ut.pop_dir()
+        return
+    end
+
+    cmd_try("koh compile_flags")
+
+    local ok_make = cmd_try("koh make")
+    if not ok_make then
+        printc("%{red}koh make завершился ошибкой%{reset}")
+        ut.pop_dir()
+        return
+    end
+
+    printc("%{green}запуск теста ./" .. artifact .. "%{reset}")
+    cmd_try("./" .. artifact)
+
+    ut.pop_dir()
+
+    unit_register_selftest(dir)
 end
 
 function actions.dist(_args: Args)
@@ -2087,6 +2175,94 @@ function actions.publish(_args: Args)
 
     for _, cfg in ipairs(cfgs) do
         sub_publish(_args, cfg)
+    end
+end
+
+-- Упаковывает wasm-артефакты проекта в <имякаталога>.zip в формате itch.io:
+-- index.html в корне архива, остальные файлы сохраняют имена.
+local function sub_itch(_args: Args, cfg: Cfg)
+    assert(cfg)
+    local artifact = cfg.artifact
+    assert(artifact)
+
+    local files = {
+        artifact .. ".data",
+        artifact .. ".html",
+        artifact .. ".js",
+        artifact .. ".wasm",
+    }
+
+    if not has_files_in_dir(files) then
+        printc(
+            "%{red}sub_itch: в каталоге проекта нет всех wasm-файлов "
+            .. "(.data/.html/.js/.wasm). "
+            .. "Соберите: koh make -t wasm  (или itch -b)%{reset}"
+        )
+        return
+    end
+
+    local src_dir = lfs.currentdir()
+    -- имя дистрибутива: -n или имя каталога проекта
+    local dist_name = _args.name or string.match(src_dir, "%S+/(.*)")
+    assert(dist_name)
+
+    -- временный каталог сборки; index.html ляжет в корень zip
+    local stage = "/tmp/koh_itch_" .. dist_name
+    cmd_do("rm -rf " .. stage)
+    mkdir(stage)
+
+    -- копируем артефакты в staging
+    for _, file in ipairs(files) do
+        cmd_do(format("cp %s/%s %s/", src_dir, file, stage))
+    end
+
+    -- <artifact>.html → index.html (точка входа itch.io)
+    cmd_do(format("mv %s/%s.html %s/index.html", stage, artifact, stage))
+
+    -- пакуем изнутри staging, чтобы пути в архиве были от корня
+    local zip_path = src_dir .. "/" .. dist_name .. ".zip"
+    os.remove(zip_path)
+    ut.push_current_dir()
+    chdir(stage)
+    cmd_do(format("zip -r -9 %s .", zip_path))
+    ut.pop_dir()
+
+    cmd_do("rm -rf " .. stage)
+
+    printc(
+        "%{green}itch: дистрибутив готов: " .. zip_path .. "%{reset}"
+    )
+    printc(
+        "%{blue}Загрузите zip на itch.io как HTML и отметьте "
+        .. '"This file will be played in the browser". '
+        .. "При сборке с pthreads включите "
+        .. '"SharedArrayBuffer support" в Embed Options.%{reset}'
+    )
+end
+
+function actions.itch(_args: Args)
+    local cfgs: {Cfg} = search_and_load_cfgs_up("bld.lua")
+    if not cfgs then
+        printc(
+            "%{red}actions.itch: нет bld.lua в текущем каталоге%{reset}"
+        )
+        return
+    end
+
+    if _args.build then
+        -- пересобрать wasm-артефакты перед упаковкой
+        _args.t = "wasm"
+        actions.make(_args)
+    else
+        printc(
+            "%{yellow}itch: пересборка не выполнялась "
+            .. "(флаг -b/--build для сборки wasm); "
+            .. "пакуются текущие артефакты%{reset}"
+        )
+    end
+
+    for _, cfg in ipairs(cfgs) do
+        sub_itch(_args, cfg)
     end
 end
 

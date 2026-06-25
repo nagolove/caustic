@@ -20,4 +20,5 @@ return {
     { url = "https://github.com/nagolove/caustic-test-qtree.git",    dir = "caustic-test-qtree" },
     { url = "https://github.com/nagolove/caustic-test-tmr.git",     dir = "caustic-test-tmr" },
     --{ url = "", dir = "caustic-test-render" },
+    { url = "https://github.com/nagolove/caustic-test-vfs.git", dir = "caustic-test-vfs" },
 }
