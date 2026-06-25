@@ -403,6 +403,22 @@ local function build_with_make_common(_, dep)
    end
 end
 
+
+
+
+local function build_wfc(_, dep)
+   if dep.target == 'wasm' then
+      cmd_do("make clean")
+      cmd_do("emmake make wfctool")
+   elseif dep.target == 'linux' then
+      cmd_do("make clean")
+      cmd_do("make -j wfctool")
+   elseif dep.target == 'win' then
+      cmd_do("make clean")
+      cmd_do(make[dep.target] .. " wfctool")
+   end
+end
+
 local function build_with_cmake_common(_, dep)
    print('build_with_cmake: current dir', lfs.currentdir())
    print('build_with_cmake: dep', inspect(dep))
@@ -1617,9 +1633,9 @@ _modules = {
 
    {
       dir = "wfc",
-      build = build_with_make_common,
-      build_w = build_with_make_common,
-      build_win = build_with_make_common,
+      build = build_wfc,
+      build_w = build_wfc,
+      build_win = build_wfc,
       after_init = copy_headers_to_wfc,
       copy_for_wasm = true,
 

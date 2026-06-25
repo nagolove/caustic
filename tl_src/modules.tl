@@ -403,6 +403,22 @@ local function build_with_make_common(_: Env, dep: Dependency)
     end
 end
 
+-- wfc: с коммита 765e814 Makefile завёл .DEFAULT_GOAL := help, поэтому
+-- голый `make` печатает справку и ничего не собирает. Цель wfctool задаём
+-- явно — восстанавливаем прежнее поведение (сборка бинаря wfc).
+local function build_wfc(_: Env, dep: Dependency)
+    if dep.target == 'wasm' then
+        cmd_do("make clean")
+        cmd_do("emmake make wfctool")
+    elseif dep.target == 'linux' then
+        cmd_do("make clean")
+        cmd_do("make -j wfctool")
+    elseif dep.target == 'win' then
+        cmd_do("make clean")
+        cmd_do(make[dep.target] .. " wfctool")
+    end
+end
+
 local function build_with_cmake_common(_: Env, dep: Dependency)
     print('build_with_cmake: current dir', lfs.currentdir())
     print('build_with_cmake: dep', inspect(dep))
@@ -1617,9 +1633,9 @@ _modules = {
     -- {{{ wfc
     {
         dir = "wfc",
-        build = build_with_make_common,
-        build_w = build_with_make_common,
-        build_win = build_with_make_common,
+        build = build_wfc,
+        build_w = build_wfc,
+        build_win = build_wfc,
         after_init = copy_headers_to_wfc,
         copy_for_wasm = true,
         --depends = {'stb'},
