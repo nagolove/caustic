@@ -1626,7 +1626,7 @@ _modules = {
         description = "библиотека для генерации текстур алгоритмом WaveFunctionCollapse",
         name = 'wfc',
         url_action = "git",
-        git_commit = "38b08ab7a276ba0e4266c3b85ef7f32cc59d4bce",
+        git_commit = "765e8147607697014034e81ff398084ad653be84",
         url = "https://github.com/krychu/wfc.git",
     },
     -- }}}
