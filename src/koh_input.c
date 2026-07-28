@@ -18,6 +18,7 @@
 #include "box2d/box2d.h"
 #include "koh_b2.h"
 #include "koh_paragraph.h"
+#include "input_drawer_assets.h"
 #include "koh_raylib_api.h"
 
 static raylib_api R = {};
@@ -205,6 +206,10 @@ typedef struct InputKbMouseDrawer {
     Btn             *left_shift_btn, *right_shift_btn;
 
     bool            pass_next_update;
+    // опциональный общий контейнер биндов (для подсказок)
+    InputBinder     *binder;
+    // уникальный id экземпляра — для уникального ID ImGui-окна
+    int             wnd_id;
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
@@ -328,6 +333,10 @@ InputKbMouseDrawer *input_kb_new(
     kbm->has_mod_bind = false;
     kbm->left_shift_btn = NULL;
     kbm->right_shift_btn = NULL;
+    kbm->binder = setup->binder;
+
+    static i32 drawer_instance = 0;
+    kbm->wnd_id = drawer_instance++;
 
     b2WorldDef wdef = b2DefaultWorldDef();
     wdef.gravity = b2Vec2_zero;
@@ -338,10 +347,16 @@ InputKbMouseDrawer *input_kb_new(
     // каждый раз при запуске проекта?
 
     SetTraceLogLevel(LOG_ERROR);
+#ifdef INPUT_DRAWER_FILE_ASSETS
     kbm->tex_mouse = reslist_load_tex(rl, "assets/gfx/mouse/mouse.png");
     kbm->tex_mouse_rb = reslist_load_tex(rl, "assets/gfx/mouse/rb.png");
     kbm->tex_mouse_lb = reslist_load_tex(rl, "assets/gfx/mouse/lb.png");
     kbm->tex_mouse_wheel = reslist_load_tex(rl, "assets/gfx/mouse/wheel.png");
+#else
+    input_drawer_assets_load_mouse(
+        &kbm->tex_mouse, &kbm->tex_mouse_lb,
+        &kbm->tex_mouse_rb, &kbm->tex_mouse_wheel, rl);
+#endif
 
     kbm->scale_mouse = 0.10;
     input_kb_init_btn_width(kbm, setup->btn_width);
@@ -512,6 +527,18 @@ static void iter_draw(
         if (btn_active_bind(btn, m)) {
             has_bind = true;
             break;
+        }
+    }
+
+    // Действия из общего контейнера тоже помечают клавишу как связанную.
+    if (!has_bind && kb->binder) {
+        i32 num = input_binder_count(kb->binder);
+        for (i32 j = 0; j < num; ++j) {
+            const InputAction *a = input_binder_get(kb->binder, j);
+            if (a && a->kb.keycode == btn->keycode) {
+                has_bind = true;
+                break;
+            }
         }
     }
 
@@ -733,7 +760,10 @@ void input_kb_gui_update(InputKbMouseDrawer *kb) {
 
     bool wnd_open = true;
     ImGuiWindowFlags wnd_flags = ImGuiWindowFlags_AlwaysAutoResize;
-    igBegin("input - keyboard & mouse", &wnd_open, wnd_flags);
+    char title[64] = {};
+    snprintf(title, sizeof(title),
+        "input - keyboard & mouse##%d", kb->wnd_id);
+    igBegin(title, &wnd_open, wnd_flags);
 
     // После igBegin() что-бы была доступна информация о позиции и размере окна
     input_kb_gui_update_rt(kb);
@@ -793,14 +823,22 @@ struct InputGamepadDrawer {
     bool                    // писать названия активных клавиш
                             is_draw_labels, 
                             // показывать опции
-                            is_advanched_mode; 
+                            is_advanched_mode;
+    // опциональный общий контейнер биндов (для подсказок)
+    InputBinder             *binder;
+    // уникальный id экземпляра — для уникального ID ImGui-окна
+    int                     wnd_id;
 };
 
 static void gp_load_tex(InputGamepadDrawer *gp) {
     assert(gp);
     ResList *rl = gp->reslist;
     assert(rl);
+#ifdef INPUT_DRAWER_FILE_ASSETS
     gp->tex_xbox = reslist_load_tex(rl, "assets/gfx/xbox.png");
+#else
+    input_drawer_assets_load_gp(&gp->tex_xbox, rl);
+#endif
     float ws = gp->tex_xbox.width * gp->scale,
           hs = gp->tex_xbox.height * gp->scale;
     gp->rt = reslist_load_rt(rl, ws, hs);
@@ -819,6 +857,10 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
     gp->scale = setup->scale;
     gp->is_advanched_mode = false;
     gp->is_draw_labels = true;
+    gp->binder = setup->binder;
+
+    static i32 drawer_instance = 0;
+    gp->wnd_id = drawer_instance++;
 
     ResList *rl = gp->reslist = reslist_new();
     SetTraceLogLevel(LOG_ERROR);
@@ -1096,13 +1138,34 @@ void input_gp_update(InputGamepadDrawer *gp) {
         }
     }
 
+    // Подсказки биндов из общего контейнера: для каждой кнопки ищем
+    // действие с совпадающей геймпадной привязкой и рисуем его msg.
+    if (gp->binder) {
+        i32 num = input_binder_count(gp->binder);
+        for (i32 i = 0; i < btns_num; ++i) {
+            i32 btn = btns[i];
+            for (i32 j = 0; j < num; ++j) {
+                const InputAction *a = input_binder_get(gp->binder, j);
+                if (!a || a->gp.button != btn)
+                    continue;
+                const char *msg = a->msg ? a->msg :
+                    (a->get_msg ? a->get_msg(a->udata) : "");
+                // ниже названия активной кнопки, чтобы не перекрывать
+                Vector2 pos = Vector2Add(desc[btn].p, (Vector2){0, fnt_size});
+                R.DrawTextEx(gp->fnt, msg, pos, fnt_size, fnt_size / 5., SKYBLUE);
+            }
+        }
+    }
+
     R.EndMode2D();
     R.EndTextureMode();
 
     bool wnd = true;
     int flags = ImGuiWindowFlags_AlwaysAutoResize;
     //int flags = ImGuiWindowFlags_NoResize;
-    igBegin("input - gamepad", &wnd, flags);
+    char title[64] = {};
+    snprintf(title, sizeof(title), "input - gamepad##%d", gp->wnd_id);
+    igBegin(title, &wnd, flags);
 
     R.rlImGuiImageRenderTexture(&gp->rt);
 
@@ -1193,3 +1256,84 @@ void input_kb_pass_next_frame(InputKbMouseDrawer *kb) {
     assert(kb);
     kb->pass_next_update = true;
 }
+
+// InputBinder — общий контейнер действий {{{
+
+// Общий контейнер биндов: простой realloc-массив действий.
+struct InputBinder {
+    InputAction *actions;
+    int         count, cap;
+};
+
+InputBinder *input_binder_new(void) {
+    InputBinder *b = calloc(1, sizeof(*b));
+    assert(b);
+    return b;
+}
+
+void input_binder_free(InputBinder *b) {
+    assert(b);
+    if (b->actions)
+        free(b->actions);
+    free(b);
+}
+
+InputActionId input_binder_add(InputBinder *b, InputAction a) {
+    assert(b);
+    assert(a.msg || a.get_msg);
+
+    if (b->count >= b->cap) {
+        int new_cap = b->cap ? b->cap * 2 : 8;
+        InputAction *tmp = realloc(b->actions, new_cap * sizeof(*tmp));
+        assert(tmp);
+        b->actions = tmp;
+        b->cap = new_cap;
+    }
+
+    InputActionId id = b->count;
+    b->actions[b->count++] = a;
+    return id;
+}
+
+// true, если сработала любая из привязок действия.
+bool input_binder_is_pressed(InputBinder *b, InputActionId id) {
+    assert(b);
+    if (id < 0 || id >= b->count)
+        return false;
+
+    InputAction *a = &b->actions[id];
+
+    // клавиатура — переиспользуем готовую проверку с модификаторами
+    bool kb_hit = a->kb.keycode != KEY_NULL &&
+        input_kb_is_pressed(a->kb);
+
+    // геймпад
+    bool gp_hit = a->gp.button != GP_BUTTON_NONE &&
+        R.IsGamepadButtonPressed(a->gp.gamepad, a->gp.button);
+
+    return kb_hit || gp_hit;
+}
+
+int input_binder_count(InputBinder *b) {
+    assert(b);
+    return b->count;
+}
+
+const InputAction *input_binder_get(InputBinder *b, InputActionId id) {
+    assert(b);
+    if (id < 0 || id >= b->count)
+        return NULL;
+    return &b->actions[id];
+}
+
+void input_kb_set_binder(InputKbMouseDrawer *kb, InputBinder *b) {
+    assert(kb);
+    kb->binder = b;
+}
+
+void input_gp_set_binder(InputGamepadDrawer *gp, InputBinder *b) {
+    assert(gp);
+    gp->binder = b;
+}
+
+// }}}
