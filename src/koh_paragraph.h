@@ -49,6 +49,13 @@ typedef struct Paragraph {
     Shader          sh_sdf;
     Texture2D       tex_sdf;
     RenderTexture2D rt_cache;
+
+    // Обводка SDF-текста. outline_width в единицах SDF-дистанции
+    // (~0.05..0.25 разумный диапазон); <= 0 отключает обводку.
+    Color           outline_color;
+    float           outline_width;
+    // Кэш локаций юниформов шейдера обводки
+    int             loc_outline_color, loc_outline_width;
                     // внутрениий флаг
     bool            is_cached, 
                     // включить/отключить кеширование
@@ -63,6 +70,18 @@ typedef struct Paragraph {
     u32     flags;
 } Paragraph;
 
+// AI: Добавить модальное поведение для параграфа - используя встроенный InputBinder - параграф может создавать хоткеи
+// Как лучше - использовать встроенный биндер или внешний? Добавить update для параграфа.
+// Задача - для паузы в игре - запускается параграф. И он-же ловит нажатия клавиш. 
+// Во внешнем коде обработка - выход в меню или снятие с паузы.
+// Так-же параграф может использоваться в koh-hexia для справки по игре. Снизу будет подпись "нажми X для закрытия" 
+// Норм использование?
+// Как описывать конфигурацию биндов? Покажи пример. 
+// Если добавить флаг bool is_binder в опции ParagraphOpts и опциональные указатели на InputKbMouseDrawer,
+// InputGamepadDrader туда-же
+//
+
+
 typedef enum ParagraphFlags {
     // XXX: Сделать окантовку двумя режимами - псевдографика и пиксельная рамка
     PARAGRAPH_BORDER_PSEUDO = 0b010,
@@ -74,6 +93,8 @@ typedef struct ParagraphOpts {
     i32         base_size;
     bool        use_caching;
     u32         flags;
+    // удобная альтернатива flags |= PARAGRAPH_BORDER_NONE
+    bool        no_border;
 } ParagraphOpts;
 
 __attribute__((__format__ (__printf__, 2, 3)))
@@ -95,6 +116,11 @@ void paragraph_clear(Paragraph *prgh);
 void paragraph_init(Paragraph *prgh, Font fnt);
 void paragraph_init2(Paragraph *prgh, const ParagraphOpts *opts);
 void paragraph_shutdown(Paragraph *prgh);
+
+// Обводка SDF-текста. width — толщина в единицах SDF-дистанции
+// (~0.05..0.25); width <= 0 отключает обводку. Работает только в
+// SDF-режиме (paragraph_init2). После вызова сбрасывает кэш рендера.
+void paragraph_set_outline(Paragraph *prgh, Color color, float width);
 
 extern Color paragraph_default_color_background;
 extern Color paragraph_default_color_text;

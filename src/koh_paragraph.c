@@ -272,6 +272,10 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
     assert(opts.base_size >= 0);
     assert(opts.ttf_fname);
 
+    // no_border — удобный синоним флага PARAGRAPH_BORDER_NONE
+    if (opts.no_border)
+        opts.flags |= PARAGRAPH_BORDER_NONE;
+
     // В dummy-режиме шрифты не загружаются
     if (raylib_api_is_dummy()) {
         prgh->is_sdf = true;
@@ -319,6 +323,14 @@ static void init_sdf(Paragraph *prgh,  ParagraphOpts opts) {
         prgh->tex_sdf, TEXTURE_FILTER_BILINEAR
     );
 
+    // Локации юниформов обводки (кэшируем на всё время жизни)
+    prgh->loc_outline_color = R.GetShaderLocation(
+        prgh->sh_sdf, "outlineColor"
+    );
+    prgh->loc_outline_width = R.GetShaderLocation(
+        prgh->sh_sdf, "outlineWidth"
+    );
+
     prgh->is_sdf = true;
     prgh->fnt.texture = prgh->tex_sdf;
     prgh->fnt.baseSize = opts.base_size;
@@ -347,6 +359,14 @@ void paragraph_init2(Paragraph *prgh, const ParagraphOpts *_opts) {
 
     init_sdf(prgh, opts);
     init_cmd(prgh);
+}
+
+void paragraph_set_outline(Paragraph *prgh, Color color, float width) {
+    assert(prgh);
+    prgh->outline_color = color;
+    prgh->outline_width = width;
+    // Обводка рисуется в кэш-текстуру — сбрасываем кэш
+    prgh->is_cached = false;
 }
 
 void paragraph_shutdown(Paragraph *prgh) {
@@ -454,16 +474,17 @@ void paragraph_build(Paragraph *prgh) {
     bool has_border =
         !(prgh->flags & PARAGRAPH_BORDER_NONE);
 
-    if (has_border) {
-        const char *dash = "─";
-        size_t dash_len = strlen(dash);
-        char *pd = dash_line;
-        for (int i = 0; i < longest; i++) {
-            strncpy(pd, dash, dash_len);
-            pd += dash_len;
-        }
-        strbuf_addf(&prgh->b_tlines, "┌%s┐", dash_line);
+    // dash_line нужен и для рамки, и для разделителей в no-border режиме
+    const char *dash = "─";
+    size_t dash_len = strlen(dash);
+    char *pd = dash_line;
+    for (int i = 0; i < longest; i++) {
+        strncpy(pd, dash, dash_len);
+        pd += dash_len;
     }
+
+    if (has_border)
+        strbuf_addf(&prgh->b_tlines, "┌%s┐", dash_line);
 
     // Сдвиг цветовых позиций с учётом padding
     i32 pad_shift = 0;
@@ -721,8 +742,24 @@ static void _paragraph_draw2(
             continue;
         }
 
-        if (prgh->is_sdf)
+        if (prgh->is_sdf) {
             R.BeginShaderMode(prgh->sh_sdf);
+
+            float oc[4] = {
+                prgh->outline_color.r / 255.f,
+                prgh->outline_color.g / 255.f,
+                prgh->outline_color.b / 255.f,
+                prgh->outline_color.a / 255.f,
+            };
+            R.SetShaderValue(
+                prgh->sh_sdf, prgh->loc_outline_color,
+                oc, SHADER_UNIFORM_VEC4
+            );
+            R.SetShaderValue(
+                prgh->sh_sdf, prgh->loc_outline_width,
+                &prgh->outline_width, SHADER_UNIFORM_FLOAT
+            );
+        }
 
         size_t line_len = strlen(line);
 
