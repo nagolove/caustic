@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include "raylib.h"
 
 /*
@@ -33,6 +34,10 @@ Texture reslist_load_texture(ResList *l, const char *fname);
 // XXX: Если текстура не загружена, а лог выключен - как узнать об ошибке?
 // Что лучше - возвращать еденичную текстуру или пустую?
 Texture reslist_load_tex(ResList *l, const char *fname);
+// Загрузка текстуры из бинарных данных в памяти (PNG/DDS).
+// fname — ключ для регистрации в ResList (для reload/replace).
+Texture reslist_load_tex_from_memory(
+    ResList *l, const char *fname, const void *data, size_t len);
 RenderTexture2D reslist_load_rt(ResList *l, int w, int h);
 Shader reslist_load_shader(ResList *l, const char *fname);
 Shader reslist_load_shader_str(ResList *l, const char *code);

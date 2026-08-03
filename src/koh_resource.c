@@ -553,6 +553,27 @@ Texture reslist_load_texture(
     return t;
 }
 
+Texture reslist_load_tex_from_memory(
+    ResList *l, const char *fname, const void *data, size_t len
+) {
+    assert(l);
+    assert(fname);
+    assert(data);
+    assert(len > 0);
+
+    Texture t = {0};
+    Image img = LoadImageFromMemory(".png", (const unsigned char *)data, (int)len);
+    t = LoadTextureFromImage(img);
+    UnloadImage(img);
+
+    R *r = reslist_add(l);
+    r->type = RT_TEXTURE;
+    assert(strlen(fname) < sizeof(r->fname));
+    strncpy(r->fname, fname, sizeof(r->fname));
+    r->raylib_object = copy_alloc(&t, sizeof(t));
+    return t;
+}
+
 RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
     assert(l);
 
