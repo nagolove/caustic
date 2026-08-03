@@ -383,6 +383,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.IsKeyPressed = IsKeyPressed;
         api.IsKeyPressedRepeat = IsKeyPressedRepeat;
         api.IsGamepadButtonDown = IsGamepadButtonDown;
+        api.IsGamepadButtonPressed = IsGamepadButtonPressed;
         api.GetGamepadAxisMovement = GetGamepadAxisMovement;
         // Время — пробрасываем реальный raylib
         api.GetTime = GetTime;
@@ -477,6 +478,7 @@ void raylib_api_init(const RayLibOpts *_opts) {
         api.IsKeyPressed = IsKeyPressed;
         api.IsKeyPressedRepeat = IsKeyPressedRepeat;
         api.IsGamepadButtonDown = IsGamepadButtonDown;
+        api.IsGamepadButtonPressed = IsGamepadButtonPressed;
         api.GetGamepadAxisMovement = GetGamepadAxisMovement;
         api.GetTime = GetTime;
         api.GetFrameTime = GetFrameTime;
