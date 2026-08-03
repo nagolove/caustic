@@ -9,6 +9,9 @@ enum { CAMP_INERTIA_FACTOR = 5, };
 
 typedef struct CameraProcessor {
     Camera2D    *cam;
+    // Обработка ввода включена. Если false — camp_update ничего не делает
+    // (камера остаётся зафиксированной). По умолчанию true.
+    bool        is_enabled;
     KeyboardKey mod_key_down_scale; 
     int         mouse_btn_move;
     float       dscale_value;

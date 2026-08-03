@@ -8,6 +8,7 @@ void camp_init(CameraProcessor *cp, CameraProcessorOpts opts) {
     assert(opts.cam);
 
     cp->cam = opts.cam;
+    cp->is_enabled = true;
     cp->mod_key_down_scale = opts.mod_key_down_scale;
     cp->mouse_btn_move = opts.mouse_btn_move;
     cp->dscale_value = 0.1;
@@ -40,13 +41,16 @@ void camp_init(CameraProcessor *cp, CameraProcessorOpts opts) {
 void camp_shutdown(CameraProcessor *cp) {
 }
 
-// TODO: Сделать обработку мыши отлючаемой
 void camp_update(CameraProcessor *cp) {
     const float zoom_min = 0.01f;
     const float zoom_max = 100.0f;
 
     assert(cp);
     assert(cp->cam);
+
+    // Камера зафиксирована — ввод не обрабатываем
+    if (!cp->is_enabled)
+        return;
 
     Camera2D *cam = cp->cam;
     float mouse_wheel = GetMouseWheelMove();
