@@ -36,6 +36,21 @@ struct Grid {
     int                         step;
 };
 
+// Локальная модель формы для редактора геометрии. Не зависит от
+// hexia/hm_geom.h — кодоген печатает лишь совместимый текст.
+// Координаты хранятся в ЮНИТАХ box2d (не в пикселях).
+enum { GEOM_SET_MAX = 64, GEOM_EDIT_MAX_VERTS = 8 };
+
+enum GeomShapeKind { GK_CIRCLE, GK_POLY };
+
+typedef struct GeomShape {
+    int     kind;                             // enum GeomShapeKind
+    Vector2 center_u;                         // GK_CIRCLE
+    float   radius_u;                         // GK_CIRCLE
+    Vector2 verts_u[GEOM_EDIT_MAX_VERTS];     // GK_POLY (выпуклый)
+    int     vcount;                           // GK_POLY
+} GeomShape;
+
 typedef struct Stage_SpriteLoader {
     Stage                       parent;
 
@@ -47,6 +62,13 @@ typedef struct Stage_SpriteLoader {
     // Слой векторной разметки поверх спрайта (мировые координаты камеры).
     DevCanvas                   *dc;
     bool                        dc_enabled;
+
+    // Редактор геометрии: набор форм составного тела.
+    GeomShape                   geom_set[GEOM_SET_MAX];
+    int                         geom_set_num;
+    char                        geom_name[64];
+    float                       px_per_unit;    // пиксели -> юниты
+    Vector2                     geom_origin;    // центр тела в пикселях
 
     struct FilesSearchResult    fsr_images;
     struct FilesSearchResult    fsr_meta;
@@ -103,6 +125,132 @@ static void search_ase_exported(
     const char *regex_pattern_file,
     const char *regex_pattern_exclude
 );
+
+// --- Редактор геометрии ------------------------------------------------
+
+// Пиксели спрайта -> юниты. Y инвертируется: экран вниз, box2d вверх.
+static Vector2 geom_px2unit(Stage_SpriteLoader *st, Vector2 p) {
+    float k = st->px_per_unit != 0.f ? st->px_per_unit : 1.f;
+    return (Vector2) {
+        (p.x - st->geom_origin.x) / k,
+        -(p.y - st->geom_origin.y) / k,
+    };
+}
+
+// Юниты -> пиксели спрайта (для отрисовки набора поверх спрайта).
+static Vector2 geom_unit2px(Stage_SpriteLoader *st, Vector2 u) {
+    float k = st->px_per_unit != 0.f ? st->px_per_unit : 1.f;
+    return (Vector2) {
+        st->geom_origin.x + u.x * k,
+        st->geom_origin.y - u.y * k,
+    };
+}
+
+// Добавить форму в набор по результату активного инструмента.
+static void geom_add_from_tool(Stage_SpriteLoader *st) {
+    if (st->geom_set_num >= GEOM_SET_MAX)
+        return;
+    struct VisualTool *vt = &st->tool_visual;
+    float k = st->px_per_unit != 0.f ? st->px_per_unit : 1.f;
+    GeomShape g = {};
+
+    switch (vt->mode) {
+    case VIS_TOOL_CIRCLE:
+        if (!vt->t_circle.exist)
+            return;
+        g.kind = GK_CIRCLE;
+        g.center_u = geom_px2unit(st, vt->t_circle.center);
+        g.radius_u = vt->t_circle.radius / k;
+        break;
+    case VIS_TOOL_RECTANGLE: {
+        if (!vt->t_recta.exist)
+            return;
+        Rectangle r = vt->t_recta.rect;
+        Vector2 corners[4] = {
+            { r.x, r.y },
+            { r.x + r.width, r.y },
+            { r.x + r.width, r.y + r.height },
+            { r.x, r.y + r.height },
+        };
+        g.kind = GK_POLY;
+        g.vcount = 4;
+        for (int i = 0; i < 4; i++)
+            g.verts_u[i] = geom_px2unit(st, corners[i]);
+        break;
+    }
+    case VIS_TOOL_POLYLINE: {
+        int n = vt->t_pl.points_num;
+        if (!vt->t_pl.points || n < 3)
+            return;
+        if (n > GEOM_EDIT_MAX_VERTS)
+            n = GEOM_EDIT_MAX_VERTS;
+        g.kind = GK_POLY;
+        g.vcount = n;
+        for (int i = 0; i < n; i++)
+            g.verts_u[i] = geom_px2unit(st, vt->t_pl.points[i]);
+        break;
+    }
+    default:
+        return;
+    }
+
+    st->geom_set[st->geom_set_num++] = g;
+}
+
+// Печать набора как static const ShapeGeom[] (стиль serialize_arr):
+// в stdout и в буфер обмена.
+static void geom_codegen(Stage_SpriteLoader *st) {
+    char buf[8192];
+    int off = 0;
+    #define GEOM_APPEND(...) \
+        off += snprintf(buf + off, sizeof(buf) - off, __VA_ARGS__)
+
+    GEOM_APPEND("static const ShapeGeom %s[] = {\n", st->geom_name);
+    for (int i = 0; i < st->geom_set_num && off < (int)sizeof(buf); i++) {
+        GeomShape *g = &st->geom_set[i];
+        if (g->kind == GK_CIRCLE) {
+            GEOM_APPEND(
+                "    { .kind = GEOM_CIRCLE, .circle_u = { "
+                ".center = {%gf, %gf}, .radius = %gf } },\n",
+                g->center_u.x, g->center_u.y, g->radius_u
+            );
+        } else {
+            GEOM_APPEND(
+                "    { .kind = GEOM_POLY, .vcount = %d, .verts_u = {\n",
+                g->vcount
+            );
+            for (int j = 0; j < g->vcount; j++)
+                GEOM_APPEND(
+                    "        {%gf, %gf},\n",
+                    g->verts_u[j].x, g->verts_u[j].y
+                );
+            GEOM_APPEND("    } },\n");
+        }
+    }
+    GEOM_APPEND("    { .kind = GEOM_NULL },\n};\n");
+    #undef GEOM_APPEND
+
+    printf("%s", buf);
+    SetClipboardText(buf);
+}
+
+// Отрисовка добавленных форм поверх спрайта. Вызывать внутри
+// BeginMode2D(st->cam).
+static void geom_set_draw(Stage_SpriteLoader *st) {
+    for (int i = 0; i < st->geom_set_num; i++) {
+        GeomShape *g = &st->geom_set[i];
+        if (g->kind == GK_CIRCLE) {
+            Vector2 c = geom_unit2px(st, g->center_u);
+            DrawCircleLinesV(c, g->radius_u * st->px_per_unit, GREEN);
+        } else {
+            for (int j = 0; j < g->vcount; j++) {
+                Vector2 a = geom_unit2px(st, g->verts_u[j]);
+                Vector2 b = geom_unit2px(st, g->verts_u[(j + 1) % g->vcount]);
+                DrawLineV(a, b, GREEN);
+            }
+        }
+    }
+}
 
 static const char *get_selected_image(Stage_SpriteLoader *st) {
     assert(st);
@@ -210,6 +358,7 @@ static void stage_sprite_loader_draw(struct Stage *s) {
     ClearBackground(GRAY);
     BeginMode2D(st->cam);
     active_sprite_draw(st);
+    geom_set_draw(st);
     visual_tool_draw(&st->tool_visual, &st->cam);
     devcanvas_render(st->dc);
     EndMode2D();
@@ -558,6 +707,11 @@ static void stage_sprite_loader_init(struct Stage *s) {
         .fname = devcanvas_fname,
     });
 
+    strncpy(st->geom_name, "turret_default", sizeof(st->geom_name) - 1);
+    st->px_per_unit = 24.f;
+    st->geom_origin = Vector2Zero();
+    st->geom_set_num = 0;
+
     st->l_cfg = luaL_newstate();
     luaL_openlibs(st->l_cfg);
 
@@ -763,7 +917,10 @@ static void toolmode_combo(Stage_SpriteLoader *st) {
     const enum MetaLoaderType* value = gui_combo(
             &st->toolmode_combo, &mode_changed
     );
-    if (value)
+    // Только при реальном изменении: иначе комбобокс перетирал бы
+    // режим каждый кадр, ломая радио-кнопки в geometry editor
+    // (у комбобокса нет VIS_TOOL_CIRCLE, дефолт схлопывался в rect).
+    if (value && mode_changed)
         st->tool_visual.mode = visual_tool_mode2metaloader_type(*value);
     if (mode_changed) {
         trace(
@@ -906,7 +1063,6 @@ static void gui_meta(Stage_SpriteLoader *st) {
 
     color_combos(st);
     toolmode_combo(st);
-    gui_devcanvas(st);
 
     if (st->active_sprite.id) {
         Vector2 sz = {
@@ -1253,14 +1409,133 @@ static void gui_sprites_loader(Stage_SpriteLoader *st) {
     gui_sprite_layers(st);
 }
 
+static void gui_geom_tool_radio(Stage_SpriteLoader *st) {
+    int mode = st->tool_visual.mode;
+    igText("tool:");
+    igSameLine(0., 10.);
+    if (igRadioButton_Bool("circle", mode == VIS_TOOL_CIRCLE))
+        st->tool_visual.mode = VIS_TOOL_CIRCLE;
+    igSameLine(0., 10.);
+    if (igRadioButton_Bool("rect", mode == VIS_TOOL_RECTANGLE))
+        st->tool_visual.mode = VIS_TOOL_RECTANGLE;
+    igSameLine(0., 10.);
+    if (igRadioButton_Bool("polyline", mode == VIS_TOOL_POLYLINE))
+        st->tool_visual.mode = VIS_TOOL_POLYLINE;
+}
+
+// Подсказка по кнопкам мыши: общая часть + специфика инструмента.
+static void gui_geom_hint(Stage_SpriteLoader *st) {
+    igTextDisabled("СКМ — пан камеры, колесо — зум");
+    switch (st->tool_visual.mode) {
+    case VIS_TOOL_CIRCLE:
+        igTextDisabled("ПКМ — центр+радиус, ручка на краю — радиус");
+        igTextDisabled("зажать ПКМ на теле круга — двигать центр");
+        break;
+    case VIS_TOOL_RECTANGLE:
+        igTextDisabled("ПКМ — тянуть рамку, ручки углов — размер");
+        break;
+    case VIS_TOOL_POLYLINE:
+        igTextDisabled("ПКМ — добавить точку, зажать ПКМ — тянуть");
+        igTextDisabled("Shift+ПКМ — удалить точку, Ctrl — замкнуть");
+        break;
+    default:
+        break;
+    }
+}
+
+static void gui_geom_list(Stage_SpriteLoader *st) {
+    igText("shapes (%d):", st->geom_set_num);
+    int remove_idx = -1;
+    for (int i = 0; i < st->geom_set_num; i++) {
+        GeomShape *g = &st->geom_set[i];
+        igPushID_Int(i);
+        if (g->kind == GK_CIRCLE)
+            igText(
+                "#%d circle c=(%.2f,%.2f) r=%.2f",
+                i, g->center_u.x, g->center_u.y, g->radius_u
+            );
+        else
+            igText("#%d poly %dv", i, g->vcount);
+        igSameLine(0., 10.);
+        if (igSmallButton("x"))
+            remove_idx = i;
+        igPopID();
+    }
+    if (remove_idx >= 0) {
+        for (int i = remove_idx; i < st->geom_set_num - 1; i++)
+            st->geom_set[i] = st->geom_set[i + 1];
+        st->geom_set_num--;
+    }
+}
+
+// Окно «meta loader» по умолчанию скрыто; включается чекбоксом в
+// geometry editor. Основной рабочий процесс — geometry editor.
+static bool show_metaloader = false;
+
+static void gui_geom_editor(Stage_SpriteLoader *st) {
+    assert(st);
+    bool opened = true;
+    igBegin("geometry editor", &opened, 0);
+
+    igInputText(
+        "set name", st->geom_name, sizeof(st->geom_name), 0, NULL, NULL
+    );
+    igSliderFloat("px_per_unit", &st->px_per_unit, 1.f, 256.f, "%.1f", 0);
+
+    if (igButton("origin = sprite center", (ImVec2){})) {
+        if (st->active_sprite.id)
+            st->geom_origin = (Vector2) {
+                st->active_sprite.texture.width / 2.f,
+                st->active_sprite.texture.height / 2.f,
+            };
+    }
+    igSameLine(0., 10.);
+    igText("origin: %s", Vector2_tostr(st->geom_origin));
+
+    igSeparator();
+    gui_geom_tool_radio(st);
+    gui_geom_hint(st);
+
+    if (igButton("add shape from tool", (ImVec2){}))
+        geom_add_from_tool(st);
+    igSameLine(0., 10.);
+    if (igButton("reset tool", (ImVec2){}))
+        visual_tool_reset_all(&st->tool_visual);
+
+    igSeparator();
+    gui_geom_list(st);
+
+    igSeparator();
+    if (igButton("generate C code", (ImVec2){}))
+        geom_codegen(st);
+    igSameLine(0., 10.);
+    if (igButton("clear set", (ImVec2){}))
+        st->geom_set_num = 0;
+
+    gui_devcanvas(st);
+
+    igSeparator();
+    igCheckbox("show meta loader", &show_metaloader);
+
+    igEnd();
+}
+
 static void stage_sprite_loader_gui_window(struct Stage *s) {
     assert(s);
     struct Stage_SpriteLoader *st = (Stage_SpriteLoader*)s;
     gui_sprites_loader(st);
-    gui_meta(st);
+    if (show_metaloader)
+        gui_meta(st);
+    gui_geom_editor(st);
 }
 
-Stage *stage_sprite_loader_new2() {
+Stage *stage_sprite_loader_new2(Stage_SpriteLoader2Opts opts) {
+    if (opts.regex_pattern_images) {
+        size_t sz = sizeof(regex_pattern_images);
+        assert(strlen(opts.regex_pattern_images) < sz);
+        strncpy(regex_pattern_images, opts.regex_pattern_images, sz);
+    }
+
     Stage_SpriteLoader *st = calloc(1, sizeof(Stage_SpriteLoader));
     if (!st) {
         printf("stage_sprite_loader_new2: bad allocation\n");
