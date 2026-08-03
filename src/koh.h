@@ -20,7 +20,6 @@ do {                                                            \
 #include "koh_fpsmeter.h"
 #include "koh_hashers.h"
 #include "koh_hotkey.h"
-#include "koh_iface.h"
 #include "koh_inotifier.h"
 #include "koh_logger.h"
 #include "koh_lua.h"
