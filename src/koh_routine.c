@@ -148,7 +148,8 @@ void koh_common_init(void) {
 
     const int ascii_last = 256, ascii_first = 32;
     // Константы из таблиц Юникода
-    const int cyrillic_last = 0x450, cyrillic_first = 0x410;
+    // 0x400..0x451 включает Ё(0x401) и ё(0x451) — они вне блока 0x410..0x44F
+    const int cyrillic_last = 0x452, cyrillic_first = 0x400;
     const int pseudo_gr_last = 0x25FF, pseudo_gr_first = 0x2500;
     const int arrows_last = 0x21FF, arrows_first = 0x2190;
     add_chars_range(ascii_first, ascii_last);
@@ -204,14 +205,16 @@ const char *color2str(Color c) {
 static void add_chars_range(int first, int last) {
     assert(first < last);
     int range = last - first;
-    size_t sz = sizeof(cmn.font_chars[0]) * cmn.font_chars_cap;
 
     if (common_verbose)
         trace("add_chars_range: [%x, %x] with %d chars\n", first, last, range);
 
     if (cmn.font_chars_num + range >= cmn.font_chars_cap) {
         cmn.font_chars_cap += range;
+        // размер считаем ПОСЛЕ увеличения cap, иначе realloc не расширит буфер
+        size_t sz = sizeof(cmn.font_chars[0]) * cmn.font_chars_cap;
         cmn.font_chars = realloc(cmn.font_chars, sz);
+        assert(cmn.font_chars);
     }
 
     for (int i = 0; i <= range; ++i) 
@@ -2428,23 +2431,6 @@ void cam_auto_update(CameraAutomat *ca) {
     //    dscale_value *= dscale_value_boost;
     //}
 
-    printf("-----\n");
-    for (int j = 0; j < num; j++) {
-        printf("%f ", ca->last_scroll[j]);
-    }
-    printf("\n\n");
-
-    // Как найти количество перемотки?
-    int k = ca->i + 1;
-    for (int j = 0; j < num; j++) {
-        k = (k - 1);
-        if (k < 0)
-            k = num - 1;
-
-        printf("%f ", ca->last_scroll[k]);
-    }
-    printf("\n");
-
     if (mouse_wheel) {
         ca->dscale_value = copysignf(ca->dscale_value, mouse_wheel);
 
@@ -2455,7 +2441,7 @@ void cam_auto_update(CameraAutomat *ca) {
                 .duration = 0.1,
                 .on_update = tmr_scroll_update,
             });
-            assert(timer);
+            assert(timer != -1);
             if (timer == -1) {
                 printf("cam_auto_update: timer == -1\n");
             }
