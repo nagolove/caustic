@@ -52,6 +52,8 @@ static void iter_b2_destroy(Btn *btn ,int x, int y, int w, int h, int btn_width,
 
 
 static const Color color_bind = { 0, 228, 48, 200 };
+// зеркальная (не-физическая) активация синхронизированного действия
+static const Color color_mirror = { 135, 60, 190, 255 }; // VIOLET
 bool koh_verbose_input = false;
 
 static struct Btn row1[] = {
@@ -179,6 +181,9 @@ static struct BtnRow btn_rows[] = {
     // }}}
 };
 
+// Число строк раскладки (row1..row6) — глобальный btn_rows служит шаблоном.
+enum { KB_ROWS_NUM = sizeof(btn_rows) / sizeof(btn_rows[0]), };
+
 typedef struct InputKbMouseDrawer {
     Vector2         paragraph_pos;
     Paragraph       pr_msg;
@@ -210,6 +215,9 @@ typedef struct InputKbMouseDrawer {
     InputBinder     *binder;
     // уникальный id экземпляра — для уникального ID ImGui-окна
     int             wnd_id;
+    // поэкземплярная копия раскладки; .btns каждой строки — свой malloc-буфер,
+    // чтобы бинды и тела box2d не разделялись между экземплярами drawer'а
+    struct BtnRow   rows[KB_ROWS_NUM];
 } InputKbMouseDrawer;
 
 void input_kb_free(InputKbMouseDrawer *kb) {
@@ -219,18 +227,42 @@ void input_kb_free(InputKbMouseDrawer *kb) {
     reslist_free(kb->reslist);
     htable_free(kb->map_keycode2btn);
     paragraph_shutdown(&kb->pr_msg);
+    // освободить поэкземплярные копии массивов Btn
+    for (int i = 0; i < KB_ROWS_NUM; i++)
+        free(kb->rows[i].btns);
     free(kb);
 }
 
-static Vector2 kb_size(int btn_width) {
+// Глубокая копия глобального шаблона btn_rows в поэкземплярные kbm->rows:
+// каждая строка получает свой malloc-буфер Btn, id тел box2d обнуляются.
+static void kb_rows_clone(InputKbMouseDrawer *kbm) {
+    for (int i = 0; i < KB_ROWS_NUM; i++) {
+        kbm->rows[i] = btn_rows[i]; // копия dx/dy/gap (и указателя .btns)
+
+        int cnt = 0;
+        while (btn_rows[i].btns[cnt].lbl)
+            cnt++;
+        cnt++; // включая NULL-терминатор (btn.lbl == NULL)
+
+        Btn *copy = calloc(cnt, sizeof(*copy));
+        assert(copy);
+        memcpy(copy, btn_rows[i].btns, cnt * sizeof(*copy));
+        for (int j = 0; j < cnt; j++)
+            memset(&copy[j].bid, 0, sizeof(copy[j].bid)); // тело box2d — своё
+
+        kbm->rows[i].btns = copy; // lbl остаётся ссылкой на литерал — ок
+    }
+}
+
+static Vector2 kb_size(struct BtnRow *rows, int btn_width) {
     // {{{
     int x_zero = 0, y_zero = 0;
     int x = x_zero, y = y_zero;
     int x_max = 0, y_max = 0;
 
-    for (int i = 0; i < sizeof(btn_rows) / sizeof(btn_rows[0]); i++) {
-        for (int j = 0; btn_rows[i].btns[j].lbl; j++) {
-            const struct Btn *btn = &btn_rows[i].btns[j];
+    for (int i = 0; i < KB_ROWS_NUM; i++) {
+        for (int j = 0; rows[i].btns[j].lbl; j++) {
+            const struct Btn *btn = &rows[i].btns[j];
 
             x += (btn_width + gap) * (btn->dx + 1);
             int w = btn_width + btn_width * btn->sx;
@@ -241,9 +273,9 @@ static Vector2 kb_size(int btn_width) {
                 y_max = y + btn_width;
 
             x += (btn_width + gap) * btn->sx;
-            
+
         }
-        y += btn_rows[i].dy * btn_width + btn_rows[i].gap;
+        y += rows[i].dy * btn_width + rows[i].gap;
         x = x_zero;
     }
 
@@ -254,6 +286,7 @@ static Vector2 kb_size(int btn_width) {
 typedef void (*BtnIterCb)(Btn *btn, int x, int y, int w, int h, int btn_width, void *user_data);
 
 static void kb_each(
+    struct BtnRow *rows,
     int x_zero, int y_zero, int btn_width,
     BtnIterCb iter,
     void *user_data
@@ -263,18 +296,18 @@ static void kb_each(
     x_zero -= btn_width;
     int x = x_zero, y = y_zero;
 
-    for (int i = 0; i < sizeof(btn_rows) / sizeof(btn_rows[0]); i++) {
-        for (int j = 0; btn_rows[i].btns[j].lbl; j++) {
-            struct Btn *btn = &btn_rows[i].btns[j];
+    for (int i = 0; i < KB_ROWS_NUM; i++) {
+        for (int j = 0; rows[i].btns[j].lbl; j++) {
+            struct Btn *btn = &rows[i].btns[j];
 
             x += (btn_width + gap) * (btn->dx + 1);
             int w = btn_width + btn_width * btn->sx;
 
             iter(btn, x, y, w, btn_width, btn_width, user_data);
             x += (btn_width + gap) * btn->sx;
-            
+
         }
-        y += btn_rows[i].dy * btn_width + btn_rows[i].gap;
+        y += rows[i].dy * btn_width + rows[i].gap;
         x = x_zero;
     }
     // }}}
@@ -282,16 +315,16 @@ static void kb_each(
 
 static void input_kb_reset_b2(InputKbMouseDrawer *kbm) {
     // удалить тела если есть
-    kb_each(0, 0, kbm->btn_width, iter_b2_destroy, kbm);
+    kb_each(kbm->rows, 0, 0, kbm->btn_width, iter_b2_destroy, kbm);
     // создать тела box2d для коллизий
-    kb_each(0, 0, kbm->btn_width, iter_b2_create, kbm);
+    kb_each(kbm->rows, 0, 0, kbm->btn_width, iter_b2_create, kbm);
 }
 
 // Инициализация системы связанной с размером кнопок, шрифта и физических тел
 // кнопок
 static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
     kbm->btn_width = btn_width;
-    Vector2 size = kb_size(btn_width);
+    Vector2 size = kb_size(kbm->rows, btn_width);
     kbm->kb_size = size;
 
     const i32 btn_width_min = 49;
@@ -334,6 +367,9 @@ InputKbMouseDrawer *input_kb_new(
     kbm->left_shift_btn = NULL;
     kbm->right_shift_btn = NULL;
     kbm->binder = setup->binder;
+
+    // своя копия раскладки — до расчёта размеров, карты клавиш и тел box2d
+    kb_rows_clone(kbm);
 
     static i32 drawer_instance = 0;
     kbm->wnd_id = drawer_instance++;
@@ -383,7 +419,7 @@ InputKbMouseDrawer *input_kb_new(
     */
 
     // заполнить map_keycode2btn по keycode
-    kb_each(0, 0, kbm->btn_width, iter_map, kbm);
+    kb_each(kbm->rows, 0, 0, kbm->btn_width, iter_map, kbm);
 
 
     // пересоздать b2 тела
@@ -494,10 +530,39 @@ static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
             msg = bind->get_msg(bind->s, bind->udata);
     }
 
+    // Fallback: подсказка из общего контейнера биндов по совпадению keycode.
+    if ((!msg || !msg[0]) && kb->binder) {
+        i32 num = input_binder_count(kb->binder);
+        for (i32 j = 0; j < num; ++j) {
+            const InputAction *a = input_binder_get(kb->binder, j);
+            if (!a || a->kb.keycode != btn->keycode)
+                continue;
+            msg = a->msg ? a->msg : (a->get_msg ? a->get_msg(a->udata) : "");
+            break;
+        }
+    }
+
     if (msg) {
         paragraph_add(pr_msg, "%s", msg);
         paragraph_build(pr_msg);
     }
+}
+
+// Клавиша активна через синхронизированное действие, нажатое на геймпаде.
+static bool kb_mirror_down(InputKbMouseDrawer *kb, Btn *btn) {
+    if (!kb->binder)
+        return false;
+    i32 num = input_binder_count(kb->binder);
+    for (i32 j = 0; j < num; ++j) {
+        const InputAction *a = input_binder_get(kb->binder, j);
+        if (!a || !a->is_synced || a->kb.keycode != btn->keycode)
+            continue;
+        if (a->gp.button == GP_BUTTON_NONE)
+            continue;
+        if (R.IsGamepadButtonDown(a->gp.gamepad, a->gp.button))
+            return true;
+    }
+    return false;
 }
 
 static void iter_draw(
@@ -552,15 +617,18 @@ static void iter_draw(
         R.DrawRectangle(
             x, y, w, btn_width, kb->color_btn_pressed_no_bind
         );
+    } else if (kb_mirror_down(kb, btn)) {
+        // нажато на геймпаде через синхронизированное действие
+        R.DrawRectangle(x, y, w, btn_width, color_mirror);
     }
 
-    // Треугольник-маркер бинда
+    // Треугольник-маркер бинда — уголок в правом-нижнем углу.
+    // Смещение считаем от высоты клавиши (не ширины), иначе на широких
+    // клавишах (SPACE/BACKSPACE/ENTER) вершина уходит ниже клавиши.
     if (has_bind) {
-        const i32 _w = w, _h = btn_width;
-        const f32 space = w / 2.f;
-        const Vector2 v1 = { x + space, y + _h },
-              v2 = { x + _w, y + space },
-              v3 = { x + _w, y + _h };
+        const f32 s = btn_width / 2.f;
+        const f32 rx = x + w, by = y + btn_width;
+        const Vector2 v1 = { rx - s, by }, v2 = { rx, by - s }, v3 = { rx, by };
         R.DrawTriangle(v2, v1, v3, color_bind);
     }
 
@@ -635,9 +703,9 @@ void input_kb_update(InputKbMouseDrawer *kb) {
     bool imgui_wants_kb = io && io->WantCaptureKeyboard;
 
     if (!kb->pass_next_update && !imgui_wants_kb) {
-        kb_each(0, 0, kb->btn_width, iter_update, kb);
+        kb_each(kb->rows, 0, 0, kb->btn_width, iter_update, kb);
         kb->has_mod_bind = false;
-        kb_each(0, 0, kb->btn_width, iter_check_mod_bind, kb);
+        kb_each(kb->rows, 0, 0, kb->btn_width, iter_check_mod_bind, kb);
     }
     kb->pass_next_update = false;
 
@@ -661,7 +729,7 @@ static void input_kb_gui_update_rt(InputKbMouseDrawer *kb) {
     R.ClearBackground(GRAY);
 
     kb->is_draw_paragraph = false;
-    kb_each(0, 0, kb->btn_width, iter_draw, kb);
+    kb_each(kb->rows, 0, 0, kb->btn_width, iter_draw, kb);
 
     if (kb->is_draw_paragraph)
         paragraph_draw(&kb->pr_msg, kb->paragraph_pos);
@@ -867,8 +935,15 @@ InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup) {
 
     gp_load_tex(gp);
 
-    //gp->fnt = GetFontDefault();
-    gp->fnt = reslist_load_font_dlft(rl);
+    // По умолчанию — встроенный шрифт (только ASCII). Если задан TTF,
+    // грузим юникод-шрифт, чтобы кириллические подсказки не были ???.
+    if (setup->font_ttf) {
+        enum { FONT_SIZE_DEFAULT = 32, };
+        int size = setup->font_size > 0 ? setup->font_size : FONT_SIZE_DEFAULT;
+        gp->fnt = reslist_load_font_unicode(rl, setup->font_ttf, size);
+    } else {
+        gp->fnt = reslist_load_font_dlft(rl);
+    }
 
     SetTraceLogLevel(LOG_INFO);
 
@@ -993,6 +1068,23 @@ static void draw_stick(
     }
 }
 
+// Кнопка геймпада активна через синхронизированное действие, нажатое на клаве.
+static bool gp_mirror_down(InputGamepadDrawer *gp, i32 button) {
+    if (!gp->binder)
+        return false;
+    i32 num = input_binder_count(gp->binder);
+    for (i32 j = 0; j < num; ++j) {
+        const InputAction *a = input_binder_get(gp->binder, j);
+        if (!a || !a->is_synced || a->gp.button != button)
+            continue;
+        if (a->kb.keycode == KEY_NULL)
+            continue;
+        if (R.IsKeyDown(a->kb.keycode))
+            return true;
+    }
+    return false;
+}
+
 void input_gp_update(InputGamepadDrawer *gp) {
     // {{{
     assert(gp);
@@ -1109,12 +1201,16 @@ void input_gp_update(InputGamepadDrawer *gp) {
 
     for (i32 i = 0; i < btns_num; ++i) {
         i32 btn = btns[i];
-        if (R.IsGamepadButtonDown(gamepad, btn)) {
+        bool phys = R.IsGamepadButtonDown(gamepad, btn);
+        // зеркало: нажатие на клавиатуре через синхронизированное действие
+        bool mirror = !phys && gp_mirror_down(gp, btn);
+        if (phys || mirror) {
             const Vector2 p = desc[btn].p;
+            const Color c = phys ? RED : color_mirror;
             if (desc[btn].has_wh)
-                R.DrawRectangleV(p, desc[btn].wh, RED);
+                R.DrawRectangleV(p, desc[btn].wh, c);
             else
-                R.DrawCircleV(p, desc[btn].radius, RED);
+                R.DrawCircleV(p, desc[btn].radius, c);
         }
     }
 

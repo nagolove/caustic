@@ -70,6 +70,11 @@ typedef struct InputGamepadDrawerSetup {
     float scale;
     // опциональный общий контейнер биндов для отрисовки подсказок
     InputBinder *binder;
+    // опциональный TTF с кириллицей для подписей/подсказок;
+    // NULL → встроенный шрифт raylib (только ASCII, кириллица как ???)
+    const char  *font_ttf;
+    // размер загрузки шрифта при font_ttf != NULL (0 → значение по умолчанию)
+    int         font_size;
 } InputGamepadDrawerSetup;
 
 InputGamepadDrawer *input_gp_new(InputGamepadDrawerSetup *setup);
@@ -108,6 +113,8 @@ typedef struct InputAction {
     KbStroke    kb;
     // геймпадная привязка (button == GP_BUTTON_NONE → нет)
     GpStroke    gp;
+    // зеркалировать активацию действия в оба drawer'а (kb и gp)
+    bool        is_synced;
 } InputAction;
 
 // Дескриптор действия внутри InputBinder; -1 — ошибка.
