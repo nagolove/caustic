@@ -32,6 +32,13 @@ typedef struct ToolSector {
     Vector2 position;
 } ToolSector;
 
+typedef struct ToolCircle {
+    void    *internal;
+    bool    exist;
+    Vector2 center;
+    float   radius;
+} ToolCircle;
+
 typedef struct ToolCommonOpts {
     // Номер кнопки мыши из Raylib для работы с рамкой выделения
     // При -1 сохряняется текущее значение в Tool****
@@ -79,11 +86,22 @@ typedef struct ToolSectorOpts {
     struct ToolCommonOpts   common;
 } ToolSectorOpts;
 
+typedef struct ToolCircleOpts {
+    struct ToolCommonOpts   common;
+} ToolCircleOpts;
+
+typedef struct ToolCircleDrawOpts {
+    bool draw_center;
+} ToolCircleDrawOpts;
+
 enum VisualToolMode {
     VIS_TOOL_RECTANGLE,
     VIS_TOOL_RECTANGLE_ORIENTED,
     VIS_TOOL_POLYLINE,
     VIS_TOOL_SECTOR,
+    // Новые режимы добавлять В КОНЕЦ: visual_tool_draw опирается на
+    // совпадение значений VIS_TOOL_* с MLT_* из koh_metaloader.h.
+    VIS_TOOL_CIRCLE,
 };
 
 typedef struct VisualTool {
@@ -104,6 +122,10 @@ typedef struct VisualTool {
     struct ToolPolyline             t_pl;
     struct ToolPolylineDrawOpts     t_pl_draw_opts;
     struct ToolPolylineOpts         t_pl_opts;
+
+    struct ToolCircle               t_circle;
+    struct ToolCircleOpts           t_circle_opts;
+    struct ToolCircleDrawOpts       t_circle_draw_opts;
 } VisualTool;
 
 /*
@@ -179,6 +201,19 @@ void sector_update(struct ToolSector *sec, const Camera2D *cam);
 
 void sector_draw(
     struct ToolSector *sec, struct ToolSectorDrawOpts *opts,
+    const Camera2D *cam
+);
+
+void circle_init(
+    struct ToolCircle *circle, const struct ToolCircleOpts *opts
+);
+void circle_update_opts(
+    struct ToolCircle *circle, const struct ToolCircleOpts *new_opts
+);
+void circle_shutdown(struct ToolCircle *circle);
+void circle_update(struct ToolCircle *circle, const Camera2D *cam);
+void circle_draw(
+    struct ToolCircle *circle, const struct ToolCircleDrawOpts *opts,
     const Camera2D *cam
 );
 

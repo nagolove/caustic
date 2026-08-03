@@ -64,6 +64,13 @@ struct ToolSectorInternal {
     struct ToolCommonOpts   cmn;
 };
 
+struct ToolCircleInternal {
+    struct ToolCommonOpts   cmn;
+    enum State              state;
+    // true — курсор над ручкой радиуса (на краю окружности)
+    bool                    on_radius;
+};
+
 static void common_trace(const char *prefix, struct ToolCommonOpts *cmn);
 static void build_points_from_rect(
     struct ToolRectangle *r, const Rectangle rect
@@ -634,7 +641,8 @@ void rectanglea_draw(
         float handle_r = cmn->handle_circle_radius;
         if (cam)
             handle_r /= cam->zoom;
-        DrawCircleV(internal->corner_point, handle_r, cmn->handle_color);
+        // Прозрачная окружность с обводкой, не заслоняет спрайт.
+        DrawCircleLinesV(internal->corner_point, handle_r, cmn->handle_color);
     }
 }
 
@@ -671,7 +679,7 @@ void polyline_init(
     assert(plt->internal);
     polyline_update_opts(plt, opts);
     struct ToolPolylineInternal *internal = plt->internal;
-    internal->cmn.handle_circle_radius = 30.;
+    internal->cmn.handle_circle_radius = 10.;
 
     internal->points_cap = 100;
     internal->points = calloc(
@@ -847,9 +855,12 @@ void polyline_update(struct ToolPolyline *plt, const Camera2D *cam) {
         internal->drag_index = -1;
         // TODO: Не проверять для каждой точки, использовать какую-то 
         // продвинутую структуру данных
+        // Зона захвата = экранный размер ручки (совпадает с draw).
+        float radius = internal->cmn.handle_circle_radius;
+        if (cam)
+            radius /= cam->zoom;
         for (int j = 0; j < internal->points_num; j++) {
             Vector2 point = internal->points[j];
-            float radius = internal->cmn.handle_circle_radius;
             if (CheckCollisionPointCircle(mp, point, radius)) {
                 //trace("polyline_update: j = %d\n", j);
                 internal->selected_point_index = j;
@@ -906,16 +917,16 @@ void polyline_draw(
     // Получить видимые координаты экрана после преобразования камеры
     //const Rectangle screen = screen_with_cam(cam);
 
-    // TODO: Сделать кружок internal->cmn.handle_circle_radius всегда одного 
-    // размера
+    // Ручка постоянного экранного размера: делим на зум, чтобы при
+    // приближении кружки не разрастались в мировых единицах.
     float handle_r = internal->cmn.handle_circle_radius;
-    //handle_r /= cam->zoom;
+    if (cam)
+        handle_r /= cam->zoom;
+    // Ручка — прозрачная окружность с обводкой, не заслоняет спрайт.
     for (int j = 0; j < internal->points_num; j++) {
         Color color = internal->selected_point_index == j ?
             internal->cmn.handle_color_selected : internal->cmn.handle_color;
-        DrawCircleV(
-            internal->points[j], handle_r, color
-        );
+        DrawCircleLinesV(internal->points[j], handle_r, color);
     }
 
     // TODO: Проверить линию на вхождение в камеру и выполнить отсечение
@@ -1017,6 +1028,149 @@ void sector_draw(
     );
 }
 
+void circle_init(
+    struct ToolCircle *circle, const struct ToolCircleOpts *opts
+) {
+    assert(circle);
+    trace("circle_init:\n");
+    memset(circle, 0, sizeof(*circle));
+    circle->internal = malloc(sizeof(struct ToolCircleInternal));
+    assert(circle->internal);
+
+    struct ToolCircleInternal *internal = circle->internal;
+    internal->cmn.handle_circle_radius = 10.;
+    internal->cmn.line_thick = 3.;
+    internal->cmn.line_color = YELLOW;
+    internal->cmn.handle_color = BLUE;
+    internal->cmn.snap_size = 1;
+    internal->cmn.snap = false;
+    internal->cmn.mouse_button_bind = MOUSE_BUTTON_LEFT;
+    internal->state = S_NONE;
+    internal->on_radius = false;
+    circle_update_opts(circle, opts);
+}
+
+void circle_update_opts(
+    struct ToolCircle *circle, const struct ToolCircleOpts *new_opts
+) {
+    assert(circle);
+    if (!new_opts)
+        return;
+    struct ToolCircleInternal *internal = circle->internal;
+    assert(internal);
+    struct ToolCommonOpts *cmn = &internal->cmn;
+    if (new_opts->common.mouse_button_bind != -1)
+        cmn->mouse_button_bind = new_opts->common.mouse_button_bind;
+    cmn->line_color = new_opts->common.line_color;
+    cmn->handle_color = new_opts->common.handle_color;
+    cmn->line_thick = new_opts->common.line_thick;
+    common_trace("circle_update_opts:", cmn);
+}
+
+void circle_shutdown(struct ToolCircle *circle) {
+    assert(circle);
+    if (circle->internal) {
+        free(circle->internal);
+        circle->internal = NULL;
+    }
+}
+
+// Ручка радиуса — точка на краю окружности справа от центра.
+static Vector2 circle_radius_handle(const struct ToolCircle *circle) {
+    return (Vector2) {
+        circle->center.x + circle->radius,
+        circle->center.y,
+    };
+}
+
+void circle_update(struct ToolCircle *circle, const Camera2D *cam) {
+    assert(circle);
+    struct ToolCircleInternal *internal = circle->internal;
+    struct ToolCommonOpts *cmn = &internal->cmn;
+    Vector2 mp = mouse_with_cam(cam);
+    int btn = cmn->mouse_button_bind;
+
+    // Первый клик по пустому месту — задать центр и начать тянуть радиус
+    if (!circle->exist) {
+        if (IsMouseButtonPressed(btn)) {
+            circle->center = mp;
+            circle->radius = 0.f;
+            circle->exist = true;
+            internal->state = S_RESIZE;
+        }
+        return;
+    }
+
+    // Наведение на ручку радиуса. Зона захвата = экранный размер
+    // ручки (draw делит на зум), поэтому здесь тоже делим.
+    float handle_r = cmn->handle_circle_radius;
+    if (cam)
+        handle_r /= cam->zoom;
+    Vector2 handle = circle_radius_handle(circle);
+    internal->on_radius = CheckCollisionPointCircle(mp, handle, handle_r);
+
+    if (IsMouseButtonPressed(btn)) {
+        if (internal->on_radius)
+            internal->state = S_RESIZE;
+        else if (CheckCollisionPointCircle(mp, circle->center, circle->radius))
+            internal->state = S_ROTATE; // переиспользуем как «перенос»
+        else
+            internal->state = S_NONE;
+    }
+
+    if (IsMouseButtonDown(btn)) {
+        if (internal->state == S_RESIZE) {
+            circle->radius = Vector2Distance(circle->center, mp);
+            SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
+        } else if (internal->state == S_ROTATE) {
+            circle->center = Vector2Add(
+                circle->center, mouse_with_cam_delta(cam)
+            );
+            SetMouseCursor(MOUSE_CURSOR_RESIZE_ALL);
+        }
+    } else {
+        internal->state = S_NONE;
+        SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+    }
+}
+
+void circle_draw(
+    struct ToolCircle *circle, const struct ToolCircleDrawOpts *opts,
+    const Camera2D *cam
+) {
+    assert(circle);
+    assert(circle->internal);
+    if (!circle->exist)
+        return;
+
+    struct ToolCircleInternal *internal = circle->internal;
+    struct ToolCommonOpts *cmn = &internal->cmn;
+
+    float line_thick = cmn->line_thick;
+    if (cam)
+        line_thick /= cam->zoom;
+
+    int segments = circle->radius > 1 ? (int)(circle->radius * 2) : 16;
+    DrawRing(
+        circle->center,
+        circle->radius - line_thick, circle->radius + line_thick,
+        0.f, 360.f, segments, cmn->line_color
+    );
+
+    // Ручки — прозрачные окружности с обводкой, не заслоняют спрайт.
+    float handle_r = cmn->handle_circle_radius;
+    if (cam)
+        handle_r /= cam->zoom;
+    Color hc = internal->on_radius ?
+        cmn->handle_color : Fade(cmn->handle_color, 0.5f);
+    DrawCircleLinesV(circle_radius_handle(circle), handle_r, hc);
+
+    if (opts && opts->draw_center) {
+        float dot_r = handle_r * 0.6f;
+        DrawCircleLinesV(circle->center, dot_r, cmn->line_color);
+    }
+}
+
 /*
 void visual_tool_init(
     struct VisualTool *vt,
@@ -1035,14 +1189,16 @@ void visual_tool_shutdown(struct VisualTool *vt) {
     rectangle_shutdown(&vt->t_rect);
     polyline_shutdown(&vt->t_pl);
     sector_shutdown(&vt->t_sector);
+    circle_shutdown(&vt->t_circle);
 }
 
 const char *visual_mode2str(enum VisualToolMode mode) {
     switch (mode) {
         case VIS_TOOL_RECTANGLE: return "RECTANGLE";  
         case VIS_TOOL_RECTANGLE_ORIENTED: return "RECTANGLE_ORIENTED"; 
-        case VIS_TOOL_POLYLINE: return "POLYLINE"; 
-        case VIS_TOOL_SECTOR: return "SECTOR"; 
+        case VIS_TOOL_POLYLINE: return "POLYLINE";
+        case VIS_TOOL_SECTOR: return "SECTOR";
+        case VIS_TOOL_CIRCLE: return "CIRCLE";
     }
     return NULL;
 }
@@ -1066,6 +1222,9 @@ void visual_tool_update(struct VisualTool *vt, const Camera2D *cam) {
         case VIS_TOOL_SECTOR:
             //if (vt->t_sector.exist)
                 sector_update(&vt->t_sector, cam);
+            break;
+        case VIS_TOOL_CIRCLE:
+            circle_update(&vt->t_circle, cam);
             break;
     }
 }
@@ -1098,6 +1257,9 @@ void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam) {
             //else if (trace_nonexist)
                 //trace("visual_tool_draw: sector is not exists\n");
             break;
+        case VIS_TOOL_CIRCLE:
+            circle_draw(&vt->t_circle, &vt->t_circle_draw_opts, cam);
+            break;
         default:
             trace("visual_tool_draw: unknown value in switch\n");
     }
@@ -1124,6 +1286,11 @@ void visual_tool_reset_all(struct VisualTool *vt) {
     if (vt->t_sector.internal) {
         sector_shutdown(&vt->t_sector);
         sector_init(&vt->t_sector, &vt->t_sector_opts);
+    }
+
+    if (vt->t_circle.internal) {
+        circle_shutdown(&vt->t_circle);
+        circle_init(&vt->t_circle, &vt->t_circle_opts);
     }
 
 }
@@ -1390,5 +1557,11 @@ void visual_tool_init(struct VisualTool *tool_visual) {
         .common = common_opts,
     };
     sector_init(&tool_visual->t_sector, &tool_visual->t_sector_opts);
+
+    tool_visual->t_circle_opts = (struct ToolCircleOpts){
+        .common = common_opts,
+    };
+    tool_visual->t_circle_draw_opts.draw_center = true;
+    circle_init(&tool_visual->t_circle, &tool_visual->t_circle_opts);
 }
 
