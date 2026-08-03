@@ -349,19 +349,21 @@ local function cimgui_after_build(_, _)
 end
 
 
-local function build_freetype_common(e, dep)
+local function build_freetype_common(_, dep)
    print('build_freetype_common', dep.target)
    print('currentdir', lfs.currentdir())
    ut.push_current_dir()
 
    find_and_remove_cmake_cache()
 
-   local function toolchain()
-      if dep.target == 'win' then
-         return e.cmake_toolchain_win_opt
-      end
-      return " "
-   end
+
+
+
+
+
+
+
+
 
    local cm = cmake[dep.target]
    print("build_freetype_common: cmake", cm)
@@ -545,24 +547,6 @@ local function build_raylib_common(_, dep)
       cmd_do("make clean")
       cmd_do(make[dep.target])
    end
-
-   local raylib_i =
-   [[
-%module raylib
-%{
-#include "raylib.h"
-%}
-
-%include "raylib.h"
-]]
-
-   local raylib_wrap_h =
-   [[
-#include "lua.h"
-#include "lauxlib.h"
-// объявляем эту функцию — она из raylib_wrap.c
-extern int luaopen_raylib(lua_State *L);
-]]
 
 
 
@@ -1110,7 +1094,7 @@ _modules = {
          "nanosvg/src",
       },
       libdirs = { "nanosvg" },
-      links = { "nanosvg" },
+      links = { "nanosvg", "nanosvgrast" },
       links_internal = {},
       name = "nanosvg",
       url_action = "git",
