@@ -18,6 +18,7 @@ static raylib_api R = {};
 #include "lua.h"
 #include "raylib.h"
 #include "koh_gui_combo.h"
+#include "box2d/box2d.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -40,8 +41,9 @@ struct Grid {
 // hexia/hm_geom.h — кодоген печатает лишь совместимый текст.
 // Координаты хранятся в ЮНИТАХ box2d (не в пикселях).
 enum { GEOM_SET_MAX = 64, GEOM_EDIT_MAX_VERTS = 8 };
+enum { GEOM_CATEGORIES_MAX = 8, GEOM_CAT_NAME_MAX = 16, GEOM_TAG_MAX = 16 };
 
-enum GeomShapeKind { GK_CIRCLE, GK_POLY };
+enum GeomShapeKind { GK_CIRCLE, GK_POLY, GK_POINT };
 
 typedef struct GeomShape {
     int     kind;                             // enum GeomShapeKind
@@ -49,6 +51,9 @@ typedef struct GeomShape {
     float   radius_u;                         // GK_CIRCLE
     Vector2 verts_u[GEOM_EDIT_MAX_VERTS];     // GK_POLY (выпуклый)
     int     vcount;                           // GK_POLY
+    int     category;                         // индекс в geom_categories, 0 = дефолт
+    Vector2 point_u;                          // GK_POINT (позиция якоря)
+    char    tag[GEOM_TAG_MAX];                // GK_POINT (имя якоря)
 } GeomShape;
 
 typedef struct Stage_SpriteLoader {
@@ -70,9 +75,18 @@ typedef struct Stage_SpriteLoader {
     float                       px_per_unit;    // пиксели -> юниты
     Vector2                     geom_origin;    // центр тела в пикселях
 
+    // Имена категорий коллизий (произвольные строки оператора).
+    // Индекс имени = значение GeomShape.category, экспортируется в код.
+    char                        geom_categories[GEOM_CATEGORIES_MAX][GEOM_CAT_NAME_MAX];
+    int                         geom_categories_num;
+
     struct FilesSearchResult    fsr_images;
     struct FilesSearchResult    fsr_meta;
     struct FilesSearchResult    fsr_ase_exported;
+
+    // Текстовые наборы геометрии (assets/geom/*.geom) для комбобокса.
+    struct FilesSearchResult    fsr_geom;
+    int                         geom_selected_idx; // индекс в fsr_geom.names, -1 = пусто
 
     // Массивы, в которых один элемент — выбранный.
     // Соотносятся с переменными fsr_*
@@ -106,6 +120,9 @@ static char regex_pattern_exclude_ase_exported[512] = "";
 static const char *path_assets = "assets";
 static const char *path_meta = "assets/meta";
 static const char *path_meta_pattern = ".*\\.lua$";
+// Каталог и паттерн текстовых наборов геометрии редактора (*.geom).
+static const char *path_geom = "assets/geom";
+static const char *path_geom_pattern = "\\.geom$";
 static char regex_pattern_images[128] = ".*\\.png$";
 static char regex_pattern_ase_exported[128] = ".*\\.aseprite\\.lua$";
 static const char *cfg_fname = "sprite_loader.lua";
@@ -205,14 +222,33 @@ static void geom_codegen(Stage_SpriteLoader *st) {
     #define GEOM_APPEND(...) \
         off += snprintf(buf + off, sizeof(buf) - off, __VA_ARGS__)
 
+    // Печать поля .category с комментарием-именем (только если != 0).
+    #define GEOM_APPEND_CATEGORY(g) \
+        do { \
+            if ((g)->category != 0) { \
+                const char *_nm = ((g)->category < st->geom_categories_num) \
+                    ? st->geom_categories[(g)->category] : "?"; \
+                GEOM_APPEND( \
+                    " .category = %d, /* \"%s\" */", (g)->category, _nm); \
+            } \
+        } while (0)
+
     GEOM_APPEND("static const ShapeGeom %s[] = {\n", st->geom_name);
     for (int i = 0; i < st->geom_set_num && off < (int)sizeof(buf); i++) {
         GeomShape *g = &st->geom_set[i];
         if (g->kind == GK_CIRCLE) {
             GEOM_APPEND(
                 "    { .kind = GEOM_CIRCLE, .circle_u = { "
-                ".center = {%gf, %gf}, .radius = %gf } },\n",
+                ".center = {%gf, %gf}, .radius = %gf },",
                 g->center_u.x, g->center_u.y, g->radius_u
+            );
+            GEOM_APPEND_CATEGORY(g);
+            GEOM_APPEND(" },\n");
+        } else if (g->kind == GK_POINT) {
+            GEOM_APPEND(
+                "    { .kind = GEOM_POINT, .tag = \"%s\", "
+                ".point_u = {%gf, %gf} },\n",
+                g->tag, g->point_u.x, g->point_u.y
             );
         } else {
             GEOM_APPEND(
@@ -224,10 +260,13 @@ static void geom_codegen(Stage_SpriteLoader *st) {
                     "        {%gf, %gf},\n",
                     g->verts_u[j].x, g->verts_u[j].y
                 );
-            GEOM_APPEND("    } },\n");
+            GEOM_APPEND("    },");
+            GEOM_APPEND_CATEGORY(g);
+            GEOM_APPEND(" },\n");
         }
     }
     GEOM_APPEND("    { .kind = GEOM_NULL },\n};\n");
+    #undef GEOM_APPEND_CATEGORY
     #undef GEOM_APPEND
 
     printf("%s", buf);
@@ -242,6 +281,14 @@ static void geom_set_draw(Stage_SpriteLoader *st) {
         if (g->kind == GK_CIRCLE) {
             Vector2 c = geom_unit2px(st, g->center_u);
             DrawCircleLinesV(c, g->radius_u * st->px_per_unit, GREEN);
+        } else if (g->kind == GK_POINT) {
+            // Якорь: крестик + подпись тегом.
+            Vector2 p = geom_unit2px(st, g->point_u);
+            const float r = 6.f;
+            DrawLineV((Vector2){ p.x - r, p.y }, (Vector2){ p.x + r, p.y }, YELLOW);
+            DrawLineV((Vector2){ p.x, p.y - r }, (Vector2){ p.x, p.y + r }, YELLOW);
+            DrawCircleLinesV(p, r, YELLOW);
+            DrawText(g->tag, (int)(p.x + r + 2), (int)(p.y - r), 10, YELLOW);
         } else {
             for (int j = 0; j < g->vcount; j++) {
                 Vector2 a = geom_unit2px(st, g->verts_u[j]);
@@ -249,6 +296,271 @@ static void geom_set_draw(Stage_SpriteLoader *st) {
                 DrawLineV(a, b, GREEN);
             }
         }
+    }
+}
+
+// Добавить якорь-точку в набор по позиции курсора (мировые координаты).
+static void geom_add_point(Stage_SpriteLoader *st, const char *tag) {
+    if (st->geom_set_num >= GEOM_SET_MAX)
+        return;
+    Vector2 mp_scr = GetMousePosition();
+    Vector2 mp_px = GetScreenToWorld2D(mp_scr, st->cam);
+    GeomShape g = { .kind = GK_POINT };
+    g.point_u = geom_px2unit(st, mp_px);
+    strncpy(g.tag, tag, GEOM_TAG_MAX - 1);
+    st->geom_set[st->geom_set_num++] = g;
+}
+
+// --- Персистентность набора в текстовый файл .geom --------------------
+
+// Сохранить текущий набор геометрии в текстовый файл path.
+// Формат строчный (см. grammar в шапке функции загрузки).
+static bool geom_save_to_file(Stage_SpriteLoader *st, const char *path) {
+    assert(st);
+    assert(path);
+
+    if (!DirectoryExists(path_geom)) {
+        // MakeDirectory: 0 при успехе.
+        if (MakeDirectory(path_geom) != 0) {
+            trace("geom_save_to_file: cannot create dir '%s'\n", path_geom);
+            return false;
+        }
+    }
+
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        trace("geom_save_to_file: fopen '%s': %s\n", path, strerror(errno));
+        return false;
+    }
+
+    fprintf(f, "# caustic geom set v1\n");
+    fprintf(f, "name %s\n", st->geom_name);
+    fprintf(f, "px_per_unit %g\n", st->px_per_unit);
+    fprintf(f, "origin %.6f %.6f\n", st->geom_origin.x, st->geom_origin.y);
+
+    for (int c = 0; c < st->geom_categories_num; c++)
+        fprintf(f, "category %s\n", st->geom_categories[c]);
+
+    for (int i = 0; i < st->geom_set_num; i++) {
+        GeomShape *g = &st->geom_set[i];
+        switch (g->kind) {
+        case GK_CIRCLE:
+            fprintf(
+                f, "circle %d %.6f %.6f %.6f\n",
+                g->category, g->center_u.x, g->center_u.y, g->radius_u
+            );
+            break;
+        case GK_POLY:
+            fprintf(f, "poly %d %d", g->category, g->vcount);
+            for (int k = 0; k < g->vcount; k++)
+                fprintf(f, " %.6f %.6f", g->verts_u[k].x, g->verts_u[k].y);
+            fprintf(f, "\n");
+            break;
+        case GK_POINT:
+            fprintf(
+                f, "point %.6f %.6f %s\n",
+                g->point_u.x, g->point_u.y, g->tag
+            );
+            break;
+        default:
+            break;
+        }
+    }
+
+    fclose(f);
+    trace("geom_save_to_file: saved '%s'\n", path);
+    return true;
+}
+
+// Загрузить набор геометрии из текстового файла path.
+// Грамматика (по строке; '#' и пустые — пропуск):
+//   name <str> | px_per_unit <f> | origin <fx> <fy>
+//   category <name>                     (в порядке индексов, первая = 0)
+//   circle <cat> <cx> <cy> <r>
+//   poly   <cat> <n> <x0> <y0> ...      (n пар)
+//   point  <x> <y> <tag>
+// Парсинг во ВРЕМЕННЫЕ буферы; применение к st только при успехе.
+static bool geom_load_from_file(Stage_SpriteLoader *st, const char *path) {
+    assert(st);
+    assert(path);
+
+    char *text = LoadFileText(path);
+    if (!text) {
+        trace("geom_load_from_file: cannot read '%s'\n", path);
+        return false;
+    }
+
+    GeomShape set[GEOM_SET_MAX];
+    int set_num = 0;
+    char cats[GEOM_CATEGORIES_MAX][GEOM_CAT_NAME_MAX];
+    int cats_num = 0;
+    char name[64] = "";
+    float ppu = st->px_per_unit;
+    Vector2 origin = { 0, 0 };
+
+    char *save = NULL;
+    for (char *line = strtok_r(text, "\n", &save); line;
+         line = strtok_r(NULL, "\n", &save)) {
+
+        // Пропуск пустых строк и комментариев.
+        while (*line == ' ' || *line == '\t') line++;
+        if (*line == '\0' || *line == '#')
+            continue;
+
+        char kw[16] = "";
+        if (sscanf(line, "%15s", kw) != 1)
+            continue;
+
+        if (!strcmp(kw, "name")) {
+            // Остаток строки после ключевого слова.
+            const char *rest = line + 4;
+            while (*rest == ' ') rest++;
+            strncpy(name, rest, sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+        } else if (!strcmp(kw, "px_per_unit")) {
+            sscanf(line, "px_per_unit %f", &ppu);
+        } else if (!strcmp(kw, "origin")) {
+            sscanf(line, "origin %f %f", &origin.x, &origin.y);
+        } else if (!strcmp(kw, "category")) {
+            if (cats_num < GEOM_CATEGORIES_MAX) {
+                char nm[GEOM_CAT_NAME_MAX] = "";
+                if (sscanf(line, "category %15s", nm) == 1) {
+                    strncpy(cats[cats_num], nm, GEOM_CAT_NAME_MAX - 1);
+                    cats[cats_num][GEOM_CAT_NAME_MAX - 1] = '\0';
+                    cats_num++;
+                }
+            } else
+                trace("geom_load_from_file: too many categories\n");
+        } else if (!strcmp(kw, "circle")) {
+            int cat = 0;
+            float cx = 0, cy = 0, r = 0;
+            if (sscanf(line, "circle %d %f %f %f", &cat, &cx, &cy, &r) == 4
+                && set_num < GEOM_SET_MAX) {
+                set[set_num] = (GeomShape){
+                    .kind = GK_CIRCLE, .category = cat,
+                    .center_u = { cx, cy }, .radius_u = r,
+                };
+                set_num++;
+            } else if (set_num >= GEOM_SET_MAX)
+                trace("geom_load_from_file: too many shapes\n");
+        } else if (!strcmp(kw, "poly")) {
+            int cat = 0, n = 0, off = 0;
+            if (sscanf(line, "poly %d %d%n", &cat, &n, &off) == 2
+                && set_num < GEOM_SET_MAX) {
+                if (n > GEOM_EDIT_MAX_VERTS) {
+                    trace("geom_load_from_file: poly clamp %d->%d\n",
+                        n, GEOM_EDIT_MAX_VERTS);
+                    n = GEOM_EDIT_MAX_VERTS;
+                }
+                GeomShape g = { .kind = GK_POLY, .category = cat, .vcount = n };
+                const char *p = line + off;
+                int k = 0;
+                for (; k < n; k++) {
+                    float x = 0, y = 0;
+                    int consumed = 0;
+                    if (sscanf(p, " %f %f%n", &x, &y, &consumed) != 2)
+                        break;
+                    g.verts_u[k] = (Vector2){ x, y };
+                    p += consumed;
+                }
+                if (k == n) {
+                    set[set_num++] = g;
+                } else
+                    trace("geom_load_from_file: poly bad verts\n");
+            } else if (set_num >= GEOM_SET_MAX)
+                trace("geom_load_from_file: too many shapes\n");
+        } else if (!strcmp(kw, "point")) {
+            float px = 0, py = 0;
+            char tag[GEOM_TAG_MAX] = "";
+            if (sscanf(line, "point %f %f %15s", &px, &py, tag) == 3
+                && set_num < GEOM_SET_MAX) {
+                GeomShape g = { .kind = GK_POINT, .point_u = { px, py } };
+                strncpy(g.tag, tag, GEOM_TAG_MAX - 1);
+                set[set_num++] = g;
+            } else if (set_num >= GEOM_SET_MAX)
+                trace("geom_load_from_file: too many shapes\n");
+        } else {
+            trace("geom_load_from_file: unknown keyword '%s'\n", kw);
+        }
+    }
+
+    UnloadFileText(text);
+
+    // Гарантировать наличие дефолтной категории.
+    if (cats_num == 0) {
+        strncpy(cats[0], "default", GEOM_CAT_NAME_MAX - 1);
+        cats[0][GEOM_CAT_NAME_MAX - 1] = '\0';
+        cats_num = 1;
+    }
+
+    // Применение к состоянию редактора (только теперь).
+    memcpy(st->geom_set, set, sizeof(GeomShape) * set_num);
+    st->geom_set_num = set_num;
+    memcpy(st->geom_categories, cats, sizeof(cats[0]) * cats_num);
+    st->geom_categories_num = cats_num;
+    if (name[0])
+        strncpy(st->geom_name, name, sizeof(st->geom_name) - 1);
+    if (ppu > 0.f)
+        st->px_per_unit = ppu;
+    st->geom_origin = origin;
+
+    // Финальный clamp категорий у шейпов.
+    for (int i = 0; i < st->geom_set_num; i++)
+        if (st->geom_set[i].category >= st->geom_categories_num
+            || st->geom_set[i].category < 0)
+            st->geom_set[i].category = 0;
+
+    trace("geom_load_from_file: loaded '%s' (%d shapes)\n", path, set_num);
+    return true;
+}
+
+// Обновить список .geom-файлов для комбобокса.
+static void geom_files_search(Stage_SpriteLoader *st) {
+    assert(st);
+    koh_search_files_shutdown(&st->fsr_geom);
+    st->fsr_geom = koh_search_files(&(struct FilesSearchSetup) {
+        .path = path_geom,
+        .regex_pattern = path_geom_pattern,
+        .deep = -1,
+    });
+    if (st->geom_selected_idx >= st->fsr_geom.num)
+        st->geom_selected_idx = st->fsr_geom.num ? 0 : -1;
+}
+
+// Показывать превью выпуклой оболочки полилинии (что даст box2d).
+static bool show_hull_preview = true;
+
+// Пересчитывает каждый кадр выпуклую оболочку текущей полилинии тем же
+// b2ComputeHull, что и hm_geom.c, и рисует её поверх — видно потерю
+// вогнутости и переупорядочивание вершин ещё в редакторе.
+// Вызывать внутри BeginMode2D(st->cam) (точки — мировые пиксели).
+static void polyline_hull_preview_draw(Stage_SpriteLoader *st) {
+    assert(st);
+    struct VisualTool *vt = &st->tool_visual;
+    if (vt->mode != VIS_TOOL_POLYLINE)
+        return;
+    int n = vt->t_pl.points_num;
+    if (!vt->t_pl.points || n < 3)
+        return;
+
+    // Копируем точки в b2Vec2 явно (не кастуем массив Vector2).
+    if (n > B2_MAX_POLYGON_VERTICES)
+        n = B2_MAX_POLYGON_VERTICES;
+    b2Vec2 pts[B2_MAX_POLYGON_VERTICES];
+    for (int i = 0; i < n; i++)
+        pts[i] = (b2Vec2){ vt->t_pl.points[i].x, vt->t_pl.points[i].y };
+
+    b2Hull hull = b2ComputeHull(pts, n);
+    if (hull.count < 3)
+        return;
+
+    float thick = 2.f / st->cam.zoom;
+    for (int j = 0; j < hull.count; j++) {
+        b2Vec2 a = hull.points[j];
+        b2Vec2 b = hull.points[(j + 1) % hull.count];
+        DrawLineEx(
+            (Vector2){ a.x, a.y }, (Vector2){ b.x, b.y }, thick, ORANGE
+        );
     }
 }
 
@@ -360,6 +672,8 @@ static void stage_sprite_loader_draw(struct Stage *s) {
     active_sprite_draw(st);
     geom_set_draw(st);
     visual_tool_draw(&st->tool_visual, &st->cam);
+    if (show_hull_preview)
+        polyline_hull_preview_draw(st);
     devcanvas_render(st->dc);
     EndMode2D();
 }
@@ -602,6 +916,7 @@ static void stage_sprite_loader_shutdown(struct Stage *s) {
     search_images_shutdown(st);
     search_meta_shutdown(st);
     search_ase_exported_shutdown(st);
+    koh_search_files_shutdown(&st->fsr_geom);
 
     if (st->l_cfg) {
         lua_close(st->l_cfg);
@@ -696,6 +1011,10 @@ static void stage_sprite_loader_init(struct Stage *s) {
     trace("stage_sprite_loader_init:\n");
 
     visual_tool_init(&st->tool_visual);
+    // Стартовый цвет линий совпадает с индексом 0 combo (BLACK).
+    visual_tool_set_line_color(&st->tool_visual, BLACK);
+    // Полилиния рисуется замкнутой (будущий полигон box2d).
+    st->tool_visual.t_pl_draw_opts.closed = true;
 
     st->grid.step = 1;
     st->grid.visible = false;
@@ -712,12 +1031,18 @@ static void stage_sprite_loader_init(struct Stage *s) {
     st->geom_origin = Vector2Zero();
     st->geom_set_num = 0;
 
+    // Категория 0 всегда "default" (дефолтный фильтр box2d).
+    strncpy(st->geom_categories[0], "default", GEOM_CAT_NAME_MAX - 1);
+    st->geom_categories_num = 1;
+
     st->l_cfg = luaL_newstate();
     luaL_openlibs(st->l_cfg);
 
     patterns_load(st);
 
     meta_search_files(st);
+    st->geom_selected_idx = -1;
+    geom_files_search(st);
     color_combos_init(st);
     toolmode_init(st);
 
@@ -1435,11 +1760,42 @@ static void gui_geom_hint(Stage_SpriteLoader *st) {
         igTextDisabled("ПКМ — тянуть рамку, ручки углов — размер");
         break;
     case VIS_TOOL_POLYLINE:
-        igTextDisabled("ПКМ — добавить точку, зажать ПКМ — тянуть");
-        igTextDisabled("Shift+ПКМ — удалить точку, Ctrl — замкнуть");
+        igTextDisabled("ПКМ — добавить точку, зажать ПКМ — тянуть вершину");
+        igTextDisabled("Shift+ПКМ на ручке — удалить точку");
+        igTextDisabled("Shift+ЛКМ на ручке — двигать всю полилинию");
+        igTextDisabled("оранжевый контур — выпуклая оболочка box2d");
         break;
     default:
         break;
+    }
+}
+
+// Редактор имён категорий коллизий. Индекс имени = GeomShape.category.
+// Имена — произвольные строки; смысл (маппинг в b2Filter) задаёт игра.
+static void gui_geom_categories(Stage_SpriteLoader *st) {
+    igText("collision categories (%d):", st->geom_categories_num);
+    for (int i = 0; i < st->geom_categories_num; i++) {
+        igPushID_Int(i);
+        igSetNextItemWidth(160.f);
+        // Категорию 0 ("default") не переименовываем.
+        if (i == 0) {
+            igText("0: %s", st->geom_categories[0]);
+        } else {
+            char label[32];
+            snprintf(label, sizeof(label), "cat %d", i);
+            igInputText(
+                label, st->geom_categories[i], GEOM_CAT_NAME_MAX,
+                0, NULL, NULL
+            );
+        }
+        igPopID();
+    }
+    if (st->geom_categories_num < GEOM_CATEGORIES_MAX
+        && igButton("add category", (ImVec2){})) {
+        int idx = st->geom_categories_num++;
+        snprintf(
+            st->geom_categories[idx], GEOM_CAT_NAME_MAX, "cat%d", idx
+        );
     }
 }
 
@@ -1454,11 +1810,28 @@ static void gui_geom_list(Stage_SpriteLoader *st) {
                 "#%d circle c=(%.2f,%.2f) r=%.2f",
                 i, g->center_u.x, g->center_u.y, g->radius_u
             );
+        else if (g->kind == GK_POINT)
+            igText(
+                "#%d point \"%s\" (%.2f,%.2f)",
+                i, g->tag, g->point_u.x, g->point_u.y
+            );
         else
             igText("#%d poly %dv", i, g->vcount);
         igSameLine(0., 10.);
         if (igSmallButton("x"))
             remove_idx = i;
+
+        // Категория коллизии — только для физических шейпов.
+        if (g->kind != GK_POINT) {
+            const char *items[GEOM_CATEGORIES_MAX];
+            for (int c = 0; c < st->geom_categories_num; c++)
+                items[c] = st->geom_categories[c];
+            igSetNextItemWidth(160.f);
+            igCombo_Str_arr(
+                "category", &g->category,
+                items, st->geom_categories_num, 0
+            );
+        }
         igPopID();
     }
     if (remove_idx >= 0) {
@@ -1471,6 +1844,15 @@ static void gui_geom_list(Stage_SpriteLoader *st) {
 // Окно «meta loader» по умолчанию скрыто; включается чекбоксом в
 // geometry editor. Основной рабочий процесс — geometry editor.
 static bool show_metaloader = false;
+
+// Палитра цвета линий инструмента в geometry editor.
+enum { TOOL_LINE_COLORS_NUM = 5 };
+static const char *tool_line_color_names[TOOL_LINE_COLORS_NUM] = {
+    "BLACK", "WHITE", "RED", "BLUE", "GREEN",
+};
+static const Color tool_line_colors[TOOL_LINE_COLORS_NUM] = {
+    BLACK, WHITE, RED, BLUE, GREEN,
+};
 
 static void gui_geom_editor(Stage_SpriteLoader *st) {
     assert(st);
@@ -1496,11 +1878,33 @@ static void gui_geom_editor(Stage_SpriteLoader *st) {
     gui_geom_tool_radio(st);
     gui_geom_hint(st);
 
+    static int tool_line_color_idx = 0;
+    if (igCombo_Str_arr(
+        "tool line color", &tool_line_color_idx,
+        tool_line_color_names, TOOL_LINE_COLORS_NUM, 0
+    )) {
+        visual_tool_set_line_color(
+            &st->tool_visual, tool_line_colors[tool_line_color_idx]
+        );
+    }
+    igCheckbox("show_hull_preview", &show_hull_preview);
+
     if (igButton("add shape from tool", (ImVec2){}))
         geom_add_from_tool(st);
     igSameLine(0., 10.);
     if (igButton("reset tool", (ImVec2){}))
         visual_tool_reset_all(&st->tool_visual);
+
+    // Точка-якорь (дуло и т.п.): ставится по позиции курсора.
+    static char point_tag[GEOM_TAG_MAX] = "muzzle";
+    igSetNextItemWidth(120.f);
+    igInputText("point tag", point_tag, sizeof(point_tag), 0, NULL, NULL);
+    igSameLine(0., 10.);
+    if (igButton("add point at cursor", (ImVec2){}))
+        geom_add_point(st, point_tag);
+
+    igSeparator();
+    gui_geom_categories(st);
 
     igSeparator();
     gui_geom_list(st);
@@ -1511,6 +1915,45 @@ static void gui_geom_editor(Stage_SpriteLoader *st) {
     igSameLine(0., 10.);
     if (igButton("clear set", (ImVec2){}))
         st->geom_set_num = 0;
+
+    // --- Текстовые наборы (assets/geom/*.geom) ---
+    igSeparator();
+    igText("geom files (%s):", path_geom);
+
+    if (st->fsr_geom.num > 0) {
+        igSetNextItemWidth(300.f);
+        igCombo_Str_arr(
+            "saved sets", &st->geom_selected_idx,
+            (const char *const *)st->fsr_geom.names, st->fsr_geom.num, 0
+        );
+    } else {
+        igTextDisabled("(no .geom files)");
+    }
+
+    if (igButton("refresh list", (ImVec2){}))
+        geom_files_search(st);
+    igSameLine(0., 10.);
+
+    bool can_load = st->fsr_geom.num > 0 && st->geom_selected_idx >= 0;
+    if (!can_load) igBeginDisabled(true);
+    if (igButton("load selected", (ImVec2){})) {
+        char full[512];
+        snprintf(
+            full, sizeof(full), "%s/%s",
+            path_geom, st->fsr_geom.names[st->geom_selected_idx]
+        );
+        if (!geom_load_from_file(st, full))
+            trace("gui_geom_editor: load failed '%s'\n", full);
+    }
+    if (!can_load) igEndDisabled();
+    igSameLine(0., 10.);
+
+    if (igButton("save set", (ImVec2){})) {
+        char full[512];
+        snprintf(full, sizeof(full), "%s/%s.geom", path_geom, st->geom_name);
+        if (geom_save_to_file(st, full))
+            geom_files_search(st);
+    }
 
     gui_devcanvas(st);
 
