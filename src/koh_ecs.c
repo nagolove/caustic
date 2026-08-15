@@ -530,6 +530,40 @@ MunitResult test_num(const MunitParameter params[], void* userdata) {
     return MUNIT_OK;
 }
 
+// Проверка e_get_id(): зарегистрированный компонент, незарегистрированный
+// cp_id, сущность без компонента, несуществующая сущность.
+MunitResult test_get_id(const MunitParameter params[], void* userdata) {
+    ecs_t *r = e_new(NULL);
+    e_register(r, &cp_type_one);
+
+    e_id e = e_create(r);
+    char *data = e_emplace(r, e, cp_type_one);
+    *data = 42;
+
+    // 1. Корректный вызов зарегистрированного компонента: тот же указатель,
+    //    что и e_get(), и то же значение
+    void *by_id = e_get_id(r, e, cp_type_one.priv.cp_id);
+    munit_assert_not_null(by_id);
+    munit_assert_ptr_equal(by_id, e_get(r, e, cp_type_one));
+    munit_assert_char(*(char*)by_id, ==, 42);
+
+    // 2. Незарегистрированный компонент: хранилища нет -> NULL.
+    //    Берём заведомо свободный cp_id (cp_id регистрируемых типов идут с 0).
+    munit_assert_null(e_get_id(r, e, ECS_COMPONENTS_MAX - 1));
+
+    // 3. Сущность без компонента: cp_type_one зарегистрирован, но у новой
+    //    сущности компонента нет -> NULL
+    e_id e2 = e_create(r);
+    munit_assert_null(e_get_id(r, e2, cp_type_one.priv.cp_id));
+
+    // 4. Несуществующая/невалидная сущность -> NULL
+    munit_assert_null(e_get_id(r, e_build(100, 0), cp_type_one.priv.cp_id));
+
+    e_free(r);
+
+    return MUNIT_OK;
+}
+
 // Проход по всем сущностям
 MunitResult test_each_determ(const MunitParameter params[], void* userdata) {
 
@@ -3091,6 +3125,15 @@ static MunitTest test_e_internal[] = {
       NULL
     },
 
+    {
+      "/get_id",
+      test_get_id,
+      NULL,
+      NULL,
+      MUNIT_TEST_OPTION_NONE,
+      NULL
+    },
+
 
     {
       "/each_determ",
@@ -5338,4 +5381,34 @@ void e_shrink(ecs_t *r) {
             // если вдруг newp == NULL — оставляем старый буфер как есть
         }
     }
+}
+
+void* e_get_id(ecs_t* r, e_id e, size_t cp_id) {
+    ecs_assert(r);
+    entity_assert(r, e);
+    assert(cp_id < ECS_COMPONENTS_MAX);
+
+    if (!e_valid(r, e))
+        return NULL;
+
+    // Прямой O(1) поиск хранилища по числовому cp_id (без создания)
+    int32_t idx = r->storages_by_id[cp_id];
+    if (idx < 0)
+        return NULL;
+
+    e_storage *s = &r->storages[idx];
+
+    // Есть ли компонент у этой сущности?
+    if (!ss_has(&s->sparse, e.ord))
+        return NULL;
+
+    // Индекс в плотном массиве компонентов
+    int64_t sparse_index = s->sparse.sparse[e.ord];
+    assert(sparse_index >= 0);
+    assert(sparse_index < s->sparse.max);
+
+    char *cp_data = s->cp_data;
+    assert(cp_data);
+
+    return &cp_data[sparse_index * s->cp_sizeof];
 }
