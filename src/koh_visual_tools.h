@@ -62,6 +62,7 @@ typedef struct ToolSectorDrawOpts {
 
 typedef struct ToolPolylineDrawOpts {
     //bool draw_axises;
+    bool closed;   // замыкать ребром last->first при points_num > 2
 } ToolPolylineDrawOpts;
 
 typedef struct ToolRectangleDrawOpts {
@@ -140,6 +141,8 @@ void visual_tool_init(
 void visual_tool_shutdown(struct VisualTool *vt);
 void visual_tool_update(struct VisualTool *vt, const Camera2D *cam);
 void visual_tool_reset_all(struct VisualTool *vt);
+// Установить цвет линий у всех инструментов и применить его к отрисовке.
+void visual_tool_set_line_color(struct VisualTool *vt, Color color);
 void visual_tool_draw(struct VisualTool *vt, const Camera2D *cam);
 
 void polyline_init(

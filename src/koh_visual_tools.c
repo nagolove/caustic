@@ -934,10 +934,18 @@ void polyline_draw(
     for (int j = 0; j < internal->points_num; j++) {
         Vector2 point = internal->points[j];
         DrawLineEx(
-            prev_point, point, internal->cmn.line_thick, 
+            prev_point, point, internal->cmn.line_thick,
             internal->cmn.line_color
         );
         prev_point = point;
+    }
+
+    // Замыкающее ребро last->first (полигон), если включено опцией.
+    if (opts && opts->closed && internal->points_num > 2) {
+        DrawLineEx(
+            internal->points[internal->points_num - 1], internal->points[0],
+            internal->cmn.line_thick, internal->cmn.line_color
+        );
     }
 }
 
@@ -1293,6 +1301,27 @@ void visual_tool_reset_all(struct VisualTool *vt) {
         circle_init(&vt->t_circle, &vt->t_circle_opts);
     }
 
+}
+
+// Установить цвет линий у всех инструментов сразу и применить его к
+// отрисовке через *_update_opts (visual_tool_update опции не переприменяет).
+void visual_tool_set_line_color(struct VisualTool *vt, Color color) {
+    assert(vt);
+
+    vt->t_pl_opts.common.line_color = color;
+    polyline_update_opts(&vt->t_pl, &vt->t_pl_opts);
+
+    vt->t_recta_opts.common.line_color = color;
+    rectanglea_update_opts(&vt->t_recta, &vt->t_recta_opts);
+
+    vt->t_rect_opts.common.line_color = color;
+    rectangle_update_opts(&vt->t_rect, &vt->t_rect_opts);
+
+    vt->t_sector_opts.common.line_color = color;
+    sector_update_opts(&vt->t_sector, &vt->t_sector_opts);
+
+    vt->t_circle_opts.common.line_color = color;
+    circle_update_opts(&vt->t_circle, &vt->t_circle_opts);
 }
 
 void rectangle_init(
