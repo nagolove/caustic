@@ -2317,7 +2317,7 @@ function actions.remove(_args)
 
    local path = e.path_rel_third_party_t[_args.target]
    if not path then
-      print("%{yellow}unknown target%{reset}")
+      printc("%{yellow}unknown target%{reset}")
       return
    end
 
@@ -2326,7 +2326,7 @@ function actions.remove(_args)
    if _args.name and dependencies_name_map[_args.name] then
       table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
    else
-      print("%{red}modules removing supported only by one name%{reset}")
+      printc("%{red}modules removing supported only by one name%{reset}")
       return
 
 
@@ -3477,6 +3477,8 @@ function sub_make(
    if target == 'win' then
       local win_exclude = {
          "koh_ssimulacra.c",
+         "koh_net.c",
+         "koh_net.h",
          "koh_das.c",
          "koh_das_mt.c",
          "koh_dotool.c",

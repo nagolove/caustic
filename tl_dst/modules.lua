@@ -1376,7 +1376,7 @@ _modules = {
       build = build_raylib_common,
       build_win = build_raylib_common,
       url_action = "git",
-      git_commit = "c5fc7716229cef1727e7baf325a695a0ac00cf27",
+      git_commit = "12259324492d71cc6b90a5104d1eed3e46914547",
       url = "https://github.com/raysan5/raylib.git",
    },
 

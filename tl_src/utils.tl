@@ -740,6 +740,7 @@ local function _remove(path: string, dirnames: {string})
 
     if not string.match(lfs.currentdir(), path) then
         print("Bad current directory")
+        pop_dir()
         return
     end
 

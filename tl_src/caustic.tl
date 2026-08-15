@@ -2317,7 +2317,7 @@ function actions.remove(_args: Args)
 
     local path = e.path_rel_third_party_t[_args.target]
     if not path then
-        print("%{yellow}unknown target%{reset}")
+        printc("%{yellow}unknown target%{reset}")
         return
     end
 
@@ -2326,7 +2326,7 @@ function actions.remove(_args: Args)
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
-        print("%{red}modules removing supported only by one name%{reset}")
+        printc("%{red}modules removing supported only by one name%{reset}")
         return
         --[[
         for _, dirname in ipairs(get_dirs(dependencies)) do
