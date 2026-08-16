@@ -336,12 +336,15 @@ static void input_kb_init_btn_width(InputKbMouseDrawer *kbm, i32 btn_width) {
     paragraph_init2(&kbm->pr_msg, &(ParagraphOpts) {
         .ttf_fname = "assets/DejaVuSansMono.ttf",
         .base_size = kbm->font_size,
-        .flags = PARAGRAPH_BORDER_NONE,
+        .flags = PARAGRAPH_BORDER_PSEUDO,
         //.use_caching = true,
     });
     kbm->pr_msg.use_cache = false;
     //kbm->pr_msg.color_background = RAYWHITE;
-    kbm->pr_msg.color_background = color_bind;
+    // Непрозрачный фон подсказки (color_bind полупрозрачный, alpha 200).
+    kbm->pr_msg.color_background = (Color){
+        color_bind.r, color_bind.g, color_bind.b, 255,
+    };
 
     ResList *rl = kbm->reslist;
     kbm->kb_size.x += kbm->tex_mouse.width * kbm->scale_mouse;
@@ -513,39 +516,47 @@ static KbBind *btn_active_bind(Btn *btn, KbMod mod) {
 }
 
 static void draw_msg(InputKbMouseDrawer *kb, Btn *btn, int x, int y) {
-    kb->is_draw_paragraph = true;
     kb->paragraph_pos.x = x;
     kb->paragraph_pos.y = y;
     Paragraph *pr_msg = &kb->pr_msg;
     paragraph_clear(pr_msg);
 
-    KbMod mod = kb_active_mod();
-    KbBind *bind = btn_active_bind(btn, mod);
-    if (!bind)
-        bind = btn_active_bind(btn, KB_MOD_NONE);
-    const char *msg = "";
-    if (bind) {
-        msg = bind->msg ? bind->msg : "";
-        if (bind->get_msg)
-            msg = bind->get_msg(bind->s, bind->udata);
+    // Показать все бинды клавиши — по строке на каждый модификатор,
+    // с префиксом ("3", "SHIFT+3", "CTRL+3", ...).
+    bool any = false;
+    for (KbMod m = 0; m < KB_MOD_LAST; m++) {
+        KbBind *b = btn_active_bind(btn, m);
+        if (!b)
+            continue;
+        const char *txt = b->get_msg ? b->get_msg(b->s, b->udata) : b->msg;
+        if (!txt || !txt[0])
+            continue;
+        paragraph_add(pr_msg, "%s: %s", kb_stroke2str(b->s), txt);
+        any = true;
     }
 
-    // Fallback: подсказка из общего контейнера биндов по совпадению keycode.
-    if ((!msg || !msg[0]) && kb->binder) {
+    // Fallback: подсказка из общего контейнера биндов по совпадению keycode —
+    // только если ни одного бинда в слотах клавиши не нашлось.
+    if (!any && kb->binder) {
         i32 num = input_binder_count(kb->binder);
         for (i32 j = 0; j < num; ++j) {
             const InputAction *a = input_binder_get(kb->binder, j);
             if (!a || a->kb.keycode != btn->keycode)
                 continue;
-            msg = a->msg ? a->msg : (a->get_msg ? a->get_msg(a->udata) : "");
+            const char *msg =
+                a->msg ? a->msg : (a->get_msg ? a->get_msg(a->udata) : "");
+            if (msg && msg[0]) {
+                paragraph_add(pr_msg, "%s", msg);
+                any = true;
+            }
             break;
         }
     }
 
-    if (msg) {
-        paragraph_add(pr_msg, "%s", msg);
+    // Нет биндов — не показывать пустую подсказку.
+    kb->is_draw_paragraph = any;
+    if (any)
         paragraph_build(pr_msg);
-    }
 }
 
 // Клавиша активна через синхронизированное действие, нажатое на геймпаде.
