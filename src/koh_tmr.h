@@ -5,16 +5,32 @@
 #include "koh_routine.h"
 #include "raylib.h"
 
+// Глобальные sim-часы. В REAL-режиме tmr_now() = реальное время (GetTime),
+// в VIRTUAL — ручной аккумулятор koh_tmr_clock_value, который двигают
+// фиксированным шагом раз за кадр (детерминированный реплей автоматизации).
+extern double koh_tmr_clock_value;      // текущее значение sim-часов, сек
+extern bool   koh_tmr_clock_is_virtual; // true => виртуальный (ручной) режим
+
+// Включить/выключить виртуальный режим. При включении value сидируется
+// текущим реальным временем — часы остаются непрерывными, без скачка.
+void koh_tmr_clock_set_virtual(bool on);
+// Продвинуть виртуальные часы на dt (в REAL-режиме ничего не делает).
+void koh_tmr_clock_step(double dt);
+
 #ifdef KOH_TMR_TEST
 #include <time.h>
-static inline double tmr_now(void) {
+static inline double koh_tmr_now_real(void) {
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 #else
-#define tmr_now() GetTime()
+static inline double koh_tmr_now_real(void) { return GetTime(); }
 #endif
+
+static inline double tmr_now(void) {
+	return koh_tmr_clock_is_virtual ? koh_tmr_clock_value : koh_tmr_now_real();
+}
 
 #include <assert.h>
 #include <stdio.h>
