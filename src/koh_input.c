@@ -1321,11 +1321,14 @@ char *kb_stroke2str(KbStroke s) {
 // KB_MOD_NONE срабатывает только если ни один модификатор
 // не зажат.
 bool input_kb_is_pressed(KbStroke s) {
+#ifndef KOH_HEADLESS
     // Не обрабатывать хоткеи когда ImGui захватил
-    // клавиатуру (igInputText в фокусе и т.д.)
+    // клавиатуру (igInputText в фокусе и т.д.).
+    // В headless ImGui-контекста нет — проверку пропускаем.
     ImGuiIO *io = igGetIO_Nil();
     if (io && io->WantCaptureKeyboard)
         return false;
+#endif
     if (!R.IsKeyPressed(s.keycode))
         return false;
     return kb_active_mod() == s.mod;
