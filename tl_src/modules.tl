@@ -1410,7 +1410,10 @@ _modules = {
         build = build_raylib_common,
         build_win = build_raylib_common,
         url_action = "git",
-        git_commit = "12259324492d71cc6b90a5104d1eed3e46914547",
+        -- master c58072d: upstream починил гвард rlsw.h (#if вместо #ifdef
+        -- RLSW_DOUBLE_BUFFERING) — headless-сборка (PLATFORM=Memory) больше
+        -- не требует ручного патча third-party чекаута. Проверено сборкой.
+        git_commit = "c58072d595690f11b844e0333032949b317af111",
         url = "https://github.com/raysan5/raylib.git",
     },
     -- }}}
