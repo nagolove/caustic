@@ -41,6 +41,27 @@ local box2c_pin: {string: string} = {
     win   = "4996f6e22b59f8a9aa91fbbc7e8448926c5494d7",
 }
 
+-- Чекаут запиненного коммита box2c для текущего таргета (shallow).
+-- Вызывается cwd = каталог box2c. origin уже указывает на erincatto/box2d
+-- (см. git.clone_with_checkout). Нужен и в сборке (build_box2c_common), т.к.
+-- хук dep.update дёргается только из `koh update`, а не из koh init/build —
+-- иначе win остаётся на базовом клоне d9b57323 (DrawSegmentFcn) и ломает
+-- #ifdef _WIN32-ремап в koh_b2.c.
+local function box2c_checkout_pin(dep: Dependency)
+    local sha = box2c_pin[dep.target]
+    if not sha then
+        printc("%{red}box2c_checkout_pin: нет пина box2c для таргета "
+            .. tostring(dep.target) .. "%{reset}")
+        return
+    end
+    if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
+        cmd_do("git checkout --force FETCH_HEAD")
+    else
+        cmd_do("git fetch origin")
+        cmd_do("git checkout --force " .. sha)
+    end
+end
+
 -- XXX: Какую лучше использовать сигнатуру функции?
 local function update_box2c(e: Env, dep: Dependency)
     ut.push_current_dir()
@@ -68,22 +89,7 @@ local function update_box2c(e: Env, dep: Dependency)
     end
     printc("%{green}repository in clean state%{reset}")
 
-    local sha = box2c_pin[dep.target]
-    if not sha then
-        printc("%{red}update_box2c: нет пина box2c для таргета "
-            .. tostring(dep.target) .. "%{reset}")
-        ut.pop_dir()
-        return
-    end
-
-    -- origin уже указывает на erincatto/box2d (см. clone_with_checkout).
-    -- Фиксируем ровно запиненный коммит (shallow), без дрейфа на свежий main.
-    if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
-        cmd_do("git checkout FETCH_HEAD")
-    else
-        cmd_do("git fetch origin")
-        cmd_do("git checkout " .. sha)
-    end
+    box2c_checkout_pin(dep)
 
     ut.pop_dir()
 end
@@ -200,6 +206,9 @@ end
 
 local function build_box2c_common(_: Env, dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
+    -- cwd = каталог box2c (см. _build → chdir(dep.dir)). Фиксируем нужный
+    -- коммит по таргету ДО cmake/make: win требует DrawLineFcn (4996f6e2).
+    box2c_checkout_pin(dep)
     find_and_remove_cmake_cache()
 
     local t = {}

@@ -42,6 +42,27 @@ local box2c_pin = {
 }
 
 
+
+
+
+
+
+local function box2c_checkout_pin(dep)
+   local sha = box2c_pin[dep.target]
+   if not sha then
+      printc("%{red}box2c_checkout_pin: нет пина box2c для таргета " ..
+      tostring(dep.target) .. "%{reset}")
+      return
+   end
+   if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
+      cmd_do("git checkout --force FETCH_HEAD")
+   else
+      cmd_do("git fetch origin")
+      cmd_do("git checkout --force " .. sha)
+   end
+end
+
+
 local function update_box2c(e, dep)
    ut.push_current_dir()
    local ok
@@ -68,22 +89,7 @@ local function update_box2c(e, dep)
    end
    printc("%{green}repository in clean state%{reset}")
 
-   local sha = box2c_pin[dep.target]
-   if not sha then
-      printc("%{red}update_box2c: нет пина box2c для таргета " ..
-      tostring(dep.target) .. "%{reset}")
-      ut.pop_dir()
-      return
-   end
-
-
-
-   if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
-      cmd_do("git checkout FETCH_HEAD")
-   else
-      cmd_do("git fetch origin")
-      cmd_do("git checkout " .. sha)
-   end
+   box2c_checkout_pin(dep)
 
    ut.pop_dir()
 end
@@ -200,6 +206,9 @@ end
 
 local function build_box2c_common(_, dep)
 
+
+
+   box2c_checkout_pin(dep)
    find_and_remove_cmake_cache()
 
    local t = {}
