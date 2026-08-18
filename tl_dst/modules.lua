@@ -31,6 +31,17 @@ local function get_deps_name_map()
 end
 
 
+
+
+
+
+local box2c_pin = {
+   linux = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
+   wasm = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
+   win = "4996f6e22b59f8a9aa91fbbc7e8448926c5494d7",
+}
+
+
 local function update_box2c(e, dep)
    ut.push_current_dir()
    local ok
@@ -50,14 +61,28 @@ local function update_box2c(e, dep)
 
    print("update_box2c", lfs.currentdir())
 
-   if ut.git_is_repo_clean(".", true) then
-      printc("%{green}repository in clean state%{reset}")
-      cmd_do("git config pull.rebase false")
-
-      cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
-      cmd_do("git pull erin main")
-   else
+   if not ut.git_is_repo_clean(".", true) then
       printc("%{red}repository is dirty, nothing to do%{reset}")
+      ut.pop_dir()
+      return
+   end
+   printc("%{green}repository in clean state%{reset}")
+
+   local sha = box2c_pin[dep.target]
+   if not sha then
+      printc("%{red}update_box2c: нет пина box2c для таргета " ..
+      tostring(dep.target) .. "%{reset}")
+      ut.pop_dir()
+      return
+   end
+
+
+
+   if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
+      cmd_do("git checkout FETCH_HEAD")
+   else
+      cmd_do("git fetch origin")
+      cmd_do("git checkout " .. sha)
    end
 
    ut.pop_dir()

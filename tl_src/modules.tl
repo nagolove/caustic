@@ -30,6 +30,17 @@ local function get_deps_name_map(): {string: Dependency}
     return map
 end
 
+-- Пины box2c по таргетам. koh_b2.c под _WIN32 ремапит DrawSegmentFcn ->
+-- DrawLineFcn, поэтому win требует коммит box2d с полем DrawLineFcn
+-- (4996f6e2, «Macro clean up»), а linux/wasm — старый d9b57323 с
+-- DrawSegmentFcn. Свежий main переименовал поле обратно и ломает win-сборку,
+-- поэтому НЕ тянем main, а чекаутим фиксированный коммит по таргету.
+local box2c_pin: {string: string} = {
+    linux = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
+    wasm  = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
+    win   = "4996f6e22b59f8a9aa91fbbc7e8448926c5494d7",
+}
+
 -- XXX: Какую лучше использовать сигнатуру функции?
 local function update_box2c(e: Env, dep: Dependency)
     ut.push_current_dir()
@@ -50,14 +61,28 @@ local function update_box2c(e: Env, dep: Dependency)
 
     print("update_box2c", lfs.currentdir())
 
-    if ut.git_is_repo_clean(".", true) then
-        printc("%{green}repository in clean state%{reset}")
-        cmd_do("git config pull.rebase false")
-        -- TODO: Проверка на существование записи
-        cmd_do("git remote add erin  https://github.com/erincatto/box2d.git")
-        cmd_do("git pull erin main")
-    else
+    if not ut.git_is_repo_clean(".", true) then
         printc("%{red}repository is dirty, nothing to do%{reset}")
+        ut.pop_dir()
+        return
+    end
+    printc("%{green}repository in clean state%{reset}")
+
+    local sha = box2c_pin[dep.target]
+    if not sha then
+        printc("%{red}update_box2c: нет пина box2c для таргета "
+            .. tostring(dep.target) .. "%{reset}")
+        ut.pop_dir()
+        return
+    end
+
+    -- origin уже указывает на erincatto/box2d (см. clone_with_checkout).
+    -- Фиксируем ровно запиненный коммит (shallow), без дрейфа на свежий main.
+    if ut.cmd_try("git fetch --depth 1 origin " .. sha) then
+        cmd_do("git checkout FETCH_HEAD")
+    else
+        cmd_do("git fetch origin")
+        cmd_do("git checkout " .. sha)
     end
 
     ut.pop_dir()
