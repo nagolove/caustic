@@ -64,6 +64,15 @@ void im_nav(void);
 // клавиатурный фокус и прокрутку на следующий (обёрнутый) виджет.
 const char *im_nav_mark(const char *label);
 
+// Как im_nav_mark, но для сворачиваемых секций (CollapsingHeader/TreeNode):
+// во время warm-up обхода форсит секцию открытой, чтобы её тело исполнилось.
+const char *im_nav_mark_open(const char *label);
+
+// Обёртки таб-бара: сбрасывают счётчик вкладок бара, чтобы warm-up обход мог
+// нумеровать вкладки внутри каждого бара независимо.
+bool im_nav_tabbar_begin(const char *id, bool ret);
+void im_nav_tabbar_end(void);
+
 // Обёртки контейнеров: принимают результат настоящего вызова, ведут текущий
 // контекст пути (имя окна / имя вкладки) и возвращают тот же результат.
 bool im_nav_win_begin(const char *name, bool ret);
@@ -126,12 +135,13 @@ int im_nav_tab_flags(const char *label);
 #define igColorEdit3(lbl, ...)    igColorEdit3(im_nav_mark(lbl), ##__VA_ARGS__)
 #define igColorEdit4(lbl, ...)    igColorEdit4(im_nav_mark(lbl), ##__VA_ARGS__)
 
-// Узлы (метка индексируется; переключение вкладок важнее для прыжка)
-#define igTreeNode_Str(lbl, ...)  igTreeNode_Str(im_nav_mark(lbl), ##__VA_ARGS__)
+// Узлы: метка индексируется + im_nav_mark_open форс-открывает их в warm-up,
+// чтобы тело секции исполнилось и вложенные виджеты попали в индекс.
+#define igTreeNode_Str(lbl, ...)  igTreeNode_Str(im_nav_mark_open(lbl), ##__VA_ARGS__)
 #define igCollapsingHeader_TreeNodeFlags(lbl, ...) \
-    igCollapsingHeader_TreeNodeFlags(im_nav_mark(lbl), ##__VA_ARGS__)
+    igCollapsingHeader_TreeNodeFlags(im_nav_mark_open(lbl), ##__VA_ARGS__)
 #define igCollapsingHeader_BoolPtr(lbl, ...) \
-    igCollapsingHeader_BoolPtr(im_nav_mark(lbl), ##__VA_ARGS__)
+    igCollapsingHeader_BoolPtr(im_nav_mark_open(lbl), ##__VA_ARGS__)
 
 // ── Контейнеры пути: обёртка «по результату» ────────────────────────────
 // Настоящий вызов (blue paint) выполняется первым, его bool-результат идёт
@@ -141,6 +151,11 @@ int im_nav_tab_flags(const char *label);
 #define igBegin(name, popen, flags) \
     im_nav_win_begin((name), igBegin((name), (popen), (flags)))
 #define igEnd() (im_nav_win_end(), igEnd())
+
+// Таб-бар: на открытии сбрасываем нумерацию вкладок бара (для warm-up обхода).
+#define igBeginTabBar(id, flags) \
+    im_nav_tabbar_begin((id), igBeginTabBar((id), (flags)))
+#define igEndTabBar() (im_nav_tabbar_end(), igEndTabBar())
 
 // Для вкладки дополнительно подмешиваем SetSelected, когда это цель прыжка.
 #define igBeginTabItem(lbl, popen, flags) \

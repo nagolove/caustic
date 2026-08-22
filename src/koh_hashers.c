@@ -68,6 +68,6 @@ Hash_t koh_hasher_djb2(const void *data, size_t len) {
 }
 
 Hash_t koh_hasher_xxhash(const void *data, size_t len) {
-    printf("koh_hasher_xxhash:\n");
+    //printf("koh_hasher_xxhash:\n");
     return XXH3_64bits(data, len);
 }

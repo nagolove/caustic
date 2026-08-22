@@ -58,6 +58,14 @@ static struct {
     char        target_tab[NAV_TAB_LEN];
     int         target_ttl;
 
+    // Warm-up обход («проиндексировать всё»): по кадрам форсим выбор очередной
+    // вкладки в каждом баре и форс-открываем секции, чтобы их код исполнился и
+    // виджеты попали в индекс без ручного перещёлкивания.
+    bool        index_all;    // обход активен
+    int         walk_step;    // порядковый номер вкладки, выбираемой в этот кадр
+    int         walk_max;     // макс. номер вкладки, встреченный в кадре
+    int         bar_tab_idx;  // счётчик вкладок текущего бара (сброс на BeginTabBar)
+
     int         frame;
 } NAV = { .enabled = true };
 
@@ -170,15 +178,45 @@ const char *im_nav_mark(const char *label) {
     NavItem *it = im_nav_upsert(NAV.cur_win, NAV.cur_tab, label);
     if (it) it->last_frame = NAV.frame;
 
-    // Достигли целевого контрола: фокус клавиатуры на СЛЕДУЮЩИЙ (обёрнутый)
-    // виджет + прокрутка к нему. Клавиатурный фокус даёт и nav-подсветку.
+    // Достигли целевого контрола: фокус на СЛЕДУЮЩИЙ (обёрнутый) виджет БЕЗ
+    // активации + прокрутка к нему. Это копия SetKeyboardFocusHere(0) минус
+    // ImGuiNavMoveFlags_Activate — иначе Slider/Drag/InputText уходят в режим
+    // текстового редактирования. Даёт только nav-рамку (подсветку). Ср. штатный
+    // ImGui::FocusItem() — он тоже без Activate, но целит в последний виджет, а
+    // мы вызываемся ДО сабмита цели (макрос оборачивает лишь метку).
     if (it && NAV.has_target && it->id == NAV.target_id) {
-        igSetKeyboardFocusHere(0);
+        igSetNavWindow(igGetCurrentWindow());
+        ImGuiNavMoveFlags mf = ImGuiNavMoveFlags_IsTabbing |
+                               ImGuiNavMoveFlags_FocusApi |
+                               ImGuiNavMoveFlags_NoSelect;
+        ImGuiScrollFlags sf = ImGuiScrollFlags_KeepVisibleEdgeX |
+                              ImGuiScrollFlags_KeepVisibleEdgeY;
+        igNavMoveRequestSubmit(ImGuiDir_None, ImGuiDir_Down, mf, sf);
+        igSetNavCursorVisible(true);   // гарантировать видимость рамки
         igSetScrollHereY(0.5f);
         NAV.has_target = false; // цель отработана
     }
     return label;
 }
+
+// Пометка секции (CollapsingHeader/TreeNode). Во время warm-up форсим её
+// открытой, чтобы тело исполнилось и вложенные виджеты проиндексировались;
+// вне обхода — обычная пометка, ручное сворачивание не трогаем.
+const char *im_nav_mark_open(const char *label) {
+    if (NAV.enabled && NAV.index_all)
+        igSetNextItemOpen(true, ImGuiCond_Always);
+    return im_nav_mark(label);
+}
+
+// Обёртка таб-бара: на его открытии сбрасываем счётчик вкладок бара, чтобы
+// каждой вкладке достался порядковый номер внутри своего бара.
+bool im_nav_tabbar_begin(const char *id, bool ret) {
+    (void)id;
+    if (ret) NAV.bar_tab_idx = 0;
+    return ret;
+}
+
+void im_nav_tabbar_end(void) { }
 
 bool im_nav_win_begin(const char *name, bool ret) {
     if (ret) NAV.cur_win = name; // контекст валиден, только пока тело сабмитится
@@ -195,9 +233,18 @@ bool im_nav_tab_begin(const char *label, bool ret) {
 void im_nav_tab_end(void) { NAV.cur_tab = NULL; }
 
 int im_nav_tab_flags(const char *label) {
-    if (!NAV.enabled || !NAV.has_target || !NAV.target_tab[0] || !label)
-        return 0;
-    // Ограничиваем текущим целевым окном (cur_win уже выставлен igBegin).
+    if (!NAV.enabled || !label) return 0;
+
+    // Порядковый номер вкладки внутри текущего бара (для warm-up обхода).
+    int idx = NAV.bar_tab_idx++;
+    if (idx > NAV.walk_max) NAV.walk_max = idx;
+
+    // Режим обхода: форсим выбор той вкладки, что назначена этому кадру.
+    if (NAV.index_all)
+        return (idx == NAV.walk_step) ? ImGuiTabItemFlags_SetSelected : 0;
+
+    // Иначе — прыжок к целевой вкладке по метке (cur_win уже выставлен igBegin).
+    if (!NAV.has_target || !NAV.target_tab[0]) return 0;
     const char *win = NAV.cur_win ? NAV.cur_win : "";
     if (strcmp(win, NAV.target_win) != 0) return 0;
     if (strcmp(label, NAV.target_tab) != 0) return 0;
@@ -236,6 +283,29 @@ static int im_nav_hit_cmp(const void *a, const void *b) {
     return y->score - x->score; // по убыванию очков
 }
 
+// Матч запроса по полям контрола ПО ОТДЕЛЬНОСТИ: весь паттерн должен уложиться
+// в одно поле (окно / вкладка / метка), а не сшиваться из кусков разных полей
+// («groups»+«activate» → мнимое «rotat»). Возвращает лучший счёт; совпадение по
+// метке приоритетнее вкладки, вкладка — окна.
+static bool im_nav_match(const NavItem *it, const char *q, int *out_score) {
+    enum { W_LABEL = 20, W_TAB = 4, W_WIN = 0 };
+    int best = 0, s;
+    bool have = false;
+
+    if (im_nav_fuzzy(q, it->label, &s)) {
+        best = s + W_LABEL; have = true;
+    }
+    if (it->tab[0] && im_nav_fuzzy(q, it->tab, &s)) {
+        s += W_TAB; if (!have || s > best) best = s; have = true;
+    }
+    if (it->win[0] && im_nav_fuzzy(q, it->win, &s)) {
+        s += W_WIN; if (!have || s > best) best = s; have = true;
+    }
+
+    if (out_score) *out_score = best;
+    return have;
+}
+
 void im_nav(void) {
     NAV.frame++;
 
@@ -249,19 +319,29 @@ void im_nav(void) {
     static char query[NAV_QUERY_LEN] = "";
     igInputText("поиск контрола", query, sizeof query, 0, NULL, NULL);
     igText("проиндексировано: %d", NAV.num);
+
+    // Warm-up: обойти все вкладки/секции, чтобы их код исполнился и виджеты
+    // попали в индекс без ручного перещёлкивания. walk_step = -1: в этот кадр
+    // (index_all включается в конце) вкладки не форсим, со следующего — с №0.
+    igSameLine(0, -1);
+    if (igButton("проиндексировать всё", (ImVec2){ 0, 0 })) {
+        NAV.index_all = true;
+        NAV.walk_step = -1;
+        NAV.walk_max  = 0;
+    }
+    if (NAV.index_all)
+        igText("индексирую… вкладка %d", NAV.walk_step);
     igSeparator();
 
-    // Собираем совпадения по составной строке «окно вкладка метка».
+    // Совпадения: паттерн матчится по каждому полю отдельно (см. im_nav_match).
     static NavHit hits[NAV_RESULTS + 1];
     int hits_num = 0;
 
     for (int i = 0; i < NAV.num; i++) {
         NavItem *it = &NAV.items[i];
-        char hay[NAV_HAY_LEN];
-        snprintf(hay, sizeof hay, "%s %s %s", it->win, it->tab, it->label);
 
         int score;
-        if (!im_nav_fuzzy(query, hay, &score)) continue;
+        if (!im_nav_match(it, query, &score)) continue;
 
         // Вставка с усечением: держим только топ NAV_RESULTS по очкам.
         if (hits_num < NAV_RESULTS) {
@@ -293,6 +373,18 @@ void im_nav(void) {
 
         if (igSelectable_Bool(row, false, 0, (ImVec2){ 0, 0 }))
             im_nav_goto(it);
+    }
+
+    // Продвижение warm-up. im_nav() рисуется последним за кадр, поэтому walk_max
+    // уже отражает макс. номер вкладки среди всех баров этого кадра (все tab-item
+    // зовут im_nav_tab_flags каждый кадр, независимо от выбора). Идём по одному
+    // номеру за кадр и останавливаемся, как только прошли последнюю вкладку —
+    // один полный свип. НЕ завязываемся на «индекс перестал расти»: виджеты с
+    // динамическими метками растят индекс каждый кадр, и обход не завершился бы.
+    if (NAV.index_all) {
+        if (NAV.walk_step >= NAV.walk_max) NAV.index_all = false;
+        else NAV.walk_step++;
+        NAV.walk_max = 0;
     }
 
     igEnd();
