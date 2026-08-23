@@ -41,9 +41,10 @@ typedef struct NavItem {
     int         last_frame; // последний кадр, когда контрол реально виден
 } NavItem;
 
-static struct {
-    bool        enabled;
-
+// Экземпляр навигатора: свой индекс, контекст, цель прыжка, состояние warm-up и
+// строка поиска. Несколько экземпляров независимы; активный (g_active) получает
+// marks от макро-слоя. Тип непрозрачный для клиента (см. koh_im_nav.h).
+struct ImNav {
     NavItem     *items;
     int         num, cap;
 
@@ -66,8 +67,17 @@ static struct {
     int         walk_max;     // макс. номер вкладки, встреченный в кадре
     int         bar_tab_idx;  // счётчик вкладок текущего бара (сброс на BeginTabBar)
 
+    char        query[NAV_QUERY_LEN]; // строка поиска (per-instance)
+    bool        list_hovered;         // курсор над списком результатов (прошлый кадр)
     int         frame;
-} NAV = { .enabled = true };
+};
+
+// Kill-switch индексации/прыжков — модуль-глобальный (общий для всех экземпляров).
+static bool     g_enabled = true;
+// Активный экземпляр: сюда идут marks от макро-слоя. Глобального экземпляра нет —
+// владелец создаёт свой через im_nav_new и назначает активным im_nav_active_set.
+// Пока активный не назначен (NULL) — marks игнорируются.
+static struct ImNav *g_active = NULL;
 
 // ── Утилиты ─────────────────────────────────────────────────────────────
 
@@ -137,8 +147,8 @@ static bool im_nav_fuzzy(const char *pat, const char *str, int *out_score) {
 
 // ── Индекс: upsert по (win, tab, label) ─────────────────────────────────
 
-static NavItem *im_nav_upsert(const char *win, const char *tab,
-                              const char *label) {
+static NavItem *im_nav_upsert(struct ImNav *nav, const char *win,
+                              const char *tab, const char *label) {
     win   = win   ? win   : "";
     tab   = tab   ? tab   : "";
 
@@ -150,33 +160,35 @@ static NavItem *im_nav_upsert(const char *win, const char *tab,
     if (n > (int)sizeof key - 1) n = (int)sizeof key - 1; // усечение при переполнении
     Hash_t id = koh_hasher_xxhash(key, n);
 
-    for (int i = 0; i < NAV.num; i++)
-        if (NAV.items[i].id == id) return &NAV.items[i];
+    for (int i = 0; i < nav->num; i++)
+        if (nav->items[i].id == id) return &nav->items[i];
 
-    if (NAV.num == NAV.cap) {
-        int cap = NAV.cap + NAV_GROW;
-        NavItem *p = realloc(NAV.items, cap * sizeof(*p));
+    if (nav->num == nav->cap) {
+        int cap = nav->cap + NAV_GROW;
+        NavItem *p = realloc(nav->items, cap * sizeof(*p));
         if (!p) return NULL; // OOM — молча пропускаем индексацию
-        NAV.items = p;
-        NAV.cap = cap;
+        nav->items = p;
+        nav->cap = cap;
     }
 
-    NavItem *it = &NAV.items[NAV.num++];
+    NavItem *it = &nav->items[nav->num++];
     snprintf(it->win,   sizeof it->win,   "%s", win);
     snprintf(it->tab,   sizeof it->tab,   "%s", tab);
     snprintf(it->label, sizeof it->label, "%s", label);
     it->id = id;
-    it->last_frame = NAV.frame;
+    it->last_frame = nav->frame;
     return it;
 }
 
 // ── Публичные helper'ы (зовутся из макросов заголовка) ──────────────────
 
 const char *im_nav_mark(const char *label) {
-    if (!NAV.enabled || !label) return label;
+    if (!g_enabled || !label) return label;
+    struct ImNav *nav = g_active;
+    if (!nav) return label; // активный экземпляр не назначен
 
-    NavItem *it = im_nav_upsert(NAV.cur_win, NAV.cur_tab, label);
-    if (it) it->last_frame = NAV.frame;
+    NavItem *it = im_nav_upsert(nav, nav->cur_win, nav->cur_tab, label);
+    if (it) it->last_frame = nav->frame;
 
     // Достигли целевого контрола: фокус на СЛЕДУЮЩИЙ (обёрнутый) виджет БЕЗ
     // активации + прокрутка к нему. Это копия SetKeyboardFocusHere(0) минус
@@ -184,7 +196,7 @@ const char *im_nav_mark(const char *label) {
     // текстового редактирования. Даёт только nav-рамку (подсветку). Ср. штатный
     // ImGui::FocusItem() — он тоже без Activate, но целит в последний виджет, а
     // мы вызываемся ДО сабмита цели (макрос оборачивает лишь метку).
-    if (it && NAV.has_target && it->id == NAV.target_id) {
+    if (it && nav->has_target && it->id == nav->target_id) {
         igSetNavWindow(igGetCurrentWindow());
         ImGuiNavMoveFlags mf = ImGuiNavMoveFlags_IsTabbing |
                                ImGuiNavMoveFlags_FocusApi |
@@ -194,7 +206,7 @@ const char *im_nav_mark(const char *label) {
         igNavMoveRequestSubmit(ImGuiDir_None, ImGuiDir_Down, mf, sf);
         igSetNavCursorVisible(true);   // гарантировать видимость рамки
         igSetScrollHereY(0.5f);
-        NAV.has_target = false; // цель отработана
+        nav->has_target = false; // цель отработана
     }
     return label;
 }
@@ -203,7 +215,7 @@ const char *im_nav_mark(const char *label) {
 // открытой, чтобы тело исполнилось и вложенные виджеты проиндексировались;
 // вне обхода — обычная пометка, ручное сворачивание не трогаем.
 const char *im_nav_mark_open(const char *label) {
-    if (NAV.enabled && NAV.index_all)
+    if (g_enabled && g_active && g_active->index_all)
         igSetNextItemOpen(true, ImGuiCond_Always);
     return im_nav_mark(label);
 }
@@ -212,64 +224,82 @@ const char *im_nav_mark_open(const char *label) {
 // каждой вкладке достался порядковый номер внутри своего бара.
 bool im_nav_tabbar_begin(const char *id, bool ret) {
     (void)id;
-    if (ret) NAV.bar_tab_idx = 0;
+    if (ret && g_active) g_active->bar_tab_idx = 0;
     return ret;
 }
 
 void im_nav_tabbar_end(void) { }
 
 bool im_nav_win_begin(const char *name, bool ret) {
-    if (ret) NAV.cur_win = name; // контекст валиден, только пока тело сабмитится
+    if (ret && g_active) g_active->cur_win = name; // контекст живёт, пока тело сабмитится
     return ret;
 }
 
-void im_nav_win_end(void) { NAV.cur_win = NULL; }
+void im_nav_win_end(void) { if (g_active) g_active->cur_win = NULL; }
 
 bool im_nav_tab_begin(const char *label, bool ret) {
-    if (ret) NAV.cur_tab = label;
+    if (ret && g_active) g_active->cur_tab = label;
     return ret;
 }
 
-void im_nav_tab_end(void) { NAV.cur_tab = NULL; }
+void im_nav_tab_end(void) { if (g_active) g_active->cur_tab = NULL; }
 
 int im_nav_tab_flags(const char *label) {
-    if (!NAV.enabled || !label) return 0;
+    if (!g_enabled || !label || !g_active) return 0;
+    struct ImNav *nav = g_active;
 
     // Порядковый номер вкладки внутри текущего бара (для warm-up обхода).
-    int idx = NAV.bar_tab_idx++;
-    if (idx > NAV.walk_max) NAV.walk_max = idx;
+    int idx = nav->bar_tab_idx++;
+    if (idx > nav->walk_max) nav->walk_max = idx;
 
     // Режим обхода: форсим выбор той вкладки, что назначена этому кадру.
-    if (NAV.index_all)
-        return (idx == NAV.walk_step) ? ImGuiTabItemFlags_SetSelected : 0;
+    if (nav->index_all)
+        return (idx == nav->walk_step) ? ImGuiTabItemFlags_SetSelected : 0;
 
     // Иначе — прыжок к целевой вкладке по метке (cur_win уже выставлен igBegin).
-    if (!NAV.has_target || !NAV.target_tab[0]) return 0;
-    const char *win = NAV.cur_win ? NAV.cur_win : "";
-    if (strcmp(win, NAV.target_win) != 0) return 0;
-    if (strcmp(label, NAV.target_tab) != 0) return 0;
+    if (!nav->has_target || !nav->target_tab[0]) return 0;
+    const char *win = nav->cur_win ? nav->cur_win : "";
+    if (strcmp(win, nav->target_win) != 0) return 0;
+    if (strcmp(label, nav->target_tab) != 0) return 0;
     return ImGuiTabItemFlags_SetSelected;
 }
 
 // ── Управление состоянием ───────────────────────────────────────────────
 
-void im_nav_set_enabled(bool enabled) { NAV.enabled = enabled; }
-bool im_nav_is_enabled(void)          { return NAV.enabled; }
+void im_nav_set_enabled(bool enabled) { g_enabled = enabled; }
+bool im_nav_is_enabled(void)          { return g_enabled; }
 
-void im_nav_reset(void) {
-    free(NAV.items);
-    NAV.items = NULL;
-    NAV.num = NAV.cap = 0;
-    NAV.has_target = false;
+// ── Жизненный цикл и активный экземпляр ──────────────────────────────────
+
+struct ImNav *im_nav_new(void) {
+    return calloc(1, sizeof(struct ImNav));
+}
+
+void im_nav_free(struct ImNav *nav) {
+    if (!nav) return;
+    if (g_active == nav) g_active = NULL; // активный ушёл — marks игнорируются
+    free(nav->items);
+    free(nav);
+}
+
+void          im_nav_active_set(struct ImNav *n) { g_active = n; }
+struct ImNav *im_nav_active_get(void)            { return g_active; }
+
+void im_nav_reset(struct ImNav *nav) {
+    if (!nav) return;
+    free(nav->items);
+    nav->items = NULL;
+    nav->num = nav->cap = 0;
+    nav->has_target = false;
 }
 
 // Поставить цель прыжка на выбранный из выдачи контрол.
-static void im_nav_goto(const NavItem *it) {
-    NAV.has_target = true;
-    NAV.target_id = it->id;
-    snprintf(NAV.target_win, sizeof NAV.target_win, "%s", it->win);
-    snprintf(NAV.target_tab, sizeof NAV.target_tab, "%s", it->tab);
-    NAV.target_ttl = NAV_TARGET_TTL;
+static void im_nav_goto(struct ImNav *nav, const NavItem *it) {
+    nav->has_target = true;
+    nav->target_id = it->id;
+    snprintf(nav->target_win, sizeof nav->target_win, "%s", it->win);
+    snprintf(nav->target_tab, sizeof nav->target_tab, "%s", it->tab);
+    nav->target_ttl = NAV_TARGET_TTL;
     if (it->win[0]) igSetWindowFocus_Str(it->win);
 }
 
@@ -306,42 +336,44 @@ static bool im_nav_match(const NavItem *it, const char *q, int *out_score) {
     return have;
 }
 
-void im_nav(void) {
-    NAV.frame++;
+// Встраиваемый GUI поиска: рисует поле/кнопку/список ПРЯМО в текущее окно, без
+// собственного igBegin/igEnd. Годится и как отдельное окно (см. ниже), и для
+// вшивания в чужую панель. Рисует переданный экземпляр (не обязательно активный).
+void im_nav_gui(struct ImNav *nav) {
+    if (!nav) return;
+    nav->frame++;
 
     // Гасим просроченную цель, если контрол так и не встретился.
-    if (NAV.has_target && --NAV.target_ttl <= 0) NAV.has_target = false;
+    if (nav->has_target && --nav->target_ttl <= 0) nav->has_target = false;
 
-    if (!NAV.enabled) return;
+    if (!g_enabled) return;
 
-    if (!igBegin("im_nav", NULL, 0)) { igEnd(); return; }
-
-    static char query[NAV_QUERY_LEN] = "";
-    igInputText("поиск контрола", query, sizeof query, 0, NULL, NULL);
-    igText("проиндексировано: %d", NAV.num);
+    igInputText("поиск контрола", nav->query, sizeof nav->query, 0, NULL, NULL);
+    bool input_active = igIsItemActive(); // поле ввода в фокусе/редактируется
+    igText("проиндексировано: %d", nav->num);
 
     // Warm-up: обойти все вкладки/секции, чтобы их код исполнился и виджеты
     // попали в индекс без ручного перещёлкивания. walk_step = -1: в этот кадр
     // (index_all включается в конце) вкладки не форсим, со следующего — с №0.
     igSameLine(0, -1);
     if (igButton("проиндексировать всё", (ImVec2){ 0, 0 })) {
-        NAV.index_all = true;
-        NAV.walk_step = -1;
-        NAV.walk_max  = 0;
+        nav->index_all = true;
+        nav->walk_step = -1;
+        nav->walk_max  = 0;
     }
-    if (NAV.index_all)
-        igText("индексирую… вкладка %d", NAV.walk_step);
+    if (nav->index_all)
+        igText("индексирую… вкладка %d", nav->walk_step);
     igSeparator();
 
     // Совпадения: паттерн матчится по каждому полю отдельно (см. im_nav_match).
     static NavHit hits[NAV_RESULTS + 1];
     int hits_num = 0;
 
-    for (int i = 0; i < NAV.num; i++) {
-        NavItem *it = &NAV.items[i];
+    for (int i = 0; i < nav->num; i++) {
+        NavItem *it = &nav->items[i];
 
         int score;
-        if (!im_nav_match(it, query, &score)) continue;
+        if (!im_nav_match(it, nav->query, &score)) continue;
 
         // Вставка с усечением: держим только топ NAV_RESULTS по очкам.
         if (hits_num < NAV_RESULTS) {
@@ -358,34 +390,63 @@ void im_nav(void) {
 
     qsort(hits, hits_num, sizeof hits[0], im_nav_hit_cmp);
 
-    for (int h = 0; h < hits_num; h++) {
-        NavItem *it = &NAV.items[hits[h].idx];
-        char lbl[NAV_LABEL_LEN];
-        im_nav_display_label(it->label, lbl, sizeof lbl);
+    // Список результатов — под кнопкой, в TreeNode. Форсим раскрытие, пока
+    // активно поле ввода ИЛИ курсор над списком (иначе список закрыт и не
+    // перекрывает содержимое окна). list_hovered с прошлого кадра держит узел
+    // открытым, пока целишься в строку, — иначе клик по строке закрыл бы узел
+    // (клик снимает фокус с поля ввода) раньше, чем сработает. Cond_Always:
+    // ручное сворачивание игнорируем — состояние ведём сами.
+    bool open = input_active || nav->list_hovered;
+    igSetNextItemOpen(open, ImGuiCond_Always);
+    nav->list_hovered = false;
 
-        // «окно › вкладка › метка» с пропуском пустых частей.
-        char row[NAV_HAY_LEN];
-        if (it->tab[0])
-            snprintf(row, sizeof row, "%s › %s › %s##%" PRIu64,
-                     it->win, it->tab, lbl, it->id);
-        else
-            snprintf(row, sizeof row, "%s › %s##%" PRIu64, it->win, lbl, it->id);
+    char node[64];
+    snprintf(node, sizeof node, "результаты: %d##imnav_results", hits_num);
+    if (igTreeNode_Str(node)) {
+        // Дочернее окно: своя прокрутка + чистое определение наведения курсора.
+        if (igBeginChild_Str("imnav_list", (ImVec2){ 0, 240 },
+                             ImGuiChildFlags_Borders, 0)) {
+            for (int h = 0; h < hits_num; h++) {
+                NavItem *it = &nav->items[hits[h].idx];
+                char lbl[NAV_LABEL_LEN];
+                im_nav_display_label(it->label, lbl, sizeof lbl);
 
-        if (igSelectable_Bool(row, false, 0, (ImVec2){ 0, 0 }))
-            im_nav_goto(it);
+                // «окно › вкладка › метка» с пропуском пустых частей.
+                char row[NAV_HAY_LEN];
+                if (it->tab[0])
+                    snprintf(row, sizeof row, "%s › %s › %s##%" PRIu64,
+                             it->win, it->tab, lbl, it->id);
+                else
+                    snprintf(row, sizeof row, "%s › %s##%" PRIu64,
+                             it->win, lbl, it->id);
+
+                if (igSelectable_Bool(row, false, 0, (ImVec2){ 0, 0 }))
+                    im_nav_goto(nav, it);
+            }
+        }
+        if (igIsWindowHovered(0)) nav->list_hovered = true;
+        igEndChild();
+        igTreePop();
     }
 
-    // Продвижение warm-up. im_nav() рисуется последним за кадр, поэтому walk_max
-    // уже отражает макс. номер вкладки среди всех баров этого кадра (все tab-item
-    // зовут im_nav_tab_flags каждый кадр, независимо от выбора). Идём по одному
-    // номеру за кадр и останавливаемся, как только прошли последнюю вкладку —
-    // один полный свип. НЕ завязываемся на «индекс перестал расти»: виджеты с
-    // динамическими метками растят индекс каждый кадр, и обход не завершился бы.
-    if (NAV.index_all) {
-        if (NAV.walk_step >= NAV.walk_max) NAV.index_all = false;
-        else NAV.walk_step++;
-        NAV.walk_max = 0;
+    // Продвижение warm-up. GUI обычно рисуется после сабмита баров этого окна,
+    // поэтому walk_max отражает макс. номер вкладки (все tab-item зовут
+    // im_nav_tab_flags каждый кадр, независимо от выбора). Идём по одному номеру
+    // за кадр и останавливаемся, пройдя последнюю вкладку — один полный свип. НЕ
+    // завязываемся на «индекс перестал расти»: динамические метки растят индекс
+    // каждый кадр, и обход не завершился бы. Для встроенного варианта (поиск
+    // сверху окна) walk_max берётся с лагом в 1 кадр — безвредно.
+    if (nav->index_all) {
+        if (nav->walk_step >= nav->walk_max) nav->index_all = false;
+        else nav->walk_step++;
+        nav->walk_max = 0;
     }
+}
 
+// Оконный вариант: тот же поиск, но в собственном окне «im_nav».
+void im_nav_gui_window(struct ImNav *nav) {
+    if (!g_enabled) return;
+    if (igBegin("im_nav", NULL, 0))
+        im_nav_gui(nav);
     igEnd();
 }
