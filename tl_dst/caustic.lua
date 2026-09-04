@@ -3674,6 +3674,15 @@ function sub_make(
 
    local files_processed = ut.filter_sources(".", exclude)
 
+
+
+
+
+
+
+
+   local to_record = {}
+
    local function gather_tasks(ext)
       local matched = {}
       for _, file in ipairs(files_processed) do
@@ -3687,12 +3696,15 @@ function sub_make(
 
       local tasks = {}
 
+      to_record = {}
+
       for _, file in ipairs(matched) do
          local _output = output_dir ..
          "/" ..
          gsub(file, "(.*%.)" ..
          ext ..
          "$", "%1o")
+         local _dfile = gsub(_output, "%.o$", ".d")
          local _input = cwd .. file
 
          local args = {}
@@ -3726,6 +3738,12 @@ function sub_make(
 
          add_args('includes', '-I')
 
+
+
+         insert(args, "-MMD")
+         insert(args, "-MF")
+         insert(args, _dfile)
+
          insert(args, "-o")
          insert(args, _output)
          insert(args, "-c")
@@ -3757,10 +3775,22 @@ function sub_make(
 
          if _args.all_sources or cache:should_recompile(file, task) then
             table.insert(tasks, task)
+            table.insert(to_record, {
+               fname = file, dfile = _dfile, task = task,
+            })
          end
       end
 
       return tasks
+   end
+
+
+
+   local function record_deps()
+      if _args.all_sources then return end
+      for _, rec in ipairs(to_record) do
+         cache:record(rec.fname, rec.task, rec.dfile)
+      end
    end
 
    local tasks = {}
@@ -3770,6 +3800,7 @@ function sub_make(
    time_print("sub_make: gather_tasks(c)", _t_gc)
    local _t_dc = time_ms()
    driver(tasks, driver_ctx)
+   record_deps()
    time_print("sub_make: driver(c)", _t_dc)
 
    local _t_gcpp = time_ms()
@@ -3777,6 +3808,7 @@ function sub_make(
    time_print("sub_make: gather_tasks(cpp)", _t_gcpp)
    local _t_dcpp = time_ms()
    driver(tasks, driver_ctx)
+   record_deps()
    time_print("sub_make: driver(cpp)", _t_dcpp)
 
    cache:save()
