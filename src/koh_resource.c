@@ -20,6 +20,14 @@
 
 static raylib_api RL = {};
 
+// Гарантирует, что таблица вызовов заполнена. Загрузка ресурсов идёт через RL,
+// чтобы в headless (dummy-бекенд) не дёргать реальный GL и не сыпать
+// предупреждения rlgl («GPU is not ready…», «FBO can not be created»).
+static void rl_ensure(void) {
+    if (!RL.LoadTextureFromImage)
+        RL = raylib_api_get();
+}
+
 typedef struct R {
     ResourceType type;
     char         fname[128];
@@ -34,6 +42,7 @@ struct ResList {
     int  arr_num, arr_cap;
     //u32  filter;
     bool is_minipreview;
+    bool is_log_unload;
     // drag-and-drop перезагрузка текстур
     char dropped_path[256];
     bool drop_pending;
@@ -83,17 +92,18 @@ Resource *res_add(
 Texture2D res_tex_load(
     Resource *res_list, const char *fname
 ) {
+    rl_ensure();
     Texture2D tex = {0};
     size_t sz = 0;
     void *buf = vfs_try_load(fname, &sz, false);
     if (buf) {
         const char *ext = GetFileExtension(fname);
         Image img = LoadImageFromMemory(ext, buf, sz);
-        tex = LoadTextureFromImage(img);
+        tex = RL.LoadTextureFromImage(img);
         UnloadImage(img);
         free(buf);
     } else {
-        tex = LoadTexture(fname);
+        tex = RL.LoadTexture(fname);
     }
     res_add(
         res_list, RT_TEXTURE,
@@ -104,7 +114,8 @@ Texture2D res_tex_load(
 }
 
 RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h) {
-    RenderTexture2D tex_rt = LoadRenderTexture(w, h);
+    rl_ensure();
+    RenderTexture2D tex_rt = RL.LoadRenderTexture(w, h);
     res_add(
         res_list, RT_TEXTURE_RT,
         &tex_rt, sizeof(RenderTexture2D),
@@ -150,6 +161,7 @@ Font res_font_load(
 Shader res_shader_load(
     Resource *res_list, const char *vertex_fname
 ) {
+    rl_ensure();
     Shader shdr;
     size_t sz = 0;
     void *buf = vfs_try_load(
@@ -157,11 +169,11 @@ Shader res_shader_load(
     );
     if (buf) {
         char *fixed = koh_shader_fix_version_alloc((const char *)buf);
-        shdr = LoadShaderFromMemory(NULL, fixed);
+        shdr = RL.LoadShaderFromMemory(NULL, fixed);
         free(fixed);
         free(buf);
     } else {
-        shdr = LoadShader(NULL, vertex_fname);
+        shdr = RL.LoadShader(NULL, vertex_fname);
     }
     res_add(
         res_list, RT_SHADER,
@@ -176,6 +188,7 @@ void res_reload_all(Resource *res_list) {
 
 // TODO: протестировать создание и удаление ресурсов
 void res_unload_all(Resource *res_list, bool no_log) {
+    rl_ensure();
     Resource *allocated = res_list->next;
 
     // Сколько всего элементов?
@@ -204,7 +217,7 @@ void res_unload_all(Resource *res_list, bool no_log) {
                     "res_unload_all: RT_FONT '%s'\n",
                     (char*)cur->source_data
                 );
-                UnloadFont(*(Font*)cur->data);
+                RL.UnloadFont(*(Font*)cur->data);
                 break;
             }
 
@@ -228,7 +241,7 @@ void res_unload_all(Resource *res_list, bool no_log) {
                     "res_unload_all: RT_SHADER '%s'\n",
                     (char*)cur->source_data
                 );
-                UnloadShader(*(Shader*)cur->data);
+                RL.UnloadShader(*(Shader*)cur->data);
                 break;
             }
             case RT_TEXTURE_RT: {
@@ -237,7 +250,7 @@ void res_unload_all(Resource *res_list, bool no_log) {
                     "res_unload_all: RT_TEXTURE_RT %dx%d\n",
                     rt.texture.width, rt.texture.height
                 );
-                UnloadRenderTexture(rt);
+                RL.UnloadRenderTexture(rt);
                 break;
             }
             default:
@@ -339,6 +352,7 @@ ResList *reslist_new() {
         l->arr_cap = 16;
         l->arr = calloc(l->arr_cap, sizeof(l->arr[0]));
         l->is_minipreview = true;
+        l->is_log_unload = true;
         reslist_label_set(l, NULL);
     }
     return l;
@@ -346,6 +360,7 @@ ResList *reslist_new() {
 
 void reslist_free(ResList *l) {
     assert(l);
+    rl_ensure();
     for (int i = 0; i < l->arr_num; i++) {
         R *r = &l->arr[i];
         if (!r->raylib_object) {
@@ -359,38 +374,46 @@ void reslist_free(ResList *l) {
                 break;
             }
             case RT_TEXTURE: {
-                koh_term_color_set(KOH_TERM_BLUE);
-                printf("reslist_free: unload tex [%s]\n", r->fname);
-                koh_term_color_reset();
+                if (l->is_log_unload) {
+                    koh_term_color_set(KOH_TERM_BLUE);
+                    printf("reslist_free: unload tex [%s]\n", r->fname);
+                    koh_term_color_reset();
+                }
                 Texture2D *t = r->raylib_object;
-                UnloadTexture(*t);
+                RL.UnloadTexture(*t);
                 free(t);
                 break;
             }
             case RT_TEXTURE_RT: {
-                koh_term_color_set(KOH_TERM_BLUE);
-                printf("reslist_free: unload rt [%dx%d]\n", r->rt_w, r->rt_h);
-                koh_term_color_reset();
+                if (l->is_log_unload) {
+                    koh_term_color_set(KOH_TERM_BLUE);
+                    printf("reslist_free: unload rt [%dx%d]\n", r->rt_w, r->rt_h);
+                    koh_term_color_reset();
+                }
                 RenderTexture2D *rt = r->raylib_object;
-                UnloadRenderTexture(*rt);
+                RL.UnloadRenderTexture(*rt);
                 free(rt);
                 break;
             }
             case RT_FONT: {
-                koh_term_color_set(KOH_TERM_YELLOW);
-                printf("reslist_free: unload font [%s]\n", r->fname);
-                koh_term_color_reset();
+                if (l->is_log_unload) {
+                    koh_term_color_set(KOH_TERM_YELLOW);
+                    printf("reslist_free: unload font [%s]\n", r->fname);
+                    koh_term_color_reset();
+                }
                 Font *f = r->raylib_object;
-                UnloadFont(*f);
+                RL.UnloadFont(*f);
                 free(f);
                 break;
             }
             case RT_SHADER: {
-                koh_term_color_set(KOH_TERM_RED);
-                printf("reslist_free: unload shader [%s]\n", r->fname);
-                koh_term_color_reset();
+                if (l->is_log_unload) {
+                    koh_term_color_set(KOH_TERM_RED);
+                    printf("reslist_free: unload shader [%s]\n", r->fname);
+                    koh_term_color_reset();
+                }
                 Shader *sh = r->raylib_object;
-                UnloadShader(*sh);
+                RL.UnloadShader(*sh);
                 free(sh);
                 break;
             }
@@ -476,11 +499,11 @@ Shader reslist_load_shader(
     void *buf = vfs_try_load(fname, &sz, true);
     if (buf) {
         char *fixed = koh_shader_fix_version_alloc((const char *)buf);
-        s = LoadShaderFromMemory(NULL, fixed);
+        s = RL.LoadShaderFromMemory(NULL, fixed);
         free(fixed);
         free(buf);
     } else {
-        s = LoadShader(NULL, fname);
+        s = RL.LoadShader(NULL, fname);
     }
     R *r = reslist_add(l);
     r->type = RT_SHADER;
@@ -537,11 +560,11 @@ Texture reslist_load_texture(
             ? ".dds" : GetFileExtension(load_path);
         Image img =
             LoadImageFromMemory(load_ext, buf, sz);
-        t = LoadTextureFromImage(img);
+        t = RL.LoadTextureFromImage(img);
         UnloadImage(img);
         free(buf);
     } else {
-        t = LoadTexture(load_path);
+        t = RL.LoadTexture(load_path);
     }
 
     R *r = reslist_add(l);
@@ -563,7 +586,7 @@ Texture reslist_load_tex_from_memory(
 
     Texture t = {0};
     Image img = LoadImageFromMemory(".png", (const unsigned char *)data, (int)len);
-    t = LoadTextureFromImage(img);
+    t = RL.LoadTextureFromImage(img);
     UnloadImage(img);
 
     R *r = reslist_add(l);
@@ -589,7 +612,7 @@ RenderTexture2D reslist_load_rt(ResList *l, int w, int h) {
 
     assert(w > 0);
     assert(h > 0);
-    RenderTexture2D rt = LoadRenderTexture(w, h);
+    RenderTexture2D rt = RL.LoadRenderTexture(w, h);
     R *r = reslist_add(l);
     memset(r->fname, 0, sizeof(r->fname));
     r->type = RT_TEXTURE_RT;
@@ -650,7 +673,7 @@ Font reslist_load_font(
 
 Font reslist_load_font_dlft(ResList *l) {
     assert(l);
-    Font f = GetFontDefault();
+    Font f = RL.GetFontDefault();
     R *r = reslist_add(l);
     r->type = RT_FONT;
     r->fnt_size = 0;
@@ -662,7 +685,7 @@ Shader reslist_load_shader_str(ResList *l, const char *code) {
     assert(l);
     assert(code);
     char *fixed = koh_shader_fix_version_alloc(code);
-    Shader s = LoadShaderFromMemory(NULL, fixed);
+    Shader s = RL.LoadShaderFromMemory(NULL, fixed);
     free(fixed);
     R *r = reslist_add(l);
     r->type = RT_SHADER;
@@ -785,6 +808,11 @@ void reslist_label_set(ResList *l, const char *label) {
     if (!label) 
         label = "";
     snprintf(l->label, sizeof(l->label), "reslist - %s", label);
+}
+
+void reslist_set_unload_log(ResList *l, bool enabled) {
+    assert(l);
+    l->is_log_unload = enabled;
 }
 
 // Перезагрузить текстуру по индексу из внешнего файла

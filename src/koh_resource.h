@@ -12,16 +12,6 @@
 ///////////////////////////////////////////////////////////////////
 typedef struct ResList ResList;
 
-// Текстура которая может перезагружаться во время работы программы
-typedef struct Tex {
-    Texture2D t;
-    // XXX: Добавить сюда какие-то данные
-    // Подсчет ссылок?
-    /* 
-        Tex reslist_load_tex2(ResList *l, const char *fname);
-     */
-} Tex;
-
 ResList *reslist_new();
 void reslist_free(ResList *l);
 
@@ -50,6 +40,8 @@ char *koh_shader_fix_version_alloc(const char *src);
 void reslist_gui(ResList *l);
 // Установить уникальную надпись для списка ресурсов
 void reslist_label_set(ResList *l, const char *label);
+// Включить/выключить информационный лог при выгрузке ресурсов
+void reslist_set_unload_log(ResList *l, bool enabled);
 void reslist_dragndrop_gui(ResList *l);
 ////////////////////////////////////////////////////////////////////
 //void reslist_reload_all(ResList *l);
@@ -77,9 +69,15 @@ typedef struct Resource {
  */
 
 // Как добавить подсчет ссылок на загруженные текстуры?
+// Устаревший интерфейс на связном списке Resource — использовать ResList
+// (reslist_load_*).
+__attribute__((deprecated))
 Texture2D res_tex_load(Resource *res_list, const char *fname);
+__attribute__((deprecated))
 Font res_font_load(Resource *res_list, const char *fname, int font_size);
+__attribute__((deprecated))
 Shader res_shader_load(Resource *res_list, const char *vertex_fname);
+__attribute__((deprecated))
 RenderTexture2D res_tex_load_rt(Resource *res_list, int w, int h);
 
 //void res_tex_load2(Resource *res_list, Texture2D **dest, const char *fname);
