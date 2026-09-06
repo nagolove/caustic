@@ -131,8 +131,16 @@ static Texture2D dummy_LoadTexture(const char *fileName) {
 }
 
 static Texture2D dummy_LoadTextureFromImage(Image image) {
-    (void)image;
-    return (Texture2D){0};
+    // Без GL (id=0), но геометрию сохраняем: headless-код считает размеры
+    // текстур (напр. koh_input kb_size из ширин, RT-кэш гексов). Обнуление
+    // размеров ломало reslist_load_rt (w=0 → koh_fatal).
+    return (Texture2D){
+        .id      = 0,
+        .width   = image.width,
+        .height  = image.height,
+        .mipmaps = 1,
+        .format  = image.format,
+    };
 }
 
 static void dummy_UnloadTexture(Texture2D texture) {
@@ -261,8 +269,14 @@ static void dummy_SetTextureFilter(Texture2D texture, int filter) {
 }
 
 static RenderTexture2D dummy_LoadRenderTexture(int width, int height) {
-    (void)width; (void)height;
-    return (RenderTexture2D){0};
+    // Без GL, но сохраняем размеры прикреплённой текстуры — их читают
+    // шейдерные uniform'ы (maskSize) и логика, зависящая от размера RT.
+    RenderTexture2D rt = {0};
+    rt.texture.width   = width;
+    rt.texture.height  = height;
+    rt.texture.mipmaps = 1;
+    rt.texture.format  = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+    return rt;
 }
 
 static void dummy_UnloadRenderTexture(RenderTexture2D target) {
