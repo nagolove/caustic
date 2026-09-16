@@ -4965,48 +4965,22 @@ e_cp_type **e_types(ecs_t *r, e_id e, int *num) {
     static e_cp_type *slots[SLOTS_NUM][TYPES_NUM] = {};
     static int index = 0;
     e_cp_type **types = slots[index];
-
-    memset(types, 0, sizeof(slots[index]));
     index = (index + 1) % SLOTS_NUM;
 
+    // Прямой проход по плотному массиву созданных хранилищ вместо обхода всех
+    // зарегистрированных типов через htable + e_has на каждый (и memset всего
+    // буфера). Хранилище компонента существует, если хоть одна сущность его
+    // получила, поэтому для «какие компоненты у e» проход по storages полон.
+    // ss_has — инлайн O(1). Указатель &st->type в r->storages валиден, пока
+    // массив не реаллоцировался (это бывает только при первом хранилище нового
+    // типа в e_assure); все вызывающие используют результат до такого события.
+    assert(r->storages_size < TYPES_NUM);
     int found_types_num = 0;
-
-    // Убедиться что хватит места на все типы компонент.
-    assert(htable_count(r->cp_types) < TYPES_NUM);
-
-    for (HTableIterator i = htable_iter_new(r->cp_types);
-        htable_iter_valid(&i); htable_iter_next(&i)) {
-        const char *type_name = htable_iter_key(&i, NULL);
-
-        assert(type_name);
-        if (!type_name) {
-            printf("e_types: type_name is NULL\n");
-            koh_fatal();
-        }
-
-        /*printf("e_types: '%s'\n", type_name);*/
-        e_cp_type *type = htable_iter_value(&i, NULL);
-
-        if (e_verbose) {
-            const char *s = e_cp_type_2str(*type);
-            printf("e_types: %s\n", s);
-        }
-
-        assert(type);
-        if (e_has(r, e, *type)) {
-
-            /*
-            koh_term_color_set(KOH_TERM_GREEN);
-            printf("type");
-            koh_term_color_set(KOH_TERM_YELLOW);
-            printf(" '%s' ",type->name);
-            koh_term_color_set(KOH_TERM_GREEN);
-            printf("was added to array\n");
-            koh_term_color_reset();
-            */
-
-            types[found_types_num++] = type;
-        }
+    const int64_t ord = e.ord;
+    for (int i = 0; i < r->storages_size; i++) {
+        e_storage *st = &r->storages[i];
+        if (ss_has(&st->sparse, ord))
+            types[found_types_num++] = &st->type;
     }
 
     if (num)
