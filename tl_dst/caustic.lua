@@ -910,9 +910,13 @@ with -g option just call 'git status' for each entry
    },
    profile = {
       summary = "профилирование через AMDuProf, вывод отчёта через tabular",
+      description = "Доп. ключи бинарнику через --, напр.: koh profile -- --dev",
       options = { "-c --config" },
       flags = {
          { "-f --full", "показать все секции отчёта" },
+      },
+      arguments = {
+         { "args", "*" },
       },
    },
 }
@@ -4308,9 +4312,14 @@ function actions.profile(_args)
       "запускает текущий бинарник%{reset}")
 
 
+      local extra = ""
+      if _args.args and #_args.args > 0 then
+         extra = " " .. concat(_args.args, " ")
+      end
+
       local collect_cmd = format(
-      "%s/AMDuProfCLI collect --config %s -o %s ./%s",
-      amd_profiler, config, prof_dir, artifact)
+      "%s/AMDuProfCLI collect --config %s -o %s ./%s%s",
+      amd_profiler, config, prof_dir, artifact, extra)
 
       cmd_do(collect_cmd)
 
