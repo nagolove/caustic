@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "koh_common.h"
+#include "koh_tmr.h"
+#include "koh_raylib_api.h"
 
 bool koh_timerman_verbose = false;
 
@@ -22,7 +24,9 @@ struct TimerMan {
 };
 
 struct TimerMan *timerman_new(int cap, const char *name) {
-    assert(IsWindowReady());
+    // Окно нужно лишь для реального времени (tmr_now → GetTime). В dummy
+    // (headless) время виртуальное (koh_tmr), окна нет — ассерт ослаблен.
+    assert(IsWindowReady() || raylib_api_is_dummy());
     struct TimerMan *tm = calloc(1, sizeof(*tm));
     assert(tm);
     assert(cap > 0);
@@ -121,7 +125,7 @@ timer_id_t timerman_add(struct TimerMan *tm, struct TimerDef td) {
     struct Timer *tmr = &tm->timers[tm->timers_num++];
     static size_t id = 0;
     tmr->id = id++;
-    tmr->add_time = tmr->last_now = GetTime();
+    tmr->add_time = tmr->last_now = tmr_now();
     assert(td.duration > 0);
     tmr->duration = td.duration;
 
@@ -181,7 +185,7 @@ int timerman_update(struct TimerMan *tm) {
         if (t->duration < 0) continue;
 
         if (t->state == TS_ON_START) {
-            t->last_now = GetTime();
+            t->last_now = tmr_now();
             t->amount = 0.f;
             if (t->on_start) {
                 if (t->on_start(t))
@@ -191,7 +195,7 @@ int timerman_update(struct TimerMan *tm) {
         }
 
         if (t->state == TS_ON_UPDATE) {
-            double now = GetTime();
+            double now = tmr_now();
             if (now - t->add_time > t->duration) {
                 t->state = TS_ON_STOP;
             } else {
@@ -225,7 +229,7 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
         if (!tm->paused) {
             // enable -> disable
             trace("timerman_pause: enable -> disable\n");
-            tm->pause_time = GetTime();
+            tm->pause_time = tmr_now();
             for (int i = 0; i < tm->timers_num; ++i) {
                 tm->timers[i].last_now = tm->pause_time;
             }
@@ -234,7 +238,7 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
     } else {
         if (tm->paused) {
             // disable -> enable
-            double shift = GetTime() - tm->pause_time;
+            double shift = tmr_now() - tm->pause_time;
             trace("timerman_pause: disable -> enable, shift %f\n", shift);
             for (int i = 0; i < tm->timers_num; ++i) {
                 tm->timers[i].add_time += shift;
@@ -245,6 +249,10 @@ void timerman_pause(struct TimerMan *tm, bool is_paused) {
 }
 
 void timerman_window_gui(struct TimerMan *tm) {
+    // В dummy (headless) контекста ImGui нет — вызов igBegin упал бы.
+    if (raylib_api_is_dummy())
+        return;
+
     bool open = true;
     ImGuiWindowFlags flags = 0;
     igBegin("timers", &open, flags);
