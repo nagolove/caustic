@@ -440,6 +440,15 @@ local function build_with_make_common(_: Env, dep: Dependency)
     end
 end
 
+-- genann: Makefile собирает только examples/test, статической библиотеки не
+-- даёт. Компилируем genann.o (без -march=native — ломает wasm; +fPIC для
+-- линковки в PIE) и пакуем в libgenann.a своими руками.
+local function build_genann(_: Env, dep: Dependency)
+    cmd_do("make clean")
+    cmd_do(make[dep.target] .. "CFLAGS='-O2 -g -fPIC' genann.o")
+    cmd_do(ar[dep.target] .. " rcs libgenann.a genann.o")
+end
+
 -- wfc: с коммита 765e814 Makefile завёл .DEFAULT_GOAL := help, поэтому
 -- голый `make` печатает справку и ничего не собирает. Цель wfctool задаём
 -- явно — восстанавливаем прежнее поведение (сборка бинаря wfc).
@@ -1494,21 +1503,20 @@ _modules = {
     -- }}}
     --]]
 
-    --[[
     -- {{{ genann
     {
-        disabled = true,
-        build = build_with_make,
-        after_build = gennann_after_build,
-        -- определенный коммит используется здесь как пример
-        git_commit = "4f72209510c9792131bd8c4b0347272b088cfa80",
+        disabled = false,
+        build = build_genann,
+        build_w = build_genann,
+        build_win = build_genann,
+        git_commit = "8dcd1db031c53176cffcbe4a7530ce040bb59b1d",
         copy_for_wasm = true,
         description = "простая библиотека для многослойного персетрона",
         dir = "genann",
         includes = { "genann" },
         libdirs = { "genann" },
-        links  = { "genann:static" },
-        links_internal = { "genann:static" },
+        links  = { "genann" },
+        links_internal = { "genann" },
         name = 'genann',
         url_action = "git",
         url = "https://github.com/codeplea/genann.git",

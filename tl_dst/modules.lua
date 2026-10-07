@@ -443,6 +443,15 @@ end
 
 
 
+local function build_genann(_, dep)
+   cmd_do("make clean")
+   cmd_do(make[dep.target] .. "CFLAGS='-O2 -g -fPIC' genann.o")
+   cmd_do(ar[dep.target] .. " rcs libgenann.a genann.o")
+end
+
+
+
+
 local function build_wfc(_, dep)
    if dep.target == 'wasm' then
       cmd_do("make clean")
@@ -1495,24 +1504,23 @@ _modules = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   {
+      disabled = false,
+      build = build_genann,
+      build_w = build_genann,
+      build_win = build_genann,
+      git_commit = "8dcd1db031c53176cffcbe4a7530ce040bb59b1d",
+      copy_for_wasm = true,
+      description = "простая библиотека для многослойного персетрона",
+      dir = "genann",
+      includes = { "genann" },
+      libdirs = { "genann" },
+      links = { "genann" },
+      links_internal = { "genann" },
+      name = 'genann',
+      url_action = "git",
+      url = "https://github.com/codeplea/genann.git",
+   },
 
 
 
