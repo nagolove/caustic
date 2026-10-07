@@ -259,8 +259,11 @@ int im_nav_tab_flags(const char *label) {
     // Иначе — прыжок к целевой вкладке по метке (cur_win уже выставлен igBegin).
     if (!nav->has_target || !nav->target_tab[0]) return 0;
     const char *win = nav->cur_win ? nav->cur_win : "";
+    fprintf(stderr, "[imnav] TABFLAGS nav=%p label='%s' cur_win='%s' twin='%s' ttab='%s'\n",
+            (void*)nav, label, win, nav->target_win, nav->target_tab); // DEBUG
     if (strcmp(win, nav->target_win) != 0) return 0;
     if (strcmp(label, nav->target_tab) != 0) return 0;
+    fprintf(stderr, "[imnav] TABFLAGS -> SetSelected '%s'\n", label); // DEBUG
     return ImGuiTabItemFlags_SetSelected;
 }
 
@@ -300,6 +303,8 @@ static void im_nav_goto(struct ImNav *nav, const NavItem *it) {
     snprintf(nav->target_win, sizeof nav->target_win, "%s", it->win);
     snprintf(nav->target_tab, sizeof nav->target_tab, "%s", it->tab);
     nav->target_ttl = NAV_TARGET_TTL;
+    fprintf(stderr, "[imnav] GOTO nav=%p win='%s' tab='%s' label='%s'\n",
+            (void*)nav, it->win, it->tab, it->label); // DEBUG
     if (it->win[0]) igSetWindowFocus_Str(it->win);
 }
 
