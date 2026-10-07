@@ -377,12 +377,17 @@ local function prefix_add(prefix, t)
    return prefixed_t
 end
 
-local function gather_links(deps, headless)
+
+local function gather_links(
+   deps, headless, release)
+
    local links_tbl = {}
-   local linkstype = "links"
    for _, dep in ipairs(deps) do
       if not dep.disabled then
-         local dep_links = (dep)[linkstype]
+         local dep_links = dep.links
+         if release and dep.links_release then
+            dep_links = dep.links_release
+         end
          if dep_links then
             local list
 
@@ -472,7 +477,9 @@ local function get_ready_deps(
    return ready_deps
 end
 
-local function get_ready_l(cfg, target, headless)
+local function get_ready_l(
+   cfg, target, headless, release)
+
    local merge_tables = ut.merge_tables
    local base
    if target == 'win' then
@@ -484,7 +491,8 @@ local function get_ready_l(cfg, target, headless)
    else
       base = { "stdc++", "m" }
    end
-   return merge_tables(base, gather_links(get_ready_deps(cfg, target), headless))
+   local deps = get_ready_deps(cfg, target)
+   return merge_tables(base, gather_links(deps, headless, release))
 end
 
 
@@ -523,7 +531,10 @@ local function get_ready_links_linux_only(cfg, target)
 end
 
 
-local function gather_libdirs_abs(cfg, deps)
+
+local function gather_libdirs_abs(
+   cfg, deps, release)
+
    assert(cfg)
    assert(deps)
 
@@ -542,7 +553,11 @@ local function gather_libdirs_abs(cfg, deps)
          local path = e.path_abs_third_party[dep.target] .. "/"
          assert(path)
 
-         for _, libdir in ipairs(dep.libdirs) do
+         local libdirs = dep.libdirs
+         if release and dep.libdirs_release then
+            libdirs = dep.libdirs_release
+         end
+         for _, libdir in ipairs(libdirs) do
             table.insert(libdirs_tbl, path .. libdir)
          end
       end
@@ -2534,6 +2549,51 @@ end
 
 
 
+local verify_system_libs = {
+   ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
+   ["dl"] = true, ["rt"] = true, ["X11"] = true,
+}
+
+
+
+local function verify_links_in_libdirs(
+   dep, links, libdirs, kind)
+
+
+
+
+   local libdirs_list = {}
+   for _, libdir in ipairs(libdirs) do
+      table.insert(libdirs_list, libdir)
+   end
+   local base = e.path_abs_third_party[dep.target] .. "/"
+   for _, link in ipairs(links) do
+      if link:sub(1, 1) ~= "-" and not verify_system_libs[link] then
+         local found = false
+         for _, libdir in ipairs(libdirs_list) do
+            local path = base .. libdir .. "/lib" .. link .. ".a"
+            if ut.test_artifact_a_linux(path) then
+               found = true
+               break
+            end
+         end
+         if not found then
+            local msg = format(
+            "verify_dep_artifacts_linux: модуль '%s' не собрал " ..
+            "'lib%s.a' [%s] (libdirs: {%s})",
+            dep.name, link, kind, table.concat(libdirs_list, ", "))
+
+            printc("%{red}" .. msg .. "%{reset}")
+            os.exit(1)
+         end
+      end
+   end
+end
+
+
+
+
+
 local function verify_dep_artifacts_linux(dep)
    if dep.target ~= 'linux' then
       return
@@ -2547,41 +2607,11 @@ local function verify_dep_artifacts_linux(dep)
    else
       links = dep.links
    end
+   verify_links_in_libdirs(dep, links, dep.libdirs, "debug")
 
-
-
-   local system_libs = {
-      ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
-      ["dl"] = true, ["rt"] = true, ["X11"] = true,
-   }
-
-
-
-   local libdirs_list = {}
-   for _, libdir in ipairs(dep.libdirs) do
-      table.insert(libdirs_list, libdir)
-   end
-   local base = e.path_abs_third_party[dep.target] .. "/"
-   for _, link in ipairs(links) do
-      if link:sub(1, 1) ~= "-" and not system_libs[link] then
-         local found = false
-         for _, libdir in ipairs(libdirs_list) do
-            local path = base .. libdir .. "/lib" .. link .. ".a"
-            if ut.test_artifact_a_linux(path) then
-               found = true
-               break
-            end
-         end
-         if not found then
-            local msg = format(
-            "verify_dep_artifacts_linux: модуль '%s' не собрал " ..
-            "'lib%s.a' (libdirs: {%s})",
-            dep.name, link, table.concat(libdirs_list, ", "))
-
-            printc("%{red}" .. msg .. "%{reset}")
-            os.exit(1)
-         end
-      end
+   if dep.links_release then
+      local libdirs = dep.libdirs_release or dep.libdirs
+      verify_links_in_libdirs(dep, dep.links_release, libdirs, "release")
    end
 end
 
@@ -3637,14 +3667,17 @@ function sub_make(
    local path = e.path_rel_third_party_t[target]
    assert(path)
 
-   local libsdirs = gather_libdirs_abs(cfg, mods.modules())
+
+   local release = false
+   if _args.release then release = true end
+   local libsdirs = gather_libdirs_abs(cfg, mods.modules(), release)
 
    if target == 'linux' then
 
    end
 
    local libs = ut.merge_tables(
-   get_ready_l(cfg, target, _args.headless ~= nil),
+   get_ready_l(cfg, target, _args.headless ~= nil, release),
    get_ready_links_linux_only(cfg, target))
 
 

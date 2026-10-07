@@ -377,12 +377,17 @@ local function prefix_add(prefix: string, t: {string}): {string}
     return prefixed_t
 end
 
-local function gather_links(deps: {Dependency}, headless?: boolean): {string}
+-- release: при `koh make -r` брать dep.links_release, если он задан.
+local function gather_links(
+    deps: {Dependency}, headless?: boolean, release?: boolean
+): {string}
     local links_tbl = {}
-    local linkstype = "links"
     for _, dep in ipairs(deps) do
         if not dep.disabled then
-            local dep_links = (dep as {any:any})[linkstype] as DepLinks
+            local dep_links: DepLinks = dep.links
+            if release and dep.links_release then
+                dep_links = dep.links_release
+            end
             if dep_links then
                 local list: {string}
 
@@ -472,7 +477,9 @@ local function get_ready_deps(
     return ready_deps
 end
 
-local function get_ready_l(cfg: Cfg, target: Target, headless?: boolean): {string}
+local function get_ready_l(
+    cfg: Cfg, target: Target, headless?: boolean, release?: boolean
+): {string}
     local merge_tables = ut.merge_tables
     local base: {string}
     if target == 'win' then
@@ -484,7 +491,8 @@ local function get_ready_l(cfg: Cfg, target: Target, headless?: boolean): {strin
     else
         base = { "stdc++", "m" }
     end
-    return merge_tables(base, gather_links(get_ready_deps(cfg, target), headless))
+    local deps = get_ready_deps(cfg, target)
+    return merge_tables(base, gather_links(deps, headless, release))
 end
 
 -- TODO: Убрать эту функцию или сделать зависимой от цели сборки
@@ -522,8 +530,11 @@ local function get_ready_links_linux_only(cfg: Cfg, target?: Target): {string}
     return links_linux_only
 end
 
--- Собирает все каталоги для библиотек из модулей
-local function gather_libdirs_abs(cfg: Cfg, deps: {Dependency}): {string}
+-- Собирает все каталоги для библиотек из модулей.
+-- release: при `koh make -r` брать dep.libdirs_release, если он задан.
+local function gather_libdirs_abs(
+    cfg: Cfg, deps: {Dependency}, release?: boolean
+): {string}
     assert(cfg)
     assert(deps)
 
@@ -542,7 +553,11 @@ local function gather_libdirs_abs(cfg: Cfg, deps: {Dependency}): {string}
             local path = e.path_abs_third_party[dep.target] .. "/"
             assert(path)
 
-            for _, libdir in ipairs(dep.libdirs) do
+            local libdirs = dep.libdirs
+            if release and dep.libdirs_release then
+                libdirs = dep.libdirs_release
+            end
+            for _, libdir in ipairs(libdirs) do
                 table.insert(libdirs_tbl, path .. libdir)
             end
         end
@@ -2531,9 +2546,54 @@ local function split_libs_by_linkage(libs: {string}, target?: Target): {string},
     return static_libs, dynamic_libs
 end
 
+-- В links встречаются флаги линкера (-Wl,...) и системные библиотеки
+-- (X11, dl, ...), для которых нашего lib<name>.a в дереве модулей нет.
+-- Их пропускаем — проверяем только собственные статические библиотеки.
+local verify_system_libs: {string: boolean} = {
+    ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
+    ["dl"] = true, ["rt"] = true, ["X11"] = true,
+}
+
+-- Каждый link → lib<link>.a в одном из libdirs, иначе выход с ошибкой.
+-- kind — подпись варианта в сообщении ("debug"/"release").
+local function verify_links_in_libdirs(
+    dep: Dependency, links: {string}, libdirs: {string}, kind: string
+)
+    -- dep может быть readonly-прокси (см. ut.readonly): inspect() ходит сырым
+    -- next() мимо __pairs и покажет {}. Поэтому список libdirs собираем через
+    -- ipairs, который работает сквозь __index.
+    local libdirs_list = {}
+    for _, libdir in ipairs(libdirs) do
+        table.insert(libdirs_list, libdir)
+    end
+    local base = e.path_abs_third_party[dep.target] .. "/"
+    for _, link in ipairs(links) do
+        if link:sub(1, 1) ~= "-" and not verify_system_libs[link] then
+            local found = false
+            for _, libdir in ipairs(libdirs_list) do
+                local path = base .. libdir .. "/lib" .. link .. ".a"
+                if ut.test_artifact_a_linux(path) then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                local msg = format(
+                    "verify_dep_artifacts_linux: модуль '%s' не собрал "
+                    .. "'lib%s.a' [%s] (libdirs: {%s})",
+                    dep.name, link, kind, table.concat(libdirs_list, ", ")
+                )
+                printc("%{red}" .. msg .. "%{reset}")
+                os.exit(1)
+            end
+        end
+    end
+end
+
 -- Проверяет, что собранный модуль реально дал заявленные статические
--- библиотеки. Сейчас только linux: каждый link → lib<link>.a в одном из
--- libdirs. При отсутствии — громко падаем с именем модуля (fail-fast).
+-- библиотеки. Сейчас только linux. Если у модуля есть релизный вариант
+-- (links_release), проверяется и он: оба варианта собираются заранее.
+-- При отсутствии — громко падаем с именем модуля (fail-fast).
 local function verify_dep_artifacts_linux(dep: Dependency)
     if dep.target ~= 'linux' then
         return
@@ -2547,41 +2607,11 @@ local function verify_dep_artifacts_linux(dep: Dependency)
     else
         links = dep.links as {string}
     end
-    -- В links встречаются флаги линкера (-Wl,...) и системные библиотеки
-    -- (X11, dl, ...), для которых нашего lib<name>.a в дереве модулей нет.
-    -- Их пропускаем — проверяем только собственные статические библиотеки.
-    local system_libs: {string: boolean} = {
-        ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
-        ["dl"] = true, ["rt"] = true, ["X11"] = true,
-    }
-    -- dep может быть readonly-прокси (см. ut.readonly): inspect() ходит сырым
-    -- next() мимо __pairs и покажет {}. Поэтому список libdirs собираем через
-    -- ipairs, который работает сквозь __index.
-    local libdirs_list = {}
-    for _, libdir in ipairs(dep.libdirs) do
-        table.insert(libdirs_list, libdir)
-    end
-    local base = e.path_abs_third_party[dep.target] .. "/"
-    for _, link in ipairs(links) do
-        if link:sub(1, 1) ~= "-" and not system_libs[link] then
-            local found = false
-            for _, libdir in ipairs(libdirs_list) do
-                local path = base .. libdir .. "/lib" .. link .. ".a"
-                if ut.test_artifact_a_linux(path) then
-                    found = true
-                    break
-                end
-            end
-            if not found then
-                local msg = format(
-                    "verify_dep_artifacts_linux: модуль '%s' не собрал "
-                    .. "'lib%s.a' (libdirs: {%s})",
-                    dep.name, link, table.concat(libdirs_list, ", ")
-                )
-                printc("%{red}" .. msg .. "%{reset}")
-                os.exit(1)
-            end
-        end
+    verify_links_in_libdirs(dep, links, dep.libdirs, "debug")
+
+    if dep.links_release then
+        local libdirs = dep.libdirs_release or dep.libdirs
+        verify_links_in_libdirs(dep, dep.links_release, libdirs, "release")
     end
 end
 
@@ -3637,14 +3667,17 @@ function sub_make(
     local path = e.path_rel_third_party_t[target]
     assert(path)
 
-    local libsdirs = gather_libdirs_abs(cfg, mods.modules())
+    -- -r: модули с links_release/libdirs_release линкуются релизными.
+    local release = false
+    if _args.release then release = true end
+    local libsdirs = gather_libdirs_abs(cfg, mods.modules(), release)
 
     if target == 'linux' then
         --table.insert(libsdirs, "/usr/lib")
     end
 
     local libs = ut.merge_tables(
-        get_ready_l(cfg, target, _args.headless ~= nil),
+        get_ready_l(cfg, target, _args.headless ~= nil, release),
         get_ready_links_linux_only(cfg, target)
     )
 

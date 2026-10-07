@@ -23,6 +23,7 @@
 #include "koh_logger.h"
 #include "raylib.h"
 #include <assert.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -604,7 +605,7 @@ char ** b2Counters_to_str(b2WorldId world, bool lua) {
         p(lines[i++], "treeHeight = %d,", stat.treeHeight);
         //p(lines[i++], "stackCapacity = %d,", stat.stackCapacity);
         p(lines[i++], "stackUsed = %d,", stat.stackUsed);
-        p(lines[i++], "byteCount = %d,", stat.byteCount);
+        p(lines[i++], "byteCount = %" PRId64 ",", stat.byteCount);
         p(lines[i++], " }");
     } else {
         p(lines[i++], "islandCount %d", stat.islandCount);
@@ -615,7 +616,7 @@ char ** b2Counters_to_str(b2WorldId world, bool lua) {
         p(lines[i++], "treeHeight %d", stat.treeHeight);
         //p(lines[i++], "stackCapacity %d", stat.stackCapacity);
         p(lines[i++], "stackUsed %d", stat.stackUsed);
-        p(lines[i++], "byteCount %d", stat.byteCount);
+        p(lines[i++], "byteCount %" PRId64, stat.byteCount);
     }
 
     lines[i] = NULL;

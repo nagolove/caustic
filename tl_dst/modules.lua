@@ -204,12 +204,22 @@ local function build_implot(e, dep)
 
 end
 
+
+
+
+
+
+local BOX2C_BUILD_DEBUG = "build_debug"
+local BOX2C_BUILD_RELEASE = "build_release"
+
 local function build_box2c_common(_, dep)
 
 
-
    box2c_checkout_pin(dep)
+
+
    find_and_remove_cmake_cache()
+   os.remove("src/libbox2dd.a")
 
    local t = {}
    if dep.target == 'wasm' then
@@ -217,19 +227,22 @@ local function build_box2c_common(_, dep)
       insert(t, '-DCMAKE_CXX_FLAGS="-pthread -matomics -mbulk-memory" ')
       insert(t, '-DCMAKE_EXE_LINKER_FLAGS="-pthread -s USE_PTHREADS=1" ')
    end
-
-
-
-
-   cmd_do(cmake[dep.target] .. table.concat(t, " ") ..
-   '-DCMAKE_BUILD_TYPE=Debug ' ..
-
+   local common = table.concat(t, " ") ..
    '-DBOX2D_BENCHMARKS=OFF ' ..
    '-DBOX2D_UNIT_TESTS=OFF ' ..
    '-DBOX2D_BUILD_DOCS=OFF ' ..
-   '-DBOX2D_SAMPLES=OFF .')
+   '-DBOX2D_SAMPLES=OFF '
 
-   cmd_do(make[dep.target])
+   local variants = {
+      { BOX2C_BUILD_DEBUG, '-DCMAKE_BUILD_TYPE=Debug ' },
+      { BOX2C_BUILD_RELEASE, '-DCMAKE_BUILD_TYPE=RelWithDebInfo ' ..
+'-DBOX2D_VALIDATE=OFF ', },
+   }
+   for _, v in ipairs(variants) do
+      local bdir, flags = v[1], v[2]
+      cmd_do(cmake[dep.target] .. common .. flags .. '-S . -B ' .. bdir)
+      cmd_do(make[dep.target] .. '-C ' .. bdir)
+   end
 end
 
 
@@ -1538,11 +1551,12 @@ _modules = {
          "box2c/src",
       },
       update = update_box2c,
-      libdirs = { "box2c/src" },
 
 
-
+      libdirs = { "box2c/build_debug/src" },
+      libdirs_release = { "box2c/build_release/src" },
       links = { "box2dd" },
+      links_release = { "box2d" },
       links_internal = { "box2dd" },
       name = 'box2c',
       git_commit = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
