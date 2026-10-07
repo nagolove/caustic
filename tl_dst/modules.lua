@@ -36,9 +36,9 @@ end
 
 
 local box2c_pin = {
-   linux = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
-   wasm = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
-   win = "4996f6e22b59f8a9aa91fbbc7e8448926c5494d7",
+   linux = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
+   wasm = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
+   win = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
 }
 
 
@@ -225,6 +225,7 @@ local function build_box2c_common(_, dep)
    '-DCMAKE_BUILD_TYPE=Debug ' ..
 
    '-DBOX2D_BENCHMARKS=OFF ' ..
+   '-DBOX2D_UNIT_TESTS=OFF ' ..
    '-DBOX2D_BUILD_DOCS=OFF ' ..
    '-DBOX2D_SAMPLES=OFF .')
 

@@ -30,15 +30,15 @@ local function get_deps_name_map(): {string: Dependency}
     return map
 end
 
--- Пины box2c по таргетам. koh_b2.c под _WIN32 ремапит DrawSegmentFcn ->
--- DrawLineFcn, поэтому win требует коммит box2d с полем DrawLineFcn
--- (4996f6e2, «Macro clean up»), а linux/wasm — старый d9b57323 с
--- DrawSegmentFcn. Свежий main переименовал поле обратно и ломает win-сборку,
--- поэтому НЕ тянем main, а чекаутим фиксированный коммит по таргету.
+-- Пины box2c по таргетам. Все таргеты на одном коммите main (ac7c751e):
+-- API с b2Pos/b2WorldTransform, DrawLineFcn, b2TaskCallback(ctx) и
+-- встроенным планировщиком потоков. Таблица по таргетам оставлена, чтобы
+-- при поломке одного таргета откатить только его. Голый main НЕ тянем —
+-- API box2d меняется без обратной совместимости.
 local box2c_pin: {string: string} = {
-    linux = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
-    wasm  = "d9b573238d334c86b8a36b2a5584a6a741f1363a",
-    win   = "4996f6e22b59f8a9aa91fbbc7e8448926c5494d7",
+    linux = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
+    wasm  = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
+    win   = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
 }
 
 -- Чекаут запиненного коммита box2c для текущего таргета (shallow).
@@ -207,7 +207,7 @@ end
 local function build_box2c_common(_: Env, dep: Dependency)
     -- TODO: Добавить сборку без отладочной информации.
     -- cwd = каталог box2c (см. _build → chdir(dep.dir)). Фиксируем нужный
-    -- коммит по таргету ДО cmake/make: win требует DrawLineFcn (4996f6e2).
+    -- коммит по таргету ДО cmake/make (см. box2c_pin).
     box2c_checkout_pin(dep)
     find_and_remove_cmake_cache()
 
@@ -225,6 +225,7 @@ local function build_box2c_common(_: Env, dep: Dependency)
         '-DCMAKE_BUILD_TYPE=Debug ' ..
         --'-DBOX2D_VALIDATE=ON ' ..
         '-DBOX2D_BENCHMARKS=OFF ' ..
+        '-DBOX2D_UNIT_TESTS=OFF ' ..
         '-DBOX2D_BUILD_DOCS=OFF ' ..
         '-DBOX2D_SAMPLES=OFF .'
     )

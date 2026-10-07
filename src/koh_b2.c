@@ -28,11 +28,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// box2c API: DrawSegmentFcn переименован в DrawLineFcn
-#ifdef _WIN32
-#define DrawSegmentFcn DrawLineFcn
-#endif
-
 #define STR_LEN 64
 #define STR_NUM 64
 
@@ -56,27 +51,29 @@ typedef struct Ctx {
     f32 u2pix;
 } Ctx;
 
+// Локальные вершины полигона → пиксели экрана через трансформ тела.
+// box2d передаёт в DrawPolygonFcn/DrawSolidPolygonFcn вершины в локальных
+// координатах шейпа вместе с b2WorldTransform.
+static void verts_to_pix(
+    Vector2 *out, b2WorldTransform xf, const b2Vec2 *vertices, int n, f32 u2pix
+) {
+    for (int i = 0; i < n; i++) {
+        b2Vec2 w = b2TransformPoint(xf, vertices[i]);
+        out[i] = (Vector2) { w.x * u2pix, w.y * u2pix };
+    }
+}
+
 /// Draw a closed polygon provided in CCW order.
 static void draw_polygon(
-    const b2Vec2* vertices, int vertexCount, b2HexColor color, void* context
+    b2WorldTransform transform, const b2Vec2* vertices, int vertexCount,
+    b2HexColor color, void* context
 ) {
-  
-    /*
-    char *str = b2Vec2_tostr_alloc(vertices, vertexCount);
-    assert(str);
-    trace("draw_polygon: %s\n", str);
-    free(str);
-    */
-
     const Ctx *ctx = context;
-    float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
+    float line_thick = //context ? ((WorldCtx*)context)->line_thick :
         default_line_thick;
 
-    Vector2 verts[10] = {};
-    for (int i = 0; i < vertexCount; i++) {
-        verts[i].x = vertices[i].x * ctx->u2pix;
-        verts[i].y = vertices[i].y * ctx->u2pix;
-    }
+    Vector2 verts[B2_MAX_POLYGON_VERTICES] = {};
+    verts_to_pix(verts, transform, vertices, vertexCount, ctx->u2pix);
 
     for (int i = 0; i < vertexCount - 1; i++) {
         DrawLineEx(
@@ -90,7 +87,7 @@ static void draw_polygon(
 
 /// Draw a solid closed polygon provided in CCW order.
 static void draw_solid_polygon(
-        b2Transform transform, const b2Vec2* vertices, 
+        b2WorldTransform transform, const b2Vec2* vertices,
         int vertexCount, float radius, b2HexColor color, void* context
 ) {
     if (verbose_b2) {
@@ -107,13 +104,10 @@ static void draw_solid_polygon(
     float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
 
-    Vector2 verts[10] = {};
+    Vector2 verts[B2_MAX_POLYGON_VERTICES] = {};
     const Ctx *ctx = context;
     assert(ctx);
-    for (int i = 0; i < vertexCount; i++) {
-        verts[i].x = vertices[i].x * ctx->u2pix;
-        verts[i].y = vertices[i].y * ctx->u2pix;
-    }
+    verts_to_pix(verts, transform, vertices, vertexCount, ctx->u2pix);
 
     DrawTriangleFan(verts, vertexCount, b2Color_to_Color(color));
 
@@ -166,20 +160,17 @@ static void draw_circle(
 }
 
 /// Draw a solid circle.
-static	void draw_solid_circle(
-    b2Transform transform, float radius, b2HexColor color, void* context
-) {
-/*
+// center — в локальных координатах шейпа, переводим через transform.
 static void draw_solid_circle(
-    b2Transform transform, b2Vec2 center, float radius, 
-    b2Vec2 axis, float radius, b2HexColor color, void* context
+    b2WorldTransform transform, b2Vec2 center, float radius,
+    b2HexColor color, void* context
 ) {
-*/
     if (verbose_b2)
         trace("draw_solid_circle:\n");
     const Ctx *ctx = context;
+    b2Vec2 c = b2TransformPoint(transform, center);
     DrawCircleV(
-        (Vector2) { transform.p.x * ctx->u2pix, transform.p.y * ctx->u2pix, },
+        (Vector2) { c.x * ctx->u2pix, c.y * ctx->u2pix, },
         radius * ctx->u2pix, 
         b2Color_to_Color(color)
     );
@@ -243,9 +234,9 @@ static void draw_solid_capsule(
 */
 
 /// Draw a line segment.
-static void draw_segment(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* context) {
+static void draw_line(b2Pos p1, b2Pos p2, b2HexColor color, void* context) {
     if (verbose_b2)
-        trace("draw_segment:\n");
+        trace("draw_line:\n");
 
     float line_thick = //context ? ((WorldCtx*)context)->line_thick : 
         default_line_thick;
@@ -294,7 +285,7 @@ b2DebugDraw b2_world_dbg_draw_create2(f32 u2pix) {
         .DrawCircleFcn = draw_circle,
         .DrawSolidCircleFcn = draw_solid_circle,
         .DrawSolidCapsuleFcn = draw_solid_capsule,
-        .DrawSegmentFcn = draw_segment,
+        .DrawLineFcn = draw_line,
         .DrawTransformFcn = draw_transform,
         .DrawPointFcn = draw_point,
         .DrawStringFcn = draw_string,
@@ -319,7 +310,7 @@ b2DebugDraw b2_world_dbg_draw_create2(f32 u2pix) {
         .DrawCircleFcn = draw_circle,
         .DrawSolidCircleFcn = draw_solid_circle,
         .DrawSolidCapsuleFcn = draw_solid_capsule,
-        .DrawSegmentFcn = draw_segment,
+        .DrawLineFcn = draw_line,
         .DrawTransformFcn = draw_transform,
         .DrawPointFcn = draw_point,
         .DrawStringFcn = draw_string,
@@ -343,7 +334,7 @@ b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
         .DrawCircleFcn = draw_circle,
         .DrawSolidCircleFcn = draw_solid_circle,
         .DrawSolidCapsuleFcn = draw_solid_capsule,
-        .DrawSegmentFcn = draw_segment,
+        .DrawLineFcn = draw_line,
         .DrawTransformFcn = draw_transform,
         .DrawPointFcn = draw_point,
         .DrawStringFcn = draw_string,
@@ -362,7 +353,7 @@ b2DebugDraw b2_world_dbg_draw_create(WorldCtx *wctx) {
         .DrawCircleFcn = draw_circle,
         .DrawSolidCircleFcn = draw_solid_circle,
         .DrawSolidCapsuleFcn = draw_solid_capsule,
-        .DrawSegmentFcn = draw_segment,
+        .DrawLineFcn = draw_line,
         .DrawTransformFcn = draw_transform,
         .DrawPointFcn = draw_point,
         .DrawStringFcn = draw_string,
@@ -952,41 +943,6 @@ void world_step(struct WorldCtx *wctx) {
         b2World_Step(wctx->world, wctx->timestep, wctx->substeps);
 }
 
-static void* enqueue_task(
-    b2TaskCallback* task, int32_t itemCount, int32_t minRange,
-    void* taskContext, void* userContext
-) {
-    /*
-    struct Stage_Box2d *st = userContext;
-    if (st->tasks_count < tasks_max)
-    {
-        SampleTask& sampleTask = sample->m_tasks[sample->m_taskCount];
-        sampleTask.m_SetSize = itemCount;
-        sampleTask.m_MinRange = minRange;
-        sampleTask.m_task = task;
-        sampleTask.m_taskContext = taskContext;
-        sample->m_scheduler.AddTaskSetToPipe(&sampleTask);
-        ++sample->m_taskCount;
-        return &sampleTask;
-    }
-    else
-    {
-        assert(false);
-        task(0, itemCount, 0, taskContext);
-        return NULL;
-    }
-    */
-    return NULL;
-}
-
-static void finish_task(void* taskPtr, void* userContext) {
-    /*
-    SampleTask* sampleTask = static_cast<SampleTask*>(taskPtr);
-    Sample* sample = static_cast<Sample*>(userContext);
-    sample->m_scheduler.WaitforTask(sampleTask);
-    */
-}
-
 WorldCtx world_init2(WorldCtxSetup *setup) {
     assert(setup);
 
@@ -1003,13 +959,9 @@ WorldCtx world_init2(WorldCtxSetup *setup) {
 
     // TODO: шаг вынести в параметры. Или получать из GetFPS()?
     wctx.timestep = 1. / 60.;
-    wctx.task_shed = enkiNewTaskScheduler();
-    enkiInitTaskScheduler(wctx.task_shed);
-    assert(wctx.task_shed);
-    wctx.task_set = enkiCreateTaskSet(wctx.task_shed, NULL);
-    assert(wctx.task_set);
-    wctx.world_def.enqueueTask = enqueue_task;
-    wctx.world_def.finishTask = finish_task;
+    // Многопоточность — встроенный планировщик box2d: при
+    // world_def.workerCount > 1 и без enqueueTask/finishTask box2d сам
+    // поднимает потоки (Windows/Linux/Android/Emscripten-pthreads).
 
     wctx.world = b2CreateWorld(&wctx.world_def);
 
@@ -1079,14 +1031,7 @@ void world_init(struct WorldCtxSetup *setup, struct WorldCtx *wctx) {
     }
 
     wctx->timestep = 1. / 60.;
-    //int max_threads = 6;
-    wctx->task_shed = enkiNewTaskScheduler();
-    enkiInitTaskScheduler(wctx->task_shed);
-    assert(wctx->task_shed);
-    wctx->task_set = enkiCreateTaskSet(wctx->task_shed, NULL);
-    assert(wctx->task_set);
-    wctx->world_def.enqueueTask = enqueue_task;
-    wctx->world_def.finishTask = finish_task;
+    // Многопоточность — встроенный планировщик box2d (см. world_init2).
 
     wctx->world = b2CreateWorld(&wctx->world_def);
 
@@ -1312,7 +1257,7 @@ b2TreeStats b2World_OverlapAABB( b2WorldId worldId, b2AABB aabb, b2QueryFilter f
 b2TreeStats b2World_OverlapPoint( b2WorldId worldId, b2Vec2 point, b2Transform transform,
 												b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
     b2ShapeProxy proxy = b2MakeProxy(&point, 1, 1.f);
-    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+    return b2World_OverlapShape(worldId, b2Pos_zero, &proxy, filter, fcn, context);
 
 }
 
@@ -1320,7 +1265,7 @@ b2TreeStats b2World_OverlapPoint( b2WorldId worldId, b2Vec2 point, b2Transform t
 b2TreeStats b2World_OverlapCircle( b2WorldId worldId, const b2Circle* circle, b2Transform transform,
 												b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
     b2ShapeProxy proxy = b2MakeProxy(&circle->center, 1, circle->radius);
-    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+    return b2World_OverlapShape(worldId, b2Pos_zero, &proxy, filter, fcn, context);
 }
 
 /*
@@ -1328,7 +1273,7 @@ b2TreeStats b2World_OverlapCircle( b2WorldId worldId, const b2Circle* circle, b2
 b2TreeStats b2World_OverlapCapsule( b2WorldId worldId, const b2Capsule* capsule, b2Transform transform,
 												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
     b2ShapeProxy proxy = b2MakeProxy(&point, 1, 1.f);
-    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+    return b2World_OverlapShape(worldId, b2Pos_zero, &proxy, filter, fcn, context);
 }
 */
 
@@ -1336,7 +1281,7 @@ b2TreeStats b2World_OverlapCapsule( b2WorldId worldId, const b2Capsule* capsule,
 b2TreeStats b2World_OverlapPolygon( b2WorldId worldId, const b2Polygon* polygon, b2Transform transform,
 												 b2QueryFilter filter, b2OverlapResultFcn* fcn, void* context ) {
     b2ShapeProxy proxy = b2MakeProxy(polygon->vertices, polygon->count, polygon->radius);
-    return b2World_OverlapShape(worldId, &proxy, filter, fcn, context);
+    return b2World_OverlapShape(worldId, b2Pos_zero, &proxy, filter, fcn, context);
 }
 
 #endif

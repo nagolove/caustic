@@ -1507,7 +1507,7 @@ void beh_check_under_mouse2(struct CheckUnderMouseOpts2 *opts) {
 
         b2ShapeProxy proxy = b2MakeProxy(&circle.center, 1, circle.radius);
         b2World_OverlapShape(
-            opts->wctx->world, &proxy, 
+            opts->wctx->world, b2Pos_zero, &proxy,
             b2DefaultQueryFilter(), test_point, &shape_under_mouse
         );
     }
@@ -1577,7 +1577,7 @@ void beh_check_under_mouse(struct CheckUnderMouseOpts *opts) {
 
         b2ShapeProxy proxy = b2MakeProxy(&circle.center, 1, circle.radius);
         b2World_OverlapShape(
-            opts->wctx->world, &proxy,
+            opts->wctx->world, b2Pos_zero, &proxy,
             b2DefaultQueryFilter(), test_point, &shape_under_mouse
         );
     }
