@@ -277,6 +277,21 @@ static void draw_string(
     DrawText(s, p.x * ctx->u2pix, p.y * ctx->u2pix, 20, BLACK);
 }
 
+// Рамка AABB шейпа (drawBounds). box2d вызывает DrawBoundsFcn без
+// проверки на NULL, поэтому колбэк обязателен при drawBounds = true.
+static void draw_bounds(b2AABB aabb, b2HexColor color, void* context) {
+    if (verbose_b2)
+        trace("draw_bounds:\n");
+    Ctx *ctx = context;
+    Rectangle r = {
+        .x = aabb.lowerBound.x * ctx->u2pix,
+        .y = aabb.lowerBound.y * ctx->u2pix,
+        .width = (aabb.upperBound.x - aabb.lowerBound.x) * ctx->u2pix,
+        .height = (aabb.upperBound.y - aabb.lowerBound.y) * ctx->u2pix,
+    };
+    DrawRectangleLinesEx(r, 1.f, b2Color_to_Color(color));
+}
+
 b2DebugDraw b2_world_dbg_draw_create2(f32 u2pix) {
 #ifndef B2_LATEST
     return (struct b2DebugDraw) {
@@ -315,6 +330,7 @@ b2DebugDraw b2_world_dbg_draw_create2(f32 u2pix) {
         .DrawTransformFcn = draw_transform,
         .DrawPointFcn = draw_point,
         .DrawStringFcn = draw_string,
+        .DrawBoundsFcn = draw_bounds,
         .drawShapes = true,
         .drawJoints = true,
         .drawBounds = true,
