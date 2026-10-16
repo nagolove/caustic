@@ -199,6 +199,17 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 local function filter_sources_c(
    path, cb, exclude)
 
@@ -740,6 +751,7 @@ end
 
 
 
+
 local parser_setup = {
 
 
@@ -884,6 +896,57 @@ local parser_setup = {
       },
    },
 
+   tg = {
+      summary = "собрать zip-пакет под платформу и отправить в общий TG-канал",
+      description = [[
+Сборка (koh make) -> zip -> отправка в Telegram-канал сборок. Один канал
+и одна авторизация на все проекты.
+
+  koh tg -t win -r          release под windows, упаковать, отправить
+  koh tg -t linux --no-send только zip в каталоге проекта
+  koh tg -t win -c          показать состав пакета без сборки и отправки
+  koh tg -t linux -s        перед отправкой запустить artifact из пакета
+  koh tg --login            разовый вход (телефон + код), проверка канала
+  koh tg --login --from F   взять готовую telethon-session F вместо входа
+
+Пакет: <каталог>-<target>-<debug|release>-<sha>.zip, внутри папка с тем
+же именем. Состав: artifact (win: .exe, wasm: .data/.html/.js/.wasm)
++ dist.include + dist.extra[target] - исключения.
+
+Настройка состава в bld.tl проекта (необязательно):
+  dist = {
+      -- пути/шаблоны sh от корня проекта; по умолчанию { "assets" }
+      include = { "assets", "levels", "config.lua" },
+      -- шаблоны zip -x ('*' совпадает и через '/')
+      exclude = { "assets/raw/*", "*.wav" },
+      -- доп. файлы по платформе (dll, readme)
+      extra = { win = { "SDL2.dll" } },
+  },
+Встроенные исключения всегда: *.kra *~ *.bak *.BAK/* *.orig *.xcf *.psd
+*.dcnv. Что реально грузит игра: strace -f -e openat ./<artifact>.
+После правки bld.tl: cyan gen bld.tl.
+
+Лимиты: > 200 MB — предупреждение, > 2000 MB — отказ (лимит TG).
+
+Отправка: ~/caustic/koh_tg.py (python3 + telethon). Настройки — env
+TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_PHONE, TG_PROXY или файл
+~/.config/koh/tg.env (KEY=value; шаблон: python3 ~/caustic/koh_tg.py
+--template). Перед первой отправкой: koh tg --login. Код приходит не боту
+Verification Codes, а в служебный чат «Telegram» (777000) аккаунта TG_PHONE;
+--login печатает способ доставки, пустой Enter — переотправка (SMS и т.п.).
+Session: ~/.config/koh/koh_tg.session; без неё отправка сразу падает.]],
+      options = { "-t", "--from" },
+      flags = {
+         { "-r --release", "release-сборка" },
+         { "-a --noasan", "без address sanitizer" },
+         { "-B --nobuild", "не пересобирать, упаковать текущий artifact" },
+         { "--no-send", "только zip, без отправки" },
+         { "-c --check", "показать состав пакета, zip удалить" },
+         { "-s --smoke", "запустить artifact из пакета (win: wine)" },
+         { "--login", "авторизоваться в Telegram и проверить канал" },
+      },
+   },
+
    remove = {
       summary = "remove module by name and target from source tree",
       options = { "-n --name", "-t --target" },
@@ -938,6 +1001,12 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
+
+
+
+
+
+
 
 
 
@@ -2284,6 +2353,270 @@ function actions.itch(_args)
       sub_itch(_args, cfg)
    end
 end
+
+
+
+
+
+local dist_exclude_default = {
+   "*.kra", "*~", "*.bak", "*.BAK/*", "*.orig", "*.xcf", "*.psd", "*.dcnv",
+}
+
+local MB = 1024 * 1024
+
+local TG_SIZE_MAX = 2000 * MB
+
+local TG_SIZE_WARN = 200 * MB
+
+local DIST_TOP_NUM = 10
+
+local DIST_SMOKE_SEC = 5
+
+
+local TIMEOUT_EXPIRED = 124
+
+
+local function shq(s)
+   return "'" .. (s:gsub("'", "'\\''")) .. "'"
+end
+
+
+local function popen_read(cmd)
+   local p = io.popen(cmd, "r")
+   if not p then return "" end
+   local s = p:read("*a")
+   p:close()
+   return ((s or ""):gsub("%s+$", ""))
+end
+
+
+local function dist_git_sha()
+   local sha = popen_read("git rev-parse --short HEAD 2>/dev/null")
+   if sha == "" then return "nogit" end
+   if popen_read("git status --porcelain -uno 2>/dev/null") ~= "" then
+      sha = sha .. "-dirty"
+   end
+   return sha
+end
+
+
+local function dist_artifact_files(artifact, target)
+   if target == "win" then
+      return { artifact .. ".exe" }
+   elseif target == "wasm" then
+      return {
+         artifact .. ".data", artifact .. ".html",
+         artifact .. ".js", artifact .. ".wasm",
+      }
+   end
+   return { artifact }
+end
+
+
+
+local function dist_smoke(stage, artifact, target)
+   local run
+   if target == "linux" then
+      run = "./" .. artifact
+   elseif target == "win" then
+      if not cmd_try("command -v wine >/dev/null") then
+         printc("%{yellow}tg: smoke пропущен — нет wine%{reset}")
+         return true
+      end
+      run = "env WINEDEBUG=-all wine " .. artifact .. ".exe"
+   else
+      printc("%{yellow}tg: smoke для wasm не поддержан%{reset}")
+      return true
+   end
+
+   local cmd = format(
+   "cd %s && timeout %d %s", shq(stage), DIST_SMOKE_SEC, run)
+
+   printc("%{blue}tg: smoke: " .. cmd .. "%{reset}")
+   local _, _, code = os.execute(cmd)
+   if code == 0 or code == TIMEOUT_EXPIRED then
+      printc("%{green}tg: smoke ок%{reset}")
+      return true
+   end
+   printc(format("%%{red}tg: smoke провален, код %s%%{reset}", tostring(code)))
+   return false
+end
+
+
+local function dist_report(zip_path, full)
+   local zq = shq(zip_path)
+   if full then
+      cmd_try("unzip -l " .. zq)
+   end
+   print(format("крупнейшие файлы (до %d):", DIST_TOP_NUM))
+   cmd_try(format(
+   "unzip -l %s | awk '$1 ~ /^[0-9]+$/ && NF >= 4' | sort -k1 -nr | head -%d",
+   zq, DIST_TOP_NUM))
+
+   local attr = lfs.attributes(zip_path)
+   local size = attr and attr.size or 0
+   print(format("размер пакета: %.1f MB", size / MB))
+end
+
+
+
+
+
+local function sub_dist_pack(_args, cfg, target)
+   assert(cfg.artifact)
+   local files = dist_artifact_files(cfg.artifact, target)
+   if not has_files_in_dir(files) then
+      printc(format(
+      "%%{red}tg: нет артефакта %s, соберите: koh make -t %s%%{reset}",
+      table.concat(files, " "), target))
+
+      return nil, nil
+   end
+
+   local src_dir = lfs.currentdir()
+   local name = string.match(src_dir, "[^/]+$")
+   local mode = _args.release and "release" or "debug"
+   local pkg = format("%s-%s-%s-%s", name, target, mode, dist_git_sha())
+   local stage_root = "/tmp/koh_tg_" .. name
+   local stage = stage_root .. "/" .. pkg
+
+   cmd_do("rm -rf " .. shq(stage_root))
+   cmd_do("mkdir -p " .. shq(stage))
+
+   for _, f in ipairs(files) do
+      cmd_do(format("cp %s %s/", shq(f), shq(stage)))
+   end
+
+
+   local d = cfg.dist or {}
+   local copy = {}
+   if target ~= "wasm" then
+      for _, inc in ipairs(d.include or { "assets" }) do
+         insert(copy, inc)
+      end
+   end
+   for _, x in ipairs(d.extra and d.extra[target] or {}) do
+      insert(copy, x)
+   end
+   for _, c in ipairs(copy) do
+      if not cmd_try(format("cp -r --parents %s %s/", c, shq(stage))) then
+         printc("%{red}tg: не скопирован '" .. c .. "'%{reset}")
+         cmd_do("rm -rf " .. shq(stage_root))
+         return nil, nil
+      end
+   end
+
+
+   local excl = {}
+   for _, x in ipairs(dist_exclude_default) do
+      insert(excl, "-x " .. shq(pkg .. "/" .. x))
+   end
+   for _, x in ipairs(d.exclude or {}) do
+      insert(excl, "-x " .. shq(pkg .. "/" .. x))
+   end
+
+   local zip_path = src_dir .. "/" .. pkg .. ".zip"
+   os.remove(zip_path)
+   local zip_cmd = format(
+   "cd %s && zip -r -9 -q %s %s %s",
+   shq(stage_root), shq(zip_path), shq(pkg), table.concat(excl, " "))
+
+   if not cmd_try(zip_cmd) then
+      printc("%{red}tg: zip завершился с ошибкой%{reset}")
+      cmd_do("rm -rf " .. shq(stage_root))
+      return nil, nil
+   end
+
+
+   if _args.smoke then
+      local smoke_dir = stage_root .. "/smoke"
+      cmd_do(format("unzip -q %s -d %s", shq(zip_path), shq(smoke_dir)))
+      local ok = dist_smoke(smoke_dir .. "/" .. pkg, cfg.artifact, target)
+      if not ok then
+         cmd_do("rm -rf " .. shq(stage_root))
+         os.remove(zip_path)
+         return nil, nil
+      end
+   end
+
+   cmd_do("rm -rf " .. shq(stage_root))
+   printc("%{green}tg: пакет готов: " .. zip_path .. "%{reset}")
+   return zip_path, pkg
+end
+
+function actions.tg(_args)
+   local cfgs = search_and_load_cfgs_up("bld.lua")
+   if not cfgs or not cfgs[1] then
+      printc("%{red}tg: нет bld.lua в текущем каталоге%{reset}")
+      os.exit(1)
+   end
+
+
+   if _args.login then
+      local cmd = format("python3 %s/koh_tg.py --login", e.path_caustic)
+      if _args.from then
+         cmd = cmd .. " --from " .. shq(_args.from)
+      end
+      if not cmd_try(cmd) then os.exit(1) end
+      return
+   end
+
+   local target = _args.t or "linux"
+   _args.t = target
+
+   if not _args.nobuild and not _args.check then
+      actions.make(_args)
+   end
+
+   local name = string.match(lfs.currentdir(), "[^/]+$")
+
+   local tag = "#" .. (name:gsub("[^%w_]", "_"))
+   local mode = _args.release and "release" or "debug"
+   local last = popen_read("git log -1 --oneline 2>/dev/null")
+
+   for _, cfg in ipairs(cfgs) do
+      if cfg.artifact then
+         local zip_path = sub_dist_pack(_args, cfg, target)
+         if not zip_path then os.exit(1) end
+
+         local attr = lfs.attributes(zip_path)
+         local size = attr and attr.size or 0
+         dist_report(zip_path, _args.check ~= nil)
+
+         if _args.check then
+            os.remove(zip_path)
+         elseif size > TG_SIZE_MAX then
+            printc(format(
+            "%%{red}tg: пакет %.0f MB больше лимита TG %.0f MB, " ..
+            "сузьте dist.include/exclude%%{reset}",
+            size / MB, TG_SIZE_MAX / MB))
+
+            os.exit(1)
+         else
+            if size > TG_SIZE_WARN then
+               printc(format(
+               "%%{yellow}tg: крупный пакет %.0f MB%%{reset}", size / MB))
+
+            end
+            if not _args.no_send then
+               local caption = format(
+               "%s %s %s %s\n%s", tag, cfg.artifact, target, mode, last)
+
+               local send = format(
+               "python3 %s/koh_tg.py -c %s %s",
+               e.path_caustic, shq(caption), shq(zip_path))
+
+               if not cmd_try(send) then
+                  printc("%{red}tg: отправка не удалась%{reset}")
+                  os.exit(1)
+               end
+            end
+         end
+      end
+   end
+end
+
+
 
 local function backup(dep)
    if not dep.target then

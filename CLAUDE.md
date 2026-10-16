@@ -78,6 +78,7 @@ C-фреймворк для 2D-игр на raylib + ImGui.
 | `compile_commands` | Генерация compile_commands.json |
 | `ctags` | Генерация тегов + эмбеддингов |
 | `selftest` | Запуск тестовых проектов |
+| `tg -t <target> [-r]` | Сборка → zip → общий TG-канал сборок (`koh tg --help`) |
 
 ### Конфигурация (bld.lua)
 
@@ -90,6 +91,16 @@ C-фреймворк для 2D-игр на raylib + ImGui.
 - `debug_define` / `release_define` — макросы препроцессора
 - `exclude_files` — паттерны исключений
 - `codegen` — шаги кодогенерации
+- `dist` — состав пакета `koh tg`: `include` (по умолчанию `{"assets"}`),
+  `exclude` (zip -x), `extra[target]`; подробно — `koh tg --help`
+
+### koh tg — раздача билдов через Telegram
+
+`actions.tg` (`tl_src/caustic.tl`) собирает zip `<каталог>-<target>-<mode>-<sha>.zip`
+и отдаёт его `koh_tg.py` (telethon). Один канал и одна session на все проекты:
+`~/.config/koh/tg.env` (TG_API_ID/HASH/CHANNEL/PHONE/PROXY, env приоритетнее),
+`~/.config/koh/koh_tg.session`. Первый раз — `koh tg --login`. Проверка состава
+без сборки — `koh tg -t win -c`, запуск из пакета — `-s` (win через wine).
 
 ### Платформы
 
