@@ -956,11 +956,17 @@ local function build_md4c_common(_, _)
    ut.pop_dir()
 end
 
-local function build_libtess2_common(_, _)
+local function build_libtess2_common(_, dep)
    cmd_do("premake5 gmake")
    ut.push_current_dir()
    chdir("Build")
-   cmd_do("make")
+   if dep.target == 'win' then
+
+
+      cmd_do(make[dep.target] .. " tess2")
+   else
+      cmd_do("make")
+   end
    ut.pop_dir()
 end
 
@@ -1697,6 +1703,7 @@ _modules = {
       after_init = libtess2_after_init,
       build = build_libtess2_common,
       build_w = build_libtess2_common,
+      build_win = build_libtess2_common,
       copy_for_wasm = true,
       includes = { "libtess2/Include" },
       libdirs = { "libtess2/Build" },
