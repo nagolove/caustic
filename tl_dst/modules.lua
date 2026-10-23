@@ -286,6 +286,41 @@ end
 
 
 
+
+
+
+
+
+local function cimgui_android_display_size_patch()
+   local fname = "cimgui.cpp"
+   local f = io.open(fname, "r")
+   if not f then
+      printc("%{red}cimgui_android_display_size_patch: нет " .. fname .. "%{reset}")
+      os.exit(1)
+   end
+   local src = f:read("*a")
+   f:close()
+
+   local old = "#ifndef PLATFORM_DRM\n    if (IsWindowFullscreen())"
+   local new = "#if !defined(PLATFORM_DRM) && !defined(PLATFORM_ANDROID)\n" ..
+   "    if (IsWindowFullscreen())"
+   local i, j = src:find(old, 1, true)
+   if not i then
+      if src:find(new, 1, true) then
+         print("cimgui_android_display_size_patch: уже применён")
+         return
+      end
+      printc("%{red}cimgui_android_display_size_patch: место не найдено " ..
+      "(обновился rlImGui?)%{reset}")
+      os.exit(1)
+   end
+   src = src:sub(1, i - 1) .. new .. src:sub(j + 1)
+   f = io.open(fname, "w")
+   f:write(src)
+   f:close()
+   print("cimgui_android_display_size_patch: применён")
+end
+
 local function build_cimgui_common(e, dep)
    print('build_cimgui:', inspect(dep))
 
@@ -318,6 +353,9 @@ local function build_cimgui_common(e, dep)
 
 
 
+   if dep.target == 'android' then
+      cimgui_android_display_size_patch()
+   end
    find_and_remove_cmake_cache()
    local path = e.path_abs_third_party[dep.target]
    local flags
