@@ -42,10 +42,15 @@ koh-2048 — своё дерево `wt new android`.
   через `__ANDROID__`. munit — `-DMUNIT_NO_NL_LANGINFO`, physfs —
   без тестовых программ. `init/build -t android` берут только модули с
   `build_android` и header-only.
-- [ ] Этап 2. caustic: `src/koh_android.c/h`
-  - [ ] `koh_android_stdio_to_logcat()`
-  - [ ] `koh_android_args()` (intent extra + `debug.<artifact>.args`)
-  - [ ] `koh_android_data_path()`
+- [x] Этап 2. caustic: `src/koh_android.c/h`
+  - [x] `koh_android_stdio_to_logcat()`
+  - [x] `koh_android_args()` (intent extra + `debug.<artifact>.args`)
+  - [x] `koh_android_data_path()`
+
+  Заметки этапа 2: на не-Android функции — заглушки (файл собирается
+  везде). `android_native_app_glue.h` подключается из NDK
+  (`-I<ndk>/sources/android/native_app_glue` в defines android).
+  glue.o уже внутри `libraylib.a` — отдельно не компилировать.
 - [ ] Этап 3. caustic: упаковка APK
   - [ ] шаблон `android/AndroidManifest.xml.in`, иконка
   - [ ] таблица `android` в Cfg (`bld.tl`), проверка обязательных полей

@@ -3947,6 +3947,8 @@ function sub_make(
       insert(defines, "-DPLATFORM_ANDROID")
       insert(defines, "-D__ANDROID__")
       insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
+
+      insert(defines, "-I" .. android_ndk .. "/sources/android/native_app_glue")
       insert(defines, "-DPCRE2_STATIC")
       insert(defines, "-DUTF8PROC_STATIC")
    end
