@@ -1693,7 +1693,7 @@ void koh_window_state_print() {
     );
 }
 
-#if defined(__wasm__) || defined(_WIN32)
+#if defined(__wasm__) || defined(_WIN32) || defined(__ANDROID__)
 void koh_backtrace_print() {
 }
 const char * koh_backtrace_get() {

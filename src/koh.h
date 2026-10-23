@@ -8,6 +8,7 @@ do {                                                            \
 } while (0);                                                    \
 
 
+#include "koh_android.h"
 #include "koh_adsr.h"
 #include "koh_array.h"
 #include "koh_cammode.h"

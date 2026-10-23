@@ -39,6 +39,7 @@ local box2c_pin: {string: string} = {
     linux = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
     wasm  = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
     win   = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
+    android = "ac7c751eaeddbabdc1c4d41ae4f3a25d78627790",
 }
 
 -- Чекаут запиненного коммита box2c для текущего таргета (shallow).
@@ -97,9 +98,12 @@ end
 local function build_physfs(_: Env, dep: Dependency)
     find_and_remove_cmake_cache()
     cmd_do("make clean")
+    -- тестовые программы (test_physfs, physfshttpd) не нужны, а
+    -- physfshttpd не собирается под NDK (нет setprotoent)
     cmd_do(cmake[dep.target]
         .. " -DPHYSFS_BUILD_STATIC=ON"
-        .. " -DPHYSFS_BUILD_SHARED=OFF .")
+        .. " -DPHYSFS_BUILD_SHARED=OFF"
+        .. " -DPHYSFS_BUILD_TEST=OFF .")
     cmd_do(make[dep.target])
 end
 
@@ -323,6 +327,8 @@ local function build_cimgui_common(e: Env, dep: Dependency)
         flags = "-g3 -DPLATFORM_WEB=1"
     elseif dep.target == 'win' then
         flags = "-g3 -DPLATFORM_DESKTOP"
+    elseif dep.target == 'android' then
+        flags = "-g3 -DPLATFORM_ANDROID -fPIC"
     else
         printc("%{red}build_cimgui_common:bad target " .. dep.target .. "%{reset}")
         os.exit(1)
@@ -447,7 +453,7 @@ local function build_with_make_common(_: Env, dep: Dependency)
     elseif dep.target == 'linux' then
         cmd_do("make clean")
         cmd_do("make -j")
-    elseif dep.target == 'win' then
+    elseif dep.target == 'win' or dep.target == 'android' then
         cmd_do("make clean")
         cmd_do(make[dep.target])
     end
@@ -486,7 +492,7 @@ local function build_with_cmake_common(_: Env, dep: Dependency)
     local linker_option = ' -DCMAKE_EXE_LINKER_FLAGS="-s INITIAL_MEMORY=67108864" '
     --local linker_option = ''
 
-    if dep.target == 'linux' or dep.target == 'win' then
+    if dep.target ~= 'wasm' then
         linker_option = ''
     end
 
@@ -528,6 +534,10 @@ local function build_munit_common(_: Env, dep: Dependency)
     end
     if dep.target == "wasm" then
         flags = flags .. " -pthread "
+    end
+    if dep.target == "android" then
+        -- nl_langinfo в bionic только с API 26
+        flags = flags .. " -DMUNIT_NO_NL_LANGINFO "
     end
     local cmd = compiler_c[dep.target] .. " -c munit.c " .. flags
 
@@ -603,6 +613,21 @@ local function build_raylib_common(_: Env, dep: Dependency)
         cmd_do(a)
         cmd_do("make clean")
         cmd_do(make[dep.target])
+    elseif dep.target == 'android' then
+        -- Нативный Makefile raylib: rcore_android.c, EGL/GLES3 и
+        -- android_native_app_glue.o внутри libraylib.a (src/)
+        chdir("src")
+        local args = {
+            "make",
+            "PLATFORM=PLATFORM_ANDROID",
+            "ANDROID_NDK=" .. android_ndk,
+            "ANDROID_ARCH=arm64",
+            "ANDROID_API_VERSION=" .. tostring(android_api),
+            "GRAPHICS=GRAPHICS_API_OPENGL_ES3",
+        }
+        local cmd = table.concat(args, " ")
+        cmd_do(cmd .. " clean")
+        cmd_do(cmd .. " -j")
     end
 
 --[[
@@ -729,6 +754,8 @@ local function cimgui_after_init(e: Env, dep: Dependency)
         flags = "-g3 -DPLATFORM_WEB=1"
     elseif dep.target == 'win' then
         flags = "-g3 -DPLATFORM_DESKTOP"
+    elseif dep.target == 'android' then
+        flags = "-g3 -DPLATFORM_ANDROID -fPIC"
     else
         printc(
             "%{red}build_cimgui_common:bad target "
@@ -852,6 +879,14 @@ local function build_lua_common(_: Env, dep: Dependency)
             .. 'AR="x86_64-w64-mingw32-ar rc" '
             .. 'RANLIB=x86_64-w64-mingw32-ranlib '
             .. 'MYCFLAGS="-std=c99 -DLUA_USE_WINDOWS"')
+    elseif dep.target == 'android' then
+        -- CFLAGS целиком: в makefile Lua стоит -march=native и
+        -- readline; цель 'a' — только liblua.a, без исполняемых lua/luac
+        cmd_do("make clean")
+        cmd_do(make[dep.target]
+            .. 'AR="' .. ar[dep.target] .. ' rcs" '
+            .. 'CFLAGS="-Wall -O2 -fPIC -std=c99 -DLUA_USE_LINUX" '
+            .. 'MYLIBS="" MYLDFLAGS="" a')
     else
         printc(
             "%{red}build_lua_common: bad target" .. dep.target .. "%{reset}"
@@ -960,9 +995,9 @@ local function build_libtess2_common(_: Env, dep: Dependency)
     cmd_do("premake5 gmake")
     ut.push_current_dir()
     chdir("Build")
-    if dep.target == 'win' then
-        -- Кросс-MinGW: собираю только цель tess2 — example требует
-        -- glfw/GLEW, которых нет под x86_64-w64-mingw32
+    if dep.target == 'win' or dep.target == 'android' then
+        -- Кросс-сборка: только цель tess2 — example требует glfw/GLEW,
+        -- которых нет ни под MinGW, ни под NDK
         cmd_do(make[dep.target] .. " tess2")
     else
         cmd_do("make")
@@ -1017,6 +1052,7 @@ _modules = {
         build = build_physfs,
         build_w = build_physfs,
         build_win = build_physfs,
+        build_android = build_physfs,
         git_commit = "d70c3fcf06814f8608c8327d3e8136063ee0133d",
         url = "https://github.com/icculus/physfs.git",
     },
@@ -1072,6 +1108,7 @@ _modules = {
         build = build_with_make_common,
         build_w = build_with_make_common,
         build_win = build_with_make_common,
+        build_android = build_with_make_common,
         git_commit = "1ec193eacfeae3e0da497373d41ccd850ebec9e5",
         url = "https://github.com/Cyan4973/xxHash.git",
         --update = update_default,
@@ -1097,6 +1134,7 @@ _modules = {
         build = build_freetype_common,
         build_w = build_freetype_common,
         build_win = build_freetype_common,
+        build_android = build_freetype_common,
         git_commit = "a059b237bb01eb3e4f9f8b1618dda8c117498bab",
         url = "https://github.com/freetype/freetype.git",
         --update = update_default,
@@ -1197,6 +1235,7 @@ _modules = {
         build = build_munit_common,
         build_w = build_munit_common,
         build_win = build_munit_common,
+        build_android = build_munit_common,
         description = "munit testing framework",
         dir = "munit",
         includes = { "munit" },
@@ -1254,6 +1293,7 @@ _modules = {
         build = build_with_cmake_common,
         build_w = build_with_cmake_common,
         build_win = build_with_cmake_common,
+        build_android = build_with_cmake_common,
         description = "task sheduler, used by box2d",
         dir = "enkits",
         includes = { "enkits/src" },
@@ -1288,6 +1328,7 @@ _modules = {
         build = build_pcre2,
         build_w = build_pcre2_w,
         build_win = build_pcre2,
+        build_android = build_pcre2,
         description = "регулярные выражения",
         dir = "pcre2",
         includes = { "pcre2/src", "pcre2", "pcre2/interface" },
@@ -1422,6 +1463,9 @@ _modules = {
                     "-Wl,--end-group",
                     "gdi32", "winmm", "opengl32",
                 }
+            elseif dep.target == 'android' then
+                -- системные (EGL, GLESv3, log, android) — в get_ready_l
+                return { "raylib", "OpenSLES" }
             else
                 printc(
                     "%{red}bad target in links" .. dep.target ..  "%{reset}"
@@ -1438,6 +1482,7 @@ _modules = {
         build_w = build_raylib_common,
         build = build_raylib_common,
         build_win = build_raylib_common,
+        build_android = build_raylib_common,
         url_action = "git",
         -- master c58072d: upstream починил гвард rlsw.h (#if вместо #ifdef
         -- RLSW_DOUBLE_BUFFERING) — headless-сборка (PLATFORM=Memory) больше
@@ -1457,6 +1502,7 @@ _modules = {
         build = build_cimgui_common,
         build_w = build_cimgui_common,
         build_win = build_cimgui_common,
+        build_android = build_cimgui_common,
         --depends = {'freetype', 'rlimgui'},
         description = "C биндинг для imgui",
         dir = "cimgui",
@@ -1548,6 +1594,7 @@ _modules = {
         build = build_box2c_common,
         build_w = build_box2c_common,
         build_win = build_box2c_common,
+        build_android = build_box2c_common,
         copy_for_wasm = true,
         description = "box2c - плоский игровой физический движок",
         dir = "box2c",
@@ -1595,6 +1642,7 @@ _modules = {
         build = build_lua_common,
         build_w = build_lua_common,
         build_win = build_lua_common,
+        build_android = build_lua_common,
         copy_for_wasm = true,
         description = "lua интерпритатор",
         dir = "lua",
@@ -1652,6 +1700,7 @@ _modules = {
         build = build_with_make_common,
         build_w = build_with_make_common,
         build_win = build_with_make_common,
+        build_android = build_with_make_common,
         after_build = utf8proc_after_build,
         copy_for_wasm = true,
         description = "библиотека для работы с utf8 Юникодом",
@@ -1704,6 +1753,7 @@ _modules = {
         build = build_libtess2_common,
         build_w = build_libtess2_common,
         build_win = build_libtess2_common,
+        build_android = build_libtess2_common,
         copy_for_wasm = true,
         includes = { "libtess2/Include" },
         libdirs = { "libtess2/Build" },

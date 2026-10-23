@@ -1,6 +1,8 @@
 modules_*
 obj_linux
 obj_wasm
+obj_win
+obj_android
 cache.lua
 #src/stq6LTr3
 .vim-bookmarks
