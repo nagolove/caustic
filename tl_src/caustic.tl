@@ -2666,7 +2666,6 @@ local function android_manifest(cfg: Cfg, a: Cfg.Android, extract: boolean): str
         PACKAGE = a.package,
         LABEL = a.label or cfg.artifact,
         ORIENTATION = a.orientation or "sensor",
-        LIB_NAME = cfg.artifact,
         PERMISSIONS = concat(perms, "\n"),
         ICON = icon,
         EXTRACT_NATIVE_LIBS = tostring(extract),
@@ -2766,12 +2765,15 @@ local function android_package(_args: Args, cfg: Cfg): boolean
     end
     cmd_do(concat(link, " "))
 
-    -- .so без отладочной информации; полная остаётся в корне проекта
+    -- В APK .so всегда libmain.so — её NativeActivity грузит по умолчанию,
+    -- без meta-data android.app.lib_name (aapt2 превращает цифровое имя
+    -- вроде "2048" в Integer, и NativeActivity его не читает).
+    -- В APK — без отладочной информации; полная остаётся в корне проекта.
     for _, abi in ipairs(a.abis or { android_abi }) do
         local dir = stage .. "/lib/" .. abi
         cmd_do("mkdir -p " .. shq(dir))
-        cmd_do(format("%s/llvm-strip --strip-debug -o %s/%s %s",
-            android_bin, shq(dir), so, shq(so)))
+        cmd_do(format("%s/llvm-strip --strip-debug -o %s/libmain.so %s",
+            android_bin, shq(dir), shq(so)))
     end
     -- page_align: .so без сжатия, грузится прямо из APK (extractNativeLibs=false)
     local zip_level = page_align and "-0" or "-9"
@@ -4459,7 +4461,10 @@ function sub_make(
                 table.insert(args, include)
             end
 
-            if target ~= 'wasm' then
+            -- -L/-l в компиляции: clang (wasm, android) на каждый файл
+            -- печатает 'linker input unused'
+            local compile_libs = target ~= 'wasm' and target ~= 'android'
+            if compile_libs then
                 for _, libdir in ipairs(libsdirs) do
                     table.insert(args, "-L" .. libdir)
                 end
@@ -4491,7 +4496,7 @@ function sub_make(
             insert(args, "-c")
             insert(args, _input)
 
-            if target ~= 'wasm' then
+            if compile_libs then
                 for _, lib in ipairs(make_l(libs)) do
                     table.insert(args, lib)
                 end
