@@ -7,7 +7,8 @@
     .so на 16 KB в zip — zipalign -P 16 из build-tools 35+.
 
     NativeActivity — системный класс, Java-кода в APK нет (hasCode=false);
-    он грузит lib${LIB_NAME}.so, где android_main() raylib зовёт main().
+    он грузит libmain.so (имя по умолчанию, meta-data lib_name не нужна),
+    где android_main() raylib зовёт main().
     configChanges: поворот/клавиатура/размер не пересоздают activity —
     иначе EGL-контекст и всё состояние игры терялись бы.
 -->
@@ -31,8 +32,6 @@ ${PERMISSIONS}
             android:launchMode="singleTask"
             android:resizeableActivity="false"
             android:exported="true">
-
-            <meta-data android:name="android.app.lib_name" android:value="${LIB_NAME}"/>
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
