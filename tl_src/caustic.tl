@@ -186,6 +186,33 @@ local record Cfg
     end
     dist: Dist
 
+    -- Сборка под Android (`koh make/run/tg -t android`). Нужна только для
+    -- target=android, на остальных платформах не читается.
+    record Android
+        -- идентификатор приложения (Java-пакет), обязателен
+        package: string
+        -- подпись под иконкой, по умолчанию artifact
+        label: string
+        -- растёт с каждой публикуемой сборкой, по умолчанию 1
+        version_code: integer
+        -- строка версии для человека, по умолчанию "0.1"
+        version_name: string
+        -- минимальный API, по умолчанию android_api (24)
+        min_sdk: integer
+        -- API, под который тестировали; по умолчанию — новейшая
+        -- установленная платформа SDK
+        target_sdk: integer
+        -- portrait | landscape | sensor | ..., по умолчанию sensor
+        orientation: string
+        -- список ABI, по умолчанию { android_abi }
+        abis: {string}
+        -- png-иконка от корня проекта; без неё — системная
+        icon: string
+        -- разрешения без префикса, напр. "INTERNET"
+        permissions: {string}
+    end
+    android: Android
+
     -- каталоги включаемых файлов
     includes: {string}
     -- каталоги с библиотеками статическими
@@ -843,7 +870,9 @@ local parser_setup: {string:ParserSetup} = {
     run = {
         summary = "make and run current project",
         description = "Use -- to pass extra args"
-            .. " to artifact, e.g.: koh run -d -- --dev",
+            .. " to artifact, e.g.: koh run -d -- --dev."
+            .. " With -t android: install APK, start via adb, show logcat",
+        options = { "-t" },
         flags = {
             {"-d --debug", "run artifact in gdb",},
             {"--noreset", "no call 'reset' for clearing terminal output"},
@@ -2507,6 +2536,14 @@ local function sub_dist_pack(_args: Args, cfg: Cfg, target: Target): string, str
     local name = string.match(src_dir, "[^/]+$")
     local mode = _args.release and "release" or "debug"
     local pkg = format("%s-%s-%s-%s", name, target, mode, dist_git_sha())
+
+    -- android: APK уже содержит активы — отправляется сам, без zip
+    if target == "android" then
+        local apk_path = src_dir .. "/" .. pkg .. ".apk"
+        cmd_do(format("cp %s %s", shq(files[1]), shq(apk_path)))
+        printc("%{green}tg: пакет готов: " .. apk_path .. "%{reset}")
+        return apk_path, pkg
+    end
     local stage_root = "/tmp/koh_tg_" .. name
     local stage = stage_root .. "/" .. pkg
 
@@ -2573,6 +2610,246 @@ local function sub_dist_pack(_args: Args, cfg: Cfg, target: Target): string, str
     printc("%{green}tg: пакет готов: " .. zip_path .. "%{reset}")
     return zip_path, pkg
 end
+
+-- {{{ Android: упаковка APK без Gradle
+
+local function android_sdk_path(): string
+    return os.getenv("ANDROID_HOME") or "/opt/android-sdk"
+end
+
+-- Последний по версии подкаталог dir (build-tools/34.0.0, android-34)
+local function latest_subdir(dir: string): string
+    local cmd = "ls -1 " .. shq(dir) .. " 2>/dev/null | sort -V | tail -1"
+    local name = popen_read(cmd)
+    if name == "" then
+        return nil
+    end
+    return name
+end
+
+-- debug.keystore создаётся при первой сборке, как это делает Android Studio
+local function android_debug_keystore(): string
+    local ks = os.getenv("HOME") .. "/.android/debug.keystore"
+    if not lfs.attributes(ks) then
+        cmd_do("mkdir -p " .. shq(os.getenv("HOME") .. "/.android"))
+        cmd_do("keytool -genkeypair -keystore " .. shq(ks)
+            .. " -storepass android -keypass android"
+            .. " -alias androiddebugkey -keyalg RSA -keysize 2048"
+            .. " -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'")
+    end
+    return ks
+end
+
+local function android_manifest(cfg: Cfg, a: Cfg.Android, extract: boolean): string
+    local tmpl_path = e.path_caustic .. "/android/AndroidManifest.xml.in"
+    local f = io.open(tmpl_path, "r")
+    if not f then
+        printc("%{red}android: нет шаблона " .. tmpl_path .. "%{reset}")
+        return nil
+    end
+    local tmpl = f:read("*a")
+    f:close()
+
+    local perms: {string} = {}
+    for _, p in ipairs(a.permissions or {}) do
+        insert(perms, format(
+            '    <uses-permission android:name="android.permission.%s"/>', p
+        ))
+    end
+
+    local icon = ""
+    if a.icon then
+        icon = '\n        android:icon="@mipmap/ic_launcher"'
+    end
+
+    local vars: {string: string} = {
+        PACKAGE = a.package,
+        LABEL = a.label or cfg.artifact,
+        ORIENTATION = a.orientation or "sensor",
+        LIB_NAME = cfg.artifact,
+        PERMISSIONS = concat(perms, "\n"),
+        ICON = icon,
+        EXTRACT_NATIVE_LIBS = tostring(extract),
+    }
+    local xml = tmpl:gsub("%${([%w_]+)}", function(k: string): string
+        return vars[k] or ""
+    end)
+    return xml
+end
+
+-- Собирает <artifact>.apk в корне проекта из lib<artifact>.so:
+-- манифест → aapt2 link → активы (dist.include/exclude) и .so → zipalign
+-- → apksigner (debug.keystore). Вызывается из actions.make.
+local function android_package(_args: Args, cfg: Cfg): boolean
+    local a = cfg.android
+    if not a or not a.package then
+        printc("%{red}android: в bld.tl нет android.package — "
+            .. "задайте таблицу android, см. caustic-android.md%{reset}")
+        return false
+    end
+
+    local root = lfs.currentdir()
+    local so = "lib" .. cfg.artifact .. ".so"
+    if not lfs.attributes(so) then
+        printc("%{red}android: нет " .. so .. "%{reset}")
+        return false
+    end
+
+    local sdk = android_sdk_path()
+    local bt_ver = latest_subdir(sdk .. "/build-tools")
+    if not bt_ver then
+        printc("%{red}android: нет build-tools в " .. sdk .. "%{reset}")
+        return false
+    end
+    local bt = sdk .. "/build-tools/" .. bt_ver
+    -- zipalign -P 16 (16 KB выравнивание .so в zip) есть с build-tools 35.
+    -- Старее: .so сжимаются и распаковываются при установке
+    -- (extractNativeLibs=true), 16 KB выравнивание ELF сохраняется.
+    local BT_PAGE_ALIGN_MIN = 35
+    local bt_major = math.tointeger(tonumber(bt_ver:match("^(%d+)"))) or 0
+    local page_align = bt_major >= BT_PAGE_ALIGN_MIN
+    if not page_align then
+        printc("%{yellow}android: build-tools " .. bt_ver .. " без zipalign -P, "
+            .. ".so распаковываются при установке. Для прямой загрузки из APK: "
+            .. "sdkmanager 'build-tools;35.0.0'%{reset}")
+    end
+
+    local target_sdk = a.target_sdk
+    if not target_sdk then
+        local plat = latest_subdir(sdk .. "/platforms") or ""
+        target_sdk = math.tointeger(tonumber(plat:match("%d+")))
+    end
+    local jar = format("%s/platforms/android-%d/android.jar", sdk, target_sdk)
+    if not lfs.attributes(jar) then
+        printc("%{red}android: нет " .. jar .. "%{reset}")
+        return false
+    end
+
+    local stage = root .. "/obj_android/apk"
+    cmd_do("rm -rf " .. shq(stage))
+    cmd_do("mkdir -p " .. shq(stage))
+
+    local xml = android_manifest(cfg, a, not page_align)
+    if not xml then
+        return false
+    end
+    local manifest = stage .. "/AndroidManifest.xml"
+    local mf = io.open(manifest, "w")
+    mf:write(xml)
+    mf:close()
+
+    -- ресурсы: только иконка
+    local res_zip = ""
+    if a.icon then
+        cmd_do("mkdir -p " .. shq(stage .. "/res/mipmap"))
+        cmd_do(format("cp %s %s/res/mipmap/ic_launcher.png", shq(a.icon), shq(stage)))
+        cmd_do(format("%s/aapt2 compile --dir %s/res -o %s/res.zip",
+            bt, shq(stage), shq(stage)))
+        res_zip = shq(stage .. "/res.zip")
+    end
+
+    local base = stage .. "/base.apk"
+    local link = {
+        bt .. "/aapt2 link",
+        "-o " .. shq(base),
+        "-I " .. shq(jar),
+        "--manifest " .. shq(manifest),
+        "--min-sdk-version " .. tostring(a.min_sdk or android_api),
+        "--target-sdk-version " .. tostring(target_sdk),
+        "--version-code " .. tostring(a.version_code or 1),
+        "--version-name " .. shq(a.version_name or "0.1"),
+        res_zip,
+    }
+    if not _args.release then
+        -- debuggable: run-as, отладчик, доступ к data через adb
+        insert(link, "--debug-mode")
+    end
+    cmd_do(concat(link, " "))
+
+    -- .so без отладочной информации; полная остаётся в корне проекта
+    for _, abi in ipairs(a.abis or { android_abi }) do
+        local dir = stage .. "/lib/" .. abi
+        cmd_do("mkdir -p " .. shq(dir))
+        cmd_do(format("%s/llvm-strip --strip-debug -o %s/%s %s",
+            android_bin, shq(dir), so, shq(so)))
+    end
+    -- page_align: .so без сжатия, грузится прямо из APK (extractNativeLibs=false)
+    local zip_level = page_align and "-0" or "-9"
+    cmd_do(format("cd %s && zip %s -r -q base.apk lib", shq(stage), zip_level))
+
+    -- активы: пути как в проекте, внутри APK под assets/ —
+    -- fopen("assets/x.png") → AAssetManager_open("assets/x.png")
+    local d = cfg.dist or {}
+    local assets = stage .. "/assets"
+    cmd_do("mkdir -p " .. shq(assets))
+    for _, inc in ipairs(d.include or { "assets" }) do
+        if not cmd_try(format("cp -r --parents %s %s/", inc, shq(assets))) then
+            printc("%{red}android: не скопирован '" .. inc .. "'%{reset}")
+            return false
+        end
+    end
+    local excl: {string} = {}
+    for _, x in ipairs(dist_exclude_default) do
+        insert(excl, "-x " .. shq("assets/" .. x))
+    end
+    for _, x in ipairs(d.exclude or {}) do
+        insert(excl, "-x " .. shq("assets/" .. x))
+    end
+    cmd_do(format("cd %s && zip -r -q base.apk assets %s",
+        shq(stage), concat(excl, " ")))
+
+    local aligned = stage .. "/aligned.apk"
+    local align_flags = page_align and "-P 16 -f" or "-f"
+    cmd_do(format("%s/zipalign %s 4 %s %s",
+        bt, align_flags, shq(base), shq(aligned)))
+
+    local apk = root .. "/" .. cfg.artifact .. ".apk"
+    local ks = android_debug_keystore()
+    cmd_do(format(
+        "%s/apksigner sign --ks %s --ks-pass pass:android "
+        .. "--key-pass pass:android --out %s %s",
+        bt, shq(ks), shq(apk), shq(aligned)
+    ))
+    os.remove(apk .. ".idsig")
+
+    local attr = lfs.attributes(apk)
+    local size = attr and attr.size as number or 0
+    printc(format("%%{green}android: %s (%.1f MB)%%{reset}", apk, size / MB))
+    return true
+end
+
+-- Установка APK, запуск и logcat процесса. args — хвост после `--`,
+-- уходит в intent extra "args" (см. koh_android_args).
+local function android_run(cfg: Cfg, args: {string})
+    local a = cfg.android
+    local apk = cfg.artifact .. ".apk"
+    cmd_do("adb install -r " .. shq(apk))
+    cmd_do("adb logcat -c")
+
+    local start = "adb shell am start -S -n "
+        .. a.package .. "/android.app.NativeActivity"
+    if args and #args > 0 then
+        -- строка проходит через шелл устройства: кавычим дважды
+        start = start .. " --es args " .. shq(shq(concat(args, " ")))
+    end
+    cmd_do(start)
+
+    -- pid появляется не сразу после am start
+    local pid = ""
+    for _ = 1, 20 do
+        pid = popen_read("adb shell pidof -s " .. a.package)
+        if pid ~= "" then break end
+        cmd_try("sleep 0.25")
+    end
+    if pid == "" then
+        printc("%{red}android: процесс не запустился, полный logcat%{reset}")
+        cmd_do("adb logcat -d | tail -100")
+        return
+    end
+    cmd_do("adb logcat --pid=" .. pid)
+end
+
+-- }}}
 
 function actions.tg(_args: Args)
     local cfgs: {Cfg} = search_and_load_cfgs_up("bld.lua")
@@ -3420,6 +3697,9 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         artifact = artifact .. ".html"
     elseif _args.target == 'win' then
         artifact = artifact .. ".exe"
+    elseif _args.target == 'android' then
+        -- приложение = lib<artifact>.so, его грузит NativeActivity
+        artifact = "../lib" .. cfg.artifact .. ".so"
     end
 
     local is_shared = ""
@@ -3448,6 +3728,19 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         if cfg.kind == 'app' then
             cmd = cmd .. " -mwindows "
         end
+    end
+
+    if _args.target == 'android' then
+        -- clang++: только C++-драйвер подтягивает libc++ (-static-libstdc++)
+        cmd = compiler_cpp['android'] .. " -shared -o \"" .. artifact .. "\" "
+            -- точка входа NativeActivity из native_app_glue (libraylib.a)
+            .. "-u ANativeActivity_onCreate "
+            -- fopen всего блоба читает активы APK (rcore_android.c)
+            .. "-Wl,--wrap=fopen "
+            -- 16 KB страницы: требование Android 15+
+            .. "-Wl,-z,max-page-size=16384 "
+            .. "-Wl,--no-undefined "
+            .. "-static-libstdc++ "
     end
 
     -- Добавить какие-то wasm флаги
@@ -4408,6 +4701,11 @@ function actions.run(_args: Args)
         return
     end
 
+    if _args.t == 'android' then
+        android_run(cfgs[1], _args.args)
+        return
+    end
+
     local extra = ""
     if _args.args and #_args.args > 0 then
         extra = " " .. concat(_args.args, " ")
@@ -4864,6 +5162,7 @@ function actions.make(_args: Args)
     end
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     local target = _args.t or "linux"
+    local root = lfs.currentdir()
     -- Каталоги объектников не приходят из клона (gitignore), а sub_make их
     -- не создаёт — в отличие от koh_recompile. Создаём здесь.
     mkdir("obj_linux")
@@ -4879,6 +5178,20 @@ function actions.make(_args: Args)
                 "actions.make: cfg[%d]", i
             ), _t1)
         end
+    end
+
+    -- android: lib<artifact>.so → <artifact>.apk
+    if target == 'android' then
+        ut.push_current_dir()
+        chdir(root)
+        for _, cfg in ipairs(cfgs) do
+            if cfg.artifact and cfg.kind == 'app' then
+                if not android_package(_args, cfg) then
+                    os.exit(1)
+                end
+            end
+        end
+        ut.pop_dir()
     end
     time_print("actions.make", _t0)
 end

@@ -51,12 +51,21 @@ koh-2048 — своё дерево `wt new android`.
   везде). `android_native_app_glue.h` подключается из NDK
   (`-I<ndk>/sources/android/native_app_glue` в defines android).
   glue.o уже внутри `libraylib.a` — отдельно не компилировать.
-- [ ] Этап 3. caustic: упаковка APK
-  - [ ] шаблон `android/AndroidManifest.xml.in`, иконка
-  - [ ] таблица `android` в Cfg (`bld.tl`), проверка обязательных полей
-  - [ ] линк `.so` (`--wrap=fopen`, 16 KB страницы), aapt2, zipalign,
-        apksigner, debug.keystore
-  - [ ] `koh run -t android [-- args]`, `koh tg -t android`
+- [x] Этап 3. caustic: упаковка APK
+  - [x] шаблон `android/AndroidManifest.xml.in` (иконка — опционально,
+        без неё системная)
+  - [x] таблица `android` в Cfg (`bld.tl`), проверка обязательных полей
+  - [x] линк `.so` через clang++ (`--wrap=fopen`, 16 KB страницы,
+        `-static-libstdc++`), aapt2, zipalign, apksigner, debug.keystore
+  - [x] `koh run -t android [-- args]`, `koh tg -t android` (шлёт .apk)
+
+  Заметки этапа 3: build-tools 34 не умеет `zipalign -P 16` → .so
+  сжимается и распаковывается при установке (`extractNativeLibs=true`).
+  С build-tools 35+ — автоматически прямая загрузка из APK. В APK кладётся
+  .so без debug-info (`llvm-strip --strip-debug`), полная — в корне
+  проекта. `keep_screen_on` из черновика не сделан: манифестом не задаётся,
+  нужен `ANativeActivity_setWindowFlags` — позже.
+
 - [ ] Этап 4. koh-2048: порт
   - [ ] `bld.tl`: таблица `android`, исключения
   - [ ] `2048.c`: logcat, args, `InitWindow(0,0)`, `KEY_BACK`, жест GUI
