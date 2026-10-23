@@ -5,6 +5,7 @@
 #include FT_FREETYPE_H
 #include FT_OUTLINE_H
 
+#include "koh_ft.h"
 #include "koh_logger.h"
 #include "koh_common.h"
 #include "koh_table.h"
@@ -14,6 +15,8 @@ struct FntVector {
     // Последняя позиция курсора
     Vector2 cursor;
     FT_Face face;
+    // байты ttf, на которые ссылается face (см. koh_ft_face_open)
+    unsigned char *ttf_data;
     float   line_thick;
     /*int     advance;*/
 };
@@ -76,10 +79,9 @@ void fnt_vector_free(FntVector *fv) {
 
     trace("fnt_vector_free:\n");
 
-    if (fv->face) {
-        FT_Done_Face(fv->face);
-        fv->face = NULL;
-    }
+    koh_ft_face_close(fv->face, fv->ttf_data);
+    fv->face = NULL;
+    fv->ttf_data = NULL;
     free(fv);
 }
 
@@ -100,7 +102,7 @@ FntVector *fnt_vector_new(const char *ttf_file, const FntVectorOpts *opts) {
     }
     */
 
-    if (FT_New_Face(library, ttf_file, 0, &fv->face)) {
+    if (koh_ft_face_open(library, ttf_file, &fv->face, &fv->ttf_data)) {
         trace("Error loading font\n");
         koh_trap();
     }

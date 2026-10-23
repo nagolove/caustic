@@ -29,7 +29,9 @@
 #endif
 
 static bool is_trace_enabled = true;
-#ifdef _WIN32
+// Android: /tmp нет; относительный путь перехваченный fopen кладёт в
+// internalDataPath приложения
+#if defined(_WIN32) || defined(__ANDROID__)
 static const char *log_fname = "causticlog.txt";
 #else
 static const char *log_fname = "/tmp/causticlog";
