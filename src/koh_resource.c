@@ -449,7 +449,8 @@ static void *copy_alloc(void *ptr, size_t sz) {
 }
 
 // Платформенный заголовок шейдера, приклеиваемый вместо #version.
-#if defined(__wasm__) || defined(PLATFORM_WEB)
+// GLES3 — wasm (WebGL2) и Android.
+#if defined(__wasm__) || defined(PLATFORM_WEB) || defined(GRAPHICS_API_OPENGL_ES3)
 // В GLSL ES 3.00 производные (dFdx/fwidth) уже в ядре — расширение
 // GL_OES_standard_derivatives не нужно и вызывает "unsupported shader
 // version", поэтому его не подключаем.
