@@ -97,6 +97,7 @@ local libcaustic_name = {
     ["linux"] = "caustic_linux",
     ["wasm"] = "caustic_wasm",
     ["win"] = "caustic_win",
+    ["android"] = "caustic_android",
 }
 
 -- }}}
@@ -337,6 +338,7 @@ local enum TargetBuildFunc
     "build"
     "build_w"
     "build_win"
+    "build_android"
 end
 
 local enum ProfileConfig
@@ -466,6 +468,7 @@ local function get_ready_deps(
             local any_build = dep.build ~= nil
                 or dep.build_win ~= nil
                 or dep.build_w ~= nil
+                or dep.build_android ~= nil
             if not any_build then
                 table.insert(filtered, dep)
             else
@@ -476,6 +479,8 @@ local function get_ready_deps(
                     has_build = dep.build_win ~= nil
                 elseif target == 'wasm' then
                     has_build = dep.build_w ~= nil
+                elseif target == 'android' then
+                    has_build = dep.build_android ~= nil
                 end
                 if has_build then
                     table.insert(filtered, dep)
@@ -499,6 +504,10 @@ local function get_ready_l(
             "gdi32", "winmm", "opengl32",
             "ws2_32", "ole32", "setupapi",
         }
+    elseif target == 'android' then
+        -- C++ рантайм NDK линкуется статически флагом -static-libstdc++
+        -- (project_link), системные — из платформы NDK
+        base = { "m", "log", "android", "EGL", "GLESv3" }
     else
         base = { "stdc++", "m" }
     end
@@ -508,7 +517,7 @@ end
 
 -- TODO: Убрать эту функцию или сделать зависимой от цели сборки
 local function get_ready_links_linux_only(cfg: Cfg, target?: Target): {string}
-    if target == 'win' or target == 'wasm' then
+    if target == 'win' or target == 'wasm' or target == 'android' then
         return {}
     end
     --print('get_ready_links_linux_only:', inspect(cfg))
@@ -1793,6 +1802,21 @@ Stage *stage_$stage$_new();
     ut.pop_dir()
 end
 
+-- Android: только модули, умеющие собираться под NDK (build_android),
+-- и header-only без сборки. Остальные не клонируем и не собираем.
+local function android_deps_filter(deps: {Dependency}): {Dependency}
+    local filtered = {}
+    for _, dep in ipairs(deps) do
+        local any_build = dep.build ~= nil
+            or dep.build_w ~= nil
+            or dep.build_win ~= nil
+        if dep.build_android or not any_build then
+            table.insert(filtered, dep)
+        end
+    end
+    return filtered
+end
+
 -- Проверяет аргументы и создает список модулей
 local function pre_init(_args: Args): {Dependency}
     local deps = {}
@@ -1811,6 +1835,10 @@ local function pre_init(_args: Args): {Dependency}
         -- mods.modules() возвращает сырые (не readonly) модули
         deps = mods.modules()
     end
+
+    if _args.target == 'android' then
+        deps = android_deps_filter(deps)
+    end
     return deps
 end
 
@@ -1819,7 +1847,7 @@ end
 -- зависимости
 function actions.init(_args: Args)
     if not _args.target then
-        printc("%{red}--target[-t] is not selected(linux, wasm)%{reset}")
+        printc("%{red}--target[-t] is not selected(linux, wasm, win, android)%{reset}")
         return
     end
 
@@ -2408,6 +2436,8 @@ local function dist_artifact_files(artifact: string, target: Target): {string}
             artifact .. ".data", artifact .. ".html",
             artifact .. ".js", artifact .. ".wasm",
         }
+    elseif target == "android" then
+        return { artifact .. ".apk" }
     end
     return { artifact }
 end
@@ -2425,7 +2455,7 @@ local function dist_smoke(stage: string, artifact: string, target: Target): bool
         end
         run = "env WINEDEBUG=-all wine " .. artifact .. ".exe"
     else
-        printc("%{yellow}tg: smoke для wasm не поддержан%{reset}")
+        printc("%{yellow}tg: smoke для " .. target .. " не поддержан%{reset}")
         return true
     end
 
@@ -2775,6 +2805,11 @@ function actions.compile_flags(_args: Args)
         put("-DGRAPHICS_API_OPENGL_43")
         put("-DPLATFORM_DESKTOP")
         put("-DPLATFORM=PLATFORM_DESKTOP")
+    elseif target == 'android' then
+        put("--target=" .. android_triple .. android_api)
+        put("-DPLATFORM_ANDROID")
+        put("-D__ANDROID__")
+        put("-DGRAPHICS_API_OPENGL_ES3")
     end
 
     if cfgs then
@@ -2865,6 +2900,15 @@ local function split_libs_by_linkage(libs: {string}, target?: Target): {string},
         system_libs["X11"] = nil
         system_libs["pthread"] = nil
         system_libs["stdc++"] = nil
+    elseif target == 'android' then
+        system_libs["log"] = true
+        system_libs["android"] = true
+        system_libs["EGL"] = true
+        system_libs["GLESv3"] = true
+        system_libs["OpenSLES"] = true
+        system_libs["rt"] = nil
+        system_libs["X11"] = nil
+        system_libs["pthread"] = nil
     end
     
     for _, lib in ipairs(libs) do
@@ -2885,6 +2929,8 @@ end
 local verify_system_libs: {string: boolean} = {
     ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
     ["dl"] = true, ["rt"] = true, ["X11"] = true,
+    ["log"] = true, ["android"] = true, ["EGL"] = true, ["GLESv3"] = true,
+    ["OpenSLES"] = true,
 }
 
 -- Каждый link → lib<link>.a в одном из libdirs, иначе выход с ошибкой.
@@ -2985,6 +3031,7 @@ local function _build(dep: Dependency)
                 ['wasm'] = 'build_w',
                 ['linux'] = 'build',
                 ['win'] = 'build_win',
+                ['android'] = 'build_android',
             }
 
             local target_build_func_name = m[dep.target]
@@ -3105,6 +3152,10 @@ local function sub_build(_args: Args, path_rel: string, target: Target)
         for m in mods.iter() do
             table.insert(deps, m)
         end
+    end
+
+    if target == 'android' then
+        deps = android_deps_filter(deps)
     end
 
     --print('sub_build:', target)
@@ -3748,6 +3799,7 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
         mkdir("obj_linux")
         mkdir("obj_wasm")
         mkdir("obj_win")
+        mkdir("obj_android")
 
         printc("%{blue}sub_make:%{reset}", lfs.currentdir())
         local _t1 = time_ms()
@@ -3856,6 +3908,20 @@ function sub_make(
         end
     end
 
+    -- Desktop-only файлы: dotool — X11/uinput, inotifier — слежка за
+    -- файлами рядом с бинарником (на Android активы внутри APK)
+    if target == 'android' then
+        local android_exclude = {
+            "koh_dotool.c",
+            "koh_inotifier.c",
+            -- posix_spawnp в bionic только с API 28
+            "koh_ssimulacra.c",
+        }
+        for _, v in ipairs(android_exclude) do
+            table.insert(exclude, v)
+        end
+    end
+
     local objfiles: {string} = {}
     local defines: {string} = {}
 
@@ -3875,6 +3941,12 @@ function sub_make(
         insert(defines, "-DPLATFORM_DESKTOP")
         insert(defines, "-D_WIN32")
         insert(defines, "-DWIN32")
+        insert(defines, "-DPCRE2_STATIC")
+        insert(defines, "-DUTF8PROC_STATIC")
+    elseif target == 'android' then
+        insert(defines, "-DPLATFORM_ANDROID")
+        insert(defines, "-D__ANDROID__")
+        insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
         insert(defines, "-DPCRE2_STATIC")
         insert(defines, "-DUTF8PROC_STATIC")
     end
@@ -3907,7 +3979,7 @@ function sub_make(
     -- параметр параллелизма -flto=4 не поддерживается — допустим только
     -- голый -flto, иначе clang падает с "unsupported argument '4'".
     local lto_flag = "-flto=4"
-    if target == 'wasm' then
+    if target == 'wasm' or target == 'android' then
         lto_flag = "-flto"
     end
 
@@ -3986,6 +4058,9 @@ function sub_make(
         -- atomics обеспечивают -matomics/-mbulk-memory в линк-флагах,
         -- отдельная libatomic не нужна (иначе clang ругается на -latomic)
         table.insert(common_flags, "-fPIC")
+    elseif target == 'android' then
+        -- всё попадает в lib<artifact>.so, которую грузит NativeActivity
+        table.insert(common_flags, "-fPIC")
     end
     flags = ut.merge_tables(flags, common_flags)
     flags = ut.merge_tables(flags, get_ready_deps_defines(cfg, target))
@@ -4040,6 +4115,8 @@ function sub_make(
         output_dir = pre .. "obj_wasm"
     elseif target == 'win' then
         output_dir = pre .. "obj_win"
+    elseif target == 'android' then
+        output_dir = pre .. "obj_android"
     end
 
     local files_processed =  ut.filter_sources(".", exclude)
@@ -4790,6 +4867,7 @@ function actions.make(_args: Args)
     mkdir("obj_linux")
     mkdir("obj_wasm")
     mkdir("obj_win")
+    mkdir("obj_android")
     for i, cfg in ipairs(cfgs) do
         if cfg_not_empty(cfg) then
             local _t1 = time_ms()
@@ -4960,6 +5038,7 @@ function actions.clean(_: Args)
         "rm ./obj_linux/*.o",
         "rm ./obj_win/*.o",
         "rm ./obj_wasm/*.o",
+        "rm ./obj_android/*.o",
     })
 end
 

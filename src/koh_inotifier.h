@@ -8,9 +8,9 @@ typedef void (*WatchCallback)(const char *fname, void *data);
 // XXX: Почему не используется какая-то переменая контекта?
 // Есть ли необходимость в глобальных переменных?
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
 
-// Заглушки для Windows (inotify недоступен)
+// Заглушки для Windows (inotify недоступен) и Android (активы в APK)
 static inline void inotifier_init() {}
 static inline void inotifier_shutdown() {}
 static inline void inotifier_watch(

@@ -23,16 +23,25 @@
 koh-2048 — своё дерево `wt new android`.
 
 - [x] Шаг 0. План записан в `caustic-android.md`
-- [ ] Этап 1. caustic: таргет, тулчейн, модули
-  - [ ] `global.tl`: `Target "android"`, `build_android`, NDK-пути, карты
+- [x] Этап 1. caustic: таргет, тулчейн, модули
+  - [x] `global.tl`: `Target "android"`, `build_android`, NDK-пути, карты
         `compiler_c/cpp/ar/cmake/make`, `modules_android`
-  - [ ] `caustic.tl`: все развилки по target, `obj_android`,
+  - [x] `caustic.tl`: все развилки по target, `obj_android`,
         `libcaustic_android`, defines/flags, exclude, libs
-  - [ ] `modules.tl`: `build_android` — raylib, cimgui, freetype, lua,
+  - [x] `modules.tl`: `build_android` — raylib, cimgui, freetype, lua,
         box2c, libtess2, pcre2, utf8proc, xxhash, physfs, enkits, munit
-  - [ ] `cyan build`, `koh init/build -t android` — объекты aarch64
-  - [ ] `koh make -t android` → `libcaustic_android.a`
-  - [ ] регресс linux/win/wasm
+  - [x] `cyan build`, `koh init/build -t android` — объекты aarch64
+  - [x] `koh make -t android` → `libcaustic_android.a`
+  - [x] регресс linux/win (wasm падает и без этих правок: box2c в
+        `modules_wasm` старый, без `b2WorldTransform` — пересобрать
+        `koh build -t wasm -n box2c`)
+
+  Заметки этапа 1: под android исключены `koh_dotool.c`,
+  `koh_inotifier.c` (заглушки в `.h`), `koh_ssimulacra.c`
+  (`posix_spawnp` с API 28); cimplot и `backtrace()` (API 33) выключены
+  через `__ANDROID__`. munit — `-DMUNIT_NO_NL_LANGINFO`, physfs —
+  без тестовых программ. `init/build -t android` берут только модули с
+  `build_android` и header-only.
 - [ ] Этап 2. caustic: `src/koh_android.c/h`
   - [ ] `koh_android_stdio_to_logcat()`
   - [ ] `koh_android_args()` (intent extra + `debug.<artifact>.args`)

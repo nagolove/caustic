@@ -97,6 +97,7 @@ local libcaustic_name = {
    ["linux"] = "caustic_linux",
    ["wasm"] = "caustic_wasm",
    ["win"] = "caustic_win",
+   ["android"] = "caustic_android",
 }
 
 
@@ -354,6 +355,7 @@ end
 
 
 
+
 local _dependecy_init
 
 
@@ -465,7 +467,8 @@ local function get_ready_deps(
       for _, dep in ipairs(ready_deps) do
          local any_build = dep.build ~= nil or
          dep.build_win ~= nil or
-         dep.build_w ~= nil
+         dep.build_w ~= nil or
+         dep.build_android ~= nil
          if not any_build then
             table.insert(filtered, dep)
          else
@@ -476,6 +479,8 @@ local function get_ready_deps(
                has_build = dep.build_win ~= nil
             elseif target == 'wasm' then
                has_build = dep.build_w ~= nil
+            elseif target == 'android' then
+               has_build = dep.build_android ~= nil
             end
             if has_build then
                table.insert(filtered, dep)
@@ -499,6 +504,10 @@ local function get_ready_l(
          "gdi32", "winmm", "opengl32",
          "ws2_32", "ole32", "setupapi",
       }
+   elseif target == 'android' then
+
+
+      base = { "m", "log", "android", "EGL", "GLESv3" }
    else
       base = { "stdc++", "m" }
    end
@@ -508,7 +517,7 @@ end
 
 
 local function get_ready_links_linux_only(cfg, target)
-   if target == 'win' or target == 'wasm' then
+   if target == 'win' or target == 'wasm' or target == 'android' then
       return {}
    end
 
@@ -1794,6 +1803,21 @@ Stage *stage_$stage$_new();
 end
 
 
+
+local function android_deps_filter(deps)
+   local filtered = {}
+   for _, dep in ipairs(deps) do
+      local any_build = dep.build ~= nil or
+      dep.build_w ~= nil or
+      dep.build_win ~= nil
+      if dep.build_android or not any_build then
+         table.insert(filtered, dep)
+      end
+   end
+   return filtered
+end
+
+
 local function pre_init(_args)
    local deps = {}
 
@@ -1811,6 +1835,10 @@ local function pre_init(_args)
 
       deps = mods.modules()
    end
+
+   if _args.target == 'android' then
+      deps = android_deps_filter(deps)
+   end
    return deps
 end
 
@@ -1819,7 +1847,7 @@ end
 
 function actions.init(_args)
    if not _args.target then
-      printc("%{red}--target[-t] is not selected(linux, wasm)%{reset}")
+      printc("%{red}--target[-t] is not selected(linux, wasm, win, android)%{reset}")
       return
    end
 
@@ -2408,6 +2436,8 @@ local function dist_artifact_files(artifact, target)
          artifact .. ".data", artifact .. ".html",
          artifact .. ".js", artifact .. ".wasm",
       }
+   elseif target == "android" then
+      return { artifact .. ".apk" }
    end
    return { artifact }
 end
@@ -2425,7 +2455,7 @@ local function dist_smoke(stage, artifact, target)
       end
       run = "env WINEDEBUG=-all wine " .. artifact .. ".exe"
    else
-      printc("%{yellow}tg: smoke для wasm не поддержан%{reset}")
+      printc("%{yellow}tg: smoke для " .. target .. " не поддержан%{reset}")
       return true
    end
 
@@ -2775,6 +2805,11 @@ function actions.compile_flags(_args)
       put("-DGRAPHICS_API_OPENGL_43")
       put("-DPLATFORM_DESKTOP")
       put("-DPLATFORM=PLATFORM_DESKTOP")
+   elseif target == 'android' then
+      put("--target=" .. android_triple .. android_api)
+      put("-DPLATFORM_ANDROID")
+      put("-D__ANDROID__")
+      put("-DGRAPHICS_API_OPENGL_ES3")
    end
 
    if cfgs then
@@ -2865,6 +2900,15 @@ local function split_libs_by_linkage(libs, target)
       system_libs["X11"] = nil
       system_libs["pthread"] = nil
       system_libs["stdc++"] = nil
+   elseif target == 'android' then
+      system_libs["log"] = true
+      system_libs["android"] = true
+      system_libs["EGL"] = true
+      system_libs["GLESv3"] = true
+      system_libs["OpenSLES"] = true
+      system_libs["rt"] = nil
+      system_libs["X11"] = nil
+      system_libs["pthread"] = nil
    end
 
    for _, lib in ipairs(libs) do
@@ -2885,6 +2929,8 @@ end
 local verify_system_libs = {
    ["m"] = true, ["stdc++"] = true, ["c"] = true, ["pthread"] = true,
    ["dl"] = true, ["rt"] = true, ["X11"] = true,
+   ["log"] = true, ["android"] = true, ["EGL"] = true, ["GLESv3"] = true,
+   ["OpenSLES"] = true,
 }
 
 
@@ -2985,6 +3031,7 @@ local function _build(dep)
             ['wasm'] = 'build_w',
             ['linux'] = 'build',
             ['win'] = 'build_win',
+            ['android'] = 'build_android',
          }
 
          local target_build_func_name = m[dep.target]
@@ -3105,6 +3152,10 @@ local function sub_build(_args, path_rel, target)
       for m in mods.iter() do
          table.insert(deps, m)
       end
+   end
+
+   if target == 'android' then
+      deps = android_deps_filter(deps)
    end
 
 
@@ -3748,6 +3799,7 @@ local function koh_recompile(_args, cfg, _target)
       mkdir("obj_linux")
       mkdir("obj_wasm")
       mkdir("obj_win")
+      mkdir("obj_android")
 
       printc("%{blue}sub_make:%{reset}", lfs.currentdir())
       local _t1 = time_ms()
@@ -3856,6 +3908,20 @@ function sub_make(
       end
    end
 
+
+
+   if target == 'android' then
+      local android_exclude = {
+         "koh_dotool.c",
+         "koh_inotifier.c",
+
+         "koh_ssimulacra.c",
+      }
+      for _, v in ipairs(android_exclude) do
+         table.insert(exclude, v)
+      end
+   end
+
    local objfiles = {}
    local defines = {}
 
@@ -3875,6 +3941,12 @@ function sub_make(
       insert(defines, "-DPLATFORM_DESKTOP")
       insert(defines, "-D_WIN32")
       insert(defines, "-DWIN32")
+      insert(defines, "-DPCRE2_STATIC")
+      insert(defines, "-DUTF8PROC_STATIC")
+   elseif target == 'android' then
+      insert(defines, "-DPLATFORM_ANDROID")
+      insert(defines, "-D__ANDROID__")
+      insert(defines, "-DGRAPHICS_API_OPENGL_ES3")
       insert(defines, "-DPCRE2_STATIC")
       insert(defines, "-DUTF8PROC_STATIC")
    end
@@ -3907,7 +3979,7 @@ function sub_make(
 
 
    local lto_flag = "-flto=4"
-   if target == 'wasm' then
+   if target == 'wasm' or target == 'android' then
       lto_flag = "-flto"
    end
 
@@ -3986,6 +4058,9 @@ function sub_make(
 
 
       table.insert(common_flags, "-fPIC")
+   elseif target == 'android' then
+
+      table.insert(common_flags, "-fPIC")
    end
    flags = ut.merge_tables(flags, common_flags)
    flags = ut.merge_tables(flags, get_ready_deps_defines(cfg, target))
@@ -4040,6 +4115,8 @@ function sub_make(
       output_dir = pre .. "obj_wasm"
    elseif target == 'win' then
       output_dir = pre .. "obj_win"
+   elseif target == 'android' then
+      output_dir = pre .. "obj_android"
    end
 
    local files_processed = ut.filter_sources(".", exclude)
@@ -4790,6 +4867,7 @@ function actions.make(_args)
    mkdir("obj_linux")
    mkdir("obj_wasm")
    mkdir("obj_win")
+   mkdir("obj_android")
    for i, cfg in ipairs(cfgs) do
       if cfg_not_empty(cfg) then
          local _t1 = time_ms()
@@ -4960,6 +5038,7 @@ function actions.clean(_)
       "rm ./obj_linux/*.o",
       "rm ./obj_win/*.o",
       "rm ./obj_wasm/*.o",
+      "rm ./obj_android/*.o",
    })
 end
 

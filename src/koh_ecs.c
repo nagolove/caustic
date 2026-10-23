@@ -14,7 +14,7 @@
 #include "koh_common.h"
 #include "koh_routine.h"
 #include "koh_b2.h"
-#if !defined(_WIN32) && !defined(__wasm__)
+#if !defined(_WIN32) && !defined(__wasm__) && !defined(__ANDROID__)
 #include "cimplot.h"
 #endif
 
@@ -162,7 +162,7 @@ typedef struct ecs_t {
     // в ImGui поиска
     int             ref_filter_func;
     AllocInspector  alli;
-#if !defined(_WIN32) && !defined(__wasm__)
+#if !defined(_WIN32) && !defined(__wasm__) && !defined(__ANDROID__)
     ImPlotContext   *plot_ctx;
 #endif
 } ecs_t;
@@ -3592,7 +3592,7 @@ ecs_t *e_new(e_options *opts) {
     ainspector_init(&r->alli, true);
 
     // XXX: починить cimplot для Windows
-#if !defined(_WIN32) && !defined(__wasm__)
+#if !defined(_WIN32) && !defined(__wasm__) && !defined(__ANDROID__)
     r->plot_ctx = ImPlot_CreateContext();
 #endif
 
@@ -3643,7 +3643,7 @@ void e_free(ecs_t *r) {
     ecs_assert(r);
 
     // XXX: починить cimplot для Windows
-#if !defined(_WIN32) && !defined(__wasm__)
+#if !defined(_WIN32) && !defined(__wasm__) && !defined(__ANDROID__)
     if (r->plot_ctx) {
         ImPlot_DestroyContext(r->plot_ctx);
         r->plot_ctx = NULL;
@@ -4359,7 +4359,7 @@ ecs_t *e_clone(ecs_t *r) {
     c->ref_filter_func = 0;
     ainspector_init(&c->alli, true);
     // XXX: починить cimplot для Windows
-#if !defined(_WIN32) && !defined(__wasm__)
+#if !defined(_WIN32) && !defined(__wasm__) && !defined(__ANDROID__)
     c->plot_ctx = ImPlot_CreateContext();
 #endif
 
@@ -4673,7 +4673,7 @@ static void memory_usage_gui(ecs_t *r) {
     igSetNextItemOpen(tree_open, ImGuiCond_Once);
     if (igTreeNode_Str("memory usage")) {
         // XXX: починить cimplot для Windows
-#if !defined(_WIN32) && !defined(__wasm__)
+#if !defined(_WIN32) && !defined(__wasm__) && !defined(__ANDROID__)
         ImPlot_SetCurrentContext(r->plot_ctx);
         bool wnd_open = true;
         ImPlot_ShowDemoWindow(&wnd_open);
