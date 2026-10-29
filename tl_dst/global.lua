@@ -48,6 +48,9 @@ Target = {}
 
 
 
+
+targets_all = { "linux", "win", "wasm", "android" }
+
 UrlAction = {}
 
 

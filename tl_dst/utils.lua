@@ -14,6 +14,12 @@ local function printc(...)
 end
 
 
+local function die(msg)
+   io.stderr:write(ansicolors("%{red}" .. msg .. "%{reset}") .. "\n")
+   os.exit(1)
+end
+
+
 
 local function remove_last_backslash(path)
    if #path > 1 and string.sub(path, -1, -1) == "/" then
@@ -338,7 +344,10 @@ local function do_parser_setup(
       if setup_tbl.options then
          for _, option in ipairs(setup_tbl.options) do
             prnt("add option", option)
-            p:option(option)
+            local opt = p:option(option)
+            if option == "-t" or option:match("^%-t ") then
+               opt:choices(targets_all)
+            end
          end
       end
       if setup_tbl.flags then
@@ -905,6 +914,7 @@ return {
    cmd_try = cmd_try,
    test_artifact_a_linux = test_artifact_a_linux,
    printc = printc,
+   die = die,
    ripairs = ripairs,
    filter = filter,
    git_is_repo_clean = git_is_repo_clean,

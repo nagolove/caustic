@@ -13,6 +13,12 @@ local function printc(...: string)
     print(ansicolors(table.concat({...})))
 end
 
+-- фатальная ошибка: сообщение в stderr и выход с кодом 1
+local function die(msg: string)
+    io.stderr:write(ansicolors("%{red}" .. msg .. "%{reset}") .. "\n")
+    os.exit(1)
+end
+
 -- Удалить последнюю наклонную черту если она есть и путь не указывает в
 -- корень файловой системы
 local function remove_last_backslash(path: string): string
@@ -338,7 +344,10 @@ local function do_parser_setup(
         if setup_tbl.options then
             for _, option in ipairs(setup_tbl.options) do
                 prnt("add option", option)
-                p:option(option)
+                local opt = p:option(option)
+                if option == "-t" or option:match("^%-t ") then
+                    opt:choices(targets_all as {string})
+                end
             end
         end
         if setup_tbl.flags then
@@ -413,7 +422,7 @@ local function cmd_do_execute(_cmd: string|{string}): boolean
 end
 
 --------------------------------------------------------------
-local cmd_do: function(cmd: string|{string}) = cmd_do_execute
+local cmd_do: function(cmd: string|{string}): boolean = cmd_do_execute
 
 -- Мягкий запуск команды: возвращает true/false по коду возврата и
 -- никогда не прерывает процесс. Для случаев, где неудача допустима
@@ -905,6 +914,7 @@ return {
     cmd_try                     = cmd_try,
     test_artifact_a_linux       = test_artifact_a_linux,
     printc                      = printc,
+    die                         = die,
     ripairs                     = ripairs,
     filter                      = filter,
     git_is_repo_clean           = git_is_repo_clean,

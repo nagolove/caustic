@@ -58,6 +58,7 @@ local argparse   = require 'argparse'
 local printc     = ut.printc
 local cmd_do     = ut.cmd_do
 local cmd_try    = ut.cmd_try
+local die        = ut.die
 local Cache      = require "cache"
 local uv         = require "luv"
 local readline   = ut.readline
@@ -1115,8 +1116,7 @@ end
 
 function actions.unit(_args: Args)
     if not _args.name then
-        printc("%{red}имя не задано (-n <name>)%{reset}")
-        return
+        die("имя не задано (-n <name>)")
     end
 
     -- Имя без префикса; каталог всегда caustic-test-<short>.
@@ -1130,8 +1130,7 @@ function actions.unit(_args: Args)
     local test_dir = base .. "/" .. dir
 
     if lfs.attributes(test_dir) then
-        printc("%{red}каталог уже существует: " .. dir .. "%{reset}")
-        return
+        die("каталог уже существует: " .. dir)
     end
 
     local main_c =
@@ -1263,18 +1262,16 @@ return {
     -- Кодоген bld.tl -> bld.lua, флаги для clangd, сборка и запуск теста.
     local ok_cyan = cmd_try("cyan build")
     if not ok_cyan then
-        printc("%{red}cyan build завершился ошибкой%{reset}")
         ut.pop_dir()
-        return
+        die("cyan build завершился ошибкой")
     end
 
     cmd_try("koh compile_flags")
 
     local ok_make = cmd_try("koh make")
     if not ok_make then
-        printc("%{red}koh make завершился ошибкой%{reset}")
         ut.pop_dir()
-        return
+        die("koh make завершился ошибкой")
     end
 
     printc("%{green}запуск теста ./" .. artifact .. "%{reset}")
@@ -1332,8 +1329,7 @@ function actions.project(_args: Args)
 
     local project_name = _args.name
     if not project_name then
-        print("There is no project name")
-        return
+        die("There is no project name")
     end
 
     local ok, err = mkdir(project_name)
@@ -1679,9 +1675,8 @@ function actions.stage(_args: Args)
 
     ut.push_current_dir()
     if not chdir(src_dir) then
-        printc("%{red}Каталог '" .. src_dir .. "' не найден%{reset}")
         ut.pop_dir()
-        return
+        die("Каталог '" .. src_dir .. "' не найден")
     end
 
     -- имя стейджа: CLI или интерактивный ввод
@@ -1695,9 +1690,8 @@ function actions.stage(_args: Args)
     printc("stage name: %{blue}" .. stage .. "%{reset}")
 
     if #stage <= 3 then
-        printc("%{red}Имя должно быть длиннее 3 символов%{reset}")
         ut.pop_dir()
-        return
+        die("Имя должно быть длиннее 3 символов")
     end
 
     if not stage:match("^[a-z_][a-z0-9_]*$") then
@@ -1880,14 +1874,11 @@ end
 -- зависимости
 function actions.init(_args: Args)
     if not _args.target then
-        printc("%{red}--target[-t] is not selected(linux, wasm, win, android)%{reset}")
-        return
+        die("--target[-t] is not selected(linux, wasm, win, android)")
     end
 
     if not e.path_rel_third_party_t[_args.target] then
-        printc("%{red}could not find target%{yellow}" .. _args.target .. 
-               "%{reset}")
-       return
+        die("could not find target " .. _args.target)
     end
 
     local deps = pre_init(_args)
@@ -2850,7 +2841,7 @@ local function android_run(cfg: Cfg, args: {string})
     if pid == "" then
         printc("%{red}android: процесс не запустился, полный logcat%{reset}")
         cmd_do("adb logcat -d | tail -100")
-        return
+        os.exit(1)
     end
     cmd_do("adb logcat --pid=" .. pid)
 end
@@ -2976,14 +2967,12 @@ function actions.remove(_args: Args)
     print("actions.remove")
 
     if not _args.target then
-        print("You should explicitly specify target option")
-        return
+        die("You should explicitly specify target option")
     end
 
     local path = e.path_rel_third_party_t[_args.target]
     if not path then
-        printc("%{yellow}unknown target%{reset}")
-        return
+        die("unknown target")
     end
 
     local dirnames: {string} = {}
@@ -2991,8 +2980,7 @@ function actions.remove(_args: Args)
     if _args.name and dependencies_name_map[_args.name] then
         table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
     else
-        printc("%{red}modules removing supported only by one name%{reset}")
-        return
+        die("modules removing supported only by one name")
         --[[
         for _, dirname in ipairs(get_dirs(dependencies)) do
             table.insert(dirnames, dirname)
@@ -3609,7 +3597,7 @@ local function koh_link(objfiles: {string}, _args: Args)
         .. "\" " 
         .. concat(objfiles, " ")
 
-    cmd_do(cmd)
+    if not cmd_do(cmd) then die("ar: не удалось собрать " .. lib_fname) end
     cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
     time_print("koh_link", _t0)
 end
@@ -3831,7 +3819,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         f:write(string.format("  COMMAND = %s\n\n", link_command))
     else
         print('project_link:', cmd)
-        cmd_do(cmd)
+        if not cmd_do(cmd) then die("project_link: линковка не удалась") end
     end
     time_print("project_link", _t0)
 end
@@ -4633,8 +4621,7 @@ function actions.compile_commands(_args: Args)
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
 
     if not cfgs or not cfgs[1] then
-        printc("%{red}could not generate compile_commands.json%{reset}")
-        return
+        die("could not generate compile_commands.json")
     end
 
     local target = _args.target or _args.t
@@ -4705,13 +4692,11 @@ function actions.run(_args: Args)
     time_print("actions.run: actions.make", _t_make)
 
     if not cfgs[1] then
-        printc("%{red}actions.run:%{reset} no translation unit in bld.lua")
-        return
+        die("actions.run: no translation unit in bld.lua")
     end
 
     if not cfgs[1].artifact then
-        printc("%{red}actions.run:%{reset} no artifact in bld.lua")
-        return
+        die("actions.run: no artifact in bld.lua")
     end
 
     if _args.t == 'android' then
@@ -4724,19 +4709,21 @@ function actions.run(_args: Args)
         extra = " " .. concat(_args.args, " ")
     end
 
+    local cmd: string
     if not _args.debug then
-        local cmd = "./" .. cfgs[1].artifact .. extra
-        print('cmd', cmd)
-        time_print("actions.run (до запуска)", _t0)
-        cmd_do(cmd)
+        cmd = "./" .. cfgs[1].artifact .. extra
     else
         put_gdbinit()
-        local cmd = "gdb --args ./"
-            .. cfgs[1].artifact
-            .. " --no-fork" .. extra
-        print('cmd', cmd)
-        time_print("actions.run (до запуска)", _t0)
-        cmd_do(cmd)
+        cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork" .. extra
+    end
+    print('cmd', cmd)
+    time_print("actions.run (до запуска)", _t0)
+
+    -- код возврата артефакта (или gdb) становится кодом koh
+    local ok, how, code = os.execute(cmd)
+    if not ok then
+        -- при гибели от сигнала — 128+N, как в shell
+        os.exit(how == "signal" and 128 + code or code)
     end
 end
 
@@ -5051,8 +5038,7 @@ function actions.profile(_args: Args)
     end
 
     if #artifacts == 0 then
-        printc("%{red}Нет artifact в bld.lua%{reset}")
-        return
+        die("Нет artifact в bld.lua")
     end
 
     local unique = hex_hash32(cwd)
@@ -5111,8 +5097,7 @@ function actions.profile(_args: Args)
         -- Чтение CSV и разбор на секции
         local f = io.open(csv_path, "r")
         if not f then
-            printc("%{red}Не удалось открыть CSV отчёт%{reset}")
-            return
+            die("Не удалось открыть CSV отчёт")
         end
         local text = f:read("*a")
         f:close()
@@ -5597,15 +5582,20 @@ local function main()
     parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
 
     parser:add_complete()
-    local ok, _args: boolean, argparse.Args = parser:pparse() 
-                                              as (boolean, argparse.Args)
-    --local has_command = false
+
+    if #arg == 0 then
+        io.stderr:write(parser:get_help(), "\n")
+        os.exit(1)
+    end
+
+    -- parse(): при ошибке usage команды + текст ошибки в stderr, exit 1
+    local _args = parser:parse()
 
     if _args.KOH_VERBOSE then
         KOH_VERBOSE = true
     end
 
-    if ok then
+    do
         if _args.verbose then
             verbose = true
         end
@@ -5631,11 +5621,11 @@ local function main()
 
         local cmd = (_args as {string:string}).command
         local type A = {string:function}
-        if cmd and (actions as A)[cmd] then
-            (actions as A)[cmd](_args as Args)
+        local action = (actions as A)[cmd]
+        if not action then
+            die("команда '" .. tostring(cmd) .. "' не реализована")
         end
-    else
-        print("bad args, may be not enough arguments?")
+        action(_args as Args)
     end
 
 end

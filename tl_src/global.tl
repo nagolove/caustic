@@ -48,6 +48,9 @@ global enum Target
     "android"
 end
 
+-- допустимые значения -t для argparse; держать в соответствии с Target
+global targets_all: {Target} = { "linux", "win", "wasm", "android" }
+
 global enum UrlAction
     -- склонировать 
     "git"
