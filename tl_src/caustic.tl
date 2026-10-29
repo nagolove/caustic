@@ -787,6 +787,49 @@ local record Actions
     -- }}}
 end
 
+-- Флаги сборки для команд, которые вызывают actions.make
+local build_flags: {{string}} = {
+    { "--nocodegen", "skip codegen step from bld.lua" },
+    { "-c --clean", "full rebuild without cache info" },
+    { "-r --release", "release build (-O3, NDEBUG), ASan kept" },
+    { "-a --noasan", "no address sanitizer" },
+    { "-l --link", "use linking time optimization" },
+    { "-H --headless", "link with headless raylib (no window)" },
+    { "-p --profiling", "print timing profiling info" },
+}
+
+-- build_flags без имён из skip, затем extra
+local function build_flags_with(extra: {{string}}, skip?: {string}): {{string}}
+    local skipped: {string:boolean} = {}
+    for _, name in ipairs(skip or {}) do
+        skipped[name] = true
+    end
+    local res: {{string}} = {}
+    for _, flag in ipairs(build_flags) do
+        if not skipped[flag[1]] then
+            insert(res, flag)
+        end
+    end
+    for _, flag in ipairs(extra) do
+        insert(res, flag)
+    end
+    return res
+end
+
+-- только перечисленные флаги из build_flags
+local function build_flags_only(names: {string}): {{string}}
+    local res: {{string}} = {}
+    for _, name in ipairs(names) do
+        for _, flag in ipairs(build_flags) do
+            if flag[1] == name then
+                insert(res, flag)
+            end
+        end
+    end
+    assert(#res == #names, "build_flags_only: неизвестный флаг")
+    return res
+end
+
 local parser_setup: {string:ParserSetup} = {
     -- {{{
 
@@ -808,7 +851,7 @@ local parser_setup: {string:ParserSetup} = {
 
     ctags = {
         summary = [[build ctags file for project]],
-        options = { "-t" },
+        options = { "-t --target" },
     },
 
     project = {
@@ -870,15 +913,11 @@ local parser_setup: {string:ParserSetup} = {
             .. " Flags combine: -r release+ASan, -a debug w/o ASan,"
             .. " -ra release w/o ASan, -rad same in gdb (with -ggdb3)."
             .. " With -t android: install APK, start via adb, show logcat",
-        options = { "-t" },
-        flags = {
+        options = { "-t --target" },
+        flags = build_flags_with({
             {"-d --debug", "run artifact in gdb",},
-            {"-r --release", "release build (-O3, NDEBUG), ASan kept"},
-            {"-a --noasan", "no address sanitizer"},
             {"--noreset", "no call 'reset' for clearing terminal output"},
-            {"-H --headless", "link with headless raylib (no window)"},
-            {"-p --profiling", "print timing profiling info"},
-        },
+        }),
         arguments = {
             {"args", "*"},
         },
@@ -886,7 +925,7 @@ local parser_setup: {string:ParserSetup} = {
 
     ast = {
         summary = "dump project AST to stdout",
-        options = { "-t" },
+        options = { "-t --target" },
     },
 
     --[[ koh ninja отключена
@@ -899,17 +938,8 @@ local parser_setup: {string:ParserSetup} = {
 
     make = {
         summary = "build libcaustic or current project",
-        options = { "-t" },
-        flags = {
-            { "--nocodegen", "skip codegen step from bld.lua" },
-            { "-c --clean", "full rebuild without cache info" },
-            { "-r --release", "release" },
-            { "-a --noasan", "no address sanitazer" },
-            --{ "-p --cpp", "use c++ code" },
-            { "-l --link", "use linking time optimization" },
-            { "-H --headless", "link with headless raylib (no window)" },
-            { "-p --profiling", "print timing profiling info" },
-        },
+        options = { "-t --target" },
+        flags = build_flags_with({}),
     },
 
     publish = {
@@ -918,6 +948,7 @@ local parser_setup: {string:ParserSetup} = {
         flags = {
             { "-b --build", "пересобрать wasm-артефакты перед публикацией" },
             { "-y --yes", "не спрашивать подтверждения перед push" },
+            build_flags_only({ "-r --release" })[1],
         },
     },
 
@@ -926,6 +957,7 @@ local parser_setup: {string:ParserSetup} = {
         options = { "-n --name" },
         flags = {
             { "-b --build", "пересобрать wasm-артефакты перед упаковкой" },
+            build_flags_only({ "-r --release" })[1],
         },
     },
 
@@ -968,16 +1000,15 @@ TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_PHONE, TG_PROXY или файл
 Verification Codes, а в служебный чат «Telegram» (777000) аккаунта TG_PHONE;
 --login печатает способ доставки, пустой Enter — переотправка (SMS и т.п.).
 Session: ~/.config/koh/koh_tg.session; без неё отправка сразу падает.]],
-        options = { "-t", "--from" },
-        flags = {
-            { "-r --release", "release-сборка" },
-            { "-a --noasan", "без address sanitizer" },
+        options = { "-t --target", "--from" },
+        -- -c у tg занят под --check
+        flags = build_flags_with({
             { "-B --nobuild", "не пересобирать, упаковать текущий artifact" },
             { "--no-send", "только zip, без отправки" },
             { "-c --check", "показать состав пакета, zip удалить" },
             { "-s --smoke", "запустить artifact из пакета (win: wine)" },
             { "--login", "авторизоваться в Telegram и проверить канал" },
-        },
+        }, { "-c --clean" }),
     },
 
     remove = {
@@ -1038,7 +1069,6 @@ local record Args
     g: string           -- вызывать git status вместо lazygit
     debug: string
     stage: boolean
-    t: Target
     target: Target
     cpp: string
     nocodegen: string   -- отключить проход кодогенератора
@@ -2289,7 +2319,7 @@ function actions.publish(_args: Args)
 
     if _args.build then
         -- пересобрать wasm-артефакты перед публикацией
-        _args.t = "wasm"
+        _args.target = "wasm"
         actions.make(_args)
     else
         printc(
@@ -2377,7 +2407,7 @@ function actions.itch(_args: Args)
 
     if _args.build then
         -- пересобрать wasm-артефакты перед упаковкой
-        _args.t = "wasm"
+        _args.target = "wasm"
         actions.make(_args)
     else
         printc(
@@ -2851,8 +2881,8 @@ function actions.tg(_args: Args)
         return
     end
 
-    local target: Target = _args.t or "linux"
-    _args.t = target
+    local target: Target = _args.target or "linux"
+    _args.target = target
 
     if not _args.nobuild and not _args.check then
         actions.make(_args)
@@ -3041,7 +3071,7 @@ function actions.compile_flags(_args: Args)
 
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
 
-    local target = _args.target or _args.t
+    local target = _args.target
     if not target then
         print("actions.compile_flags: target set to default value 'linux'")
         target = 'linux'
@@ -3440,7 +3470,7 @@ end
 
 function actions.build(_args: Args)
     local _t0 = time_ms()
-    local target = _args.t or _args.target
+    local target = _args.target
     if not target then
         target = 'linux'
     end
@@ -3570,7 +3600,7 @@ end
 
 local function koh_link(objfiles: {string}, _args: Args)
     local _t0 = time_ms()
-    local target = _args.t or _args.target
+    local target = _args.target
     assert(target)
     local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
@@ -4633,7 +4663,7 @@ function actions.compile_commands(_args: Args)
         die("could not generate compile_commands.json")
     end
 
-    local target = _args.target or _args.t
+    local target = _args.target
     if not target then
         print("actions.compile_commands: target set to default value 'linux'")
         target = 'linux'
@@ -4708,7 +4738,7 @@ function actions.run(_args: Args)
         die("actions.run: no artifact in bld.lua")
     end
 
-    if _args.t == 'android' then
+    if _args.target == 'android' then
         android_run(cfgs[1], _args.args)
         return
     end
@@ -5168,7 +5198,7 @@ function actions.make(_args: Args)
         print(inspect(_args))
     end
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    local target = _args.t or "linux"
+    local target = _args.target or "linux"
     local root = lfs.currentdir()
     -- Каталоги объектников не приходят из клона (gitignore), а sub_make их
     -- не создаёт — в отличие от koh_recompile. Создаём здесь.
@@ -5298,7 +5328,7 @@ end
 
 function actions.ast(_args: Args)
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    local target = _args.t or "linux"
+    local target = _args.target or "linux"
     for _, cfg in ipairs(cfgs) do
         if cfg_not_empty(cfg) then
             remove_cache_file(_args)
@@ -5316,7 +5346,7 @@ function actions.ninja(_args: Args)
         print(inspect(_args))
     end
     local cfgs, push_num: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
-    local target = _args.t or "linux"
+    local target = _args.target or "linux"
 
     local f <const> = assert(io.open("build.ninja", "w"))
     ninja_header(f)
@@ -5580,7 +5610,7 @@ local function ctags_write(tags_fname: string, target: Target, _args?: Args)
 end
 
 function actions.ctags(_args: Args)
-    local target = _args.t or "linux"
+    local target = _args.target or "linux"
     ctags_write('tags.jsonl', target, _args)
 end
 
