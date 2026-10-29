@@ -969,7 +969,8 @@ local parser_setup = {
 
   koh tg -t win -r          release под windows, упаковать, отправить
   koh tg -t linux --no-send только zip в каталоге проекта
-  koh tg -t win -c          показать состав пакета без сборки и отправки
+  koh tg -t win --check     показать состав пакета без сборки и отправки
+  koh tg -t win -c          полная пересборка (как make -c), затем отправка
   koh tg -t linux -s        перед отправкой запустить artifact из пакета
   koh tg --login            разовый вход (телефон + код), проверка канала
   koh tg --login --from F   взять готовую telethon-session F вместо входа
@@ -1001,14 +1002,13 @@ Verification Codes, а в служебный чат «Telegram» (777000) акк
 --login печатает способ доставки, пустой Enter — переотправка (SMS и т.п.).
 Session: ~/.config/koh/koh_tg.session; без неё отправка сразу падает.]],
       options = { "-t --target", "--from" },
-
       flags = build_flags_with({
          { "-B --nobuild", "не пересобирать, упаковать текущий artifact" },
          { "--no-send", "только zip, без отправки" },
-         { "-c --check", "показать состав пакета, zip удалить" },
+         { "--check", "показать состав пакета, zip удалить" },
          { "-s --smoke", "запустить artifact из пакета (win: wine)" },
          { "--login", "авторизоваться в Telegram и проверить канал" },
-      }, { "-c --clean" }),
+      }),
    },
 
    remove = {
@@ -1711,13 +1711,12 @@ function actions.stage(_args)
    end
 
    if not stage:match("^[a-z_][a-z0-9_]*$") then
-      printc(
-      "%{red}Имя должно быть допустимым " ..
-      "C-идентификатором: [a-z0-9_], " ..
-      "начинается с буквы или _%{reset}")
-
       ut.pop_dir()
-      return
+      die(
+      "Имя должно быть допустимым " ..
+      "C-идентификатором: [a-z0-9_], " ..
+      "начинается с буквы или _")
+
    end
 
 
@@ -2220,12 +2219,11 @@ local function sub_publish(_args, cfg)
    }
 
    if not has_files_in_dir(files) then
-      printc(
-      "%{red}sub_publish: в каталоге проекта нет всех wasm-файлов " ..
+      die(
+      "sub_publish: в каталоге проекта нет всех wasm-файлов " ..
       "(.data/.html/.js/.wasm). " ..
-      "Соберите: koh make -t wasm  (или publish -b)%{reset}")
+      "Соберите: koh make -t wasm  (или publish -b)")
 
-      return
    end
 
    local src_dir = lfs.currentdir()
@@ -2236,11 +2234,10 @@ local function sub_publish(_args, cfg)
    local site_repo_abs = getenv("HOME") .. "/" .. site_repo
    local ok, errmsg = chdir(site_repo_abs)
    if not ok then
-      printc(
-      "%{red}sub_publish: не удалось chdir('" .. site_repo_abs ..
-      "'): " .. tostring(errmsg) .. "%{reset}")
+      die(
+      "sub_publish: не удалось chdir('" .. site_repo_abs ..
+      "'): " .. tostring(errmsg))
 
-      return
    end
 
    ut.push_current_dir()
@@ -2311,10 +2308,9 @@ end
 function actions.publish(_args)
    local cfgs = search_and_load_cfgs_up("bld.lua")
    if not cfgs then
-      printc(
-      "%{red}actions.publish: нет bld.lua в текущем каталоге%{reset}")
+      die(
+      "actions.publish: нет bld.lua в текущем каталоге")
 
-      return
    end
 
    if _args.build then
@@ -2349,12 +2345,11 @@ local function sub_itch(_args, cfg)
    }
 
    if not has_files_in_dir(files) then
-      printc(
-      "%{red}sub_itch: в каталоге проекта нет всех wasm-файлов " ..
+      die(
+      "sub_itch: в каталоге проекта нет всех wasm-файлов " ..
       "(.data/.html/.js/.wasm). " ..
-      "Соберите: koh make -t wasm  (или itch -b)%{reset}")
+      "Соберите: koh make -t wasm  (или itch -b)")
 
-      return
    end
 
    local src_dir = lfs.currentdir()
@@ -2399,10 +2394,9 @@ end
 function actions.itch(_args)
    local cfgs = search_and_load_cfgs_up("bld.lua")
    if not cfgs then
-      printc(
-      "%{red}actions.itch: нет bld.lua в текущем каталоге%{reset}")
+      die(
+      "actions.itch: нет bld.lua в текущем каталоге")
 
-      return
    end
 
    if _args.build then
@@ -3587,11 +3581,10 @@ local function run_parallel_uv(queue)
 end
 
 local function remove_cache_file(_args)
-   if _args.c then
+   if _args.clean then
       ut.push_current_dir()
       chdir('src')
-      local err = os.remove(cache_name)
-      if not err then
+      if os.remove(cache_name) then
          print('cache removed')
       end
       ut.pop_dir()
@@ -4110,7 +4103,7 @@ local function koh_recompile(_args, cfg, _target)
       local args = {
          headless = _args.headless,
          make = true,
-         c = _args.c,
+         clean = _args.clean,
          noasan = _args.noasan,
          release = _args.release,
       }
@@ -5119,10 +5112,9 @@ function actions.profile(_args)
       end
 
       if not session_dir then
-         printc(
-         "%{red}Не найден каталог сессии профайлера%{reset}")
+         die(
+         "Не найден каталог сессии профайлера")
 
-         return
       end
 
 
