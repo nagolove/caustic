@@ -35,10 +35,109 @@ static inline double tmr_now(void) {
 #include <assert.h>
 #include <stdio.h>
 
-// Возможности:
-// * Отложенный старт
-// * Однократный запуск
-// * Нормализованное 0..1 время для вычислений
+// {{{ Tmr — таймер непосредственного режима (immediate)
+//
+// Поля настройки (до tmr_init):
+//   period            шаг тиков, сек; обязателен > 0 (assert)
+//   time_loop         длительность работы, сек; <= 0 — бесконечно.
+//                     Не «период повтора»: по истечении таймер
+//                     становится expired и больше не тикает
+//   time_start_delay  задержка от tmr_init до старта, сек
+//   once              одно срабатывание после задержки; только
+//                     без time_loop (с time_loop > 0 не влияет)
+// Результат (только чтение):
+//   time_amount       прогресс 0..1: от старта к концу time_loop,
+//                     у бесконечного — внутри текущего period
+//   expired           работа закончена (можно выставить вручную —
+//                     принудительная остановка)
+//
+// --- 1. Анимация длительностью D (прогресс 0..1) ---
+//
+//     t->tmr = (Tmr){ .period = 0.01f, .time_loop = 0.25f };
+//     tmr_init(&t->tmr);
+//     ...каждый кадр:
+//     tmr_begin(&t->tmr);
+//     float a = t->tmr.time_amount;      // в последнем кадре ровно 1
+//     pos = Vector2Lerp(from, to, a);
+//     if (t->tmr.expired)
+//         anim_done(t);
+//
+// --- 2. Периодическое действие, бесконечно ---
+//
+//     Tmr spawn = { .period = 0.5f };     // time_loop = 0 — без конца
+//     tmr_init(&spawn);
+//     ...каждый кадр:
+//     if (tmr_begin(&spawn)) {            // первый тик — сразу
+//         spawn_enemy();
+//         tmr_end(&spawn);                // без tmr_end тик будет
+//     }                                   // каждый кадр
+//
+// --- 3. Периодическое действие ограниченное время ---
+//
+//     Tmr blink = { .period = 0.1f, .time_loop = 2.f };
+//     tmr_init(&blink);
+//     if (tmr_begin(&blink)) {            // тикает 2 с, затем expired
+//         visible = !visible;
+//         tmr_end(&blink);
+//     }
+//
+// --- 4. Отложенное однократное событие ---
+//
+//     Tmr boost_off = { .period = 1.f, .time_start_delay = 3.f,
+//                       .once = true };
+//     tmr_init(&boost_off);
+//     if (tmr_begin(&boost_off))          // true ровно один раз
+//         speed = speed_base;             // через 3 с
+//
+// --- 5. Анимация с задержкой старта ---
+//
+//     Tmr fade = { .period = 0.01f, .time_start_delay = 1.f,
+//                  .time_loop = 0.5f };
+//     tmr_init(&fade);
+//     tmr_begin(&fade);                   // первую секунду amount = 0
+//     alpha = fade.time_amount;
+//
+// --- 6. Перезапуск и «уже идёт?» ---
+//
+//     bool running = t->tmr.is_inited && !t->tmr.expired;
+//     if (!running) {                     // запускать заново только
+//         t->tmr = (Tmr){ .period = 0.01f, .time_loop = 0.15f };
+//         tmr_init(&t->tmr);              // по окончании прошлого
+//     }
+//     t->tmr.expired = true;              // остановить досрочно
+//
+// --- 7. Пауза ---
+//
+//     tmr_set_paused(&t->tmr, is_paused);
+//     // На паузе tmr_begin -> false, time_amount заморожен —
+//     // рисовать по нему можно. После resume время паузы не
+//     // засчитывается.
+//
+// --- 8. Таймер в ECS-компоненте ---
+//
+//     // Таймер живёт вместе с сущностью: нет внешнего менеджера и
+//     // рассинхрона «сущность есть — таймера нет». e_clone копирует
+//     // таймер с компонентом (у старого снимка он уже истёк).
+//     e_id dead[CAP]; int dead_num = 0;
+//     for (e_view v = e_view_create_single(r, cmp_fade);
+//          e_view_valid(&v); e_view_next(&v)) {
+//         Fade *f = e_view_get(&v, cmp_fade);
+//         tmr_begin(&f->tmr);
+//         if (f->tmr.expired)
+//             dead[dead_num++] = e_view_entity(&v);
+//     }
+//     for (int i = 0; i < dead_num; i++)  // не уничтожать внутри view
+//         e_destroy(r, dead[i]);
+//
+// Ловушки:
+// * period == 0 — assert в tmr_init, даже для анимаций.
+// * Периодический таймер без tmr_end тикает каждый кадр.
+// * Тики идут по кадрам, tmr_end якорит на now: реальный период —
+//   period, округлённый вверх до кадра (0.1 с при 60 fps — 7 кадров,
+//   18 тиков за 2 с вместо 20). time_loop при этом точен.
+// * Таймер, созданный и сразу помеченный expired (как «пустой»
+//   в init), не стартует, пока не будет tmr_init заново.
+// }}}
 typedef struct Tmr {
     f64     time_init,
             time_last;      // raylib - tmr_now()
@@ -164,7 +263,9 @@ static inline bool tmr_begin(Tmr *t) {
     const double start_at = t->time_init + t->time_start_delay;
 
     // --- once: одно срабатывание в момент старта ---
-    if (t->once) {
+    // С time_loop > 0 таймер и так однократный (истекает в конце),
+    // once там не влияет — иначе истекал бы в первом же кадре.
+    if (t->once && t->time_loop <= 0.0) {
         if (now < start_at) {
             t->time_amount = 0.0; return false; 
         }
