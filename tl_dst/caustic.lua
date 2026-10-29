@@ -871,10 +871,14 @@ local parser_setup = {
       summary = "make and run current project",
       description = "Use -- to pass extra args" ..
       " to artifact, e.g.: koh run -d -- --dev." ..
+      " Flags combine: -r release+ASan, -a debug w/o ASan," ..
+      " -ra release w/o ASan, -rad same in gdb (with -ggdb3)." ..
       " With -t android: install APK, start via adb, show logcat",
       options = { "-t" },
       flags = {
          { "-d --debug", "run artifact in gdb" },
+         { "-r --release", "release build (-O3, NDEBUG), ASan kept" },
+         { "-a --noasan", "no address sanitizer" },
          { "--noreset", "no call 'reset' for clearing terminal output" },
          { "-H --headless", "link with headless raylib (no window)" },
          { "-p --profiling", "print timing profiling info" },
@@ -4321,6 +4325,10 @@ function sub_make(
       table.insert(flags, "-DNDEBUG")
 
       table.insert(flags, lto_flag)
+
+      if _args.debug and target ~= 'wasm' then
+         table.insert(flags, "-ggdb3")
+      end
 
       defines_apply(flags, cfg.release_define)
    end

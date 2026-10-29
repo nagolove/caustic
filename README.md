@@ -93,7 +93,7 @@ CLI-утилита `koh`, написанная на Teal. Команды:
 | `koh init -t linux` | Скачать зависимости для целевой платформы |
 | `koh build -n <name>` | Собрать зависимость |
 | `koh make` | Скомпилировать libcaustic или текущий проект |
-| `koh run` | Собрать и запустить (опционально в gdb) |
+| `koh run` | Собрать и запустить: `-d` gdb, `-r` release (ASan остаётся), `-a` без ASan; `-rad` — release в gdb |
 | `koh project -n <name>` | Создать новый проект из шаблона |
 | `koh stage` | Сгенерировать шаблон сцены |
 | `koh unit -n <name>` | Создать unit-тест |
