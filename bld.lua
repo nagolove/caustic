@@ -13,6 +13,9 @@ return {
             "stage_template.c",
         },
         codegen = { {
+            -- пути относительно src/: перегенерация только при изменении
+            inputs = { "../tl_dst/tabular.lua" },
+            outputs = { "koh_lua_tabular.c", "koh_lua_tabular.h" },
             external = function()
                 -- codegen использует bin2c.lua (чистый Lua) из корня caustic
                 -- вместо внешней утилиты bin2c; cwd здесь = src/, путь к

@@ -238,6 +238,11 @@ end
 
 
 
+
+
+
+
+
 local function filter_sources_c(
    path, cb, exclude)
 
@@ -3845,10 +3850,35 @@ function actions.update(_args)
 
 end
 
+
+local function codegen_fresh(cg)
+   if not cg.inputs or not cg.outputs then
+      return false
+   end
+   local newest_in = 0
+   for _, path in ipairs(cg.inputs) do
+      local mtime = lfs.attributes(path, "modification")
+      if not mtime then
+         die("codegen: нет входного файла " .. path)
+      end
+      newest_in = math.max(newest_in, mtime)
+   end
+   for _, path in ipairs(cg.outputs) do
+      local mtime = lfs.attributes(path, "modification")
+
+      if not mtime or mtime <= newest_in then
+         return false
+      end
+   end
+   return true
+end
+
 local function codegen(cg)
    local _t0 = time_ms()
-   if not cg.file_in or not cg.file_out then
-
+   if codegen_fresh(cg) then
+      if verbose then
+         print("codegen: актуально, пропуск", inspect(cg.outputs))
+      end
       return
    end
 
@@ -3867,6 +3897,10 @@ local function codegen(cg)
          print("Error in calling 'external' codegen function", errmsg)
       end
       ut.pop_dir()
+      return
+   end
+
+   if not cg.file_in or not cg.file_out then
       return
    end
 

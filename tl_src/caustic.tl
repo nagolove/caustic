@@ -230,6 +230,11 @@ local record Cfg
         on_read: function(line: string)
         on_write: function(capture: string): {string}
         on_finish: function() -- XXX: Почему только для отладки?
+
+        -- Пути относительно src. Если заданы оба списка и все outputs
+        -- новее всех inputs — шаг пропускается.
+        inputs: {string}
+        outputs: {string}
     end
 
 end
@@ -3845,10 +3850,35 @@ function actions.update(_args: Args)
     --]]
 end
 
+-- Все outputs существуют и новее самого свежего из inputs
+local function codegen_fresh(cg: Cfg.Codegen): boolean
+    if not cg.inputs or not cg.outputs then
+        return false
+    end
+    local newest_in = 0
+    for _, path in ipairs(cg.inputs) do
+        local mtime = lfs.attributes(path, "modification") as integer
+        if not mtime then
+            die("codegen: нет входного файла " .. path)
+        end
+        newest_in = math.max(newest_in, mtime)
+    end
+    for _, path in ipairs(cg.outputs) do
+        local mtime = lfs.attributes(path, "modification") as integer
+        -- mtime в секундах: при равенстве надёжнее перегенерировать
+        if not mtime or mtime <= newest_in then
+            return false
+        end
+    end
+    return true
+end
+
 local function codegen(cg: Cfg.Codegen)
     local _t0 = time_ms()
-    if not cg.file_in or not cg.file_out then
-        --print("codegen: no file_in or file_out, returning")
+    if codegen_fresh(cg) then
+        if verbose then
+            print("codegen: актуально, пропуск", inspect(cg.outputs))
+        end
         return
     end
 
@@ -3867,6 +3897,10 @@ local function codegen(cg: Cfg.Codegen)
             print("Error in calling 'external' codegen function", errmsg)
         end
         ut.pop_dir()
+        return
+    end
+
+    if not cg.file_in or not cg.file_out then
         return
     end
 
