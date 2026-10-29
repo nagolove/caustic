@@ -378,11 +378,6 @@ end
 
 
 
-
-
-
-
-
 local _dependecy_init
 
 
@@ -808,6 +803,7 @@ local parser_setup = {
 
    ctags = {
       summary = [[build ctags file for project]],
+      options = { "-t" },
    },
 
    project = {
@@ -885,26 +881,22 @@ local parser_setup = {
 
    ast = {
       summary = "dump project AST to stdout",
-      flags = {},
-
+      options = { "-t" },
    },
 
-   ninja = {
-      summary = "create ninja build file",
-      flags = {},
 
-   },
+
+
+
+
+
+
 
    make = {
       summary = "build libcaustic or current project",
-
-
-
-
-
       options = { "-t" },
       flags = {
-
+         { "--nocodegen", "skip codegen step from bld.lua" },
          { "-c --clean", "full rebuild without cache info" },
          { "-r --release", "release" },
          { "-a --noasan", "no address sanitazer" },
@@ -913,7 +905,6 @@ local parser_setup = {
          { "-H --headless", "link with headless raylib (no window)" },
          { "-p --profiling", "print timing profiling info" },
       },
-
    },
 
    publish = {
@@ -1035,7 +1026,6 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
-
 
 
 
@@ -3668,12 +3658,6 @@ local function project_link(ctx, cfg, _args, ninja)
       flags = flags .. concat(cfg.flags, " ")
    end
 
-
-
-   if _args.make_type == 'release' then
-      flags = ""
-   end
-
    local artifact = "../" .. cfg.artifact
    local cc = compiler_c[_args.target]
    assert(cc)
@@ -5186,75 +5170,78 @@ function actions.make(_args)
 end
 
 
-local function find_arg_after(args, flag)
-   for i, a in ipairs(args) do
-      if a == flag then
-         return args[i + 1] or ""
-      end
-   end
-   return ""
-end
-
-local function ninja_footer(f, c, ctx)
-   assert(f)
-   assert(c)
-   assert(ctx)
-
-   if c.artifact then
-      f:write(string.format("\ndefault %s\n", c.artifact))
-   end
-end
-
-local function ninja_header(f)
-
-   f:write("ninja_required_version = 1.13\n\n")
-
-   f:write("rule cc\n")
-   f:write("  command = $COMMAND\n\n")
-end
-
-local function run_ninja_codegen(queue, f)
-   local _t0 = time_ms()
-   print("queue length:", #queue)
-   if #queue == 0 then
-      return
-   end
-
-   assert(f)
-
-   for _, task in ipairs(queue) do
-
-      print()
-      print()
-
-
-      local up = function(s)
-         return s
-      end
-
-      local output <const> = up(find_arg_after(task.args, "-o"))
-      local input <const> = up(find_arg_after(task.args, "-c"))
 
 
 
 
 
-      local parts = { task.cmd }
-      for _, a in ipairs(task.args) do
-
-         parts[#parts + 1] = up(a)
-      end
-      local command <const> = table.concat(parts, " ")
 
 
 
 
-      f:write(string.format("build %s: cc %s\n", output, input))
-      f:write(string.format("  COMMAND = %s\n\n", command))
-   end
 
-   time_print("run_ninja_codegen", _t0)
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function run_ast(queue)
    local _t0 = time_ms()
@@ -5286,35 +5273,38 @@ function actions.ast(_args)
    end
 end
 
-function actions.ninja(_args)
-   if verbose then
-      print('make:')
 
-      print(inspect(_args))
-   end
-   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
-   local target = _args.t or "linux"
 
-   local f <const> = assert(io.open("build.ninja", "w"))
-   ninja_header(f)
 
-   for _, cfg in ipairs(cfgs) do
-      if cfg_not_empty(cfg) then
-         remove_cache_file(_args)
 
-         local ctx = {
-            objfiles = {},
-            libsdirs = {},
-            libs = {},
-         }
 
-         sub_make(_args, cfg, target, run_ninja_codegen, push_num, f)
-         ninja_footer(f, cfg, ctx)
-      end
-   end
 
-   f:close()
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function actions.clean(_)
 

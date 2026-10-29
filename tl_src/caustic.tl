@@ -356,11 +356,6 @@ end
 
 -- }}}
 
-local enum MakeAction
-    "release"
-    --"debug"
-end
-
 local enum TargetBuildFunc
     "build"
     "build_w"
@@ -753,7 +748,7 @@ local record Actions
     -- {{{
 
     ast: function(Args)
-    ninja: function(Args)
+    --ninja: function(Args)
     clean: function(Args)
     cppcheck: function(Args)
     snapshot: function(Args)
@@ -808,6 +803,7 @@ local parser_setup: {string:ParserSetup} = {
 
     ctags = {
         summary = [[build ctags file for project]],
+        options = { "-t" },
     },
 
     project = {
@@ -885,26 +881,22 @@ local parser_setup: {string:ParserSetup} = {
 
     ast = {
         summary = "dump project AST to stdout",
-        flags = {
-        }
+        options = { "-t" },
     },
 
+    --[[ koh ninja отключена
     ninja = {
         summary = "create ninja build file",
         flags = {
         }
     },
+    --]]
 
     make = {
         summary = "build libcaustic or current project",
-        --[[
-        arguments = {
-            { "make_type", "?" }
-        },
-        --]]
         options = { "-t" },
         flags = {
-            --{ "-g --nocodegen", "disable codegeneration step" },
+            { "--nocodegen", "skip codegen step from bld.lua" },
             { "-c --clean", "full rebuild without cache info" },
             { "-r --release", "release" },
             { "-a --noasan", "no address sanitazer" },
@@ -913,7 +905,6 @@ local parser_setup: {string:ParserSetup} = {
             { "-H --headless", "link with headless raylib (no window)" },
             { "-p --profiling", "print timing profiling info" },
         },
-        --]]
     },
 
     publish = {
@@ -1055,7 +1046,6 @@ local record Args
     build: string       -- пересобрать wasm перед публикацией
     yes: string         -- не спрашивать подтверждения перед push
     prefix: string      -- префикс для stage-файлов
-    make_type: MakeAction
     link: string        -- оптимизация времени линковки(работает долго)
     full: string        -- XXX: Что значит?
     headless: string    -- сборка с безголовым рейлибом
@@ -3668,12 +3658,6 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         flags = flags .. concat(cfg.flags, " ")
     end
 
-    -- XXX: Нужно ли убирать флаги при релизной сборке?
-    -- Зависит от значений флагов
-    if _args.make_type == 'release' then
-        flags = ""
-    end
-
     local artifact = "../" .. cfg.artifact
     local cc = compiler_c[_args.target]
     assert(cc)
@@ -5185,6 +5169,8 @@ function actions.make(_args: Args)
     time_print("actions.make", _t0)
 end
 
+-- генерация build.ninja (только для отключённой koh ninja)
+--[[
 -- Извлечь значение аргумента после флага, например после "-o" или "-c"
 local function find_arg_after(args: {string}, flag: string): string
     for i, a in ipairs(args) do
@@ -5255,6 +5241,7 @@ local function run_ninja_codegen(queue: {Task}, f: FILE)
 
     time_print("run_ninja_codegen", _t0)
 end
+--]]
 
 local function run_ast(queue: {Task})
     local _t0 = time_ms()
@@ -5286,6 +5273,8 @@ function actions.ast(_args: Args)
     end
 end
 
+-- koh ninja отключена: команда не поддерживается
+--[[
 function actions.ninja(_args: Args)
     if verbose then
         print('make:')
@@ -5315,6 +5304,7 @@ function actions.ninja(_args: Args)
 
     f:close()
 end
+--]]
 
 function actions.clean(_: Args)
     --print("actions.clean:")
