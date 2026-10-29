@@ -19,7 +19,6 @@ assert(e.path_caustic)
 
 
 
-
 package.path = package.path .. ";" .. e.path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. e.path_caustic .. "/tl_dst/?.lua;"
 package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
@@ -788,7 +787,6 @@ end
 
 
 
-
 local parser_setup = {
 
 
@@ -801,10 +799,6 @@ local parser_setup = {
 
 
       options = { "-e --exclude" },
-   },
-
-   bld_lua = {
-      summary = [[write example of bld.lua file in current directory]],
    },
 
    dist = {
@@ -1022,9 +1016,6 @@ with -g option just call 'git status' for each entry
    },
    selftest_lg = {
       summary = "call lazygit for dirty selftest.lua entries",
-   },
-   verbose = {
-      summary = "print internal data with urls, paths etc.",
    },
    snapshot = {
       summary = "make revisions and branches snapshot of target modules tree",
@@ -5580,6 +5571,15 @@ local function main()
    parser:flag("-v --verbose", "use verbose output")
    parser:flag("-V --KOH_VERBOSE", "use debug verbose")
    parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
+
+
+
+   for _, name in ipairs({ "verbose", "KOH_VERBOSE", "no_verbose_path",
+"completion", }) do
+      if parser_setup[name] then
+         die("команда '" .. name .. "' совпадает с глобальным флагом")
+      end
+   end
 
    parser:add_complete()
 

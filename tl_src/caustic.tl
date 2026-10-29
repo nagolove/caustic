@@ -15,9 +15,8 @@ local lua_ver = "5.4"
 local e = glob.env_instance()
 assert(e.path_caustic)
 
--- XXX: Слишком много bld_lua переменных. Удалить ненужные действия.
--- Для тестов и проектов сделать универсальную функция-обертку для создания
--- bld_lua или bld_tl
+-- XXX: Для тестов и проектов сделать универсальную функцию-обертку
+-- для создания bld.tl
 
 -- {{{ package.path, package.cpath
 package.path = package.path .. ";" .. e.path_caustic .. "/?.lua;"
@@ -757,7 +756,6 @@ local record Actions
     ninja: function(Args)
     clean: function(Args)
     cppcheck: function(Args)
-    bld_lua: function(Args)
     snapshot: function(Args)
     build: function(Args)
     compile_flags: function(Args)
@@ -801,10 +799,6 @@ local parser_setup: {string:ParserSetup} = {
         -- Lua-шаблон для исключения файлов из анализа,
         -- например: --exclude "lua_pattern.*%.c"
         options = { "-e --exclude", },
-    },
-
-    bld_lua = {
-        summary = [[write example of bld.lua file in current directory]]
     },
 
     dist = {
@@ -1022,9 +1016,6 @@ with -g option just call 'git status' for each entry
     },
     selftest_lg = {
         summary = "call lazygit for dirty selftest.lua entries",
-    },
-    verbose = {
-        summary = "print internal data with urls, paths etc.",
     },
     snapshot = {
         summary = "make revisions and branches snapshot of target modules tree",
@@ -5580,6 +5571,15 @@ local function main()
     parser:flag("-v --verbose", "use verbose output")
     parser:flag("-V --KOH_VERBOSE", "use debug verbose")
     parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
+
+    -- argparse пишет args[<команда>] = true: команда с именем глобального
+    -- флага молча включила бы этот флаг (так было с `koh verbose`)
+    for _, name in ipairs({ "verbose", "KOH_VERBOSE", "no_verbose_path",
+                            "completion" }) do
+        if parser_setup[name] then
+            die("команда '" .. name .. "' совпадает с глобальным флагом")
+        end
+    end
 
     parser:add_complete()
 
