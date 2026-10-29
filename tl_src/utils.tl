@@ -328,7 +328,15 @@ local function do_parser_setup(
     end
 
     prnt("do_parser_setup:")
-    for cmd_name, setup_tbl in pairs(setup) do
+    -- алфавитный порядок команд в --help
+    local names: {string} = {}
+    for cmd_name in pairs(setup) do
+        insert(names, cmd_name)
+    end
+    table.sort(names)
+
+    for _, cmd_name in ipairs(names) do
+        local setup_tbl = setup[cmd_name]
 
         prnt("cmd_name", cmd_name)
         prnt("setup_tbl", inspect(setup_tbl))
@@ -343,9 +351,14 @@ local function do_parser_setup(
         end
         if setup_tbl.options then
             for _, option in ipairs(setup_tbl.options) do
-                prnt("add option", option)
-                local opt = p:option(option)
-                if option == "-t" or option:match("^%-t ") then
+                local name = option[1]
+                assert(type(name) == "string")
+                assert(type(option[2]) == "string", "нет описания у " .. name)
+                prnt("add option", name)
+                local opt = p:option(name, option[2])
+                if #option > 2 then
+                    opt:choices(table.move(option, 3, #option, 1, {}))
+                elseif name == "-t" or name:match("^%-t ") then
                     opt:choices(targets_all as {string})
                 end
             end

@@ -36,7 +36,8 @@ end
 global record ParserSetup
     summary: string
     description: string
-    options: {string}
+    -- [1] имя ("-n --name"), [2] описание, [3..] допустимые значения
+    options: {{string}}
     flags: {{string}}
     arguments: {{string|integer}}
 end

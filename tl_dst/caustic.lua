@@ -789,13 +789,13 @@ end
 
 
 local build_flags = {
-   { "--nocodegen", "skip codegen step from bld.lua" },
-   { "-c --clean", "full rebuild without cache info" },
-   { "-r --release", "release build (-O3, NDEBUG), ASan kept" },
-   { "-a --noasan", "no address sanitizer" },
-   { "-l --link", "use linking time optimization" },
-   { "-H --headless", "link with headless raylib (no window)" },
-   { "-p --profiling", "print timing profiling info" },
+   { "--nocodegen", "пропустить шаг codegen из bld.lua" },
+   { "-c --clean", "полная пересборка со сбросом кэша" },
+   { "-r --release", "release-сборка (-O3, NDEBUG), ASan остаётся" },
+   { "-a --noasan", "без address sanitizer" },
+   { "-l --link", "оптимизация на этапе линковки (LTO)" },
+   { "-H --headless", "линковать headless raylib (без окна)" },
+   { "-p --profiling", "печатать время этапов сборки" },
 }
 
 
@@ -830,93 +830,99 @@ local function build_flags_only(names)
    return res
 end
 
+
+local opt_target = { "-t --target", "целевая платформа (по умолчанию linux)" }
+local opt_target_req = { "-t --target", "целевая платформа (обязательно)" }
+local opt_dep = { "-n --name", "имя зависимости (по умолчанию все)" }
+
 local parser_setup = {
 
 
    clean = {
-      summary = [[remove compiled objects files and binaries]],
+      summary = [[удалить объектные файлы и бинарники]],
    },
 
    cppcheck = {
-      summary = [[run cppcheck on current project directory]],
+      summary = [[запустить cppcheck в каталоге проекта]],
 
-
-      options = { "-e --exclude" },
+      options = {
+         { "-e --exclude", "Lua-шаблон исключаемых из анализа файлов" },
+      },
    },
 
    dist = {
-      options = {},
-      summary = [[build binary distribution]],
+      summary = [[собрать бинарный дистрибутив]],
    },
 
    ctags = {
-      summary = [[build ctags file for project]],
-      options = { "-t --target" },
+      summary = [[построить ctags-файл проекта]],
+      options = { opt_target },
    },
 
    project = {
-      options = { "-n --name" },
-      summary = [[create project subdirectory with given name]],
+      options = { { "-n --name", "имя каталога проекта" } },
+      summary = [[создать проект в подкаталоге с заданным именем]],
    },
 
    stage = {
-      options = { "-n --name", "-p --prefix" },
-      summary = [[Create stage in project]],
+      options = {
+         { "-n --name", "имя сцены (C-идентификатор)" },
+         { "-p --prefix", "префикс файлов: h -> h_stage_X.c (без -p спросит)" },
+      },
+      summary = [[создать сцену в проекте]],
    },
 
    unit = {
-      options = { "-n --name" },
+      options = { { "-n --name", "имя теста, каталог caustic-test-<name>" } },
       summary = [[создать тестовый каталог caustic-test-<name> (munit)]],
    },
 
    update = {
-
-      summary = "make backup and reinit dependency by name",
-      options = { "-n --name" },
+      summary = "сделать резервную копию и заново инициализировать зависимость",
+      options = { opt_dep },
    },
 
    dependencies = {
-      summary = "print dependencies table",
+      summary = "напечатать таблицу зависимостей",
    },
 
    build = {
-      summary = "build dependencies for native platform",
-      options = { "-n --name", "-t --target" },
+      summary = "собрать зависимости",
+      options = { opt_dep, opt_target },
    },
 
    compile_flags = {
-      summary = "print compile_flags.txt to stdout",
-      options = { "-t --target" },
+      summary = "записать compile_flags.txt и вывести его в stdout",
+      options = { opt_target },
    },
 
    compile_commands = {
-      summary = "print compile_commands.json to stdout",
-      options = { "-t --target" },
+      summary = "сгенерировать compile_commands.json",
+      options = { opt_target },
    },
 
    deps = {
-      summary = "list of dependencies",
+      summary = "список зависимостей",
       flags = {
-         { "-f --full", "full nodes info" },
+         { "-f --full", "подробная информация по узлам" },
       },
    },
 
    init = {
-      summary = "download modules from network",
-      options = { "-n --name", "-t --target" },
+      summary = "скачать модули из сети",
+      options = { opt_dep, opt_target_req },
    },
 
    run = {
-      summary = "make and run current project",
-      description = "Use -- to pass extra args" ..
-      " to artifact, e.g.: koh run -d -- --dev." ..
-      " Flags combine: -r release+ASan, -a debug w/o ASan," ..
-      " -ra release w/o ASan, -rad same in gdb (with -ggdb3)." ..
-      " With -t android: install APK, start via adb, show logcat",
-      options = { "-t --target" },
+      summary = "собрать и запустить текущий проект",
+      description = "Аргументы программе — после --, напр.: koh run -d -- --dev." ..
+      " Флаги сочетаются: -r release+ASan, -a debug без ASan," ..
+      " -ra release без ASan, -rad то же под gdb (с -ggdb3)." ..
+      " С -t android: установить APK, запустить через adb, logcat",
+      options = { opt_target },
       flags = build_flags_with({
-         { "-d --debug", "run artifact in gdb" },
-         { "--noreset", "no call 'reset' for clearing terminal output" },
+         { "-d --debug", "запустить под gdb" },
+         { "--noreset", "не очищать терминал (reset) перед запуском" },
       }),
       arguments = {
          { "args", "*" },
@@ -924,8 +930,8 @@ local parser_setup = {
    },
 
    ast = {
-      summary = "dump project AST to stdout",
-      options = { "-t --target" },
+      summary = "вывести AST проекта в stdout",
+      options = { opt_target },
    },
 
 
@@ -937,14 +943,16 @@ local parser_setup = {
 
 
    make = {
-      summary = "build libcaustic or current project",
-      options = { "-t --target" },
+      summary = "собрать libcaustic или текущий проект",
+      options = { opt_target },
       flags = build_flags_with({}),
    },
 
    publish = {
       summary = "собрать каталог проекта в ~/nagolove.github.io и запушить на web",
-      options = { "-n --name" },
+      options = {
+         { "-n --name", "каталог на сайте (по умолчанию — имя каталога проекта)" },
+      },
       flags = {
          { "-b --build", "пересобрать wasm-артефакты перед публикацией" },
          { "-y --yes", "не спрашивать подтверждения перед push" },
@@ -954,7 +962,9 @@ local parser_setup = {
 
    itch = {
       summary = "собрать дистрибутив <имякаталога>.zip для загрузки на itch.io",
-      options = { "-n --name" },
+      options = {
+         { "-n --name", "имя zip-архива (по умолчанию — имя каталога проекта)" },
+      },
       flags = {
          { "-b --build", "пересобрать wasm-артефакты перед упаковкой" },
          build_flags_only({ "-r --release" })[1],
@@ -1001,7 +1011,10 @@ TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_PHONE, TG_PROXY или файл
 Verification Codes, а в служебный чат «Telegram» (777000) аккаунта TG_PHONE;
 --login печатает способ доставки, пустой Enter — переотправка (SMS и т.п.).
 Session: ~/.config/koh/koh_tg.session; без неё отправка сразу падает.]],
-      options = { "-t --target", "--from" },
+      options = {
+         opt_target,
+         { "--from", "путь к готовой telethon-session для --login" },
+      },
       flags = build_flags_with({
          { "-B --nobuild", "не пересобирать, упаковать текущий artifact" },
          { "--no-send", "только zip, без отправки" },
@@ -1012,45 +1025,51 @@ Session: ~/.config/koh/koh_tg.session; без неё отправка сразу
    },
 
    remove = {
-      summary = "remove module by name and target from source tree",
-      options = { "-n --name", "-t --target" },
+      summary = "удалить модуль по имени и платформе из дерева исходников",
+      options = {
+         { "-n --name", "имя зависимости (обязательно)" },
+         opt_target_req,
+      },
    },
 
    test = {
-      summary = "build native test executable and run it",
+      summary = "собрать нативный тестовый бинарник и запустить",
    },
    selftest = {
-      summary = "build and run tests from selftest.lua",
-      options = { "--timeout" },
+      summary = "собрать и запустить тесты из selftest.lua",
+      options = {
+         { "--timeout", "секунд на запуск одного теста (по умолчанию 120)" },
+      },
    },
    selftest_status = {
-      summary = "print git status for selftest.lua entries",
+      summary = "git status для проектов из selftest.lua",
    },
    projects_status = {
-      summary = [[
-call lazygit for projects.lua entries
-with -g option just call 'git status' for each entry
-]],
+      summary = "lazygit для каждого проекта из projects.lua",
+      description = "С -g вместо lazygit выполняется git status.",
       flags = {
-         { "-g --git", "run `git status` instead of lazygit" },
+         { "-g --git", "git status вместо lazygit" },
       },
    },
    projects_make = {
-      summary = "make projects from projects.lua",
+      summary = "собрать проекты из projects.lua",
    },
    selftest_push = {
-      summary = "call git push for selftest.lua entries",
+      summary = "git push для проектов из selftest.lua",
    },
    selftest_lg = {
-      summary = "call lazygit for dirty selftest.lua entries",
+      summary = "lazygit для проектов из selftest.lua с изменениями",
    },
    snapshot = {
-      summary = "make revisions and branches snapshot of target modules tree",
+      summary = "снимок ревизий и веток дерева модулей",
    },
    profile = {
       summary = "профилирование через AMDuProf, вывод отчёта через tabular",
       description = "Доп. ключи бинарнику через --, напр.: koh profile -- --dev",
-      options = { "-c --config" },
+      options = {
+         { "-c --config", "конфигурация AMDuProf (по умолчанию tbp)",
+"tbp", "hotspots", "memory", },
+      },
       flags = {
          { "-f --full", "показать все секции отчёта" },
       },
@@ -5614,9 +5633,9 @@ local function main()
    ut.do_parser_setup(parser, parser_setup)
    parser:command_target("command")
 
-   parser:flag("-v --verbose", "use verbose output")
-   parser:flag("-V --KOH_VERBOSE", "use debug verbose")
-   parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
+   parser:flag("-v --verbose", "подробный вывод")
+   parser:flag("-V --KOH_VERBOSE", "отладочный подробный вывод")
+   parser:flag("-x --no-verbose-path", "не печатать значение CAUSTIC_PATH")
 
 
 
