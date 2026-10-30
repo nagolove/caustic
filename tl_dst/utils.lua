@@ -140,11 +140,11 @@ local function filter_sources(path, exclude)
       end
       if not found then
          table.insert(files_processed, file)
-         if (_G)["KOH_VERBOSE"] then
+         if verbose then
             print(format("filter_sources: apply '%s'", file))
          end
       else
-         if (_G)["KOH_VERBOSE"] then
+         if verbose then
             print(format("filter_sources: decline '%s'", file))
          end
       end

@@ -789,10 +789,10 @@ end
 
 -- Флаги сборки для команд, которые вызывают actions.make
 local build_flags: {{string}} = {
-    { "--nocodegen", "пропустить шаг codegen из bld.lua" },
+    { "--no-codegen", "пропустить шаг codegen из bld.lua" },
     { "-c --clean", "полная пересборка со сбросом кэша" },
     { "-r --release", "release-сборка (-O3, NDEBUG), ASan остаётся" },
-    { "-a --noasan", "без address sanitizer" },
+    { "-a --no-asan", "без address sanitizer" },
     { "-l --link", "оптимизация на этапе линковки (LTO)" },
     { "-H --headless", "линковать headless raylib (без окна)" },
     { "-p --profiling", "печатать время этапов сборки" },
@@ -922,7 +922,7 @@ local parser_setup: {string:ParserSetup} = {
         options = { opt_target },
         flags = build_flags_with({
             {"-d --debug", "запустить под gdb",},
-            {"--noreset", "не очищать терминал (reset) перед запуском"},
+            {"--no-reset", "не очищать терминал (reset) перед запуском"},
         }),
         arguments = {
             {"args", "*"},
@@ -1016,7 +1016,7 @@ Session: ~/.config/koh/koh_tg.session; без неё отправка сразу
             { "--from", "путь к готовой telethon-session для --login" },
         },
         flags = build_flags_with({
-            { "-B --nobuild", "не пересобирать, упаковать текущий artifact" },
+            { "-B --no-build", "не пересобирать, упаковать текущий artifact" },
             { "--no-send", "только zip, без отправки" },
             { "--check", "показать состав пакета, zip удалить" },
             { "-s --smoke", "запустить artifact из пакета (win: wine)" },
@@ -1084,15 +1084,15 @@ local actions: Actions = {}
 
 local record Args
     -- {{{
-    noreset: string
+    no_reset: string
     g: string           -- вызывать git status вместо lazygit
     debug: string
     stage: boolean
     target: Target
     cpp: string
-    nocodegen: string   -- отключить проход кодогенератора
+    no_codegen: string  -- отключить проход кодогенератора
     release: string     -- сборка без отладки, с оптимизацией
-    noasan: string      -- отключить санитайзер
+    no_asan: string     -- отключить санитайзер
     verbose: string     -- много отладочного вывода
     make: boolean       -- собрать
     clean: string       -- полная пересборка (сброс кэша)
@@ -1107,7 +1107,7 @@ local record Args
     profiling: string   -- профилировка времени сборки
     config: ProfileConfig
     exclude: string     -- Lua-шаблон для исключения файлов из cppcheck
-    nobuild: string     -- tg: не пересобирать перед упаковкой
+    no_build: string    -- tg: не пересобирать перед упаковкой
     no_send: string     -- tg: только локальный zip, без отправки
     check: string       -- tg: показать состав пакета и удалить zip
     smoke: string       -- tg: запустить artifact из распакованного пакета
@@ -1360,7 +1360,9 @@ function actions.projects_make(_args: Args)
 end
 
 function actions.project(_args: Args)
-    print("actions.project:", inspect(_args))
+    if verbose then
+        print("actions.project:", inspect(_args))
+    end
 
     local project_name = _args.name
     if not project_name then
@@ -1699,7 +1701,9 @@ r
 end
 
 function actions.stage(_args: Args)
-    print("actions.stage")
+    if verbose then
+        print("actions.stage")
+    end
 
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
     if not cfgs then
@@ -2897,7 +2901,7 @@ function actions.tg(_args: Args)
     local target: Target = _args.target or "linux"
     _args.target = target
 
-    if not _args.nobuild and not _args.check then
+    if not _args.no_build and not _args.check then
         actions.make(_args)
     end
 
@@ -2993,7 +2997,9 @@ local function backup(dep: Dependency)
 end
 
 function actions.remove(_args: Args)
-    print("actions.remove")
+    if verbose then
+        print("actions.remove")
+    end
 
     if not _args.target then
         die("You should explicitly specify target option")
@@ -3068,10 +3074,12 @@ end
 local get_ready_deps_defines: function(cfg: Cfg, target?: Target): {string}
 
 function actions.compile_flags(_args: Args)
-    print(
-        "actions.compile_flags: currentdir", lfs.currentdir(),
-        "_args", inspect(_args)
-    )
+    if verbose then
+        print(
+            "actions.compile_flags: currentdir", lfs.currentdir(),
+            "_args", inspect(_args)
+        )
+    end
 
     cmd_do("cp compile_flags.txt compile_flags.txt.bak")
     local f = io.open("compile_flags.txt", "w")
@@ -3603,7 +3611,7 @@ local function remove_cache_file(_args: Args)
     if _args.clean then
         ut.push_current_dir()
         chdir('src')
-        if os.remove(cache_name) then
+        if os.remove(cache_name) and verbose then
             print('cache removed')
         end
         ut.pop_dir()
@@ -3695,7 +3703,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
     local flags: string = ""
 
     --[[
-    if not _args.noasan or _args.target == 'wasm' then
+    if not _args.no_asan or _args.target == 'wasm' then
         flags = flags .. concat(flags_sanitizer, " ")
         flags = flags .. " "
     end
@@ -3790,7 +3798,7 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
     --print('static_libs', inspect(static_libs))
     --print('dynamic_libs', inspect(dynamic_libs))
 
-    if not _args.noasan and _args.target == 'linux' then
+    if not _args.no_asan and _args.target == 'linux' then
         cmd = cmd .. " -fsanitize=address "
     end
 
@@ -3840,7 +3848,9 @@ local function project_link(ctx: LinkContext, cfg: Cfg, _args: Args, ninja: FILE
         f:write(string.format("build %s: link %s\n", link_output, link_inputs))
         f:write(string.format("  COMMAND = %s\n\n", link_command))
     else
-        print('project_link:', cmd)
+        if verbose then
+            print('project_link:', cmd)
+        end
         if not cmd_do(cmd) then die("project_link: линковка не удалась") end
     end
     time_print("project_link", _t0)
@@ -4123,7 +4133,7 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
             headless = _args.headless,
             make = true,
             clean = _args.clean,
-            noasan = _args.noasan,
+            no_asan = _args.no_asan,
             release = _args.release
         }
 
@@ -4139,7 +4149,9 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
         mkdir("obj_win")
         mkdir("obj_android")
 
-        printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+        if verbose then
+            printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+        end
         local _t1 = time_ms()
         sub_make(args, local_cfg, _target, run_parallel_uv)
         time_print("koh_recompile: sub_make итерация", _t1)
@@ -4198,7 +4210,7 @@ function sub_make(
     end
 
     -- TODO: кэширование генерируемых файлов. Значит нужно проверять время?
-    if not _args.nocodegen and cfg.codegen then
+    if not _args.no_codegen and cfg.codegen then
         local _t_cg = time_ms()
         for _, v in ipairs(cfg.codegen) do
             codegen(v)
@@ -4377,7 +4389,7 @@ function sub_make(
         table.insert(defines, define)
     end
 
-    if not _args.noasan and _args.target == 'linux' then
+    if not _args.no_asan and _args.target == 'linux' then
         table.insert(flags, "-fsanitize=address")
     end
 
@@ -4659,10 +4671,12 @@ function sub_make(
 end
 
 function actions.compile_commands(_args: Args)
-    print(
-        "actions.compile_commands: currentdir", lfs.currentdir(),
-        "_args", inspect(_args)
-    )
+    if verbose then
+        print(
+            "actions.compile_commands: currentdir", lfs.currentdir(),
+            "_args", inspect(_args)
+        )
+    end
 
     local attrib_cc = lfs.attributes("compile_commands.json")
     if attrib_cc and attrib_cc.mode == 'file' then
@@ -4734,7 +4748,7 @@ function actions.run(_args: Args)
     local _t0 = time_ms()
     local cfgs, _: {Cfg}, integer = search_and_load_cfgs_up("bld.lua")
 
-    if not _args.noreset then
+    if not _args.no_reset then
         cmd_do("reset")
     end
 
@@ -4767,7 +4781,9 @@ function actions.run(_args: Args)
         put_gdbinit()
         cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork" .. extra
     end
-    print('cmd', cmd)
+    if verbose then
+        print('cmd', cmd)
+    end
     time_print("actions.run (до запуска)", _t0)
 
     -- код возврата артефакта (или gdb) становится кодом koh
@@ -5529,7 +5545,9 @@ local function ctags_write(tags_fname: string, target: Target, _args?: Args)
     assert(target)
     -- XXX: Добавить пути включаемых файлов. Что имеется в виду?
 
-    print("ctags_write: _args", inspect(_args))
+    if verbose then
+        print("ctags_write: _args", inspect(_args))
+    end
 
     local attrib = lfs.attributes(tags_fname)
     if attrib and attrib.mode == 'file' then
@@ -5626,21 +5644,16 @@ function actions.ctags(_args: Args)
 end
 
 local function main()
-    global KOH_VERBOSE: boolean = nil
-
     local parser = argparse()
 
     ut.do_parser_setup(parser, parser_setup)
     parser:command_target("command")   -- имя выбранной команды → _args.command
 
-    parser:flag("-v --verbose", "подробный вывод")
-    parser:flag("-V --KOH_VERBOSE", "отладочный подробный вывод")
-    parser:flag("-x --no-verbose-path", "не печатать значение CAUSTIC_PATH")
+    parser:flag("-v --verbose", "подробный вывод для отладки")
 
     -- argparse пишет args[<команда>] = true: команда с именем глобального
     -- флага молча включила бы этот флаг (так было с `koh verbose`)
-    for _, name in ipairs({ "verbose", "KOH_VERBOSE", "no_verbose_path",
-                            "completion" }) do
+    for _, name in ipairs({ "verbose", "completion" }) do
         if parser_setup[name] then
             die("команда '" .. name .. "' совпадает с глобальным флагом")
         end
@@ -5655,10 +5668,6 @@ local function main()
 
     -- parse(): при ошибке usage команды + текст ошибки в stderr, exit 1
     local _args = parser:parse()
-
-    if _args.KOH_VERBOSE then
-        KOH_VERBOSE = true
-    end
 
     do
         if _args.verbose then
@@ -5678,9 +5687,6 @@ local function main()
 
         if verbose then
             printc("%{blue}" .. "VERBOSE_MODE" .. "%{reset}")
-        end
-
-        if not _args.no_verbose_path then
             print("CAUSTIC_PATH", e.path_caustic)
         end
 
