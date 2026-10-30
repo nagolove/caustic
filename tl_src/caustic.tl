@@ -1040,6 +1040,9 @@ Session: ~/.config/koh/koh_tg.session; без неё отправка сразу
         options = {
             { "--timeout", "секунд на запуск одного теста (по умолчанию 120)" },
         },
+        flags = {
+            { "-f --full", "также внутренние тесты koh (tests/*.sh)" },
+        },
     },
     selftest_status = {
         summary = "git status для проектов из selftest.lua",
@@ -1101,7 +1104,7 @@ local record Args
     yes: string         -- не спрашивать подтверждения перед push
     prefix: string      -- префикс для stage-файлов
     link: string        -- оптимизация времени линковки(работает долго)
-    full: string        -- XXX: Что значит?
+    full: string        -- deps, profile, selftest: подробно/всё
     headless: string    -- сборка с безголовым рейлибом
     timeout: string     -- таймаут (сек) на запуск одного теста в selftest
     profiling: string   -- профилировка времени сборки
@@ -2090,6 +2093,40 @@ function actions.selftest_status(_args: Args)
     end
 end
 
+-- Скрипт делает несколько полных сборок, поэтому таймаут больше,
+-- чем у запуска тестового артефакта
+local SELFTEST_SCRIPT_TIMEOUT <const> = 600
+
+-- Внутренние тесты koh: tests/*.sh в CAUSTIC_PATH, по алфавиту
+local function selftest_scripts(results: {SelftestResult})
+    local dir = e.path_caustic .. "/tests"
+    if not lfs.attributes(dir) then
+        printc("%{yellow}selftest: нет каталога " .. dir .. "%{reset}")
+        return
+    end
+    local scripts: {string} = {}
+    for fname in lfs.dir(dir) do
+        if fname:match("%.sh$") then
+            insert(scripts, fname)
+        end
+    end
+    table.sort(scripts)
+    if #scripts == 0 then
+        printc("%{yellow}selftest: в " .. dir .. " нет *.sh%{reset}")
+    end
+    for _, fname in ipairs(scripts) do
+        printc("%{green}" .. dir .. "/" .. fname .. "%{reset}")
+        local cmd = format(
+            "timeout %d %s/%s", SELFTEST_SCRIPT_TIMEOUT, dir, fname
+        )
+        local pass = cmd_try(cmd)
+        local name = "koh:" .. fname:gsub("%.sh$", "")
+        insert(results, {
+            name = name, ok = pass, stage = pass and "ok" or "script",
+        })
+    end
+end
+
 function actions.selftest(_args: Args)
     local selftest_fname = e.path_caustic .. "/selftest.lua"
     local timeout_s = tonumber(_args.timeout) or 120
@@ -2101,6 +2138,12 @@ function actions.selftest(_args: Args)
     local ok, errmsg: boolean, string = pcall(function()
         local nodes = load_test_nodes(selftest_fname)
         local results: {SelftestResult} = {}
+
+        -- --full: сначала тесты самой системы сборки
+        if _args.full then
+            selftest_scripts(results)
+        end
+
         ut.push_current_dir()
         for _, node in ipairs(nodes) do
             local dir = base .. "/" .. node.dir
