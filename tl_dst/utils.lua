@@ -9,6 +9,17 @@ local ansicolors = require('ansicolors')
 local insert = table.insert
 local inspect = require('inspect')
 
+
+
+local function sorted_keys(t)
+   local keys = {}
+   for k in pairs(t) do
+      table.insert(keys, k)
+   end
+   table.sort(keys)
+   return keys
+end
+
 local function printc(...)
    print(ansicolors(table.concat({ ... })))
 end
@@ -927,6 +938,7 @@ return {
    cmd_try = cmd_try,
    test_artifact_a_linux = test_artifact_a_linux,
    printc = printc,
+   sorted_keys = sorted_keys,
    die = die,
    ripairs = ripairs,
    filter = filter,

@@ -565,7 +565,7 @@ local function get_ready_links_linux_only(cfg: Cfg, target?: Target): {string}
         end
 
         links_linux_only = {}
-        for libname, _ in pairs(map_links_linux_only) do
+        for _, libname in ipairs(ut.sorted_keys(map_links_linux_only)) do
             links_linux_only[#links_linux_only + 1] = libname
         end
     end
@@ -4060,7 +4060,7 @@ get_ready_deps_defines = function(
     end
 
     local flags = {}
-    for name, _ in pairs(map_all_deps) do
+    for _, name in ipairs(ut.sorted_keys(map_all_deps)) do
         table.insert(flags, format("-DKOH_NO_%s", name:upper()))
     end
 
@@ -4087,7 +4087,8 @@ local function defines_apply(flags: {string}, defines: {string: string})
 
     --print("defines_apply: flags", inspect(flags), "defines", inspect(defines))
 
-    for define, value in pairs(defines) do
+    for _, define in ipairs(ut.sorted_keys(defines)) do
+        local value = defines[define]
         assert(type(define) == 'string');
         local value_str = value
         if type(value) == 'number' then

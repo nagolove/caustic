@@ -9,6 +9,17 @@ local ansicolors = require 'ansicolors'
 local insert     = table.insert
 local inspect = require 'inspect'
 
+-- Ключи таблицы по возрастанию: pairs() в Lua 5.4 даёт случайный порядок
+-- при каждом запуске, а флаги компилятора должны быть стабильны (кэш)
+local function sorted_keys<K>(t: {K:any}): {K}
+    local keys: {K} = {}
+    for k in pairs(t) do
+        table.insert(keys, k)
+    end
+    table.sort(keys as {string})
+    return keys
+end
+
 local function printc(...: string)
     print(ansicolors(table.concat({...})))
 end
@@ -927,6 +938,7 @@ return {
     cmd_try                     = cmd_try,
     test_artifact_a_linux       = test_artifact_a_linux,
     printc                      = printc,
+    sorted_keys                 = sorted_keys,
     die                         = die,
     ripairs                     = ripairs,
     filter                      = filter,
