@@ -761,7 +761,6 @@ local record Actions
     compile_flags: function(Args)
     compile_commands: function(Args)
     ctags: function(Args)
-    dependencies: function(Args)
     deps: function(Args)
     dist: function(Args)
     init: function(Args)
@@ -880,10 +879,6 @@ local parser_setup: {string:ParserSetup} = {
     update = {
         summary = "сделать резервную копию и заново инициализировать зависимость",
         options = { opt_dep },
-    },
-
-    dependencies = {
-        summary = "напечатать таблицу зависимостей",
     },
 
     build = {
@@ -1087,38 +1082,37 @@ local actions: Actions = {}
 
 local record Args
     -- {{{
-    no_reset: string
-    g: string           -- вызывать git status вместо lazygit
-    debug: string
-    stage: boolean
+    -- флаги (argparse отдаёт boolean)
+    debug: boolean      -- run: запуск под gdb
+    no_reset: boolean   -- run: не очищать терминал
+    release: boolean    -- сборка без отладки, с оптимизацией
+    no_asan: boolean    -- отключить санитайзер
+    no_codegen: boolean -- отключить проход кодогенератора
+    clean: boolean      -- полная пересборка (сброс кэша)
+    link: boolean       -- оптимизация времени линковки (работает долго)
+    headless: boolean   -- сборка с безголовым рейлибом
+    profiling: boolean  -- профилировка времени сборки
+    verbose: boolean    -- подробный вывод
+    full: boolean       -- deps, profile, selftest: подробно/всё
+    g: boolean          -- projects_status: git status вместо lazygit
+    build: boolean      -- publish/itch: пересобрать wasm перед выкладкой
+    yes: boolean        -- publish: не спрашивать подтверждения перед push
+    no_build: boolean   -- tg: не пересобирать перед упаковкой
+    no_send: boolean    -- tg: только локальный zip, без отправки
+    check: boolean      -- tg: показать состав пакета и удалить zip
+    smoke: boolean      -- tg: запустить artifact из распакованного пакета
+    login: boolean      -- tg: авторизоваться в Telegram и проверить канал
+    -- опции со значением
     target: Target
-    cpp: string
-    no_codegen: string  -- отключить проход кодогенератора
-    release: string     -- сборка без отладки, с оптимизацией
-    no_asan: string     -- отключить санитайзер
-    verbose: string     -- много отладочного вывода
-    make: boolean       -- собрать
-    clean: string       -- полная пересборка (сброс кэша)
-    name: string		-- dependency name
-    build: string       -- пересобрать wasm перед публикацией
-    yes: string         -- не спрашивать подтверждения перед push
+    name: string        -- имя зависимости, проекта, сцены, теста
     prefix: string      -- префикс для stage-файлов
-    link: string        -- оптимизация времени линковки(работает долго)
-    full: string        -- deps, profile, selftest: подробно/всё
-    headless: string    -- сборка с безголовым рейлибом
     timeout: string     -- таймаут (сек) на запуск одного теста в selftest
-    profiling: string   -- профилировка времени сборки
     config: ProfileConfig
     exclude: string     -- Lua-шаблон для исключения файлов из cppcheck
-    no_build: string    -- tg: не пересобирать перед упаковкой
-    no_send: string     -- tg: только локальный zip, без отправки
-    check: string       -- tg: показать состав пакета и удалить zip
-    smoke: string       -- tg: запустить artifact из распакованного пакета
-    login: string       -- tg: авторизоваться в Telegram и проверить канал
     from: string        -- tg --login: путь готовой telethon-session
+    args: {string}      -- аргументы программе после --
+    -- внутренние
     all_sources: boolean -- форсить задачи для всех исходников (cppcheck)
-    flags: {string}
-    args: {string}
     -- }}}
 end
 
@@ -3105,12 +3099,6 @@ local function get_ready_includes(cfg: Cfg, target: Target): {string}
     return _includedirs 
 end
 
-function actions.dependencies(_: Args)
-    for dep in mods.iter() do
-        print(tabular(dep));
-    end
-end
-
 -- XXX: Работает только с одной, первой сборочной целью. 
 -- Что же делать с остальными?
 -- TODO: Сделать генерацию для wasm сборки
@@ -4175,7 +4163,6 @@ local function koh_recompile(_args: Args, cfg: Cfg, _target: Target)
     for _, local_cfg in ipairs(local_cfgs) do
         local args = {
             headless = _args.headless,
-            make = true,
             clean = _args.clean,
             no_asan = _args.no_asan,
             release = _args.release
@@ -4253,7 +4240,6 @@ function sub_make(
         end
     end
 
-    -- TODO: кэширование генерируемых файлов. Значит нужно проверять время?
     if not _args.no_codegen and cfg.codegen then
         local _t_cg = time_ms()
         for _, v in ipairs(cfg.codegen) do
@@ -4347,7 +4333,6 @@ function sub_make(
         insert(defines, "-DUTF8PROC_STATIC")
     end
 
-    -- TODO: Дефайны через bld.lua
     local _defines: string = concat(defines, " ")
     local _includes: string = concat({ --[[ "/usr/include", --]] }, " ")
 
@@ -4359,7 +4344,6 @@ function sub_make(
         table.insert(includes, "-I" .. v)
     end
 
-    -- TODO: Отладочная и релизная сборка через команду
     local flags: {string} = { 
         -- {{{
         -- Ошибки сборки с флагом последней версии языка C
@@ -4616,9 +4600,6 @@ function sub_make(
             -- objfiles всегда нужны для линковки
             table.insert(objfiles, _output)
 
-            -- XXX: Правильный (в cache.lua): добавить отслеживание #include зависимостей. Стандартный подход — использовать    
-            --  -MMD флаг GCC, который генерирует .d файлы со списком заголовков. Потом хешировать все зависимости, а не только
-            --   сам .c файл. 
             -- кэширование: пропускать файлы без изменений.
             -- all_sources форсит задачу для каждого файла — нужно cppcheck,
             -- которому требуется полный список исходников независимо от кэша
