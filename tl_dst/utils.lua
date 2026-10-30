@@ -9,8 +9,25 @@ local ansicolors = require('ansicolors')
 local insert = table.insert
 local inspect = require('inspect')
 
+
+
+local function sorted_keys(t)
+   local keys = {}
+   for k in pairs(t) do
+      table.insert(keys, k)
+   end
+   table.sort(keys)
+   return keys
+end
+
 local function printc(...)
    print(ansicolors(table.concat({ ... })))
+end
+
+
+local function die(msg)
+   io.stderr:write(ansicolors("%{red}" .. msg .. "%{reset}") .. "\n")
+   os.exit(1)
 end
 
 
@@ -134,11 +151,11 @@ local function filter_sources(path, exclude)
       end
       if not found then
          table.insert(files_processed, file)
-         if (_G)["KOH_VERBOSE"] then
+         if verbose then
             print(format("filter_sources: apply '%s'", file))
          end
       else
-         if (_G)["KOH_VERBOSE"] then
+         if verbose then
             print(format("filter_sources: decline '%s'", file))
          end
       end
@@ -322,7 +339,15 @@ local function do_parser_setup(
    end
 
    prnt("do_parser_setup:")
-   for cmd_name, setup_tbl in pairs(setup) do
+
+   local names = {}
+   for cmd_name in pairs(setup) do
+      insert(names, cmd_name)
+   end
+   table.sort(names)
+
+   for _, cmd_name in ipairs(names) do
+      local setup_tbl = setup[cmd_name]
 
       prnt("cmd_name", cmd_name)
       prnt("setup_tbl", inspect(setup_tbl))
@@ -337,8 +362,16 @@ local function do_parser_setup(
       end
       if setup_tbl.options then
          for _, option in ipairs(setup_tbl.options) do
-            prnt("add option", option)
-            p:option(option)
+            local name = option[1]
+            assert(type(name) == "string")
+            assert(type(option[2]) == "string", "нет описания у " .. name)
+            prnt("add option", name)
+            local opt = p:option(name, option[2])
+            if #option > 2 then
+               opt:choices(table.move(option, 3, #option, 1, {}))
+            elseif name == "-t" or name:match("^%-t ") then
+               opt:choices(targets_all)
+            end
          end
       end
       if setup_tbl.flags then
@@ -905,6 +938,8 @@ return {
    cmd_try = cmd_try,
    test_artifact_a_linux = test_artifact_a_linux,
    printc = printc,
+   sorted_keys = sorted_keys,
+   die = die,
    ripairs = ripairs,
    filter = filter,
    git_is_repo_clean = git_is_repo_clean,

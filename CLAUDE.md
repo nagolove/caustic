@@ -100,7 +100,7 @@ C-фреймворк для 2D-игр на raylib + ImGui.
 и отдаёт его `koh_tg.py` (telethon). Один канал и одна session на все проекты:
 `~/.config/koh/tg.env` (TG_API_ID/HASH/CHANNEL/PHONE/PROXY, env приоритетнее),
 `~/.config/koh/koh_tg.session`. Первый раз — `koh tg --login`. Проверка состава
-без сборки — `koh tg -t win -c`, запуск из пакета — `-s` (win через wine).
+без сборки — `koh tg -t win --check`, запуск из пакета — `-s` (win через wine).
 
 ### Платформы
 

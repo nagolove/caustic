@@ -11,7 +11,7 @@ local record argparse
 		flag: function(self: Parser, flag: string): Option
 		flag: function(self: Parser, shortalias: string, longalias: string): Option
 
-		parse: function(self: Parser, argv: {string}): Args
+		parse: function(self: Parser, argv?: {string}): Args
 		pparse: function(self: Parser, argv?: {string}): boolean, Args | string
 
 		error: function(self: Parser, error: string)

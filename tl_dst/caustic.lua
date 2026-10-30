@@ -19,7 +19,6 @@ assert(e.path_caustic)
 
 
 
-
 package.path = package.path .. ";" .. e.path_caustic .. "/?.lua;"
 package.path = package.path .. ";" .. e.path_caustic .. "/tl_dst/?.lua;"
 package.path = home .. "/.luarocks/share/lua/" .. lua_ver .. "/?.lua;" ..
@@ -58,6 +57,7 @@ local argparse = require('argparse')
 local printc = ut.printc
 local cmd_do = ut.cmd_do
 local cmd_try = ut.cmd_try
+local die = ut.die
 local Cache = require("cache")
 local uv = require("luv")
 local readline = ut.readline
@@ -138,6 +138,11 @@ if verbose then
 
 
 end
+
+
+
+
+
 
 
 
@@ -378,11 +383,6 @@ end
 
 
 
-
-
-
-
-
 local _dependecy_init
 
 
@@ -565,7 +565,7 @@ local function get_ready_links_linux_only(cfg, target)
       end
 
       links_linux_only = {}
-      for libname, _ in pairs(map_links_linux_only) do
+      for _, libname in ipairs(ut.sorted_keys(map_links_linux_only)) do
          links_linux_only[#links_linux_only + 1] = libname
       end
    end
@@ -788,153 +788,186 @@ end
 
 
 
+local build_flags = {
+   { "--no-codegen", "пропустить шаг codegen из bld.lua" },
+   { "-c --clean", "полная пересборка со сбросом кэша" },
+   { "-r --release", "release-сборка (-O3, NDEBUG), ASan остаётся" },
+   { "-a --no-asan", "без address sanitizer" },
+   { "-l --link", "оптимизация на этапе линковки (LTO)" },
+   { "-H --headless", "линковать headless raylib (без окна)" },
+   { "-p --profiling", "печатать время этапов сборки" },
+}
+
+
+local function build_flags_with(extra, skip)
+   local skipped = {}
+   for _, name in ipairs(skip or {}) do
+      skipped[name] = true
+   end
+   local res = {}
+   for _, flag in ipairs(build_flags) do
+      if not skipped[flag[1]] then
+         insert(res, flag)
+      end
+   end
+   for _, flag in ipairs(extra) do
+      insert(res, flag)
+   end
+   return res
+end
+
+
+local function build_flags_only(names)
+   local res = {}
+   for _, name in ipairs(names) do
+      for _, flag in ipairs(build_flags) do
+         if flag[1] == name then
+            insert(res, flag)
+         end
+      end
+   end
+   assert(#res == #names, "build_flags_only: неизвестный флаг")
+   return res
+end
+
+
+local opt_target = { "-t --target", "целевая платформа (по умолчанию linux)" }
+local opt_target_req = { "-t --target", "целевая платформа (обязательно)" }
+local opt_dep = { "-n --name", "имя зависимости (по умолчанию все)" }
+
 local parser_setup = {
 
 
    clean = {
-      summary = [[remove compiled objects files and binaries]],
+      summary = [[удалить объектные файлы и бинарники]],
    },
 
    cppcheck = {
-      summary = [[run cppcheck on current project directory]],
+      summary = [[запустить cppcheck в каталоге проекта]],
 
-
-      options = { "-e --exclude" },
-   },
-
-   bld_lua = {
-      summary = [[write example of bld.lua file in current directory]],
+      options = {
+         { "-e --exclude", "Lua-шаблон исключаемых из анализа файлов" },
+      },
    },
 
    dist = {
-      options = {},
-      summary = [[build binary distribution]],
+      summary = [[собрать бинарный дистрибутив]],
    },
 
    ctags = {
-      summary = [[build ctags file for project]],
+      summary = [[построить ctags-файл проекта]],
+      options = { opt_target },
    },
 
    project = {
-      options = { "-n --name" },
-      summary = [[create project subdirectory with given name]],
+      options = { { "-n --name", "имя каталога проекта" } },
+      summary = [[создать проект в подкаталоге с заданным именем]],
    },
 
    stage = {
-      options = { "-n --name", "-p --prefix" },
-      summary = [[Create stage in project]],
+      options = {
+         { "-n --name", "имя сцены (C-идентификатор)" },
+         { "-p --prefix", "префикс файлов: h -> h_stage_X.c (без -p спросит)" },
+      },
+      summary = [[создать сцену в проекте]],
    },
 
    unit = {
-      options = { "-n --name" },
+      options = { { "-n --name", "имя теста, каталог caustic-test-<name>" } },
       summary = [[создать тестовый каталог caustic-test-<name> (munit)]],
    },
 
    update = {
-
-      summary = "make backup and reinit dependency by name",
-      options = { "-n --name" },
+      summary = "сделать резервную копию и заново инициализировать зависимость",
+      options = { opt_dep },
    },
 
    dependencies = {
-      summary = "print dependencies table",
+      summary = "напечатать таблицу зависимостей",
    },
 
    build = {
-      summary = "build dependencies for native platform",
-      options = { "-n --name", "-t --target" },
+      summary = "собрать зависимости",
+      options = { opt_dep, opt_target },
    },
 
    compile_flags = {
-      summary = "print compile_flags.txt to stdout",
-      options = { "-t --target" },
+      summary = "записать compile_flags.txt и вывести его в stdout",
+      options = { opt_target },
    },
 
    compile_commands = {
-      summary = "print compile_commands.json to stdout",
-      options = { "-t --target" },
+      summary = "сгенерировать compile_commands.json",
+      options = { opt_target },
    },
 
    deps = {
-      summary = "list of dependencies",
+      summary = "список зависимостей",
       flags = {
-         { "-f --full", "full nodes info" },
+         { "-f --full", "подробная информация по узлам" },
       },
    },
 
    init = {
-      summary = "download modules from network",
-      options = { "-n --name", "-t --target" },
+      summary = "скачать модули из сети",
+      options = { opt_dep, opt_target_req },
    },
 
    run = {
-      summary = "make and run current project",
-      description = "Use -- to pass extra args" ..
-      " to artifact, e.g.: koh run -d -- --dev." ..
-      " Flags combine: -r release+ASan, -a debug w/o ASan," ..
-      " -ra release w/o ASan, -rad same in gdb (with -ggdb3)." ..
-      " With -t android: install APK, start via adb, show logcat",
-      options = { "-t" },
-      flags = {
-         { "-d --debug", "run artifact in gdb" },
-         { "-r --release", "release build (-O3, NDEBUG), ASan kept" },
-         { "-a --noasan", "no address sanitizer" },
-         { "--noreset", "no call 'reset' for clearing terminal output" },
-         { "-H --headless", "link with headless raylib (no window)" },
-         { "-p --profiling", "print timing profiling info" },
-      },
+      summary = "собрать и запустить текущий проект",
+      description = "Аргументы программе — после --, напр.: koh run -d -- --dev." ..
+      " Флаги сочетаются: -r release+ASan, -a debug без ASan," ..
+      " -ra release без ASan, -rad то же под gdb (с -ggdb3)." ..
+      " С -t android: установить APK, запустить через adb, logcat",
+      options = { opt_target },
+      flags = build_flags_with({
+         { "-d --debug", "запустить под gdb" },
+         { "--no-reset", "не очищать терминал (reset) перед запуском" },
+      }),
       arguments = {
          { "args", "*" },
       },
    },
 
    ast = {
-      summary = "dump project AST to stdout",
-      flags = {},
-
+      summary = "вывести AST проекта в stdout",
+      options = { opt_target },
    },
 
-   ninja = {
-      summary = "create ninja build file",
-      flags = {},
 
-   },
+
+
+
+
+
+
 
    make = {
-      summary = "build libcaustic or current project",
-
-
-
-
-
-      options = { "-t" },
-      flags = {
-
-         { "-c --clean", "full rebuild without cache info" },
-         { "-r --release", "release" },
-         { "-a --noasan", "no address sanitazer" },
-
-         { "-l --link", "use linking time optimization" },
-         { "-H --headless", "link with headless raylib (no window)" },
-         { "-p --profiling", "print timing profiling info" },
-      },
-
+      summary = "собрать libcaustic или текущий проект",
+      options = { opt_target },
+      flags = build_flags_with({}),
    },
 
    publish = {
       summary = "собрать каталог проекта в ~/nagolove.github.io и запушить на web",
-      options = { "-n --name" },
+      options = {
+         { "-n --name", "каталог на сайте (по умолчанию — имя каталога проекта)" },
+      },
       flags = {
          { "-b --build", "пересобрать wasm-артефакты перед публикацией" },
          { "-y --yes", "не спрашивать подтверждения перед push" },
+         build_flags_only({ "-r --release" })[1],
       },
    },
 
    itch = {
       summary = "собрать дистрибутив <имякаталога>.zip для загрузки на itch.io",
-      options = { "-n --name" },
+      options = {
+         { "-n --name", "имя zip-архива (по умолчанию — имя каталога проекта)" },
+      },
       flags = {
          { "-b --build", "пересобрать wasm-артефакты перед упаковкой" },
+         build_flags_only({ "-r --release" })[1],
       },
    },
 
@@ -946,7 +979,8 @@ local parser_setup = {
 
   koh tg -t win -r          release под windows, упаковать, отправить
   koh tg -t linux --no-send только zip в каталоге проекта
-  koh tg -t win -c          показать состав пакета без сборки и отправки
+  koh tg -t win --check     показать состав пакета без сборки и отправки
+  koh tg -t win -c          полная пересборка (как make -c), затем отправка
   koh tg -t linux -s        перед отправкой запустить artifact из пакета
   koh tg --login            разовый вход (телефон + код), проверка канала
   koh tg --login --from F   взять готовую telethon-session F вместо входа
@@ -977,61 +1011,68 @@ TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_PHONE, TG_PROXY или файл
 Verification Codes, а в служебный чат «Telegram» (777000) аккаунта TG_PHONE;
 --login печатает способ доставки, пустой Enter — переотправка (SMS и т.п.).
 Session: ~/.config/koh/koh_tg.session; без неё отправка сразу падает.]],
-      options = { "-t", "--from" },
-      flags = {
-         { "-r --release", "release-сборка" },
-         { "-a --noasan", "без address sanitizer" },
-         { "-B --nobuild", "не пересобирать, упаковать текущий artifact" },
+      options = {
+         opt_target,
+         { "--from", "путь к готовой telethon-session для --login" },
+      },
+      flags = build_flags_with({
+         { "-B --no-build", "не пересобирать, упаковать текущий artifact" },
          { "--no-send", "только zip, без отправки" },
-         { "-c --check", "показать состав пакета, zip удалить" },
+         { "--check", "показать состав пакета, zip удалить" },
          { "-s --smoke", "запустить artifact из пакета (win: wine)" },
          { "--login", "авторизоваться в Telegram и проверить канал" },
-      },
+      }),
    },
 
    remove = {
-      summary = "remove module by name and target from source tree",
-      options = { "-n --name", "-t --target" },
+      summary = "удалить модуль по имени и платформе из дерева исходников",
+      options = {
+         { "-n --name", "имя зависимости (обязательно)" },
+         opt_target_req,
+      },
    },
 
    test = {
-      summary = "build native test executable and run it",
+      summary = "собрать нативный тестовый бинарник и запустить",
    },
    selftest = {
-      summary = "build and run tests from selftest.lua",
-      options = { "--timeout" },
+      summary = "собрать и запустить тесты из selftest.lua",
+      options = {
+         { "--timeout", "секунд на запуск одного теста (по умолчанию 120)" },
+      },
+      flags = {
+         { "-f --full", "также внутренние тесты koh (tests/*.sh)" },
+      },
    },
    selftest_status = {
-      summary = "print git status for selftest.lua entries",
+      summary = "git status для проектов из selftest.lua",
    },
    projects_status = {
-      summary = [[
-call lazygit for projects.lua entries
-with -g option just call 'git status' for each entry
-]],
+      summary = "lazygit для каждого проекта из projects.lua",
+      description = "С -g вместо lazygit выполняется git status.",
       flags = {
-         { "-g --git", "run `git status` instead of lazygit" },
+         { "-g --git", "git status вместо lazygit" },
       },
    },
    projects_make = {
-      summary = "make projects from projects.lua",
+      summary = "собрать проекты из projects.lua",
    },
    selftest_push = {
-      summary = "call git push for selftest.lua entries",
+      summary = "git push для проектов из selftest.lua",
    },
    selftest_lg = {
-      summary = "call lazygit for dirty selftest.lua entries",
-   },
-   verbose = {
-      summary = "print internal data with urls, paths etc.",
+      summary = "lazygit для проектов из selftest.lua с изменениями",
    },
    snapshot = {
-      summary = "make revisions and branches snapshot of target modules tree",
+      summary = "снимок ревизий и веток дерева модулей",
    },
    profile = {
       summary = "профилирование через AMDuProf, вывод отчёта через tabular",
       description = "Доп. ключи бинарнику через --, напр.: koh profile -- --dev",
-      options = { "-c --config" },
+      options = {
+         { "-c --config", "конфигурация AMDuProf (по умолчанию tbp)",
+"tbp", "hotspots", "memory", },
+      },
       flags = {
          { "-f --full", "показать все секции отчёта" },
       },
@@ -1043,8 +1084,6 @@ with -g option just call 'git status' for each entry
 
 
 local actions = {}
-
-
 
 
 
@@ -1115,8 +1154,7 @@ end
 
 function actions.unit(_args)
    if not _args.name then
-      printc("%{red}имя не задано (-n <name>)%{reset}")
-      return
+      die("имя не задано (-n <name>)")
    end
 
 
@@ -1130,8 +1168,7 @@ function actions.unit(_args)
    local test_dir = base .. "/" .. dir
 
    if lfs.attributes(test_dir) then
-      printc("%{red}каталог уже существует: " .. dir .. "%{reset}")
-      return
+      die("каталог уже существует: " .. dir)
    end
 
    local main_c =
@@ -1263,18 +1300,16 @@ return {
 
    local ok_cyan = cmd_try("cyan build")
    if not ok_cyan then
-      printc("%{red}cyan build завершился ошибкой%{reset}")
       ut.pop_dir()
-      return
+      die("cyan build завершился ошибкой")
    end
 
    cmd_try("koh compile_flags")
 
    local ok_make = cmd_try("koh make")
    if not ok_make then
-      printc("%{red}koh make завершился ошибкой%{reset}")
       ut.pop_dir()
-      return
+      die("koh make завершился ошибкой")
    end
 
    printc("%{green}запуск теста ./" .. artifact .. "%{reset}")
@@ -1328,12 +1363,13 @@ function actions.projects_make(_args)
 end
 
 function actions.project(_args)
-   print("actions.project:", inspect(_args))
+   if verbose then
+      print("actions.project:", inspect(_args))
+   end
 
    local project_name = _args.name
    if not project_name then
-      print("There is no project name")
-      return
+      die("There is no project name")
    end
 
    local ok, err = mkdir(project_name)
@@ -1668,7 +1704,9 @@ r
 end
 
 function actions.stage(_args)
-   print("actions.stage")
+   if verbose then
+      print("actions.stage")
+   end
 
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
    if not cfgs then
@@ -1679,9 +1717,8 @@ function actions.stage(_args)
 
    ut.push_current_dir()
    if not chdir(src_dir) then
-      printc("%{red}Каталог '" .. src_dir .. "' не найден%{reset}")
       ut.pop_dir()
-      return
+      die("Каталог '" .. src_dir .. "' не найден")
    end
 
 
@@ -1695,19 +1732,17 @@ function actions.stage(_args)
    printc("stage name: %{blue}" .. stage .. "%{reset}")
 
    if #stage <= 3 then
-      printc("%{red}Имя должно быть длиннее 3 символов%{reset}")
       ut.pop_dir()
-      return
+      die("Имя должно быть длиннее 3 символов")
    end
 
    if not stage:match("^[a-z_][a-z0-9_]*$") then
-      printc(
-      "%{red}Имя должно быть допустимым " ..
-      "C-идентификатором: [a-z0-9_], " ..
-      "начинается с буквы или _%{reset}")
-
       ut.pop_dir()
-      return
+      die(
+      "Имя должно быть допустимым " ..
+      "C-идентификатором: [a-z0-9_], " ..
+      "начинается с буквы или _")
+
    end
 
 
@@ -1880,14 +1915,11 @@ end
 
 function actions.init(_args)
    if not _args.target then
-      printc("%{red}--target[-t] is not selected(linux, wasm, win, android)%{reset}")
-      return
+      die("--target[-t] is not selected(linux, wasm, win, android)")
    end
 
    if not e.path_rel_third_party_t[_args.target] then
-      printc("%{red}could not find target%{yellow}" .. _args.target ..
-      "%{reset}")
-      return
+      die("could not find target " .. _args.target)
    end
 
    local deps = pre_init(_args)
@@ -2061,6 +2093,40 @@ function actions.selftest_status(_args)
    end
 end
 
+
+
+local SELFTEST_SCRIPT_TIMEOUT <const> = 600
+
+
+local function selftest_scripts(results)
+   local dir = e.path_caustic .. "/tests"
+   if not lfs.attributes(dir) then
+      printc("%{yellow}selftest: нет каталога " .. dir .. "%{reset}")
+      return
+   end
+   local scripts = {}
+   for fname in lfs.dir(dir) do
+      if fname:match("%.sh$") then
+         insert(scripts, fname)
+      end
+   end
+   table.sort(scripts)
+   if #scripts == 0 then
+      printc("%{yellow}selftest: в " .. dir .. " нет *.sh%{reset}")
+   end
+   for _, fname in ipairs(scripts) do
+      printc("%{green}" .. dir .. "/" .. fname .. "%{reset}")
+      local cmd = format(
+      "timeout %d %s/%s", SELFTEST_SCRIPT_TIMEOUT, dir, fname)
+
+      local pass = cmd_try(cmd)
+      local name = "koh:" .. fname:gsub("%.sh$", "")
+      insert(results, {
+         name = name, ok = pass, stage = pass and "ok" or "script",
+      })
+   end
+end
+
 function actions.selftest(_args)
    local selftest_fname = e.path_caustic .. "/selftest.lua"
    local timeout_s = tonumber(_args.timeout) or 120
@@ -2072,6 +2138,12 @@ function actions.selftest(_args)
    local ok, errmsg = pcall(function()
       local nodes = load_test_nodes(selftest_fname)
       local results = {}
+
+
+      if _args.full then
+         selftest_scripts(results)
+      end
+
       ut.push_current_dir()
       for _, node in ipairs(nodes) do
          local dir = base .. "/" .. node.dir
@@ -2213,12 +2285,11 @@ local function sub_publish(_args, cfg)
    }
 
    if not has_files_in_dir(files) then
-      printc(
-      "%{red}sub_publish: в каталоге проекта нет всех wasm-файлов " ..
+      die(
+      "sub_publish: в каталоге проекта нет всех wasm-файлов " ..
       "(.data/.html/.js/.wasm). " ..
-      "Соберите: koh make -t wasm  (или publish -b)%{reset}")
+      "Соберите: koh make -t wasm  (или publish -b)")
 
-      return
    end
 
    local src_dir = lfs.currentdir()
@@ -2229,11 +2300,10 @@ local function sub_publish(_args, cfg)
    local site_repo_abs = getenv("HOME") .. "/" .. site_repo
    local ok, errmsg = chdir(site_repo_abs)
    if not ok then
-      printc(
-      "%{red}sub_publish: не удалось chdir('" .. site_repo_abs ..
-      "'): " .. tostring(errmsg) .. "%{reset}")
+      die(
+      "sub_publish: не удалось chdir('" .. site_repo_abs ..
+      "'): " .. tostring(errmsg))
 
-      return
    end
 
    ut.push_current_dir()
@@ -2304,15 +2374,14 @@ end
 function actions.publish(_args)
    local cfgs = search_and_load_cfgs_up("bld.lua")
    if not cfgs then
-      printc(
-      "%{red}actions.publish: нет bld.lua в текущем каталоге%{reset}")
+      die(
+      "actions.publish: нет bld.lua в текущем каталоге")
 
-      return
    end
 
    if _args.build then
 
-      _args.t = "wasm"
+      _args.target = "wasm"
       actions.make(_args)
    else
       printc(
@@ -2342,12 +2411,11 @@ local function sub_itch(_args, cfg)
    }
 
    if not has_files_in_dir(files) then
-      printc(
-      "%{red}sub_itch: в каталоге проекта нет всех wasm-файлов " ..
+      die(
+      "sub_itch: в каталоге проекта нет всех wasm-файлов " ..
       "(.data/.html/.js/.wasm). " ..
-      "Соберите: koh make -t wasm  (или itch -b)%{reset}")
+      "Соберите: koh make -t wasm  (или itch -b)")
 
-      return
    end
 
    local src_dir = lfs.currentdir()
@@ -2392,15 +2460,14 @@ end
 function actions.itch(_args)
    local cfgs = search_and_load_cfgs_up("bld.lua")
    if not cfgs then
-      printc(
-      "%{red}actions.itch: нет bld.lua в текущем каталоге%{reset}")
+      die(
+      "actions.itch: нет bld.lua в текущем каталоге")
 
-      return
    end
 
    if _args.build then
 
-      _args.t = "wasm"
+      _args.target = "wasm"
       actions.make(_args)
    else
       printc(
@@ -2850,7 +2917,7 @@ local function android_run(cfg, args)
    if pid == "" then
       printc("%{red}android: процесс не запустился, полный logcat%{reset}")
       cmd_do("adb logcat -d | tail -100")
-      return
+      os.exit(1)
    end
    cmd_do("adb logcat --pid=" .. pid)
 end
@@ -2874,10 +2941,10 @@ function actions.tg(_args)
       return
    end
 
-   local target = _args.t or "linux"
-   _args.t = target
+   local target = _args.target or "linux"
+   _args.target = target
 
-   if not _args.nobuild and not _args.check then
+   if not _args.no_build and not _args.check then
       actions.make(_args)
    end
 
@@ -2973,17 +3040,17 @@ local function backup(dep)
 end
 
 function actions.remove(_args)
-   print("actions.remove")
+   if verbose then
+      print("actions.remove")
+   end
 
    if not _args.target then
-      print("You should explicitly specify target option")
-      return
+      die("You should explicitly specify target option")
    end
 
    local path = e.path_rel_third_party_t[_args.target]
    if not path then
-      printc("%{yellow}unknown target%{reset}")
-      return
+      die("unknown target")
    end
 
    local dirnames = {}
@@ -2991,8 +3058,7 @@ function actions.remove(_args)
    if _args.name and dependencies_name_map[_args.name] then
       table.insert(dirnames, get_dir(dependencies_name_map[_args.name]))
    else
-      printc("%{red}modules removing supported only by one name%{reset}")
-      return
+      die("modules removing supported only by one name")
 
 
 
@@ -3051,10 +3117,12 @@ end
 local get_ready_deps_defines
 
 function actions.compile_flags(_args)
-   print(
-   "actions.compile_flags: currentdir", lfs.currentdir(),
-   "_args", inspect(_args))
+   if verbose then
+      print(
+      "actions.compile_flags: currentdir", lfs.currentdir(),
+      "_args", inspect(_args))
 
+   end
 
    cmd_do("cp compile_flags.txt compile_flags.txt.bak")
    local f = io.open("compile_flags.txt", "w")
@@ -3067,7 +3135,7 @@ function actions.compile_flags(_args)
 
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
 
-   local target = _args.target or _args.t
+   local target = _args.target
    if not target then
       print("actions.compile_flags: target set to default value 'linux'")
       target = 'linux'
@@ -3466,7 +3534,7 @@ end
 
 function actions.build(_args)
    local _t0 = time_ms()
-   local target = _args.t or _args.target
+   local target = _args.target
    if not target then
       target = 'linux'
    end
@@ -3583,11 +3651,10 @@ local function run_parallel_uv(queue)
 end
 
 local function remove_cache_file(_args)
-   if _args.c then
+   if _args.clean then
       ut.push_current_dir()
       chdir('src')
-      local err = os.remove(cache_name)
-      if not err then
+      if os.remove(cache_name) and verbose then
          print('cache removed')
       end
       ut.pop_dir()
@@ -3596,7 +3663,7 @@ end
 
 local function koh_link(objfiles, _args)
    local _t0 = time_ms()
-   local target = _args.t or _args.target
+   local target = _args.target
    assert(target)
    local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
@@ -3609,7 +3676,7 @@ local function koh_link(objfiles, _args)
    "\" " ..
    concat(objfiles, " ")
 
-   cmd_do(cmd)
+   if not cmd_do(cmd) then die("ar: не удалось собрать " .. lib_fname) end
    cmd_do("mv " .. lib_fname .. " ../" .. lib_fname)
    time_print("koh_link", _t0)
 end
@@ -3687,12 +3754,6 @@ local function project_link(ctx, cfg, _args, ninja)
 
    if cfg.flags and type(cfg.flags) == 'table' then
       flags = flags .. concat(cfg.flags, " ")
-   end
-
-
-
-   if _args.make_type == 'release' then
-      flags = ""
    end
 
    local artifact = "../" .. cfg.artifact
@@ -3780,7 +3841,7 @@ local function project_link(ctx, cfg, _args, ninja)
 
 
 
-   if not _args.noasan and _args.target == 'linux' then
+   if not _args.no_asan and _args.target == 'linux' then
       cmd = cmd .. " -fsanitize=address "
    end
 
@@ -3830,8 +3891,10 @@ local function project_link(ctx, cfg, _args, ninja)
       f:write(string.format("build %s: link %s\n", link_output, link_inputs))
       f:write(string.format("  COMMAND = %s\n\n", link_command))
    else
-      print('project_link:', cmd)
-      cmd_do(cmd)
+      if verbose then
+         print('project_link:', cmd)
+      end
+      if not cmd_do(cmd) then die("project_link: линковка не удалась") end
    end
    time_print("project_link", _t0)
 end
@@ -3882,10 +3945,35 @@ function actions.update(_args)
 
 end
 
+
+local function codegen_fresh(cg)
+   if not cg.inputs or not cg.outputs then
+      return false
+   end
+   local newest_in = 0
+   for _, path in ipairs(cg.inputs) do
+      local mtime = lfs.attributes(path, "modification")
+      if not mtime then
+         die("codegen: нет входного файла " .. path)
+      end
+      newest_in = math.max(newest_in, mtime)
+   end
+   for _, path in ipairs(cg.outputs) do
+      local mtime = lfs.attributes(path, "modification")
+
+      if not mtime or mtime <= newest_in then
+         return false
+      end
+   end
+   return true
+end
+
 local function codegen(cg)
    local _t0 = time_ms()
-   if not cg.file_in or not cg.file_out then
-
+   if codegen_fresh(cg) then
+      if verbose then
+         print("codegen: актуально, пропуск", inspect(cg.outputs))
+      end
       return
    end
 
@@ -3904,6 +3992,10 @@ local function codegen(cg)
          print("Error in calling 'external' codegen function", errmsg)
       end
       ut.pop_dir()
+      return
+   end
+
+   if not cg.file_in or not cg.file_out then
       return
    end
 
@@ -4011,7 +4103,7 @@ get_ready_deps_defines = function(
    end
 
    local flags = {}
-   for name, _ in pairs(map_all_deps) do
+   for _, name in ipairs(ut.sorted_keys(map_all_deps)) do
       table.insert(flags, format("-DKOH_NO_%s", name:upper()))
    end
 
@@ -4038,7 +4130,8 @@ local function defines_apply(flags, defines)
 
 
 
-   for define, value in pairs(defines) do
+   for _, define in ipairs(ut.sorted_keys(defines)) do
+      local value = defines[define]
       assert(type(define) == 'string');
       local value_str = value
       if type(value) == 'number' then
@@ -4083,8 +4176,8 @@ local function koh_recompile(_args, cfg, _target)
       local args = {
          headless = _args.headless,
          make = true,
-         c = _args.c,
-         noasan = _args.noasan,
+         clean = _args.clean,
+         no_asan = _args.no_asan,
          release = _args.release,
       }
 
@@ -4100,7 +4193,9 @@ local function koh_recompile(_args, cfg, _target)
       mkdir("obj_win")
       mkdir("obj_android")
 
-      printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+      if verbose then
+         printc("%{blue}sub_make:%{reset}", lfs.currentdir())
+      end
       local _t1 = time_ms()
       sub_make(args, local_cfg, _target, run_parallel_uv)
       time_print("koh_recompile: sub_make итерация", _t1)
@@ -4159,7 +4254,7 @@ function sub_make(
    end
 
 
-   if not _args.nocodegen and cfg.codegen then
+   if not _args.no_codegen and cfg.codegen then
       local _t_cg = time_ms()
       for _, v in ipairs(cfg.codegen) do
          codegen(v)
@@ -4338,7 +4433,7 @@ function sub_make(
       table.insert(defines, define)
    end
 
-   if not _args.noasan and _args.target == 'linux' then
+   if not _args.no_asan and _args.target == 'linux' then
       table.insert(flags, "-fsanitize=address")
    end
 
@@ -4620,10 +4715,12 @@ function sub_make(
 end
 
 function actions.compile_commands(_args)
-   print(
-   "actions.compile_commands: currentdir", lfs.currentdir(),
-   "_args", inspect(_args))
+   if verbose then
+      print(
+      "actions.compile_commands: currentdir", lfs.currentdir(),
+      "_args", inspect(_args))
 
+   end
 
    local attrib_cc = lfs.attributes("compile_commands.json")
    if attrib_cc and attrib_cc.mode == 'file' then
@@ -4633,11 +4730,10 @@ function actions.compile_commands(_args)
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
 
    if not cfgs or not cfgs[1] then
-      printc("%{red}could not generate compile_commands.json%{reset}")
-      return
+      die("could not generate compile_commands.json")
    end
 
-   local target = _args.target or _args.t
+   local target = _args.target
    if not target then
       print("actions.compile_commands: target set to default value 'linux'")
       target = 'linux'
@@ -4696,7 +4792,7 @@ function actions.run(_args)
    local _t0 = time_ms()
    local cfgs, _ = search_and_load_cfgs_up("bld.lua")
 
-   if not _args.noreset then
+   if not _args.no_reset then
       cmd_do("reset")
    end
 
@@ -4705,16 +4801,14 @@ function actions.run(_args)
    time_print("actions.run: actions.make", _t_make)
 
    if not cfgs[1] then
-      printc("%{red}actions.run:%{reset} no translation unit in bld.lua")
-      return
+      die("actions.run: no translation unit in bld.lua")
    end
 
    if not cfgs[1].artifact then
-      printc("%{red}actions.run:%{reset} no artifact in bld.lua")
-      return
+      die("actions.run: no artifact in bld.lua")
    end
 
-   if _args.t == 'android' then
+   if _args.target == 'android' then
       android_run(cfgs[1], _args.args)
       return
    end
@@ -4724,19 +4818,23 @@ function actions.run(_args)
       extra = " " .. concat(_args.args, " ")
    end
 
+   local cmd
    if not _args.debug then
-      local cmd = "./" .. cfgs[1].artifact .. extra
-      print('cmd', cmd)
-      time_print("actions.run (до запуска)", _t0)
-      cmd_do(cmd)
+      cmd = "./" .. cfgs[1].artifact .. extra
    else
       put_gdbinit()
-      local cmd = "gdb --args ./" ..
-      cfgs[1].artifact ..
-      " --no-fork" .. extra
+      cmd = "gdb --args ./" .. cfgs[1].artifact .. " --no-fork" .. extra
+   end
+   if verbose then
       print('cmd', cmd)
-      time_print("actions.run (до запуска)", _t0)
-      cmd_do(cmd)
+   end
+   time_print("actions.run (до запуска)", _t0)
+
+
+   local ok, how, code = os.execute(cmd)
+   if not ok then
+
+      os.exit(how == "signal" and 128 + code or code)
    end
 end
 
@@ -5051,8 +5149,7 @@ function actions.profile(_args)
    end
 
    if #artifacts == 0 then
-      printc("%{red}Нет artifact в bld.lua%{reset}")
-      return
+      die("Нет artifact в bld.lua")
    end
 
    local unique = hex_hash32(cwd)
@@ -5094,10 +5191,9 @@ function actions.profile(_args)
       end
 
       if not session_dir then
-         printc(
-         "%{red}Не найден каталог сессии профайлера%{reset}")
+         die(
+         "Не найден каталог сессии профайлера")
 
-         return
       end
 
 
@@ -5111,8 +5207,7 @@ function actions.profile(_args)
 
       local f = io.open(csv_path, "r")
       if not f then
-         printc("%{red}Не удалось открыть CSV отчёт%{reset}")
-         return
+         die("Не удалось открыть CSV отчёт")
       end
       local text = f:read("*a")
       f:close()
@@ -5174,7 +5269,7 @@ function actions.make(_args)
       print(inspect(_args))
    end
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
-   local target = _args.t or "linux"
+   local target = _args.target or "linux"
    local root = lfs.currentdir()
 
 
@@ -5210,75 +5305,78 @@ function actions.make(_args)
 end
 
 
-local function find_arg_after(args, flag)
-   for i, a in ipairs(args) do
-      if a == flag then
-         return args[i + 1] or ""
-      end
-   end
-   return ""
-end
-
-local function ninja_footer(f, c, ctx)
-   assert(f)
-   assert(c)
-   assert(ctx)
-
-   if c.artifact then
-      f:write(string.format("\ndefault %s\n", c.artifact))
-   end
-end
-
-local function ninja_header(f)
-
-   f:write("ninja_required_version = 1.13\n\n")
-
-   f:write("rule cc\n")
-   f:write("  command = $COMMAND\n\n")
-end
-
-local function run_ninja_codegen(queue, f)
-   local _t0 = time_ms()
-   print("queue length:", #queue)
-   if #queue == 0 then
-      return
-   end
-
-   assert(f)
-
-   for _, task in ipairs(queue) do
-
-      print()
-      print()
-
-
-      local up = function(s)
-         return s
-      end
-
-      local output <const> = up(find_arg_after(task.args, "-o"))
-      local input <const> = up(find_arg_after(task.args, "-c"))
 
 
 
 
 
-      local parts = { task.cmd }
-      for _, a in ipairs(task.args) do
-
-         parts[#parts + 1] = up(a)
-      end
-      local command <const> = table.concat(parts, " ")
 
 
 
 
-      f:write(string.format("build %s: cc %s\n", output, input))
-      f:write(string.format("  COMMAND = %s\n\n", command))
-   end
 
-   time_print("run_ninja_codegen", _t0)
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local function run_ast(queue)
    local _t0 = time_ms()
@@ -5301,7 +5399,7 @@ end
 
 function actions.ast(_args)
    local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
-   local target = _args.t or "linux"
+   local target = _args.target or "linux"
    for _, cfg in ipairs(cfgs) do
       if cfg_not_empty(cfg) then
          remove_cache_file(_args)
@@ -5310,35 +5408,38 @@ function actions.ast(_args)
    end
 end
 
-function actions.ninja(_args)
-   if verbose then
-      print('make:')
 
-      print(inspect(_args))
-   end
-   local cfgs, push_num = search_and_load_cfgs_up("bld.lua")
-   local target = _args.t or "linux"
 
-   local f <const> = assert(io.open("build.ninja", "w"))
-   ninja_header(f)
 
-   for _, cfg in ipairs(cfgs) do
-      if cfg_not_empty(cfg) then
-         remove_cache_file(_args)
 
-         local ctx = {
-            objfiles = {},
-            libsdirs = {},
-            libs = {},
-         }
 
-         sub_make(_args, cfg, target, run_ninja_codegen, push_num, f)
-         ninja_footer(f, cfg, ctx)
-      end
-   end
 
-   f:close()
-end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function actions.clean(_)
 
@@ -5488,7 +5589,9 @@ local function ctags_write(tags_fname, target, _args)
    assert(target)
 
 
-   print("ctags_write: _args", inspect(_args))
+   if verbose then
+      print("ctags_write: _args", inspect(_args))
+   end
 
    local attrib = lfs.attributes(tags_fname)
    if attrib and attrib.mode == 'file' then
@@ -5580,32 +5683,37 @@ local function ctags_write(tags_fname, target, _args)
 end
 
 function actions.ctags(_args)
-   local target = _args.t or "linux"
+   local target = _args.target or "linux"
    ctags_write('tags.jsonl', target, _args)
 end
 
 local function main()
-   KOH_VERBOSE = nil
-
    local parser = argparse()
 
    ut.do_parser_setup(parser, parser_setup)
    parser:command_target("command")
 
-   parser:flag("-v --verbose", "use verbose output")
-   parser:flag("-V --KOH_VERBOSE", "use debug verbose")
-   parser:flag("-x --no-verbose-path", "do not print CAUSTIC_PATH value")
-
-   parser:add_complete()
-   local ok, _args = parser:pparse()
+   parser:flag("-v --verbose", "подробный вывод для отладки")
 
 
 
-   if _args.KOH_VERBOSE then
-      KOH_VERBOSE = true
+   for _, name in ipairs({ "verbose", "completion" }) do
+      if parser_setup[name] then
+         die("команда '" .. name .. "' совпадает с глобальным флагом")
+      end
    end
 
-   if ok then
+   parser:add_complete()
+
+   if #arg == 0 then
+      io.stderr:write(parser:get_help(), "\n")
+      os.exit(1)
+   end
+
+
+   local _args = parser:parse()
+
+   do
       if _args.verbose then
          verbose = true
       end
@@ -5623,19 +5731,16 @@ local function main()
 
       if verbose then
          printc("%{blue}" .. "VERBOSE_MODE" .. "%{reset}")
-      end
-
-      if not _args.no_verbose_path then
          print("CAUSTIC_PATH", e.path_caustic)
       end
 
       local cmd = (_args).command
 
-      if cmd and (actions)[cmd] then
-         (actions)[cmd](_args)
+      local action = (actions)[cmd]
+      if not action then
+         die("команда '" .. tostring(cmd) .. "' не реализована")
       end
-   else
-      print("bad args, may be not enough arguments?")
+      action(_args)
    end
 
 end
