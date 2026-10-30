@@ -94,6 +94,8 @@ void camp_update(CameraProcessor *cp) {
             cam->offset,
             Vector2Scale(cp->drag_velocity, CAMP_INERTIA_FACTOR)
         );
+        // XXX: что не так с анимацией?
+        // AI: проверь работу таймера
         tmr_null(&cp->glide_tmr);
         cp->glide_tmr.period = 0.005f;
         cp->glide_tmr.time_loop = CAMP_GLIDE_DURATION;
