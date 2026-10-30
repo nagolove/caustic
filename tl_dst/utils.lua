@@ -357,8 +357,15 @@ local function do_parser_setup(
          prnt("add summary", setup_tbl.summary)
          p:summary(setup_tbl.summary)
       end
+
+
+      local cmd_desc = setup_tbl.summary
       if setup_tbl.description then
-         p:description(setup_tbl.description)
+         cmd_desc = cmd_desc and (cmd_desc .. "\n\n" .. setup_tbl.description) or
+         setup_tbl.description
+      end
+      if cmd_desc then
+         p:description(cmd_desc)
       end
       if setup_tbl.options then
          for _, option in ipairs(setup_tbl.options) do
