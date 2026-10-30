@@ -238,30 +238,6 @@ ar = {
    ['android'] = android_bin .. '/llvm-ar',
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local getenv = os.getenv
 
 local function env_instance()

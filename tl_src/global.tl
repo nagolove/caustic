@@ -238,30 +238,6 @@ global ar = {
     ['android'] = android_bin .. '/llvm-ar',
 }
 
---require "utils"
-
---[[
-
--- каталог для библиотек x86_64 собранных в отладочном режиме
-global path_rel_third_party = getenv("CAUSTIC_MODULE_LINUX") or "modules_linux"
--- каталог для библиотек wasm, собранных в отладочном режиме
-global path_rel_wasm_third_party = getenv("CAUSTIC_MODULE_WASM") or "modules_wasm"
--- каталог для библиотек win, собранных в отладочном режиме
-global path_rel_win_third_party = getenv("CAUSTIC_MODULE_WIN") or "modules_windows"
-
-global path_rel_third_party_t: {Target: string} = {
-    ['linux'] = path_rel_third_party,
-    ['wasm'] = path_rel_wasm_third_party,
-    ['win'] = path_rel_win_third_party,
-}
-
-global path_abs_third_party: {Target: string} = {
-    ["linux"] = path_caustic .. "/" .. path_rel_third_party,
-    ['wasm'] = path_caustic .. "/" .. path_rel_wasm_third_party,
-    ['win'] = path_caustic .. "/" .. path_rel_win_third_party,
-}
---]]
-
 local getenv = os.getenv
 
 local function env_instance(): Env

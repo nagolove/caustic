@@ -1118,7 +1118,6 @@ local actions = {}
 
 
 
-
 local function unit_register_selftest(dir)
    local fname = e.path_caustic .. "/selftest.lua"
    local sf = io.open(fname, "r")
@@ -4164,7 +4163,6 @@ local function koh_recompile(_args, cfg, _target)
    for _, local_cfg in ipairs(local_cfgs) do
       local args = {
          headless = _args.headless,
-         make = true,
          clean = _args.clean,
          no_asan = _args.no_asan,
          release = _args.release,
@@ -4241,7 +4239,6 @@ function sub_make(
          os.exit(1)
       end
    end
-
 
    if not _args.no_codegen and cfg.codegen then
       local _t_cg = time_ms()
@@ -4336,7 +4333,6 @@ function sub_make(
       insert(defines, "-DUTF8PROC_STATIC")
    end
 
-
    local _defines = concat(defines, " ")
    local _includes = concat({}, " ")
 
@@ -4347,7 +4343,6 @@ function sub_make(
       _includes = _includes .. " -I" .. v
       table.insert(includes, "-I" .. v)
    end
-
 
    local flags = {}
 
@@ -4604,9 +4599,6 @@ function sub_make(
 
 
          table.insert(objfiles, _output)
-
-
-
 
 
 
