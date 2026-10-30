@@ -90,17 +90,14 @@ CLI-утилита `koh`, написанная на Teal. Команды:
 
 | Команда | Описание |
 |---------|----------|
-| `koh init -t linux` | Скачать зависимости для целевой платформы |
-| `koh build -n <name>` | Собрать зависимость |
-| `koh make` | Скомпилировать libcaustic или текущий проект |
-| `koh run` | Собрать и запустить: `-d` gdb, `-r` release (ASan остаётся), `-a` без ASan; `-rad` — release в gdb |
-| `koh project -n <name>` | Создать новый проект из шаблона |
-| `koh stage` | Сгенерировать шаблон сцены |
-| `koh unit -n <name>` | Создать unit-тест |
-| `koh compile_flags` | Сгенерировать compile_flags.txt для LSP |
-| `koh publish` | Деплой WASM-сборки на GitHub Pages |
-| `koh deps` | Показать список зависимостей |
-| `koh selftest` | Сборка и прогон тестовых проектов |
+| `koh init -t linux` | Скачать зависимости (первый запуск на машине) |
+| `koh build -t linux` | Собрать зависимости |
+| `koh project -n <name>` | Создать проект из шаблона |
+| `koh make` | Собрать проект; в каталоге caustic — libcaustic |
+| `koh run` | Собрать и запустить (`-d` gdb, `-r` release, `-a` без ASan) |
+| `koh tg -t win -r` | Релизная сборка → zip → Telegram-канал сборок |
+
+Остальные команды и флаги: `koh --help`, `koh <команда> --help`.
 
 ## Зависимости (модули)
 

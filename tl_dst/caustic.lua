@@ -787,7 +787,6 @@ end
 
 
 
-
 local build_flags = {
    { "--no-codegen", "пропустить шаг codegen из bld.lua" },
    { "-c --clean", "полная пересборка со сбросом кэша" },
@@ -880,10 +879,6 @@ local parser_setup = {
    update = {
       summary = "сделать резервную копию и заново инициализировать зависимость",
       options = { opt_dep },
-   },
-
-   dependencies = {
-      summary = "напечатать таблицу зависимостей",
    },
 
    build = {
@@ -3103,12 +3098,6 @@ local function get_ready_includes(cfg, target)
    end
 
    return _includedirs
-end
-
-function actions.dependencies(_)
-   for dep in mods.iter() do
-      print(tabular(dep));
-   end
 end
 
 

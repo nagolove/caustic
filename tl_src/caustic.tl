@@ -761,7 +761,6 @@ local record Actions
     compile_flags: function(Args)
     compile_commands: function(Args)
     ctags: function(Args)
-    dependencies: function(Args)
     deps: function(Args)
     dist: function(Args)
     init: function(Args)
@@ -880,10 +879,6 @@ local parser_setup: {string:ParserSetup} = {
     update = {
         summary = "сделать резервную копию и заново инициализировать зависимость",
         options = { opt_dep },
-    },
-
-    dependencies = {
-        summary = "напечатать таблицу зависимостей",
     },
 
     build = {
@@ -3103,12 +3098,6 @@ local function get_ready_includes(cfg: Cfg, target: Target): {string}
     end
 
     return _includedirs 
-end
-
-function actions.dependencies(_: Args)
-    for dep in mods.iter() do
-        print(tabular(dep));
-    end
 end
 
 -- XXX: Работает только с одной, первой сборочной целью. 
