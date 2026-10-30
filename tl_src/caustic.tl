@@ -2129,7 +2129,7 @@ end
 
 function actions.selftest(_args: Args)
     local selftest_fname = e.path_caustic .. "/selftest.lua"
-    local timeout_s = tonumber(_args.timeout) or 120
+    local timeout_s = (tonumber(_args.timeout) or 120) as integer
     -- Тесты лежат плоско рядом с каталогом caustic; путь собираем из
     -- CAUSTIC_PATH + "..". Это делает selftest.lua переносимым: работает
     -- локально, на CI и у любого пользователя с его CAUSTIC_PATH.

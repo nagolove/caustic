@@ -5,27 +5,11 @@ return {
     gen_compat = 'off',
     gen_target = "5.4",
     source_dir = "tl_src",
-    --include_dir = "tl_src",
+    -- Паттерны exclude матчатся относительно source_dir (tl_src).
+    -- "*.lua" — не проверять вендоренные Lua-файлы как Teal (cyan 0.4
+    -- стал проверять и .lua в source_dir).
     exclude = {
-        "assets/*",
-        "bak/*",
-        "build/*",
-        "cppcheck-cache/*",
-        "koh_src/*",
-        "modules_linux/*",
-        "modules_wasm/*",
-        "modules_windows/*",
-        "modules_android/*",
-        "obj_linux/*",
-        "obj_wasm/*",
-        "obj_android/*",
-        "plugins_aseprite/*",
-        "socket/*",
-        "src/*",
-        --]]
-    },
-    include_dir = {
-        "tl_src",
+        "*.lua",
     },
     build_dir = "tl_dst",
 }

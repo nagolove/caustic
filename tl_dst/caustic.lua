@@ -2129,7 +2129,7 @@ end
 
 function actions.selftest(_args)
    local selftest_fname = e.path_caustic .. "/selftest.lua"
-   local timeout_s = tonumber(_args.timeout) or 120
+   local timeout_s = (tonumber(_args.timeout) or 120)
 
 
 
