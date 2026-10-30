@@ -75,6 +75,7 @@ int worker_ssimulacra(void *p) {
                 render_sample_fname
             );
             assert(maxchars < SSIMULACRA_PATH_LEN);
+            (void)maxchars; // только для assert: в release (NDEBUG) иначе unused
 
             printf(
                 "worker_ssimulacra: execv '%s' '%s'\n",

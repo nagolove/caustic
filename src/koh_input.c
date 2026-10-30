@@ -437,6 +437,7 @@ static void iter_b2_destroy(
     InputKbMouseDrawer *kbm = ud;
     assert(kbm);
     assert(kbm->map_keycode2btn);
+    (void)kbm; // только для assert: в release (NDEBUG) иначе unused
 
     //printf("iter_b2_destroy:\n");
     if (b2Body_IsValid(btn->bid)) {

@@ -479,7 +479,8 @@ void paragraph_build(Paragraph *prgh) {
     size_t dash_len = strlen(dash);
     char *pd = dash_line;
     for (int i = 0; i < longest; i++) {
-        strncpy(pd, dash, dash_len);
+        // Байты символа без завершающего нуля — строка дописывается дальше
+        memcpy(pd, dash, dash_len);
         pd += dash_len;
     }
 

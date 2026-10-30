@@ -513,6 +513,7 @@ void env_play(Envelope_t e) {
         .duration = player_duration,
     });
     assert(err != -1);
+    (void)err; // только для assert: в release (NDEBUG) иначе unused
 }
 
 void env_draw_opts_gui(Envelope_t e) {
