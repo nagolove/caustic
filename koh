@@ -23,7 +23,7 @@ CAUSTIC_MODULE_PATH="$CAUSTIC_PATH/tl_dst/?.lua"
 #echo $CAUSTIC_MODULE_PATH
 
 # Объединение путей.
-# NOTE: `;;` в начале LUA_PATH/LUA_CPATH критично. По семантике Lua `;;`
+# NOTE: `;;` в LUA_PATH/LUA_CPATH критично. По семантике Lua `;;`
 # раскрывается в дефолтный package.path/cpath текущего интерпретатора.
 # Без `;;` luarocks, запускаемый рекурсивно из lua5.4 (через `koh make -c` /
 # `koh compile_flags` в actions.project), наследует только 5.4-пути и
@@ -32,10 +32,13 @@ CAUSTIC_MODULE_PATH="$CAUSTIC_PATH/tl_dst/?.lua"
 # 5.4-пути вместо 5.1-дефолта, lua5.1 не находит
 # /usr/share/lua/5.1/luarocks/core/cfg.lua и падает на require.
 # С `;;` lua5.1 подставляет свой 5.1-дефолт и находит cfg.lua, а lua5.4
-# (финальный caustic.lua) — 5.4-дефолт + luarocks-пути + tl_dst.
+# (финальный caustic.lua) — luarocks-пути + tl_dst + 5.4-дефолт.
+# `;;` стоит в КОНЦЕ: дефолтные (системные) пути остаются доступными для
+# рекурсивного luarocks, но больше не затеняют версии модулей из
+# ~/.luarocks и tl_dst.
 export PATH="$LUAROCKS_BIN:$PATH"
-export LUA_PATH=";;$LUA_PATH_STR;$CAUSTIC_MODULE_PATH"
-export LUA_CPATH=";;$LUA_CPATH_STR"
+export LUA_PATH="$LUA_PATH_STR;$CAUSTIC_MODULE_PATH;;"
+export LUA_CPATH="$LUA_CPATH_STR;;"
 
 # Запуск Caustic
 ASAN_OPTIONS=verify_asan_link_order=0 lua5.4 "$CAUSTIC_PATH/tl_dst/caustic.lua" "$@"
