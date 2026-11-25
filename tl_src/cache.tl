@@ -30,7 +30,7 @@ local record Cache
     memo: {string: string}   -- хеши, посчитанные в этом запуске
     new: function(storage: string): Cache
     should_recompile: function(
-        Cache, fname: string, t: Task
+        Cache, fname: string, t: Task, output?: string
     ): boolean
     record: function(Cache, fname: string, t: Task, dfile: string)
     save: function(Cache)
@@ -136,9 +136,13 @@ end
 
 -- Только решение: пересобирать ли файл. Кэш не изменяется — запись деталей
 -- откладывается до Cache:record после успешной компиляции (нужен готовый .d).
+-- output — путь объектника: кэш ничего не знает о выходных файлах и без
+-- этой проверки молча пропускает файл, чей .o удалён с диска.
 function Cache:should_recompile(
-    fname: string, t: Task
+    fname: string, t: Task, output?: string
 ): boolean
+    if output and not lfs.attributes(output) then return true end
+
     local file_hash = self:hash_file(fname)
     if not file_hash then return true end
     local cmd_hash = hash_cmd(t)

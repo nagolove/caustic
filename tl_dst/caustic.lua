@@ -3707,6 +3707,18 @@ local function koh_link(objfiles, _args)
    assert(target)
    local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
+
+
+   local missing = {}
+   for _, objfile in ipairs(objfiles) do
+      if not lfs.attributes(objfile) then
+         insert(missing, objfile)
+      end
+   end
+   if #missing > 0 then
+      die("koh_link: отсутствуют объектники: " .. concat(missing, ", "))
+   end
+
    if lfs.attributes(lib_fname) then
       cmd_do("rm " .. lib_fname)
    end
@@ -4656,7 +4668,11 @@ function sub_make(
 
 
 
-         if _args.all_sources or cache:should_recompile(file, task) then
+
+
+         if _args.all_sources or
+            cache:should_recompile(file, task, _output) then
+
             table.insert(tasks, task)
             table.insert(to_record, {
                fname = file, dfile = _dfile, task = task,

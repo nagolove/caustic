@@ -136,8 +136,12 @@ end
 
 
 
+
+
 function Cache:should_recompile(
-   fname, t)
+   fname, t, output)
+
+   if output and not lfs.attributes(output) then return true end
 
    local file_hash = self:hash_file(fname)
    if not file_hash then return true end

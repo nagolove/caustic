@@ -3707,6 +3707,18 @@ local function koh_link(objfiles: {string}, _args: Args)
     assert(target)
     local lib_fname = "lib" .. libcaustic_name[target] .. ".a"
 
+    -- страховка: если объектник потерян после gather_tasks, ar умер бы с
+    -- безымянной ошибкой, а сборка залипла бы до ручной чистки кэша
+    local missing: {string} = {}
+    for _, objfile in ipairs(objfiles) do
+        if not lfs.attributes(objfile) then
+            insert(missing, objfile)
+        end
+    end
+    if #missing > 0 then
+        die("koh_link: отсутствуют объектники: " .. concat(missing, ", "))
+    end
+
     if lfs.attributes(lib_fname) then
         cmd_do("rm " .. lib_fname)
     end
@@ -4652,11 +4664,15 @@ function sub_make(
             -- objfiles всегда нужны для линковки
             table.insert(objfiles, _output)
 
-            -- кэширование: пропускать файлы без изменений.
+            -- кэширование: пропускать файлы без изменений. Существование
+            -- объектника на диске проверяет should_recompile: при живом
+            -- кэше и удалённом .o файл иначе молча выпадает из сборки.
             -- all_sources форсит задачу для каждого файла — нужно cppcheck,
             -- которому требуется полный список исходников независимо от кэша
             -- (без этого второй запуск подряд даёт "no source files").
-            if _args.all_sources or cache:should_recompile(file, task) then
+            if _args.all_sources
+                or cache:should_recompile(file, task, _output)
+            then
                 table.insert(tasks, task)
                 table.insert(to_record, {
                     fname = file, dfile = _dfile, task = task,
