@@ -18,14 +18,17 @@
 #define CloseWindow Win32CloseWindow
 #define ShowCursor  Win32ShowCursor
 #include <windows.h>
+#include <process.h>
 #undef Rectangle
 #undef CloseWindow
 #undef ShowCursor
+#define G_GETPID() _getpid()
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#define G_GETPID() getpid()
 #endif
 
 static bool is_trace_enabled = true;
@@ -37,7 +40,26 @@ static const char *log_fname = "causticlog.txt";
 static const char *log_fname = "/tmp/causticlog";
 #endif
 static FILE *log_stream = NULL;
+// Параллельный per-pid лог: /tmp/causticlog_<pid>. Общий log_fname
+// при одновременном запуске нескольких caustic-приложений
+// перезаписывается — pid-копия остаётся чистой для одного процесса.
+// Не удаляется при завершении: пригодна для посмертного анализа
+// (краш, разбор после закрытия приложения).
+static FILE *log_stream_pid = NULL;
 static u64 base_time = 0;
+
+// Запись строки в оба лога (общий и per-pid) с fflush.
+// Общий лог ведёт себя как раньше.
+static void log_streams_write(const char *buf) {
+    if (log_stream) {
+        fputs(buf, log_stream);
+        fflush(log_stream);
+    }
+    if (log_stream_pid) {
+        fputs(buf, log_stream_pid);
+        fflush(log_stream_pid);
+    }
+}
 
 static const char *ignored_warnings[] = {
     "size is bigger than expected font size",
@@ -88,11 +110,23 @@ void logger_init(void) {
     log_stream = fopen(log_fname, "w");
     if (!log_stream)
         printf("logger_init: log fopen error %s\n", strerror(errno));
+
+    // per-pid копия: уникальное имя, не конфликтует с другими
+    // caustic-приложениями
+    char pid_fname[256];
+    snprintf(pid_fname, sizeof(pid_fname), "%s_%d",
+        log_fname, (int)G_GETPID());
+    log_stream_pid = fopen(pid_fname, "w");
+    if (!log_stream_pid)
+        printf("logger_init: pid log fopen error %s\n",
+            strerror(errno));
 }
 
 void logger_shutdown() {
     if (log_stream)
         fclose(log_stream);
+    if (log_stream_pid)
+        fclose(log_stream_pid);
 }
 
 /*
@@ -134,10 +168,7 @@ int tracec(const char * format, ...) {
 
 
     printf("%s", buf);
-    if (log_stream) {
-        fwrite(buf, strlen(buf), 1, log_stream);
-        fflush(log_stream);
-    }
+    log_streams_write(buf);
 
     return ret;
 }
@@ -154,10 +185,7 @@ int trace(const char * format, ...) {
     va_end(args);
 
     printf("%s", buf);
-    if (log_stream) {
-        fwrite(buf, strlen(buf), 1, log_stream);
-        fflush(log_stream);
-    }
+    log_streams_write(buf);
 
     return ret;
 }
@@ -258,11 +286,8 @@ void koh_log_custom(
     // Вывод в консоль (работает только без -mwindows)
     fputs(buf, stdout);
 
-    // Вывод в файл
-    if (log_stream) {
-        fputs(buf, log_stream);
-        fflush(log_stream);
-    }
+    // Вывод в файлы (общий + per-pid)
+    log_streams_write(buf);
 }
 
 void koh_log_custom_null(
