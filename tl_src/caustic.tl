@@ -9,8 +9,6 @@ local glob = require "global"
 local ut         = require "utils"
 local remove_last_backslash = ut.remove_last_backslash
 
--- }}}
-
 local lua_ver = "5.4"
 local e = glob.env_instance()
 assert(e.path_caustic)
@@ -747,8 +745,6 @@ local function _dependency_init(dep: Dependency): any
     ut.pop_dir()
 end
 
--- }}} 
-
 local record Actions
     -- {{{
 
@@ -1081,7 +1077,7 @@ Session: ~/.config/koh/koh_tg.session; без неё отправка сразу
         },
     },
 }
--- }}}
+    -- }}}
 
 local actions: Actions = {}
 
@@ -1246,7 +1242,7 @@ int main(int argc, char **argv) {
     return munit_suite_main(&suite_root, (void*) "µnit", argc, argv);
 }
 ]]
--- }}}
+    -- }}}
 
     local bld_tl = [[
 return {
@@ -1459,7 +1455,7 @@ return {
 
 }
 ]]
--- }}}
+    -- }}}
 
     local artifact = "e"
 
@@ -1669,7 +1665,7 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 ]]
--- }}}
+    -- }}}
 
     main_c = gsub(main_c, "%$artifact%$", artifact)
     f = io.open("src/main.c", "w")
@@ -1688,7 +1684,7 @@ end
 
 r
 ]]
--- }}}
+    -- }}}
 
     f = io.open(".gdbinit", "w")
     f:write(gdbinit)
