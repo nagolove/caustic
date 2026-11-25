@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <stdatomic.h>
 #include <threads.h>
 #include <unistd.h>
 
@@ -313,7 +314,8 @@ static void update_scripts_list(dotool_ctx_t *ctx) {
     ctx->selected_scripts = calloc(
         ctx->fsr_scripts.num, sizeof(ctx->selected_scripts[0])
     );
-    ctx->selected_scripts[0] = true;
+    if (ctx->fsr_scripts.num > 0)
+        ctx->selected_scripts[0] = true;
 
     //char buf[1024] = {};
     if (verbose)
