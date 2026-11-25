@@ -101,6 +101,8 @@ C-фреймворк для 2D-игр на raylib + ImGui.
 `~/.config/koh/tg.env` (TG_API_ID/HASH/CHANNEL/PHONE/PROXY, env приоритетнее),
 `~/.config/koh/koh_tg.session`. Первый раз — `koh tg --login`. Проверка состава
 без сборки — `koh tg -t win --check`, запуск из пакета — `-s` (win через wine).
+`-t android` шлёт сам `.apk` без zip, `-s` ставит и запускает его через adb
+(нет устройства — проверка пропускается).
 
 ### Платформы
 

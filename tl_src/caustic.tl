@@ -977,12 +977,17 @@ local parser_setup: {string:ParserSetup} = {
   koh tg -t win --check     показать состав пакета без сборки и отправки
   koh tg -t win -c          полная пересборка (как make -c), затем отправка
   koh tg -t linux -s        перед отправкой запустить artifact из пакета
+  koh tg -t android -r      release APK, отправить в канал
+  koh tg -t android -s      перед отправкой поставить APK на устройство (adb)
   koh tg --login            разовый вход (телефон + код), проверка канала
   koh tg --login --from F   взять готовую telethon-session F вместо входа
 
 Пакет: <каталог>-<target>-<debug|release>-<sha>.zip, внутри папка с тем
 же именем. Состав: artifact (win: .exe, wasm: .data/.html/.js/.wasm)
 + dist.include + dist.extra[target] - исключения.
+android: zip не делается, отправляется сам APK
+<каталог>-android-<debug|release>-<sha>.apk; активы уже внутри него
+(dist.include/extra), настройки — таблица android в bld.tl.
 
 Настройка состава в bld.tl проекта (необязательно):
   dist = {
@@ -1014,7 +1019,7 @@ Session: ~/.config/koh/koh_tg.session; без неё отправка сразу
             { "-B --no-build", "не пересобирать, упаковать текущий artifact" },
             { "--no-send", "только zip, без отправки" },
             { "--check", "показать состав пакета, zip удалить" },
-            { "-s --smoke", "запустить artifact из пакета (win: wine)" },
+            { "-s --smoke", "запустить artifact из пакета (win: wine, android: adb)" },
             { "--login", "авторизоваться в Telegram и проверить канал" },
         }),
     },
@@ -2582,6 +2587,49 @@ local function dist_report(zip_path: string, full: boolean)
     print(format("размер пакета: %.1f MB", size / MB))
 end
 
+-- Установка APK через adb и запуск: процесс жив через DIST_SMOKE_SEC
+-- секунд — ок. Без подключённого устройства проверка пропускается.
+local function android_smoke(cfg: Cfg, apk: string): boolean
+    if popen_read("adb get-state 2>/dev/null") ~= "device" then
+        printc("%{yellow}tg: smoke пропущен — нет устройства adb%{reset}")
+        return true
+    end
+    local pkg = cfg.android and cfg.android.package
+    if not pkg then
+        printc("%{red}tg: smoke — в bld.tl нет android.package%{reset}")
+        return false
+    end
+
+    printc("%{blue}tg: smoke: adb install " .. apk .. "%{reset}")
+    if not cmd_try("adb install -r " .. shq(apk)) then
+        printc("%{red}tg: smoke — adb install не удался%{reset}")
+        return false
+    end
+    cmd_try("adb logcat -c")
+    cmd_try("adb shell am start -S -n " .. pkg .. "/android.app.NativeActivity")
+
+    -- pid появляется не сразу после am start
+    local pid = ""
+    for _ = 1, 20 do
+        pid = popen_read("adb shell pidof -s " .. pkg)
+        if pid ~= "" then break end
+        cmd_try("sleep 0.25")
+    end
+    if pid ~= "" then
+        cmd_try("sleep " .. tostring(DIST_SMOKE_SEC))
+        pid = popen_read("adb shell pidof -s " .. pkg)
+    end
+    cmd_try("adb shell am force-stop " .. pkg)
+
+    if pid == "" then
+        cmd_try("adb logcat -d | tail -100")
+        printc("%{red}tg: smoke провален — процесс не жив%{reset}")
+        return false
+    end
+    printc("%{green}tg: smoke ок%{reset}")
+    return true
+end
+
 -- Собирает zip <каталог>-<target>-<debug|release>-<sha>.zip в каталоге
 -- проекта. В архиве корневая папка с тем же именем. Состав — artifact +
 -- cfg.dist.include (по умолчанию assets) + cfg.dist.extra[target], минус
@@ -2606,6 +2654,10 @@ local function sub_dist_pack(_args: Args, cfg: Cfg, target: Target): string, str
     if target == "android" then
         local apk_path = src_dir .. "/" .. pkg .. ".apk"
         cmd_do(format("cp %s %s", shq(files[1]), shq(apk_path)))
+        if _args.smoke and not android_smoke(cfg, apk_path) then
+            os.remove(apk_path)
+            return nil, nil
+        end
         printc("%{green}tg: пакет готов: " .. apk_path .. "%{reset}")
         return apk_path, pkg
     end

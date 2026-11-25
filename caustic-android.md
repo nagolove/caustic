@@ -57,7 +57,7 @@ koh-2048 — своё дерево `wt new android`.
   - [x] таблица `android` в Cfg (`bld.tl`), проверка обязательных полей
   - [x] линк `.so` через clang++ (`--wrap=fopen`, 16 KB страницы,
         `-static-libstdc++`), aapt2, zipalign, apksigner, debug.keystore
-  - [x] `koh run -t android [-- args]`, `koh tg -t android` (шлёт .apk)
+  - [x] `koh run -t android [-- args]`, `koh tg -t android` (шлёт .apk, `-s` — smoke через adb)
 
   Заметки этапа 3: build-tools 34 не умеет `zipalign -P 16` → .so
   сжимается и распаковывается при установке (`extractNativeLibs=true`).
